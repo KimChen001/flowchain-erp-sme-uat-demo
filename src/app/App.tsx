@@ -16,6 +16,7 @@ import {
   Layers, ArrowLeftRight, ClipboardCheck, Grid3x3, History, Boxes,
   Users, Receipt, Tag, Repeat, FileSpreadsheet, Handshake, Wallet,
   Inbox, ShieldCheck, AlertOctagon, Undo2, Building2, CreditCard,
+  Lock, LogOut,
 } from "lucide-react";
 
 // ─── Apple System Colors ──────────────────────────────────────────────────────
@@ -130,6 +131,16 @@ const purchaseOrders: {
   { po: "PO-2026-1280", supplier: "江苏铝合金集团", created: "5月14日", eta: "5月21日", owner: "王志强", amount: 760000,  items: 3,  received: 0,  status: "已取消",  priority: "低", paid: false },
   { po: "PO-2026-1279", supplier: "深圳新元电气",   created: "5月26日", eta: "6月03日", owner: "陈思远", amount: 528000,  items: 5,  received: 0,  status: "草稿",    priority: "低", paid: false },
 ];
+type PurchaseOrder = typeof purchaseOrders[number];
+type DemoUser = {
+  id: string;
+  company: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt?: string;
+  lastLoginAt?: string;
+};
 
 const poStatusMeta: Record<POStatus, { color: string; bg: string }> = {
   "草稿":     { color: A.gray1,  bg: A.gray6  },
@@ -171,6 +182,7 @@ const receivingDocs: {
   { grn: "GRN-202605-0422", po: "PO-2026-1283", supplier: "深圳新元电气",   arrived: "5月26日 16:21", dock: "Dock-02", receiver: "孙明",   items: 6,  passed: 6,  failed: 0, status: "已入库",  warehouse: "D 区" },
   { grn: "GRN-202605-0423", po: "PO-2026-1281", supplier: "华东精工机械",   arrived: "5月26日 11:05", dock: "Dock-01", receiver: "刘建华", items: 7,  passed: 7,  failed: 0, status: "已入库",  warehouse: "A 区" },
 ];
+type ReceivingDoc = typeof receivingDocs[number];
 
 const recvStatusMeta: Record<RecvStatus, { color: string; bg: string }> = {
   "待收货":   { color: A.gray1,  bg: A.gray6  },
@@ -256,6 +268,21 @@ function fmt(n: number) {
   if (n >= 1e8) return `¥${(n / 1e8).toFixed(2)}亿`;
   if (n >= 1e4) return `¥${(n / 1e4).toFixed(0)}万`;
   return `¥${n.toLocaleString()}`;
+}
+
+async function apiJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `API request failed: ${res.status}`);
+  }
+  return res.json();
 }
 
 const insightMeta = {
@@ -381,6 +408,67 @@ const AppleTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+const PRODUCT_NAME = "FlowChain";
+const PRODUCT_TAGLINE = "智能供应链 ERP";
+
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+type MarketPrice = {
+  symbol: string;
+  name: string;
+  category: string;
+  price: number;
+  unit: string;
+  changePct: number;
+  direction: "up" | "down" | "flat";
+  asOf: string;
+  source: string;
+  procurementImpact: string;
+};
+
+const QUICK_QUESTIONS: Record<string, string[]> = {
+  overview: ["本周最重要的风险是什么？", "今天的铁的市场价格"],
+  inventory: ["为什么这些 SKU 会断货？", "结合汇率和新闻看补货风险"],
+  sales: ["哪些产品值得优先备货？", "销售下滑的原因是什么？"],
+  forecast: ["这个预测模型靠谱吗？", "外部信号会影响预测吗？"],
+  purchasing: ["哪些采购单应该优先审批？", "结合外部风险调整采购计划"],
+  receiving: ["哪些到货异常最紧急？", "供应商延期会影响什么？"],
+  procurement: ["采购成本为什么上涨？", "结合汇率看采购成本"],
+};
+
+function buildAiAssistantReply(moduleId: string, question: string, activeInsight?: { title: string; body: string; metric?: string }) {
+  const q = question.toLowerCase();
+  const moduleLabel = PAGE_LABELS[moduleId] ?? "当前模块";
+  const evidence = activeInsight
+    ? `当前系统正在关注「${activeInsight.title}」${activeInsight.metric ? `，核心指标是 ${activeInsight.metric}` : ""}。`
+    : `当前上下文来自「${moduleLabel}」。`;
+
+  if (q.includes("为什么") || q.includes("原因") || q.includes("why")) {
+    return `${evidence} 主要原因可以拆成三层：第一是历史数据已经出现趋势变化；第二是库存、采购或交付节奏没有完全跟上；第三是这个变化会传导到订单履约或现金占用。建议先看数据依据，再确认是否需要生成采购动作或审批说明。`;
+  }
+
+  if (q.includes("风险") || q.includes("断货") || q.includes("延期")) {
+    return `${evidence} 我会把风险优先级按“影响金额、发生概率、剩余处理时间”排序。当前建议先处理高影响且时间窗口短的问题，例如低于安全库存的 SKU、待审批高优先级 PO、以及已经出现延期记录的供应商。`;
+  }
+
+  if (q.includes("采购") || q.includes("补货") || q.includes("下单")) {
+    return `${evidence} 采购建议应同时看预测需求、现有库存、在途数量、供应商交期和 MOQ。若预测需求超过可用库存，系统应生成补货数量；若同一供应商存在多张草稿 PO，可以考虑合并下单来锁价和降低物流成本。`;
+  }
+
+  if (q.includes("模型") || q.includes("预测") || q.includes("准确")) {
+    return `${evidence} 预测结果建议用 MAPE、WMAPE、Tracking Signal 和 Theil's U 一起判断。MAPE 看整体误差，Tracking Signal 看是否有系统性偏差，Theil's U 小于 1 说明模型优于朴素法。对波动大的 SKU，建议用 Holt-Winters 或敏感度更高的指数平滑参数。`;
+  }
+
+  if (q.includes("邮件") || q.includes("说明") || q.includes("审批")) {
+    return `${evidence} 可以生成一段审批说明：基于历史需求预测和当前库存覆盖天数，系统识别出潜在供应风险。建议按推荐数量发起采购，并优先选择准时率更高、交期更短的供应商，以降低断货和订单延期风险。`;
+  }
+
+  return `${evidence} 我的建议是先确认这条 insight 的数据依据，再决定动作：如果影响订单交付，优先生成采购单或催交任务；如果影响成本，优先做供应商对比和合并采购；如果只是趋势提醒，可以先加入下周 S&OP 复盘。`;
+}
+
 // ─── Typewriter ───────────────────────────────────────────────────────────────
 function TypewriterText({ text, speed = 14 }: { text: string; speed?: number }) {
   const [displayed, setDisplayed] = useState("");
@@ -420,6 +508,12 @@ function AiPanel({ moduleId }: { moduleId: string }) {
   const [scanning, setScanning] = useState(true);
   const [scanPct, setScanPct] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [asking, setAsking] = useState(false);
+  const [externalStatus, setExternalStatus] = useState("联网信号加载中");
+  const [marketPrices, setMarketPrices] = useState<MarketPrice[]>([]);
+  const [marketStatus, setMarketStatus] = useState("行情加载中");
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   const startScan = useCallback(() => {
@@ -437,19 +531,78 @@ function AiPanel({ moduleId }: { moduleId: string }) {
 
   useEffect(() => {
     startScan();
+    setInput("");
+    setMessages([{
+      role: "assistant",
+      content: `${PAGE_LABELS[moduleId] ?? "当前模块"}上下文已载入。我会基于当前页面的指标、预测和 insight 回答，不做脱离数据的建议。`,
+    }]);
+    apiJson<{ signals: { type: string }[] }>("/api/external-signals")
+      .then((data) => setExternalStatus(`联网信号 ${data.signals.length} 条`))
+      .catch(() => setExternalStatus("联网信号暂不可用"));
+    apiJson<{ asOf: string; prices: MarketPrice[] }>("/api/market-prices")
+      .then((data) => {
+        setMarketPrices(data.prices);
+        setMarketStatus(`行情 ${data.prices.length} 条`);
+      })
+      .catch(() => setMarketStatus("行情暂不可用"));
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [moduleId, refreshKey, startScan]);
-
-  useEffect(() => {
-    if (scanning) return;
-    const id = setInterval(() => setActiveIdx((i) => (i + 1) % insights.length), 5500);
-    return () => clearInterval(id);
-  }, [scanning, insights.length]);
 
   const active = insights[activeIdx];
   const meta = active ? insightMeta[active.type] : null;
   const now = new Date();
   const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+  const quickQuestions = QUICK_QUESTIONS[moduleId] ?? ["帮我解释当前 insight", "下一步建议做什么？"];
+
+  async function askAi(text: string) {
+    const question = text.trim();
+    if (!question || asking) return;
+    setAsking(true);
+    setMessages((prev) => [...prev, { role: "user", content: question }]);
+    setInput("");
+    try {
+      const result = await apiJson<{
+        provider: string;
+        model?: string;
+        content: string;
+        degraded?: boolean;
+        usedWeb?: boolean;
+        timingMs?: number;
+        externalMs?: number;
+        modelMs?: number;
+      }>("/api/ai/chat", {
+        method: "POST",
+        body: JSON.stringify({ moduleId, question, activeInsight: active }),
+      });
+      const prefix = result.provider === "local"
+        ? "本地分析: "
+        : result.provider === "market-data"
+          ? "行情数据: "
+        : `${result.provider === "doubao" ? "豆包" : "GPT"}: `;
+      const timing = typeof result.timingMs === "number"
+        ? `\n\n耗时 ${result.timingMs}ms · 模型 ${result.modelMs ?? "-"}ms · ${result.usedWeb ? `联网 ${result.externalMs ?? "-"}ms` : "未联网"}`
+        : "";
+      setMessages((prev) => [...prev, { role: "assistant", content: `${prefix}${result.content}${timing}` }]);
+    } catch {
+      const reply = buildAiAssistantReply(moduleId, question, active);
+      setMessages((prev) => [...prev, { role: "assistant", content: `本地分析: ${reply}` }]);
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  async function refreshMarketPrices() {
+    try {
+      setMarketStatus("行情刷新中");
+      const data = await apiJson<{ asOf: string; prices: MarketPrice[] }>("/api/market-prices/refresh", { method: "POST" });
+      setMarketPrices(data.prices);
+      setMarketStatus(`行情 ${data.prices.length} 条`);
+      toast.success("行情数据已刷新");
+    } catch {
+      setMarketStatus("行情刷新失败");
+      toast.error("行情刷新失败，请检查 API");
+    }
+  }
 
   return (
     <div className="flex flex-col h-full bg-white" style={{ borderLeft: "0.5px solid rgba(0,0,0,0.1)" }}>
@@ -497,11 +650,13 @@ function AiPanel({ moduleId }: { moduleId: string }) {
             SupplyChain-LLM v2.4
           </span>
           <span className="text-[10px]" style={{ color: A.gray2 }}>置信度 94.2%</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+            style={{ background: "#f0faf4", color: A.green }}>{externalStatus}</span>
         </div>
       </div>
 
       {/* Insights list */}
-      <div className="flex-1 overflow-auto px-4 py-3 space-y-2">
+      <div className="flex-[1.05] overflow-auto px-4 py-3 space-y-2">
         {scanning ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="rounded-xl p-3 space-y-2 animate-pulse" style={{ background: A.gray6 }}>
@@ -547,6 +702,9 @@ function AiPanel({ moduleId }: { moduleId: string }) {
                           <TypewriterText text={ins.body} />
                         </div>
                       )}
+                      {!isActive && (
+                        <div className="text-[10px]" style={{ color: A.gray2 }}>点击查看详细分析</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -556,9 +714,9 @@ function AiPanel({ moduleId }: { moduleId: string }) {
         )}
       </div>
 
-      {/* Footer nav */}
+      {/* Chatbot */}
       {!scanning && (
-        <div className="px-4 pb-4 pt-2" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-4 pt-3 pb-4" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div className="flex items-center justify-between">
             <div className="flex gap-1.5">
               {insights.map((_, i) => (
@@ -569,9 +727,103 @@ function AiPanel({ moduleId }: { moduleId: string }) {
             </div>
             <span className="text-[10px]" style={{ color: A.gray2 }}>{activeIdx + 1} / {insights.length}</span>
           </div>
-          <p className="text-[10px] mt-2" style={{ color: A.gray2 }}>
+          <p className="text-[10px] mt-2 mb-3" style={{ color: A.gray2 }}>
             基于 180 天历史数据 · 实时更新 · 仅供参考
           </p>
+
+          <div className="rounded-xl p-2.5 mb-2.5" style={{ background: A.gray6 }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <BarChart2 size={11} style={{ color: A.orange }} />
+                <span className="text-[11px] font-semibold" style={{ color: A.label }}>行情数据</span>
+              </div>
+              <button onClick={refreshMarketPrices}
+                className="text-[10px] px-2 py-1 rounded-lg transition-colors hover:bg-white flex items-center gap-1"
+                style={{ color: A.blue }}>
+                <RefreshCw size={10} /> {marketStatus}
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {marketPrices.slice(0, 3).map((item) => {
+                const up = item.direction === "up";
+                const down = item.direction === "down";
+                const color = up ? A.red : down ? A.green : A.gray1;
+                return (
+                  <button key={item.symbol}
+                    onClick={() => askAi(`${item.name}今天价格是多少？对采购有什么影响？`)}
+                    className="rounded-lg p-2 text-left transition-colors hover:bg-white"
+                    style={{ background: A.white, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.06)" }}>
+                    <div className="text-[10px] font-medium truncate" style={{ color: A.label }}>{item.name}</div>
+                    <div className="text-xs font-semibold mt-1" style={{ color: A.label }}>
+                      {item.price.toLocaleString()}
+                    </div>
+                    <div className="text-[9px] flex items-center gap-0.5 mt-0.5" style={{ color }}>
+                      {up ? <ArrowUpRight size={9} /> : down ? <ArrowDownRight size={9} /> : <Minus size={9} />}
+                      {Math.abs(item.changePct)}%
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-[9px] mt-1.5" style={{ color: A.gray2 }}>
+              UAT 样本行情 · 点击卡片生成采购影响分析
+            </div>
+          </div>
+
+          <div className="rounded-xl p-2.5" style={{ background: A.gray6 }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <Sparkles size={11} style={{ color: A.blue }} />
+                <span className="text-[11px] font-semibold" style={{ color: A.label }}>AI 助手</span>
+              </div>
+              <span className="text-[10px]" style={{ color: A.gray2 }}>上下文感知</span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {quickQuestions.map((q) => (
+                <button key={q} onClick={() => askAi(q)}
+                  className="text-[10px] px-2 py-1 rounded-lg transition-colors hover:bg-white"
+                  style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.06)" }}>
+                  {q}
+                </button>
+              ))}
+            </div>
+
+            <div className="max-h-72 overflow-auto space-y-2 pr-1 mb-2">
+              {messages.map((msg, i) => (
+                <div key={`${msg.role}-${i}`} className="flex" style={{ justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                  <div className="rounded-xl px-3 py-2.5 text-xs leading-relaxed max-w-[94%]"
+                    style={{
+                      background: msg.role === "user" ? A.blue : A.white,
+                      color: msg.role === "user" ? A.white : A.sub,
+                      boxShadow: msg.role === "assistant" ? "0 0 0 0.5px rgba(0,0,0,0.06)" : "none",
+                    }}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-end gap-1.5">
+              <textarea value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    askAi(input);
+                  }
+                }}
+                placeholder="追问数据原因、风险或动作..."
+                rows={3}
+                className="flex-1 rounded-lg px-2.5 py-2 text-xs outline-none resize-none"
+                style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)", fontFamily: "inherit" }} />
+              <button onClick={() => askAi(input)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0"
+                style={{ background: input.trim() && !asking ? A.blue : A.gray3 }}>
+                {asking ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -3481,7 +3733,7 @@ function NewPOModal({ open, onClose, onCreate }: {
 
 // ─── Track Shipment Modal ────────────────────────────────────────────────────
 function TrackShipmentModal({ open, onClose, po }: {
-  open: boolean; onClose: () => void; po: typeof purchaseOrders[number] | null;
+  open: boolean; onClose: () => void; po: PurchaseOrder | null;
 }) {
   if (!po) return null;
   const steps = [
@@ -3612,11 +3864,25 @@ function PurchasingPanel() {
 }
 
 function PurchasingOrders() {
-  const [orders, setOrders] = useState(purchaseOrders);
+  const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"全部" | POStatus>("全部");
   const [selectedId, setSelectedId] = useState(orders[1].po);
   const [newOpen, setNewOpen] = useState(false);
   const [trackOpen, setTrackOpen] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    apiJson<PurchaseOrder[]>("/api/purchase-orders")
+      .then((data) => {
+        if (!alive) return;
+        setOrders(data);
+        setSelectedId((current) => data.some((o) => o.po === current) ? current : data[0]?.po ?? "");
+      })
+      .catch(() => toast.error("采购订单 API 未连接", { description: "请先运行 npm run api，再运行 npm run dev" }))
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   const selectedPO = orders.find((o) => o.po === selectedId) ?? orders[0];
   const filtered = filter === "全部" ? orders : orders.filter((o) => o.status === filter);
@@ -3625,22 +3891,31 @@ function PurchasingOrders() {
   const pendingApprov = orders.filter((o) => o.status === "待审批").length;
   const inTransit     = orders.filter((o) => o.status === "已发出" || o.status === "部分到货").length;
 
-  function approve(poId: string) {
-    setOrders((arr) => arr.map((o) => o.po === poId ? { ...o, status: "已审批" } : o));
-    toast.success(`${poId} 已批准`, { description: "进入发货排程，预计 2 小时内推送至供应商" });
+  async function updatePOStatus(poId: string, status: POStatus) {
+    const updated = await apiJson<PurchaseOrder>(`/api/purchase-orders/${encodeURIComponent(poId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    setOrders((arr) => arr.map((o) => o.po === poId ? updated : o));
+    return updated;
   }
-  function reject(poId: string) {
-    setOrders((arr) => arr.map((o) => o.po === poId ? { ...o, status: "已取消" } : o));
-    toast.error(`${poId} 已驳回`, { description: "请通知采购员补充材料后重新提交" });
+
+  async function approve(poId: string) {
+    await updatePOStatus(poId, "已审批");
+    toast.success(`${poId} 已批准`, { description: "已写入后端，刷新后仍会保留" });
   }
-  function cancel(poId: string) {
+  async function reject(poId: string) {
+    await updatePOStatus(poId, "已取消");
+    toast.error(`${poId} 已驳回`, { description: "状态已保存到 API 数据源" });
+  }
+  async function cancel(poId: string) {
     if (!confirm(`确认取消 ${poId}？此操作不可撤销。`)) return;
-    setOrders((arr) => arr.map((o) => o.po === poId ? { ...o, status: "已取消" } : o));
+    await updatePOStatus(poId, "已取消");
     toast(`${poId} 已取消`);
   }
-  function send(poId: string) {
-    setOrders((arr) => arr.map((o) => o.po === poId ? { ...o, status: "已发出" } : o));
-    toast.success(`${poId} 已下发至供应商`, { description: "等待对方确认排产" });
+  async function send(poId: string) {
+    await updatePOStatus(poId, "已发出");
+    toast.success(`${poId} 已下发至供应商`, { description: "后端已记录状态变更" });
   }
   function downloadPDF(poId: string) {
     toast(`正在生成 ${poId}.pdf …`, { description: "完成后将自动下载" });
@@ -3650,7 +3925,7 @@ function PurchasingOrders() {
     <div className="space-y-5">
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="本月 PO 总额" value={fmt(totalAmount)} sub={`${purchaseOrders.length} 张订单`} delta="+12.4%" positive={false} icon={FileText}  color={A.blue}   />
+        <KpiCard label="本月 PO 总额" value={fmt(totalAmount)} sub={loading ? "加载中" : `${orders.length} 张订单`} delta="+12.4%" positive={false} icon={FileText}  color={A.blue}   />
         <KpiCard label="待审批" value={String(pendingApprov)}  sub="平均等待 2.4 小时"   delta="+1 vs 昨日" positive={false} icon={AlertCircle} color={A.orange} />
         <KpiCard label="在途订单" value={String(inTransit)}     sub="未来 7 天到货"        delta="¥624 万"     positive icon={Truck}        color={A.teal}   />
         <KpiCard label="本月完成率" value="84.6%" sub="按时交付 / 已完成"     delta="+3.2pts"     positive icon={CheckCircle2} color={A.green}  />
@@ -3876,7 +4151,15 @@ function PurchasingOrders() {
       </div>
 
       <NewPOModal open={newOpen} onClose={() => setNewOpen(false)}
-        onCreate={(po) => { setOrders((arr) => [po, ...arr]); setSelectedId(po.po); }} />
+        onCreate={async (po) => {
+          const created = await apiJson<PurchaseOrder>("/api/purchase-orders", {
+            method: "POST",
+            body: JSON.stringify(po),
+          });
+          setOrders((arr) => [created, ...arr]);
+          setSelectedId(created.po);
+          toast.success(`${created.po} 已提交`, { description: "采购申请已写入后端数据文件" });
+        }} />
       <TrackShipmentModal open={trackOpen} onClose={() => setTrackOpen(false)} po={selectedPO} />
     </div>
   );
@@ -3885,14 +4168,18 @@ function PurchasingOrders() {
 // ─── Scan Receive Modal ─────────────────────────────────────────────────────
 function ScanReceiveModal({ open, onClose, onReceive }: {
   open: boolean; onClose: () => void;
+  candidates: PurchaseOrder[];
   onReceive: (grn: string, po: string) => void;
 }) {
   const [scan, setScan] = useState("");
   const [scanning, setScanning] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
-  const candidates = purchaseOrders.filter((p) => ["已发出", "部分到货"].includes(p.status));
 
   function simulateScan() {
+    if (candidates.length === 0) {
+      toast.error("暂无可收货 PO", { description: "请先在采购订单中把订单下发至供应商" });
+      return;
+    }
     setScanning(true);
     setTimeout(() => {
       const pick = candidates[Math.floor(Math.random() * candidates.length)];
@@ -3979,7 +4266,7 @@ function ScanReceiveModal({ open, onClose, onReceive }: {
 // ─── QC Inspection Modal ────────────────────────────────────────────────────
 function QCModal({ open, onClose, grn, onComplete }: {
   open: boolean; onClose: () => void;
-  grn: typeof receivingDocs[number] | null;
+  grn: ReceivingDoc | null;
   onComplete: (grnId: string, passed: number, failed: number, warehouse: string) => void;
 }) {
   const [results, setResults] = useState<("pass" | "fail" | null)[]>([]);
@@ -4716,48 +5003,82 @@ function ReceivingReturns() {
 }
 
 function ReceivingOps() {
-  const [docs, setDocs] = useState(receivingDocs);
+  const [docs, setDocs] = useState<ReceivingDoc[]>(receivingDocs);
+  const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
+  const [loading, setLoading] = useState(true);
   const [scanOpen, setScanOpen] = useState(false);
   const [qcOpen, setQcOpen] = useState(false);
-  const [activeGrn, setActiveGrn] = useState<typeof receivingDocs[number] | null>(null);
+  const [activeGrn, setActiveGrn] = useState<ReceivingDoc | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      apiJson<ReceivingDoc[]>("/api/receiving-docs"),
+      apiJson<PurchaseOrder[]>("/api/purchase-orders"),
+    ])
+      .then(([receiving, purchase]) => {
+        if (!alive) return;
+        setDocs(receiving);
+        setOrders(purchase);
+      })
+      .catch(() => toast.error("收货 API 未连接", { description: "请先运行 npm run api，再运行 npm run dev" }))
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
 
   const todayReceived = docs.filter((d) => d.status === "已入库").length;
   const inQC          = docs.filter((d) => d.status === "质检中").length;
   const exceptions    = docs.filter((d) => d.status === "异常处理").length;
   const pending       = docs.filter((d) => d.status === "待收货").length;
 
-  function startReceive(grnId: string, poId: string) {
-    const supplier = purchaseOrders.find((p) => p.po === poId)?.supplier ?? "—";
-    const items = purchaseOrders.find((p) => p.po === poId)?.items ?? 1;
-    const now = new Date();
-    const ts = `5月27日 ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    setDocs((arr) => [{
-      grn: grnId, po: poId, supplier, arrived: ts,
-      dock: "Dock-02", receiver: "刘建华", items, passed: 0, failed: 0,
-      status: "质检中", warehouse: "—",
-    }, ...arr]);
+  async function startReceive(grnId: string, poId: string) {
+    const po = orders.find((p) => p.po === poId);
+    const created = await apiJson<ReceivingDoc>("/api/receiving-docs", {
+      method: "POST",
+      body: JSON.stringify({
+        grn: grnId,
+        po: poId,
+        supplier: po?.supplier,
+        items: po?.items,
+        status: "质检中",
+      }),
+    });
+    setDocs((arr) => [created, ...arr]);
+    setOrders((arr) => arr.map((o) => o.po === poId && o.status === "已发出" ? { ...o, status: "部分到货" } : o));
   }
 
-  function openQC(grn: typeof receivingDocs[number]) {
+  function openQC(grn: ReceivingDoc) {
     if (grn.status === "已入库") { toast(`${grn.grn} 已完成入库`); return; }
     if (grn.status === "待收货") { toast.error(`${grn.grn} 尚未签收，请先签收`); return; }
     setActiveGrn(grn);
     setQcOpen(true);
   }
 
-  function signIn(grn: typeof receivingDocs[number]) {
-    setDocs((arr) => arr.map((d) => d.grn === grn.grn ? { ...d, status: "质检中", receiver: "刘建华" } : d));
+  async function signIn(grn: ReceivingDoc) {
+    const updated = await apiJson<ReceivingDoc>(`/api/receiving-docs/${encodeURIComponent(grn.grn)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "质检中", receiver: "刘建华" }),
+    });
+    setDocs((arr) => arr.map((d) => d.grn === grn.grn ? updated : d));
     toast.success(`${grn.grn} 已签收`, { description: "已转入质检流程" });
   }
 
-  function completeQC(grnId: string, passed: number, failed: number, warehouse: string) {
-    setDocs((arr) => arr.map((d) => d.grn === grnId
-      ? { ...d, passed, failed, warehouse, status: failed > 0 ? "异常处理" : "已入库" }
-      : d));
+  async function completeQC(grnId: string, passed: number, failed: number, warehouse: string) {
+    const updated = await apiJson<ReceivingDoc>(`/api/receiving-docs/${encodeURIComponent(grnId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ passed, failed, warehouse, status: failed > 0 ? "异常处理" : "已入库" }),
+    });
+    setDocs((arr) => arr.map((d) => d.grn === grnId ? updated : d));
+    const refreshedOrders = await apiJson<PurchaseOrder[]>("/api/purchase-orders");
+    setOrders(refreshedOrders);
   }
 
-  function resolveException(grnId: string, action: string) {
-    setDocs((arr) => arr.map((d) => d.grn === grnId ? { ...d, status: "已入库" } : d));
+  async function resolveException(grnId: string, action: string) {
+    const updated = await apiJson<ReceivingDoc>(`/api/receiving-docs/${encodeURIComponent(grnId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "已入库", failed: 0 }),
+    });
+    setDocs((arr) => arr.map((d) => d.grn === grnId ? updated : d));
     toast.success(`异常已处理：${action}`);
   }
 
@@ -4840,7 +5161,7 @@ function ReceivingOps() {
       <Card>
         <div className="flex items-center px-5 py-3.5 gap-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>收货单 (GRN)</h2>
-          <span className="text-xs" style={{ color: A.gray2 }}>{receivingDocs.length} 条</span>
+          <span className="text-xs" style={{ color: A.gray2 }}>{loading ? "加载中" : `${docs.length} 条`}</span>
           <div className="ml-auto flex gap-2">
             <button onClick={() => setScanOpen(true)}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:bg-gray-200 transition-colors"
@@ -4948,7 +5269,9 @@ function ReceivingOps() {
         </div>
       </Card>
 
-      <ScanReceiveModal open={scanOpen} onClose={() => setScanOpen(false)} onReceive={startReceive} />
+      <ScanReceiveModal open={scanOpen} onClose={() => setScanOpen(false)}
+        candidates={orders.filter((p) => ["已发出", "部分到货"].includes(p.status))}
+        onReceive={startReceive} />
       <QCModal open={qcOpen} onClose={() => setQcOpen(false)} grn={activeGrn} onComplete={completeQC} />
     </div>
   );
@@ -4962,9 +5285,132 @@ const PAGE_LABELS: Record<string, string> = {
   procurement: "采购费用",
 };
 
+function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => void }) {
+  const [form, setForm] = useState({
+    company: "新辰智能制造",
+    name: "张磊",
+    email: "zhanglei@example.com",
+    role: "供应链经理",
+  });
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      const result = await apiJson<{ token: string; user: DemoUser }>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+      localStorage.setItem("scm-demo-token", result.token);
+      localStorage.setItem("scm-demo-user", JSON.stringify(result.user));
+      onLogin(result.user, result.token);
+      toast.success("登录成功，用户档案已保存");
+    } catch {
+      toast.error("登录失败，请检查本地 API 是否运行");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const update = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: A.bg, fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif" }}>
+      <Toaster position="top-right" />
+      <div className="w-full max-w-5xl grid grid-cols-[1.05fr_0.95fr] gap-8 items-center">
+        <section className="space-y-8">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg, #0071e3 0%, #32ade6 100%)" }}>
+              <Activity size={20} className="text-white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <div className="text-2xl font-semibold" style={{ color: A.label }}>{PRODUCT_NAME}</div>
+              <div className="text-sm" style={{ color: A.sub }}>{PRODUCT_TAGLINE}</div>
+            </div>
+          </div>
+
+          <div>
+            <h1 className="text-[38px] leading-tight font-semibold mb-4" style={{ color: A.label }}>
+              把采购、入库、预测和 AI insight 放进同一个工作台。
+            </h1>
+            <p className="text-base leading-7 max-w-xl" style={{ color: A.sub }}>
+              这是一个可交互的供应链 ERP demo。用户登录后，系统会保存用户档案，后续可以继续扩展为公司级租户、权限、审批流和真实数据库。
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 max-w-xl">
+            {[
+              ["9", "采购订单"],
+              ["6", "收货单据"],
+              ["AI", "经营洞察"],
+            ].map(([value, label]) => (
+              <div key={label} className="rounded-2xl px-4 py-3" style={{ background: A.white, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                <div className="text-lg font-semibold" style={{ color: A.label }}>{value}</div>
+                <div className="text-xs" style={{ color: A.gray1 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <form onSubmit={submit} className="rounded-[20px] p-6 space-y-4"
+          style={{ background: A.white, boxShadow: "0 18px 60px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.08)" }}>
+          <div className="flex items-center gap-3 pb-2">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "#f0f6ff", color: A.blue }}>
+              <Lock size={16} />
+            </div>
+            <div>
+              <div className="text-base font-semibold" style={{ color: A.label }}>进入工作台</div>
+              <div className="text-xs" style={{ color: A.gray1 }}>输入用户信息，后端会保存 demo 档案</div>
+            </div>
+          </div>
+
+          {([
+            ["company", "公司名称"],
+            ["name", "姓名"],
+            ["email", "邮箱"],
+            ["role", "角色"],
+          ] as const).map(([key, label]) => (
+            <label key={key} className="block">
+              <span className="text-xs font-medium" style={{ color: A.gray1 }}>{label}</span>
+              <input
+                value={form[key]}
+                onChange={update(key)}
+                className="mt-1 w-full h-11 rounded-xl px-3 text-sm outline-none"
+                style={{ background: A.gray6, color: A.label, border: "0.5px solid rgba(0,0,0,0.08)" }}
+                type={key === "email" ? "email" : "text"}
+                required
+              />
+            </label>
+          ))}
+
+          <button type="submit" disabled={loading}
+            className="w-full h-11 rounded-xl flex items-center justify-center gap-2 text-sm font-semibold text-white disabled:opacity-70"
+            style={{ background: A.blue }}>
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
+            {loading ? "正在进入" : `进入 ${PRODUCT_NAME}`}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [active, setActive] = useState("overview");
   const [aiVisible, setAiVisible] = useState(true);
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
+  const [user, setUser] = useState<DemoUser | null>(() => {
+    try {
+      const raw = localStorage.getItem("scm-demo-user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel />,
@@ -4975,6 +5421,22 @@ export default function App() {
     receiving:   <ReceivingPanel />,
     procurement: <ProcurementPanel />,
   };
+
+  function handleLogin(nextUser: DemoUser, token: string) {
+    setUser(nextUser);
+    setAuthToken(token);
+  }
+
+  function logout() {
+    localStorage.removeItem("scm-demo-token");
+    localStorage.removeItem("scm-demo-user");
+    setAuthToken("");
+    setUser(null);
+  }
+
+  if (!authToken || !user) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
 
   return (
     <div className="h-screen flex overflow-hidden" style={{ background: A.bg, fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif" }}>
@@ -4998,8 +5460,8 @@ export default function App() {
               <Activity size={15} className="text-white" strokeWidth={2.5} />
             </div>
             <div>
-              <div className="text-sm font-semibold" style={{ color: A.label }}>WSM</div>
-              <div className="text-[10px]" style={{ color: A.gray1 }}>供应链管理</div>
+              <div className="text-sm font-semibold" style={{ color: A.label }}>{PRODUCT_NAME}</div>
+              <div className="text-[10px]" style={{ color: A.gray1 }}>{PRODUCT_TAGLINE}</div>
             </div>
           </div>
 
@@ -5043,16 +5505,19 @@ export default function App() {
               style={{ background: aiVisible ? A.blue : A.gray4 }} />
           </button>
 
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/60 transition-colors">
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/60 transition-colors">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
               style={{ background: "linear-gradient(135deg, #0071e3, #34aadc)" }}>
-              张
+              {user.name.slice(0, 1)}
             </div>
             <div className="min-w-0">
-              <div className="text-xs font-medium" style={{ color: A.label }}>张磊</div>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>供应链经理</div>
+              <div className="text-xs font-medium truncate" style={{ color: A.label }}>{user.name}</div>
+              <div className="text-[10px] truncate" style={{ color: A.gray2 }}>{user.role}</div>
             </div>
-            <ChevronDown size={11} className="ml-auto shrink-0" style={{ color: A.gray2 }} />
+            <button onClick={logout} className="ml-auto w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white"
+              style={{ color: A.gray2 }}>
+              <LogOut size={12} />
+            </button>
           </div>
         </div>
       </aside>
@@ -5068,9 +5533,10 @@ export default function App() {
             borderBottom: "0.5px solid rgba(0,0,0,0.08)",
           }}>
           <div className="flex items-center gap-2 text-sm">
-            <span style={{ color: A.gray2 }}>WSM</span>
+            <span style={{ color: A.gray2 }}>{PRODUCT_NAME}</span>
             <span style={{ color: A.gray3 }}>/</span>
             <span className="font-medium" style={{ color: A.label }}>{PAGE_LABELS[active]}</span>
+            <span className="text-xs ml-2" style={{ color: A.gray2 }}>{user.company}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs cursor-pointer"
@@ -5096,7 +5562,7 @@ export default function App() {
           </main>
 
           {aiVisible && (
-            <div className="w-72 shrink-0 overflow-hidden flex flex-col">
+            <div className="w-[480px] shrink-0 overflow-hidden flex flex-col">
               <AiPanel moduleId={active} />
             </div>
           )}

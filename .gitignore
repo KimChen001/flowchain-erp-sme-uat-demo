@@ -1,0 +1,15 @@
+node_modules/
+dist/
+
+.env
+.env.local
+.env.*.local
+
+*.log
+cloudflare-tunnel.*.log
+localtunnel.*.log
+prod-server.*.log
+
+.DS_Store
+Thumbs.db
+

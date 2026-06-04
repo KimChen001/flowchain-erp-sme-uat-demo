@@ -1,0 +1,654 @@
+{
+  "purchaseOrders": [
+    {
+      "po": "PO-2026-1287",
+      "supplier": "深圳新元电气",
+      "created": "5月26日",
+      "eta": "6月02日",
+      "owner": "陈思远",
+      "amount": 1840000,
+      "items": 8,
+      "received": 0,
+      "status": "待审批",
+      "priority": "高",
+      "paid": false
+    },
+    {
+      "po": "PO-2026-1286",
+      "supplier": "华东精工机械",
+      "created": "5月25日",
+      "eta": "6月01日",
+      "owner": "李婷",
+      "amount": 2640000,
+      "items": 12,
+      "received": 0,
+      "status": "已审批",
+      "priority": "高",
+      "paid": false
+    },
+    {
+      "po": "PO-2026-1285",
+      "supplier": "江苏铝合金集团",
+      "created": "5月24日",
+      "eta": "5月31日",
+      "owner": "王志强",
+      "amount": 980000,
+      "items": 4,
+      "received": 0,
+      "status": "已发出",
+      "priority": "中",
+      "paid": false
+    },
+    {
+      "po": "PO-2026-1284",
+      "supplier": "佛山标准件",
+      "created": "5月22日",
+      "eta": "5月29日",
+      "owner": "李婷",
+      "amount": 412000,
+      "items": 18,
+      "received": 12,
+      "status": "部分到货",
+      "priority": "中",
+      "paid": false
+    },
+    {
+      "po": "PO-2026-1283",
+      "supplier": "深圳新元电气",
+      "created": "5月19日",
+      "eta": "5月26日",
+      "owner": "陈思远",
+      "amount": 1280000,
+      "items": 6,
+      "received": 6,
+      "status": "已完成",
+      "priority": "中",
+      "paid": true
+    },
+    {
+      "po": "PO-2026-1282",
+      "supplier": "广州化工耗材",
+      "created": "5月18日",
+      "eta": "5月25日",
+      "owner": "周浩",
+      "amount": 348000,
+      "items": 9,
+      "received": 5,
+      "status": "部分到货",
+      "priority": "低",
+      "paid": false
+    },
+    {
+      "po": "PO-2026-1281",
+      "supplier": "华东精工机械",
+      "created": "5月16日",
+      "eta": "5月23日",
+      "owner": "李婷",
+      "amount": 1920000,
+      "items": 7,
+      "received": 7,
+      "status": "已完成",
+      "priority": "中",
+      "paid": true
+    },
+    {
+      "po": "PO-2026-1280",
+      "supplier": "江苏铝合金集团",
+      "created": "5月14日",
+      "eta": "5月21日",
+      "owner": "王志强",
+      "amount": 760000,
+      "items": 3,
+      "received": 0,
+      "status": "已取消",
+      "priority": "低",
+      "paid": false
+    },
+    {
+      "po": "PO-2026-1279",
+      "supplier": "深圳新元电气",
+      "created": "5月26日",
+      "eta": "6月03日",
+      "owner": "陈思远",
+      "amount": 528000,
+      "items": 5,
+      "received": 0,
+      "status": "草稿",
+      "priority": "低",
+      "paid": false
+    }
+  ],
+  "receivingDocs": [
+    {
+      "grn": "GRN-202605-0418",
+      "po": "PO-2026-1284",
+      "supplier": "佛山标准件",
+      "arrived": "5月27日 09:14",
+      "dock": "Dock-02",
+      "receiver": "刘建华",
+      "items": 18,
+      "passed": 12,
+      "failed": 0,
+      "status": "已入库",
+      "warehouse": "A 区"
+    },
+    {
+      "grn": "GRN-202605-0419",
+      "po": "PO-2026-1282",
+      "supplier": "广州化工耗材",
+      "arrived": "5月27日 10:42",
+      "dock": "Dock-04",
+      "receiver": "孙明",
+      "items": 9,
+      "passed": 5,
+      "failed": 2,
+      "status": "异常处理",
+      "warehouse": "C 区"
+    },
+    {
+      "grn": "GRN-202605-0420",
+      "po": "PO-2026-1285",
+      "supplier": "江苏铝合金集团",
+      "arrived": "5月27日 13:08",
+      "dock": "Dock-01",
+      "receiver": "刘建华",
+      "items": 4,
+      "passed": 0,
+      "failed": 0,
+      "status": "质检中",
+      "warehouse": "—"
+    },
+    {
+      "grn": "GRN-202605-0421",
+      "po": "PO-2026-1286",
+      "supplier": "华东精工机械",
+      "arrived": "5月27日 14:30",
+      "dock": "Dock-03",
+      "receiver": "—",
+      "items": 12,
+      "passed": 0,
+      "failed": 0,
+      "status": "待收货",
+      "warehouse": "—"
+    },
+    {
+      "grn": "GRN-202605-0422",
+      "po": "PO-2026-1283",
+      "supplier": "深圳新元电气",
+      "arrived": "5月26日 16:21",
+      "dock": "Dock-02",
+      "receiver": "孙明",
+      "items": 6,
+      "passed": 6,
+      "failed": 0,
+      "status": "已入库",
+      "warehouse": "D 区"
+    },
+    {
+      "grn": "GRN-202605-0423",
+      "po": "PO-2026-1281",
+      "supplier": "华东精工机械",
+      "arrived": "5月26日 11:05",
+      "dock": "Dock-01",
+      "receiver": "刘建华",
+      "items": 7,
+      "passed": 7,
+      "failed": 0,
+      "status": "已入库",
+      "warehouse": "A 区"
+    }
+  ],
+  "events": [
+    {
+      "id": "EVT-1780559095885",
+      "type": "ai_chat",
+      "message": "AI answered overview question via market-data",
+      "ref": "overview",
+      "at": "2026-06-04T07:44:55.885Z"
+    },
+    {
+      "id": "EVT-1780558749912",
+      "type": "ai_chat",
+      "message": "AI answered overview question via market-data",
+      "ref": "overview",
+      "at": "2026-06-04T07:39:09.912Z"
+    },
+    {
+      "id": "EVT-1780546306323",
+      "type": "ai_chat",
+      "message": "AI answered forecast question via doubao",
+      "ref": "forecast",
+      "at": "2026-06-04T04:11:46.323Z"
+    },
+    {
+      "id": "EVT-1780546105832",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via doubao",
+      "ref": "purchasing",
+      "at": "2026-06-04T04:08:25.832Z"
+    },
+    {
+      "id": "EVT-1780546001516",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via doubao",
+      "ref": "purchasing",
+      "at": "2026-06-04T04:06:41.516Z"
+    },
+    {
+      "id": "EVT-1780545931333",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via doubao",
+      "ref": "purchasing",
+      "at": "2026-06-04T04:05:31.333Z"
+    },
+    {
+      "id": "EVT-1780545902665",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via doubao",
+      "ref": "purchasing",
+      "at": "2026-06-04T04:05:02.665Z"
+    },
+    {
+      "id": "EVT-1780545550316",
+      "type": "ai_chat",
+      "message": "AI answered overview question via doubao",
+      "ref": "overview",
+      "at": "2026-06-04T03:59:10.316Z"
+    },
+    {
+      "id": "EVT-1780545510734",
+      "type": "ai_chat",
+      "message": "AI answered overview question via doubao",
+      "ref": "overview",
+      "at": "2026-06-04T03:58:30.734Z"
+    },
+    {
+      "id": "EVT-1780545275769",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via doubao",
+      "ref": "purchasing",
+      "at": "2026-06-04T03:54:35.769Z"
+    },
+    {
+      "id": "EVT-1780544746278",
+      "type": "ai_chat",
+      "message": "AI answered sales question via doubao",
+      "ref": "sales",
+      "at": "2026-06-04T03:45:46.278Z"
+    },
+    {
+      "id": "EVT-1780544714504",
+      "type": "ai_chat",
+      "message": "AI answered forecast question via doubao",
+      "ref": "forecast",
+      "at": "2026-06-04T03:45:14.504Z"
+    },
+    {
+      "id": "EVT-1780544649242",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via doubao",
+      "ref": "purchasing",
+      "at": "2026-06-04T03:44:09.242Z"
+    },
+    {
+      "id": "EVT-1780544557354",
+      "type": "ai_chat",
+      "message": "AI answered procurement question via doubao",
+      "ref": "procurement",
+      "at": "2026-06-04T03:42:37.354Z"
+    },
+    {
+      "id": "EVT-1780544479905",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via doubao",
+      "ref": "purchasing",
+      "at": "2026-06-04T03:41:19.905Z"
+    },
+    {
+      "id": "EVT-1780521443703",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via doubao",
+      "ref": "purchasing",
+      "at": "2026-06-03T21:17:23.703Z"
+    },
+    {
+      "id": "EVT-1780521375265",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via doubao",
+      "ref": "purchasing",
+      "at": "2026-06-03T21:16:15.265Z"
+    },
+    {
+      "id": "EVT-1780521318040",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via local",
+      "ref": "purchasing",
+      "at": "2026-06-03T21:15:18.040Z"
+    },
+    {
+      "id": "EVT-1780519813221",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via local",
+      "ref": "purchasing",
+      "at": "2026-06-03T20:50:13.221Z"
+    },
+    {
+      "id": "EVT-1780519676663",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via local",
+      "ref": "purchasing",
+      "at": "2026-06-03T20:47:56.663Z"
+    },
+    {
+      "id": "EVT-1780518728471",
+      "type": "ai_chat",
+      "message": "AI answered purchasing question via local",
+      "ref": "purchasing",
+      "at": "2026-06-03T20:32:08.471Z"
+    }
+  ],
+  "products": [
+    {
+      "sku": "SKU-00412",
+      "name": "???? 750W",
+      "category": "????",
+      "currentStock": 34,
+      "safetyStock": 50,
+      "monthlyDemand": 138,
+      "unit": "?",
+      "stockoutRisk": "?"
+    },
+    {
+      "sku": "SKU-00623",
+      "name": "????? V3.2",
+      "category": "????",
+      "currentStock": 12,
+      "safetyStock": 20,
+      "monthlyDemand": 58,
+      "unit": "?",
+      "stockoutRisk": "?"
+    },
+    {
+      "sku": "SKU-00287",
+      "name": "????? 6063",
+      "category": "???",
+      "currentStock": 148,
+      "safetyStock": 300,
+      "monthlyDemand": 710,
+      "unit": "?",
+      "stockoutRisk": "?"
+    },
+    {
+      "sku": "SKU-00142",
+      "name": "???? 6204-ZZ",
+      "category": "????",
+      "currentStock": 2840,
+      "safetyStock": 500,
+      "monthlyDemand": 430,
+      "unit": "?",
+      "stockoutRisk": "?"
+    },
+    {
+      "sku": "SKU-00815",
+      "name": "???? 50mm",
+      "category": "????",
+      "currentStock": 67,
+      "safetyStock": 80,
+      "monthlyDemand": 152,
+      "unit": "?",
+      "stockoutRisk": "?"
+    },
+    {
+      "sku": "SKU-00744",
+      "name": "??????",
+      "category": "??",
+      "currentStock": 920,
+      "safetyStock": 200,
+      "monthlyDemand": 260,
+      "unit": "?",
+      "stockoutRisk": "?"
+    }
+  ],
+  "suppliers": [
+    {
+      "name": "??????",
+      "category": "????",
+      "onTimeRate": 96.7,
+      "qualityRate": 97.8,
+      "leadTimeDays": 7,
+      "risk": "?",
+      "country": "??"
+    },
+    {
+      "name": "??????",
+      "category": "????",
+      "onTimeRate": 98.4,
+      "qualityRate": 99.1,
+      "leadTimeDays": 9,
+      "risk": "?",
+      "country": "??"
+    },
+    {
+      "name": "???????",
+      "category": "???",
+      "onTimeRate": 99.2,
+      "qualityRate": 98.4,
+      "leadTimeDays": 12,
+      "risk": "?",
+      "country": "??"
+    },
+    {
+      "name": "??????",
+      "category": "??",
+      "onTimeRate": 92.3,
+      "qualityRate": 91.8,
+      "leadTimeDays": 14,
+      "risk": "?",
+      "country": "??"
+    },
+    {
+      "name": "?????",
+      "category": "???",
+      "onTimeRate": 97.1,
+      "qualityRate": 96.2,
+      "leadTimeDays": 5,
+      "risk": "?",
+      "country": "??"
+    }
+  ],
+  "salesForecasts": [
+    {
+      "sku": "SKU-00412",
+      "horizon": "30d",
+      "method": "Holt-Winters",
+      "forecastDemand": 138,
+      "confidence": "?",
+      "trend": "up"
+    },
+    {
+      "sku": "SKU-00623",
+      "horizon": "30d",
+      "method": "Holt-Winters",
+      "forecastDemand": 58,
+      "confidence": "?",
+      "trend": "up"
+    },
+    {
+      "sku": "SKU-00287",
+      "horizon": "30d",
+      "method": "SES",
+      "forecastDemand": 710,
+      "confidence": "?",
+      "trend": "flat"
+    },
+    {
+      "sku": "SKU-00815",
+      "horizon": "30d",
+      "method": "Holt",
+      "forecastDemand": 152,
+      "confidence": "?",
+      "trend": "up"
+    }
+  ],
+  "marketSignals": [
+    {
+      "type": "fx",
+      "title": "USD/CNY 6.7694",
+      "severity": "中",
+      "value": "Frankfurter 2026-06-03: USD/CNY=6.7694, USD/EUR=0.86103, USD/JPY=159.86",
+      "recommendedAction": "检查美元计价采购合同和进口件报价有效期。"
+    },
+    {
+      "type": "news",
+      "title": "新闻联网限频，使用风险主题 fallback",
+      "severity": "低",
+      "value": "429 Too Many Requests",
+      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
+    },
+    {
+      "type": "fx",
+      "title": "USD/CNY 6.7694",
+      "severity": "中",
+      "value": "Frankfurter 2026-06-03: USD/CNY=6.7694, USD/EUR=0.86103, USD/JPY=159.86",
+      "recommendedAction": "检查美元计价采购合同和进口件报价有效期。"
+    },
+    {
+      "type": "news",
+      "title": "新闻联网限频，使用风险主题 fallback",
+      "severity": "低",
+      "value": "429 Too Many Requests",
+      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
+    },
+    {
+      "type": "fx",
+      "title": "USD/CNY 6.7694",
+      "severity": "中",
+      "value": "Frankfurter 2026-06-03: USD/CNY=6.7694, USD/EUR=0.86103, USD/JPY=159.86",
+      "recommendedAction": "检查美元计价采购合同和进口件报价有效期。"
+    },
+    {
+      "type": "news",
+      "title": "新闻联网限频，使用风险主题 fallback",
+      "severity": "低",
+      "value": "429 Too Many Requests",
+      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
+    },
+    {
+      "type": "fx",
+      "title": "USD/CNY 6.7694",
+      "severity": "中",
+      "value": "Frankfurter 2026-06-03: USD/CNY=6.7694, USD/EUR=0.86103, USD/JPY=159.86",
+      "recommendedAction": "检查美元计价采购合同和进口件报价有效期。"
+    },
+    {
+      "type": "news",
+      "title": "新闻联网限频，使用风险主题 fallback",
+      "severity": "低",
+      "value": "This operation was aborted",
+      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
+    },
+    {
+      "type": "fx",
+      "title": "汇率数据暂不可用",
+      "severity": "低",
+      "value": "This operation was aborted",
+      "recommendedAction": "稍后重试或改用内部财务汇率表。"
+    },
+    {
+      "type": "news",
+      "title": "新闻联网限频，使用风险主题 fallback",
+      "severity": "低",
+      "value": "This operation was aborted",
+      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
+    },
+    {
+      "type": "fx",
+      "title": "汇率数据暂不可用",
+      "severity": "低",
+      "value": "This operation was aborted",
+      "recommendedAction": "稍后重试或改用内部财务汇率表。"
+    },
+    {
+      "type": "news",
+      "title": "新闻联网限频，使用风险主题 fallback",
+      "severity": "低",
+      "value": "This operation was aborted",
+      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
+    }
+  ],
+  "users": [],
+  "marketPrices": [
+    {
+      "symbol": "FE-ORE-62",
+      "name": "铁矿石 62%粉矿",
+      "category": "黑色原料",
+      "price": 828,
+      "unit": "元/吨",
+      "changePct": 1.18,
+      "direction": "up",
+      "asOf": "2026-06-04 07:39",
+      "source": "UAT行情样本",
+      "procurementImpact": "影响钢结构件、铝型材替代方案和华东精工机械报价复核。"
+    },
+    {
+      "symbol": "RB-HRB400E",
+      "name": "螺纹钢 HRB400E",
+      "category": "黑色成材",
+      "price": 3420,
+      "unit": "元/吨",
+      "changePct": 0.64,
+      "direction": "up",
+      "asOf": "2026-06-04 07:39",
+      "source": "UAT行情样本",
+      "procurementImpact": "若连续上涨，建议锁定本周钢材采购报价并复核安全库存。"
+    },
+    {
+      "symbol": "HC-Q235B",
+      "name": "热轧卷板 Q235B",
+      "category": "黑色成材",
+      "price": 3568,
+      "unit": "元/吨",
+      "changePct": -0.22,
+      "direction": "down",
+      "asOf": "2026-06-04 07:39",
+      "source": "UAT行情样本",
+      "procurementImpact": "价格回落时可暂缓低优先级补采，优先处理高风险缺料订单。"
+    },
+    {
+      "symbol": "AL-SHFE",
+      "name": "电解铝",
+      "category": "有色金属",
+      "price": 20480,
+      "unit": "元/吨",
+      "changePct": 0.35,
+      "direction": "up",
+      "asOf": "2026-06-04 07:39",
+      "source": "UAT行情样本",
+      "procurementImpact": "关联 SKU-00287 铝合金型材，当前库存低于安全线，应优先补采。"
+    },
+    {
+      "symbol": "CU-SHFE",
+      "name": "电解铜",
+      "category": "有色金属",
+      "price": 78260,
+      "unit": "元/吨",
+      "changePct": -0.48,
+      "direction": "down",
+      "asOf": "2026-06-04 07:39",
+      "source": "UAT行情样本",
+      "procurementImpact": "可复核电气元件供应商报价，争取铜价回落带来的成本让利。"
+    },
+    {
+      "symbol": "USD-CNY",
+      "name": "美元兑人民币",
+      "category": "汇率",
+      "price": 6.7694,
+      "unit": "CNY",
+      "changePct": 0.12,
+      "direction": "up",
+      "asOf": "2026-06-04 07:39",
+      "source": "Frankfurter/缓存",
+      "procurementImpact": "美元计价进口件需确认报价有效期和锁汇策略。"
+    }
+  ]
+}
