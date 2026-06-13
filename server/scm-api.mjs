@@ -45,6 +45,60 @@ const purchaseOrderStatuses = new Set(['草稿', '待审批', '已审批', '已�
 const priorities = new Set(['高', '中', '低'])
 const systemRequestSources = new Set(['forecast', 'inventory', 'mrp-release'])
 const postedReceivingStatuses = new Set(['已入库', '异常处理'])
+const workflowDefinitions = {
+  purchaseRequest: {
+    label: '采购申请',
+    idField: 'pr',
+    statuses: purchaseRequestStatuses,
+    transitions: {
+      草稿: ['待审批', '已取消'],
+      待审批: ['已批准', '已驳回', '已取消'],
+      已批准: ['已转PO', '已取消'],
+      已驳回: ['草稿', '已取消'],
+      已转PO: [],
+      已取消: [],
+    },
+  },
+  purchaseOrder: {
+    label: '采购订单',
+    idField: 'po',
+    statuses: purchaseOrderStatuses,
+    transitions: {
+      草稿: ['待审批', '已取消'],
+      待审批: ['已审批', '已驳回', '已取消'],
+      已审批: ['已发出', '已取消'],
+      已发出: ['部分到货', '已完成', '已取消'],
+      部分到货: ['已完成', '已取消'],
+      已完成: [],
+      已驳回: ['草稿', '已取消'],
+      已取消: [],
+    },
+  },
+  rfq: {
+    label: '询价单',
+    idField: 'id',
+    statuses: new Set(['进行中', '比价中', '已授标', '已转PO', '已关闭', '已取消']),
+    transitions: {
+      进行中: ['比价中', '已授标', '已取消'],
+      比价中: ['进行中', '已授标', '已取消'],
+      已授标: ['已转PO', '已关闭'],
+      已转PO: ['已关闭'],
+      已关闭: [],
+      已取消: [],
+    },
+  },
+  receivingDoc: {
+    label: '收货单',
+    idField: 'grn',
+    statuses: new Set(['待收货', '质检中', '已入库', '异常处理']),
+    transitions: {
+      待收货: ['质检中'],
+      质检中: ['已入库', '异常处理'],
+      已入库: [],
+      异常处理: [],
+    },
+  },
+}
 
 async function readDb() {
   const raw = await readFile(dataFile, 'utf8')
@@ -127,15 +181,169 @@ function todayLabel() {
   return `${now.getMonth() + 1}月${now.getDate()}日`
 }
 
+function ensureEvents(db) {
+  if (!Array.isArray(db.events)) db.events = []
+  return db.events
+}
+
+function ensureAuditLog(db) {
+  if (!Array.isArray(db.auditLog)) db.auditLog = []
+  return db.auditLog
+}
+
 function event(db, type, message, ref) {
-  db.events.unshift({
+  const events = ensureEvents(db)
+  events.unshift({
     id: `EVT-${Date.now()}`,
     type,
     message,
     ref,
     at: new Date().toISOString(),
   })
-  db.events = db.events.slice(0, 50)
+  db.events = events.slice(0, 50)
+}
+
+function workflowError(message, status = 409) {
+  const error = new Error(message)
+  error.status = status
+  return error
+}
+
+function actorFromBody(body = {}, fallback = 'system') {
+  return body.actor || body.updatedBy || body.postedBy || body.receiver || fallback
+}
+
+function workflowEntityId(definition, entity) {
+  return String(entity?.[definition.idField] || entity?.id || '')
+}
+
+function recordAudit(db, entry) {
+  const auditLog = ensureAuditLog(db)
+  const timestamp = entry.timestamp || new Date().toISOString()
+  const auditId = entry.auditId || nextSequenceId(auditLog, 'auditId', 'AUD-2026-', 1)
+  const record = {
+    auditId,
+    id: auditId,
+    timestamp,
+    actor: entry.actor || 'system',
+    source: entry.source || 'api',
+    action: entry.action || 'status_transition',
+    entityType: entry.entityType,
+    entityId: entry.entityId,
+    fromStatus: entry.fromStatus ?? null,
+    toStatus: entry.toStatus ?? null,
+    reason: entry.reason || '',
+    metadata: entry.metadata || {},
+  }
+  auditLog.unshift(record)
+  db.auditLog = auditLog.slice(0, 500)
+  return record
+}
+
+function createAuditLogEntry(db, entry) {
+  return recordAudit(db, entry)
+}
+
+function appendEntityAudit(entity, audit) {
+  if (!entity || !audit) return
+  entity.statusUpdatedAt = audit.timestamp
+  entity.lastAuditId = audit.auditId
+  entity.auditTrailIds = Array.isArray(entity.auditTrailIds) ? entity.auditTrailIds : []
+  entity.auditTrailIds = [audit.auditId, ...entity.auditTrailIds.filter((id) => id !== audit.auditId)].slice(0, 20)
+}
+
+function recordWorkflowCreation(db, entityType, entity, options = {}) {
+  const definition = workflowDefinitions[entityType]
+  if (!definition) throw workflowError(`unknown workflow entity type: ${entityType}`, 500)
+  const entityId = workflowEntityId(definition, entity)
+  const status = entity.status || options.status
+  if (!entityId) throw workflowError(`${definition.label} is missing workflow id`, 400)
+  if (!definition.statuses.has(status)) {
+    throw workflowError(`invalid ${definition.label} status: ${status}`, 400)
+  }
+  const audit = recordAudit(db, {
+    entityType,
+    entityId,
+    fromStatus: null,
+    toStatus: status,
+    action: options.action || `${entityType}_created`,
+    actor: options.actor || 'system',
+    source: options.source || 'api',
+    reason: options.reason || `${definition.label} created`,
+    metadata: options.metadata,
+  })
+  appendEntityAudit(entity, audit)
+  return audit
+}
+
+function canTransition(entityType, fromStatus, toStatus) {
+  const definition = workflowDefinitions[entityType]
+  if (!definition || !definition.statuses.has(fromStatus) || !definition.statuses.has(toStatus)) return false
+  if (fromStatus === toStatus) return true
+  return new Set(definition.transitions[fromStatus] || []).has(toStatus)
+}
+
+function assertValidTransition(entityType, fromStatus, toStatus) {
+  const definition = workflowDefinitions[entityType]
+  if (!definition) throw workflowError(`unknown workflow entity type: ${entityType}`, 500)
+  if (!definition.statuses.has(toStatus)) {
+    throw workflowError(`invalid ${definition.label} status: ${toStatus}`, 400)
+  }
+  if (!definition.statuses.has(fromStatus)) {
+    throw workflowError(`invalid current ${definition.label} status: ${fromStatus}`, 400)
+  }
+  if (!canTransition(entityType, fromStatus, toStatus)) {
+    throw workflowError(`${definition.label} cannot transition from ${fromStatus} to ${toStatus}`)
+  }
+}
+
+function transitionEntity(db, entityType, entity, nextStatus, options = {}) {
+  const definition = workflowDefinitions[entityType]
+  if (!definition) throw workflowError(`unknown workflow entity type: ${entityType}`, 500)
+  const entityId = workflowEntityId(definition, entity)
+  const currentStatus = entity.status
+  if (!entityId) throw workflowError(`${definition.label} is missing workflow id`, 400)
+  assertValidTransition(entityType, currentStatus, nextStatus)
+  if (currentStatus === nextStatus) return { changed: false, audit: null }
+
+  const audit = createAuditLogEntry(db, {
+    entityType,
+    entityId,
+    fromStatus: currentStatus,
+    toStatus: nextStatus,
+    action: options.action || `${entityType}_status_changed`,
+    actor: options.actor || 'system',
+    source: options.source || 'api',
+    reason: options.reason || '',
+    metadata: options.metadata,
+  })
+  entity.status = nextStatus
+  appendEntityAudit(entity, audit)
+  return { changed: true, audit }
+}
+
+function applyWorkflowTransition(db, entityType, entity, nextStatus, options = {}) {
+  return transitionEntity(db, entityType, entity, nextStatus, options)
+}
+
+function recordValidationBlocked(db, entityType, entity, action, reason, metadata = {}) {
+  const definition = workflowDefinitions[entityType]
+  if (!definition) return null
+  const entityId = workflowEntityId(definition, entity)
+  if (!entityId) return null
+  const audit = createAuditLogEntry(db, {
+    entityType,
+    entityId,
+    fromStatus: entity.status || null,
+    toStatus: entity.status || null,
+    action: 'system_validation_blocked',
+    actor: metadata.actor || 'system',
+    source: metadata.source || 'api',
+    reason: reason || action,
+    metadata: { action, ...metadata },
+  })
+  appendEntityAudit(entity, audit)
+  return audit
 }
 
 function ensureUsers(db) {
@@ -569,12 +777,42 @@ function applyReceivingToPoAndInventory(db, grn, po, options = {}) {
 
   calculatePoHeaderFromLines(po)
   const header = headerStatusFromLines(po)
-  po.status = header.status
+  if (po.status !== header.status) {
+    applyWorkflowTransition(db, 'purchaseOrder', po, header.status, {
+      action: 'purchase_order_receiving_status',
+      actor: options.postedBy || grn.receiver || 'system',
+      source: 'receiving',
+      reason: `GRN ${grn.grn} posted receiving quantities`,
+      metadata: {
+        grnId: grn.grn,
+        poId: po.po,
+        acceptedQty: grn.lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0),
+        rejectedQty: grn.lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0),
+      },
+    })
+  }
   po.erpStatus = header.erpStatus
   grn.postedAt = grn.postedAt || new Date().toISOString()
   grn.postedBy = grn.postedBy || options.postedBy || grn.receiver || 'system'
   grn.inventoryApplied = true
   grn.warnings = validation.warnings
+  const inventoryAudit = createAuditLogEntry(db, {
+    entityType: 'receivingDoc',
+    entityId: grn.grn,
+    fromStatus: grn.status,
+    toStatus: grn.status,
+    action: 'inventory_posted',
+    actor: grn.postedBy,
+    source: 'system',
+    reason: `Accepted quantity posted to inventory for ${grn.grn}`,
+    metadata: {
+      poId: po.po,
+      movementIds: grn.inventoryMovementIds,
+      acceptedQty: grn.lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0),
+      rejectedQty: grn.lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0),
+    },
+  })
+  appendEntityAudit(grn, inventoryAudit)
   return { warnings: validation.warnings }
 }
 
@@ -1525,7 +1763,8 @@ function buildAiContext({ moduleId, activeInsight }, db) {
     } : null,
     marketPrices: ensureMarketPrices(db).slice(0, 12),
     marketSignals: (db.marketSignals || []).slice(0, 8),
-    recentEvents: db.events.slice(0, 8),
+    recentEvents: ensureEvents(db).slice(0, 8),
+    recentAuditLog: ensureAuditLog(db).slice(0, 12),
   }
 }
 
@@ -1976,6 +2215,17 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, ensureRfqs(db))
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/audit-log') {
+      const entityType = url.searchParams.get('entityType') || ''
+      const entityId = url.searchParams.get('entityId') || ''
+      const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') || 100)))
+      const entries = ensureAuditLog(db)
+        .filter((entry) => !entityType || entry.entityType === entityType)
+        .filter((entry) => !entityId || entry.entityId === entityId)
+        .slice(0, limit)
+      return send(res, 200, entries)
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/rfqs') {
       const body = await readBody(req)
       const rfqs = ensureRfqs(db)
@@ -1984,7 +2234,7 @@ const server = http.createServer(async (req, res) => {
         item.sourceRequest &&
         body.sourceRequest &&
         item.sourceRequest === body.sourceRequest &&
-        !['已授标', '已取消'].includes(item.status)
+        !['已授标', '已转PO', '已关闭', '已取消'].includes(item.status)
       )
       if (duplicate) {
         return send(res, 409, {
@@ -2015,6 +2265,15 @@ const server = http.createServer(async (req, res) => {
       if (!rfq.title || rfq.suppliers < 0 || rfq.quoted < 0 || rfq.quoted > rfq.suppliers) {
         return send(res, 400, { error: 'invalid RFQ fields' })
       }
+      if (!workflowDefinitions.rfq.statuses.has(rfq.status)) {
+        return send(res, 400, { error: `invalid RFQ status: ${rfq.status}` })
+      }
+      recordWorkflowCreation(db, 'rfq', rfq, {
+        actor: actorFromBody(body, 'system'),
+        source: 'api',
+        reason: body.reason || 'RFQ created',
+        metadata: { sourceRequest: rfq.sourceRequest, sourceSku: rfq.sourceSku },
+      })
       rfqs.unshift(rfq)
       event(db, 'rfq_created', `询价单 ${rfq.id} 已创建`, rfq.id)
       await writeDb(db)
@@ -2027,9 +2286,24 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req)
       const rfq = ensureRfqs(db).find((item) => item.id === rfqId)
       if (!rfq) return send(res, 404, { error: 'RFQ not found' })
-      rfq.status = body.status || rfq.status
       if (body.bestSupplier) rfq.bestSupplier = body.bestSupplier
       if (typeof body.bestPrice === 'number') rfq.bestPrice = body.bestPrice
+      const nextStatus = body.status || rfq.status
+      try {
+        applyWorkflowTransition(db, 'rfq', rfq, nextStatus, {
+          action: nextStatus === '已授标' ? 'rfq_awarded' : 'rfq_status_changed',
+          actor: actorFromBody(body, 'system'),
+          source: 'api',
+          reason: body.reason || '',
+          metadata: {
+            bestSupplier: rfq.bestSupplier || '',
+            bestPrice: rfq.bestPrice || 0,
+            sourceRequest: rfq.sourceRequest || '',
+          },
+        })
+      } catch (error) {
+        return send(res, error.status || 400, { error: error.message })
+      }
       if (rfq.status === '已授标' && !rfq.linkedPo) {
         const request = rfq.sourceRequest
           ? ensurePurchaseRequests(db).find((item) => item.pr === rfq.sourceRequest)
@@ -2082,9 +2356,23 @@ const server = http.createServer(async (req, res) => {
           },
         }
         normalizePurchaseOrder(po)
+        recordWorkflowCreation(db, 'purchaseOrder', po, {
+          action: 'purchase_order_created_from_rfq',
+          actor: actorFromBody(body, 'system'),
+          source: 'rfq-award',
+          reason: `RFQ ${rfq.id} awarded`,
+          metadata: { rfqId: rfq.id, sourceRequest: rfq.sourceRequest || '' },
+        })
         db.purchaseOrders.unshift(po)
         rfq.linkedPo = po.po
         if (request && !request.linkedPo) request.linkedPo = po.po
+        applyWorkflowTransition(db, 'rfq', rfq, '已转PO', {
+          action: 'rfq_converted_to_po',
+          actor: actorFromBody(body, 'system'),
+          source: 'rfq-award',
+          reason: `Converted to ${po.po}`,
+          metadata: { poId: po.po, sourceRequest: rfq.sourceRequest || '', bestSupplier: rfq.bestSupplier || '' },
+        })
         event(db, 'purchase_order_created', `RFQ ${rfq.id} 授标生成 ${po.po}`, po.po)
       }
       event(db, 'rfq_status', `${rfq.id} 状态更新为 ${rfq.status}`, rfq.id)
@@ -2143,6 +2431,12 @@ const server = http.createServer(async (req, res) => {
       if (!priorities.has(request.priority)) {
         return send(res, 400, { error: `invalid priority: ${request.priority}` })
       }
+      recordWorkflowCreation(db, 'purchaseRequest', request, {
+        actor: actorFromBody(body, request.requester || 'system'),
+        source: request.source || 'api',
+        reason: request.reason || 'purchase request created',
+        metadata: { sourceSku: request.sourceSku, quantity: request.quantity, amount: request.amount },
+      })
       ensurePurchaseRequests(db).unshift(request)
       event(db, 'purchase_request_created', `采购申请 ${request.pr} 已提交审批`, request.pr)
       await writeDb(db)
@@ -2159,7 +2453,17 @@ const server = http.createServer(async (req, res) => {
       if (!purchaseRequestStatuses.has(nextStatus)) {
         return send(res, 400, { error: `invalid purchase request status: ${nextStatus}` })
       }
-      request.status = nextStatus
+      try {
+        applyWorkflowTransition(db, 'purchaseRequest', request, nextStatus, {
+          action: nextStatus === '已批准' ? 'purchase_request_approved' : nextStatus === '已驳回' ? 'purchase_request_rejected' : 'purchase_request_status_changed',
+          actor: actorFromBody(body, request.buyer || request.requester || 'system'),
+          source: 'api',
+          reason: body.reason || '',
+          metadata: { sourceSku: request.sourceSku || '', linkedPo: request.linkedPo || '' },
+        })
+      } catch (error) {
+        return send(res, error.status || 400, { error: error.message })
+      }
       if (body.reason) request.decisionReason = body.reason
       if (request.status === '已批准') request.approvedAt = new Date().toISOString()
       event(db, 'purchase_request_status', `${request.pr} 状态更新为 ${request.status}`, request.pr)
@@ -2173,7 +2477,14 @@ const server = http.createServer(async (req, res) => {
       const request = ensurePurchaseRequests(db).find((item) => item.pr === prId)
       if (!request) return send(res, 404, { error: 'PR not found' })
       if (request.linkedPo) return send(res, 409, { error: 'purchase request already converted', po: request.linkedPo })
-      if (request.status !== '已批准') return send(res, 409, { error: `cannot convert PR with status ${request.status}` })
+      if (request.status !== '已批准') {
+        recordValidationBlocked(db, 'purchaseRequest', request, 'convert_to_po', `cannot convert PR with status ${request.status}`, {
+          actor: request.buyer || request.requester || 'system',
+          source: 'purchase-request',
+        })
+        await writeDb(db)
+        return send(res, 409, { error: `cannot convert PR with status ${request.status}` })
+      }
       const poId = nextSequenceId(db.purchaseOrders, 'po', 'PO-2026-', 1300)
       const requestLines = Array.isArray(request.lines) && request.lines.length > 0
         ? request.lines.map((line, index) => createPoLineFromRequest({ ...request, ...line }, poId, index))
@@ -2202,8 +2513,25 @@ const server = http.createServer(async (req, res) => {
         approvalSnapshot: request.approvalSnapshot || null,
       }
       normalizePurchaseOrder(po)
+      try {
+        applyWorkflowTransition(db, 'purchaseRequest', request, '已转PO', {
+          action: 'purchase_request_converted_to_po',
+          actor: request.buyer || request.requester || 'system',
+          source: 'purchase-request',
+          reason: `Converted to ${po.po}`,
+          metadata: { poId: po.po, lineCount: po.lines.length },
+        })
+        recordWorkflowCreation(db, 'purchaseOrder', po, {
+          action: 'purchase_order_created_from_pr',
+          actor: request.buyer || request.requester || 'system',
+          source: 'purchase-request',
+          reason: `Created from ${request.pr}`,
+          metadata: { sourceRequest: request.pr, lineCount: po.lines.length },
+        })
+      } catch (error) {
+        return send(res, error.status || 400, { error: error.message })
+      }
       db.purchaseOrders.unshift(po)
-      request.status = '已转PO'
       request.linkedPo = po.po
       request.convertedAt = new Date().toISOString()
       event(db, 'purchase_request_converted', `采购申请 ${request.pr} 已转为 ${po.po}`, po.po)
@@ -2274,6 +2602,12 @@ const server = http.createServer(async (req, res) => {
       if (!priorities.has(po.priority)) {
         return send(res, 400, { error: `invalid priority: ${po.priority}` })
       }
+      recordWorkflowCreation(db, 'purchaseOrder', po, {
+        actor: actorFromBody(body, po.owner || 'system'),
+        source: po.source || 'api',
+        reason: po.reason || 'purchase order created',
+        metadata: { sourceSku: po.sourceSku, lineCount: po.lines.length, amount: po.amount },
+      })
       db.purchaseOrders.unshift(po)
       event(db, 'purchase_order_created', `采购订单 ${po.po} 已提交审批`, po.po)
       await writeDb(db)
@@ -2295,12 +2629,40 @@ const server = http.createServer(async (req, res) => {
       if (nextReceived < 0 || nextReceived > po.items) {
         return send(res, 400, { error: 'received quantity is invalid' })
       }
+      if (['已完成', '已取消'].includes(po.status) && (
+        Array.isArray(body.lines) ||
+        body.received !== undefined ||
+        (body.status !== undefined && body.status !== po.status)
+      )) {
+        const message = `PO ${po.po} is ${po.status}; closed or cancelled orders cannot be edited as open`
+        recordValidationBlocked(db, 'purchaseOrder', po, 'edit_closed_po', message, {
+          actor: actorFromBody(body, po.owner || 'system'),
+          source: 'api',
+          requestedStatus: nextStatus,
+        })
+        await writeDb(db)
+        return send(res, 409, { error: message })
+      }
       if (Array.isArray(body.lines)) {
         po.lines = body.lines.map((line, index) => normalizePoLine(line, po, index))
         calculatePoHeaderFromLines(po)
       }
-      po.status = nextStatus
       po.received = nextReceived
+      try {
+        applyWorkflowTransition(db, 'purchaseOrder', po, nextStatus, {
+          action: nextStatus === '已审批' ? 'purchase_order_approved'
+            : nextStatus === '已驳回' ? 'purchase_order_rejected'
+              : nextStatus === '已发出' ? 'purchase_order_issued'
+                : nextStatus === '已取消' ? 'purchase_order_cancelled'
+                  : 'purchase_order_status_changed',
+          actor: actorFromBody(body, po.owner || 'system'),
+          source: 'api',
+          reason: body.reason || '',
+          metadata: { received: nextReceived, lineCount: po.lines.length },
+        })
+      } catch (error) {
+        return send(res, error.status || 400, { error: error.message })
+      }
       event(db, 'purchase_order_status', `${po.po} 状态更新为 ${po.status}`, po.po)
       await writeDb(db)
       return send(res, 200, normalizePurchaseOrder(po))
@@ -2354,6 +2716,9 @@ const server = http.createServer(async (req, res) => {
         inventoryApplied: false,
         inventoryMovementIds: [],
       }
+      if (!workflowDefinitions.receivingDoc.statuses.has(grn.status)) {
+        return send(res, 400, { error: `invalid receiving status: ${grn.status}` })
+      }
       normalizeGrnLines(grn, po, { assumeApplied: false })
       if (postedReceivingStatuses.has(grn.status)) {
         try {
@@ -2365,8 +2730,26 @@ const server = http.createServer(async (req, res) => {
           return send(res, error.status || 400, { error: error.message })
         }
       }
+      try {
+        recordWorkflowCreation(db, 'receivingDoc', grn, {
+          actor: actorFromBody(body, grn.receiver || 'system'),
+          source: 'receiving',
+          reason: `Receiving document created for ${grn.po}`,
+          metadata: { poId: grn.po, lineCount: grn.lines.length, inventoryApplied: grn.inventoryApplied },
+        })
+        if (po && po.status === '已发出') {
+          applyWorkflowTransition(db, 'purchaseOrder', po, '部分到货', {
+            action: 'purchase_order_receiving_started',
+            actor: grn.receiver || 'system',
+            source: 'receiving',
+            reason: `GRN ${grn.grn} created`,
+            metadata: { grnId: grn.grn, poId: po.po },
+          })
+        }
+      } catch (error) {
+        return send(res, error.status || 400, { error: error.message })
+      }
       db.receivingDocs.unshift(grn)
-      if (po && po.status === '已发出') po.status = '部分到货'
       event(db, 'receiving_created', `收货单 ${grn.grn} 已创建`, grn.grn)
       await writeDb(db)
       return send(res, 201, grn)
@@ -2385,12 +2768,30 @@ const server = http.createServer(async (req, res) => {
         return send(res, 400, { error: 'receiving inspection quantities are invalid' })
       }
       const previousStatus = grn.status
+      const requestedStatus = body.status || grn.status
       const po = db.purchaseOrders.find((item) => item.po === grn.po)
       if (!po) return send(res, 400, { error: 'valid PO is required for receiving update' })
       normalizePurchaseOrder(po)
       const wasPosted = postedReceivingStatuses.has(previousStatus)
+      if (wasPosted && body.status !== undefined) {
+        const message = `GRN ${grn.grn} is already posted; duplicate posting is blocked`
+        recordValidationBlocked(db, 'receivingDoc', grn, 'post_grn', message, {
+          actor: actorFromBody(body, grn.receiver || 'system'),
+          source: 'receiving',
+          requestedStatus,
+        })
+        await writeDb(db)
+        return send(res, 409, { error: message })
+      }
       const protectedChangeError = postedGrnProtectedChangeError(grn, body, po)
-      if (protectedChangeError) return send(res, 400, { error: protectedChangeError })
+      if (protectedChangeError) {
+        recordValidationBlocked(db, 'receivingDoc', grn, 'edit_posted_grn', protectedChangeError, {
+          actor: actorFromBody(body, grn.receiver || 'system'),
+          source: 'receiving',
+        })
+        await writeDb(db)
+        return send(res, 400, { error: protectedChangeError })
+      }
       const aggregatePatch = !Array.isArray(body.lines) && (
         body.passed !== undefined ||
         body.failed !== undefined ||
@@ -2398,7 +2799,9 @@ const server = http.createServer(async (req, res) => {
         body.sku !== undefined ||
         body.warehouse !== undefined
       )
-      Object.assign(grn, body)
+      const patch = { ...body }
+      delete patch.status
+      Object.assign(grn, patch)
       grn.items = nextItems
       grn.passed = nextPassed
       grn.failed = nextFailed
@@ -2407,7 +2810,7 @@ const server = http.createServer(async (req, res) => {
           poLineId: body.poLineId || grn.poLineId || '',
           sku: body.sku || grn.sku || po.sourceSku || '',
           itemName: body.sourceName || grn.sourceName || po.sourceName || '',
-          receivedQty: postedReceivingStatuses.has(grn.status) ? nextPassed + nextFailed : nextItems,
+          receivedQty: postedReceivingStatuses.has(requestedStatus) ? nextPassed + nextFailed : nextItems,
           acceptedQty: nextPassed,
           rejectedQty: nextFailed,
           unit: grn.unit || po.unit || '',
@@ -2416,6 +2819,17 @@ const server = http.createServer(async (req, res) => {
           appliedAcceptedQty: wasPosted ? toNumber(grn.lines?.[0]?.appliedAcceptedQty || 0) : 0,
           appliedRejectedQty: wasPosted ? toNumber(grn.lines?.[0]?.appliedRejectedQty || 0) : 0,
         }]
+      }
+      try {
+        applyWorkflowTransition(db, 'receivingDoc', grn, requestedStatus, {
+          action: postedReceivingStatuses.has(requestedStatus) ? 'receiving_posted' : 'receiving_status_changed',
+          actor: actorFromBody(body, grn.receiver || 'system'),
+          source: 'receiving',
+          reason: body.reason || '',
+          metadata: { poId: grn.po, lineCount: Array.isArray(grn.lines) ? grn.lines.length : 0 },
+        })
+      } catch (error) {
+        return send(res, error.status || 400, { error: error.message })
       }
       normalizeGrnLines(grn, po, { assumeApplied: wasPosted && !Array.isArray(grn.lines) })
       if (postedReceivingStatuses.has(grn.status)) {

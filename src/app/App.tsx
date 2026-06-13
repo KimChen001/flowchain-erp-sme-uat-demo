@@ -359,6 +359,9 @@ type PurchaseOrder = typeof purchaseOrders[number] & {
   supplierId?: string;
   warehouseId?: string;
   erpStatus?: string;
+  statusUpdatedAt?: string;
+  lastAuditId?: string;
+  auditTrailIds?: string[];
 };
 type PurchaseOrderDraft = Omit<PurchaseOrder, "po" | "created"> & { po?: string; created?: string };
 type PurchaseRequestStatus = "草稿" | "待审批" | "已批准" | "已驳回" | "已转PO" | "已取消";
@@ -407,6 +410,9 @@ type PurchaseRequest = {
     }[];
   } | null;
   approvalSnapshot?: ApprovalSnapshot | null;
+  statusUpdatedAt?: string;
+  lastAuditId?: string;
+  auditTrailIds?: string[];
 };
 type PurchaseIntent = {
   selectedPr?: string;
@@ -484,6 +490,9 @@ type ReceivingDoc = typeof receivingDocs[number] & {
   postedBy?: string;
   inventoryApplied?: boolean;
   inventoryMovementIds?: string[];
+  statusUpdatedAt?: string;
+  lastAuditId?: string;
+  auditTrailIds?: string[];
 };
 
 const recvStatusMeta: Record<RecvStatus, { color: string; bg: string }> = {
@@ -632,16 +641,26 @@ const qcExceptions = [
 ];
 
 const navItems = [
-  { icon: BarChart2,     label: "总览",       id: "overview"     },
-  { icon: Package,       label: "库存管理",   id: "inventory"    },
-  { icon: ShoppingCart,  label: "产品销售",   id: "sales"        },
-  { icon: TrendingUp,    label: "预测分析",   id: "forecast"     },
-  { icon: ClipboardCheck, label: "采购申请",  id: "purchaseRequests" },
-  { icon: ClipboardList, label: "采购订单",   id: "purchasing"   },
-  { icon: FileSpreadsheet, label: "询价 RFQ", id: "rfq"          },
-  { icon: PackageCheck,  label: "收货管理",   id: "receiving"    },
-  { icon: DollarSign,    label: "采购费用",   id: "procurement"  },
-];
+  { icon: BarChart2,       label: "每日工作台",     id: "overview"         },
+  { icon: Package,         label: "库存",           id: "inventory"        },
+  { icon: ClipboardCheck,  label: "采购申请",       id: "purchaseRequests" },
+  { icon: ClipboardList,   label: "采购订单",       id: "purchasing"       },
+  { icon: FileSpreadsheet, label: "供应商报价",     id: "rfq"              },
+  { icon: PackageCheck,    label: "收货",           id: "receiving"        },
+  { icon: Handshake,       label: "供应商与绩效",   id: "procurement"      },
+  { icon: ShoppingCart,    label: "销售表现",       id: "sales"            },
+  { icon: TrendingUp,      label: "高级计划",       id: "forecast"         },
+] as const;
+
+const navGroups = [
+  { label: "首页", itemIds: ["overview"] },
+  { label: "库存", itemIds: ["inventory"] },
+  { label: "采购", itemIds: ["purchaseRequests", "purchasing", "rfq"] },
+  { label: "收货", itemIds: ["receiving"] },
+  { label: "供应商", itemIds: ["procurement"] },
+  { label: "报表 / 绩效", itemIds: ["sales"] },
+  { label: "高级计划", itemIds: ["forecast"] },
+] as const;
 
 // ─── AI Insights ──────────────────────────────────────────────────────────────
 const AI_INSIGHTS: Record<string, { type: "risk" | "opportunity" | "info" | "action"; title: string; body: string; metric?: string }[]> = {
@@ -843,6 +862,157 @@ function Chip({ label, color, bg }: { label: string; color: string; bg: string }
       style={{ color, background: bg }}>
       {label}
     </span>
+  );
+}
+
+function auditActionLabel(action: string) {
+  const labels: Record<string, string> = {
+    purchaseRequest_created: "创建采购申请",
+    purchase_request_approved: "批准申请",
+    purchase_request_rejected: "驳回申请",
+    purchase_request_status_changed: "更新申请状态",
+    purchase_request_converted_to_po: "转采购订单",
+    purchaseOrder_created: "创建采购订单",
+    purchase_order_created_from_pr: "由 PR 生成 PO",
+    purchase_order_created_from_rfq: "由 RFQ 生成 PO",
+    purchase_order_approved: "批准订单",
+    purchase_order_rejected: "驳回订单",
+    purchase_order_issued: "下发给供应商",
+    purchase_order_cancelled: "取消订单",
+    purchase_order_receiving_started: "开始收货",
+    purchase_order_receiving_status: "收货更新订单状态",
+    purchase_order_status_changed: "更新订单状态",
+    rfq_created: "创建供应商报价请求",
+    rfq_awarded: "授标",
+    rfq_converted_to_po: "转采购订单",
+    rfq_status_changed: "更新报价请求状态",
+    receivingDoc_created: "创建收货单",
+    receiving_posted: "收货过账",
+    receiving_status_changed: "更新收货状态",
+    inventory_posted: "库存已更新",
+    system_validation_blocked: "系统阻止了无效操作",
+  };
+  return labels[action] || action.replaceAll("_", " ");
+}
+
+function auditMetadataSummary(metadata?: Record<string, unknown>) {
+  if (!metadata) return "";
+  const pairs = [
+    ["poId", "PO"],
+    ["grnId", "收货单"],
+    ["rfqId", "RFQ"],
+    ["sourceRequest", "来源申请"],
+    ["lineCount", "明细行"],
+    ["acceptedQty", "合格数"],
+    ["rejectedQty", "拒收数"],
+    ["movementIds", "库存移动"],
+    ["bestSupplier", "供应商"],
+  ] as const;
+  const parts = pairs.flatMap(([key, label]) => {
+    const value = metadata[key];
+    if (value === undefined || value === null || value === "") return [];
+    if (Array.isArray(value)) return [`${label} ${value.length ? value.join(", ") : "无"}`];
+    return [`${label} ${String(value)}`];
+  });
+  return parts.slice(0, 3).join(" · ");
+}
+
+function DocumentHistoryPanel({
+  entityType,
+  entityId,
+  title = "单据历史",
+  refreshKey,
+}: {
+  entityType: AuditEntry["entityType"];
+  entityId?: string;
+  title?: string;
+  refreshKey?: string;
+}) {
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [openDetailId, setOpenDetailId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!entityId) {
+      setEntries([]);
+      return;
+    }
+    let alive = true;
+    setLoading(true);
+    const params = new URLSearchParams({ entityType: String(entityType), entityId, limit: "20" });
+    apiJson<AuditEntry[]>(`/api/audit-log?${params.toString()}`)
+      .then((data) => { if (alive) setEntries(data); })
+      .catch(() => { if (alive) setEntries([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [entityType, entityId, refreshKey]);
+
+  return (
+    <div className="rounded-xl p-3 mb-4" style={{ background: A.gray6, border: "1px solid rgba(0,0,0,0.05)" }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.label }}>
+          <History size={12} /> {title}
+        </div>
+        <span className="text-[10px]" style={{ color: A.gray2 }}>{loading ? "加载中" : `${entries.length} 条`}</span>
+      </div>
+      {entries.length === 0 ? (
+        <div className="text-[10px] leading-4" style={{ color: A.sub }}>
+          暂无历史记录。旧演示数据可能还没有审计历史，后续操作会自动记录。
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {entries.slice(0, 5).map((entry) => {
+            const id = entry.auditId || entry.id || `${entry.timestamp}-${entry.action}`;
+            const metadataSummary = auditMetadataSummary(entry.metadata);
+            const statusChange = entry.fromStatus || entry.toStatus
+              ? `${entry.fromStatus || "新建"} → ${entry.toStatus || "—"}`
+              : "状态未变化";
+            return (
+              <div key={id} className="rounded-lg px-2.5 py-2" style={{ background: A.white }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold" style={{ color: entry.action === "system_validation_blocked" ? A.red : A.label }}>
+                      {auditActionLabel(entry.action)}
+                    </div>
+                    <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>
+                      {entry.timestamp ? new Date(entry.timestamp).toLocaleString("zh-CN") : "—"} · {entry.actor || "system"}
+                    </div>
+                  </div>
+                  <span className="text-[10px] shrink-0" style={{ color: A.blue }}>{statusChange}</span>
+                </div>
+                {(entry.reason || metadataSummary) && (
+                  <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>
+                    {entry.reason || metadataSummary}
+                    {entry.reason && metadataSummary ? ` · ${metadataSummary}` : ""}
+                  </div>
+                )}
+                {entry.metadata && Object.keys(entry.metadata).length > 0 && (
+                  <>
+                    <button onClick={() => setOpenDetailId(openDetailId === id ? null : id)}
+                      className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium"
+                      style={{ color: A.gray1 }}>
+                      <ChevronDown size={10} className={openDetailId === id ? "rotate-180 transition-transform" : "transition-transform"} />
+                      查看细节
+                    </button>
+                    {openDetailId === id && (
+                      <div className="mt-1 rounded-md px-2 py-1.5 text-[10px] leading-4 break-words"
+                        style={{ background: A.gray6, color: A.sub }}>
+                        {Object.entries(entry.metadata).slice(0, 6).map(([key, value]) => (
+                          <div key={key}>
+                            <span className="font-medium" style={{ color: A.gray1 }}>{key}: </span>
+                            {Array.isArray(value) ? value.join(", ") : String(value)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1559,18 +1729,102 @@ function ReplenishmentRequestModal({
   );
 }
 
+type OperationsAction = {
+  label: string;
+  onClick: () => void;
+  primary?: boolean;
+};
+
+function OperationsTaskCard({
+  title,
+  metric,
+  subtitle,
+  icon: Icon,
+  color,
+  roles,
+  items,
+  actions,
+}: {
+  title: string;
+  metric: string;
+  subtitle: string;
+  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties; className?: string }>;
+  color: string;
+  roles: string[];
+  items: string[];
+  actions: OperationsAction[];
+}) {
+  return (
+    <Card className="p-4 flex flex-col min-h-[220px]">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}14`, color }}>
+            <Icon size={15} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold truncate" style={{ color: A.label }}>{title}</div>
+            <div className="text-[11px] mt-0.5 truncate" style={{ color: A.gray1 }}>{subtitle}</div>
+          </div>
+        </div>
+        <div className="text-xl font-semibold tabular-nums shrink-0" style={{ color }}>{metric}</div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {roles.map((role) => (
+          <span key={role} className="text-[10px] px-1.5 py-0.5 rounded-md font-medium" style={{ background: A.gray6, color: A.gray1 }}>
+            {role}
+          </span>
+        ))}
+      </div>
+
+      <div className="space-y-2 flex-1">
+        {items.slice(0, 4).map((item) => (
+          <div key={item} className="flex items-start gap-2 text-[11px] leading-4" style={{ color: A.sub }}>
+            <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5" style={{ background: color }} />
+            <span className="line-clamp-2">{item}</span>
+          </div>
+        ))}
+        {items.length === 0 && (
+          <div className="text-[11px] leading-5 rounded-lg p-3" style={{ background: A.gray6, color: A.gray1 }}>
+            暂无需要立即处理的事项。
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2 mt-4">
+        {actions.map((action) => (
+          <button key={action.label} onClick={action.onClick}
+            className="h-8 px-3 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-90"
+            style={action.primary
+              ? { background: color, color: A.white }
+              : { background: A.gray6, color: A.label }}>
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 // ─── Panels ──────────────────────────────────────────────────────────────────
 function OverviewPanel({
   onNavigate,
   onPrepareReplenishmentRequest,
+  onOpenAi,
 }: {
   onNavigate: (moduleId: string) => void;
   onPrepareReplenishmentRequest: (sku: string) => void;
+  onOpenAi: () => void;
 }) {
   const replenishmentActions = overviewReplenishmentActions();
   const [sopDraft, setSopDraft] = useState<SopCycle | null>(null);
   const [sopHistory, setSopHistory] = useState<SopCycle[]>([]);
   const [publishingSop, setPublishingSop] = useState(false);
+  const [dashboardOrders, setDashboardOrders] = useState<PurchaseOrder[]>(purchaseOrders);
+  const [dashboardRequests, setDashboardRequests] = useState<PurchaseRequest[]>([]);
+  const [dashboardRfqs, setDashboardRfqs] = useState<RfqRecord[]>(RFQS);
+  const [dashboardReceiving, setDashboardReceiving] = useState<ReceivingDoc[]>(receivingDocs);
+  const [dashboardSuppliers, setDashboardSuppliers] = useState<SupplierPerformance[]>(PORTAL_SUPPLIERS);
 
   useEffect(() => {
     let alive = true;
@@ -1581,6 +1835,26 @@ function OverviewPanel({
         setSopHistory(data.history || []);
       })
       .catch(() => setSopDraft(null));
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    apiJson<PurchaseOrder[]>("/api/purchase-orders")
+      .then((data) => { if (alive) setDashboardOrders(data); })
+      .catch(() => {});
+    apiJson<PurchaseRequest[]>("/api/purchase-requests")
+      .then((data) => { if (alive) setDashboardRequests(data); })
+      .catch(() => {});
+    apiJson<RfqRecord[]>("/api/rfqs")
+      .then((data) => { if (alive) setDashboardRfqs(data); })
+      .catch(() => {});
+    apiJson<ReceivingDoc[]>("/api/receiving-docs")
+      .then((data) => { if (alive) setDashboardReceiving(data); })
+      .catch(() => {});
+    apiJson<SupplierPerformance[]>("/api/supplier-performance")
+      .then((data) => { if (alive) setDashboardSuppliers(data); })
+      .catch(() => {});
     return () => { alive = false; };
   }, []);
 
@@ -1602,8 +1876,159 @@ function OverviewPanel({
     }
   }
 
+  const pendingPurchaseRequests = dashboardRequests.filter((item) => item.status === "待审批");
+  const pendingPurchaseOrders = dashboardOrders.filter((item) => item.status === "待审批");
+  const openQuoteRequests = dashboardRfqs.filter((item) => item.status === "进行中" || item.status === "比价中");
+  const pendingReceivingNotes = dashboardReceiving.filter((item) => item.status === "待收货" || item.status === "质检中" || item.status === "异常处理");
+  const supplierExceptions = dashboardSuppliers.filter((item) => item.flag === "整改" || Number(item.rejectRate || 0) > 6 || Number(item.exceptions || 0) > 0);
+  const slowMovingStock = inventoryItems
+    .filter((item) => item.qty > item.max * 0.75 || item.turnover < 4)
+    .sort((a, b) => (b.qty / b.max) - (a.qty / a.max));
+  const inventoryRiskItems = replenishmentActions.slice(0, 4);
+  const firstRiskSku = inventoryRiskItems[0]?.sku;
+  const dailyTaskCount = inventoryRiskItems.length + pendingPurchaseRequests.length + pendingPurchaseOrders.length + openQuoteRequests.length + pendingReceivingNotes.length + supplierExceptions.length;
+  const inventoryCapital = inventoryItems.reduce((sum, item) => {
+    const plan = inventoryPlan(item);
+    return sum + item.qty * Number(plan.unitPrice || 0);
+  }, 0);
+  const operationsCards = [
+    {
+      title: "今日重点事项",
+      metric: String(dailyTaskCount),
+      subtitle: "先处理会影响交付和现金的事项",
+      icon: ClipboardList,
+      color: A.blue,
+      roles: ["老板", "运营"],
+      items: [
+        `${inventoryRiskItems.length} 个库存风险需要确认是否补货`,
+        `${pendingPurchaseRequests.length} 张采购申请等待审批`,
+        `${pendingPurchaseOrders.length} 张采购订单等待批准`,
+        `${pendingReceivingNotes.length} 张收货单需要签收或质检`,
+      ],
+      actions: [
+        { label: "查看采购申请", onClick: () => onNavigate("purchaseRequests"), primary: true },
+        { label: "看库存风险", onClick: () => onNavigate("inventory") },
+      ],
+    },
+    {
+      title: "库存风险",
+      metric: String(inventoryRiskItems.length),
+      subtitle: "低库存和可能断货的物料",
+      icon: AlertTriangle,
+      color: A.orange,
+      roles: ["仓库", "计划"],
+      items: inventoryRiskItems.map((item) => `${item.sku} ${item.name}：建议采购 ${item.suggestedQty.toLocaleString()}，预计 ${fmt(item.amount)}`),
+      actions: [
+        { label: "创建 PR", onClick: () => firstRiskSku ? onPrepareReplenishmentRequest(firstRiskSku) : onNavigate("inventory"), primary: true },
+        { label: "查看库存", onClick: () => onNavigate("inventory") },
+      ],
+    },
+    {
+      title: "采购待审批",
+      metric: String(pendingPurchaseRequests.length + pendingPurchaseOrders.length),
+      subtitle: "需要经理或老板决定",
+      icon: FileCheck2,
+      color: A.green,
+      roles: ["老板", "审批人"],
+      items: [
+        ...pendingPurchaseRequests.slice(0, 2).map((item) => `${item.pr}：${item.sourceSku || item.sourceName || "采购申请"} · ${fmt(Number(item.amount || 0))}`),
+        ...pendingPurchaseOrders.slice(0, 2).map((item) => `${item.po}：${item.supplier} · ${fmt(item.amount)}`),
+      ],
+      actions: [
+        { label: "Review PR", onClick: () => onNavigate("purchaseRequests"), primary: true },
+        { label: "Approve PO", onClick: () => onNavigate("purchasing") },
+      ],
+    },
+    {
+      title: "供应商报价请求",
+      metric: String(openQuoteRequests.length),
+      subtitle: "需要比价或选择供应商",
+      icon: FileSpreadsheet,
+      color: A.purple,
+      roles: ["采购"],
+      items: openQuoteRequests.slice(0, 4).map((item) => `${item.id}：${item.title} · 已报价 ${item.quoted}/${item.suppliers}`),
+      actions: [
+        { label: "Request Quote", onClick: () => onNavigate("rfq"), primary: true },
+        { label: "查看报价", onClick: () => onNavigate("rfq") },
+      ],
+    },
+    {
+      title: "待收货 / 质检",
+      metric: String(pendingReceivingNotes.length),
+      subtitle: "今天仓库要处理的收货单",
+      icon: PackageCheck,
+      color: A.teal,
+      roles: ["仓库", "质检"],
+      items: pendingReceivingNotes.slice(0, 4).map((item) => `${item.grn}：${item.supplier} · ${item.status === "质检中" ? "等待质检" : item.status === "异常处理" ? "有异常需跟进" : "等待签收"}`),
+      actions: [
+        { label: "Receive Goods", onClick: () => onNavigate("receiving"), primary: true },
+        { label: "查看收货", onClick: () => onNavigate("receiving") },
+      ],
+    },
+    {
+      title: "供应商异常",
+      metric: String(supplierExceptions.length),
+      subtitle: "质量、拒收或交付风险",
+      icon: AlertOctagon,
+      color: A.red,
+      roles: ["采购", "老板"],
+      items: supplierExceptions.slice(0, 4).map((item) => `${item.name}：${item.flag || "需复核"} · 拒收率 ${Number(item.rejectRate || 0).toFixed(1)}%`),
+      actions: [
+        { label: "View Supplier", onClick: () => onNavigate("procurement"), primary: true },
+        { label: "看绩效", onClick: () => onNavigate("procurement") },
+      ],
+    },
+    {
+      title: "AI 采购建议",
+      metric: "AI",
+      subtitle: "把复杂计划解释成下一步动作",
+      icon: Sparkles,
+      color: A.indigo,
+      roles: ["老板", "计划", "采购"],
+      items: AI_INSIGHTS.overview.slice(0, 3).map((item) => `${item.title}：${item.metric || "查看原因"}`),
+      actions: [
+        { label: "View Reasoning", onClick: onOpenAi, primary: true },
+        { label: "高级计划", onClick: () => onNavigate("forecast") },
+      ],
+    },
+    {
+      title: "库存占用资金",
+      metric: fmt(inventoryCapital),
+      subtitle: "关注慢动和过量库存",
+      icon: Wallet,
+      color: A.gray1,
+      roles: ["老板", "财务"],
+      items: slowMovingStock.slice(0, 4).map((item) => `${item.name}：库存 ${item.qty.toLocaleString()}，周转 ${item.turnover}x`),
+      actions: [
+        { label: "查看库存", onClick: () => onNavigate("inventory"), primary: true },
+        { label: "看绩效", onClick: () => onNavigate("sales") },
+      ],
+    },
+  ];
+
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>SME Daily Operations</div>
+          <h1 className="text-2xl font-semibold tracking-tight" style={{ color: A.label }}>今天先处理这些事</h1>
+          <p className="text-sm mt-1" style={{ color: A.sub }}>把库存、采购、报价、收货和供应商异常集中到一个日常工作台。</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {["老板", "采购", "仓库", "财务", "计划"].map((role) => (
+            <span key={role} className="text-[11px] px-2.5 py-1 rounded-lg font-medium" style={{ background: A.white, color: A.gray1, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.06)" }}>
+              {role}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3">
+        {operationsCards.map((card) => (
+          <OperationsTaskCard key={card.title} {...card} />
+        ))}
+      </div>
+
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="本月营收" value="¥8,760万" sub="5月 MTD" delta="+6.2%" positive icon={DollarSign} color={A.blue} />
@@ -1615,7 +2040,7 @@ function OverviewPanel({
       <Card>
         <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>S&OP 本周期共识</h2>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>月度供需计划（高级）</h2>
             <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>
               {sopDraft ? `${sopDraft.cycle} · v${sopDraft.version} · ${sopDraft.status}` : "正在读取预测、供应和财务约束"}
             </p>
@@ -5544,7 +5969,7 @@ function POStatusPill({ status }: { status: string }) {
 // ─── Purchasing · ERP Data ────────────────────────────────────────────────────
 const RFQS: {
   id: string; title: string; category: string; suppliers: number; quoted: number;
-  bestPrice: number; bestSupplier: string; due: string; status: "进行中" | "比价中" | "已授标" | "已关闭";
+  bestPrice: number; bestSupplier: string; due: string; status: "进行中" | "比价中" | "已授标" | "已转PO" | "已关闭" | "已取消";
 }[] = [
   { id: "RFQ-26-0042", title: "Q3 铝合金型材集采",     category: "原材料",   suppliers: 6, quoted: 5, bestPrice: 18.6,  bestSupplier: "江苏铝合金集团", due: "2026-06-10", status: "比价中" },
   { id: "RFQ-26-0043", title: "标准紧固件年框",         category: "通用件",   suppliers: 8, quoted: 8, bestPrice:  0.42, bestSupplier: "佛山标准件",     due: "2026-05-30", status: "已授标" },
@@ -5562,6 +5987,9 @@ type RfqRecord = typeof RFQS[number] & {
   invitedSuppliers?: string[];
   linkedPo?: string;
   createdAt?: string;
+  statusUpdatedAt?: string;
+  lastAuditId?: string;
+  auditTrailIds?: string[];
 };
 
 const CONTRACTS: {
@@ -5670,6 +6098,21 @@ type ApprovalSnapshot = {
   forecast?: Record<string, unknown>;
   supplier?: Record<string, unknown>;
   createdAt?: string;
+};
+
+type AuditEntry = {
+  auditId: string;
+  id?: string;
+  timestamp: string;
+  actor: string;
+  source?: string;
+  action: string;
+  entityType: "purchaseRequest" | "purchaseOrder" | "rfq" | "receivingDoc" | string;
+  entityId: string;
+  fromStatus?: string | null;
+  toStatus?: string | null;
+  reason?: string;
+  metadata?: Record<string, unknown>;
 };
 
 // ─── Purchasing · Master Wrapper ──────────────────────────────────────────────
@@ -6302,6 +6745,13 @@ function PurchasingRequests({ intent, onOpenRfq }: { intent: PurchaseIntent | nu
                 </div>
               )}
 
+              <DocumentHistoryPanel
+                entityType="purchaseRequest"
+                entityId={selected.pr}
+                title="审批历史"
+                refreshKey={selected.lastAuditId || selected.auditTrailIds?.join(",") || selected.status}
+              />
+
               <div className="flex flex-wrap gap-2">
                 {selected.status === "待审批" && (
                   <>
@@ -6696,6 +7146,13 @@ function PurchasingOrders() {
               </div>
             </div>
           )}
+
+          <DocumentHistoryPanel
+            entityType="purchaseOrder"
+            entityId={selectedPO.po}
+            title="订单状态历史"
+            refreshKey={selectedPO.lastAuditId || selectedPO.auditTrailIds?.join(",") || selectedPO.status}
+          />
 
           {/* Timeline */}
           <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: A.gray2 }}>流程进度</div>
@@ -7273,15 +7730,22 @@ function LegacyQCModal({ open, onClose, grn, onComplete }: {
 function PurchasingRFQ() {
   const [rfqs, setRfqs] = useState<RfqRecord[]>(RFQS);
   const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState(RFQS[0]?.id ?? "");
 
   useEffect(() => {
     let alive = true;
     apiJson<RfqRecord[]>("/api/rfqs")
-      .then((data) => { if (alive) setRfqs(data); })
+      .then((data) => {
+        if (!alive) return;
+        setRfqs(data);
+        setSelectedId((current) => data.some((item) => item.id === current) ? current : data[0]?.id ?? "");
+      })
       .catch(() => toast.error("RFQ API 未连接", { description: "已显示本地样例询价单" }))
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  const selectedRfq = rfqs.find((item) => item.id === selectedId) ?? rfqs[0] ?? null;
 
   const award = async (id: string) => {
     try {
@@ -7290,6 +7754,7 @@ function PurchasingRFQ() {
         body: JSON.stringify({ status: "已授标" }),
       });
       setRfqs(prev => prev.map(r => r.id === id ? updated : r));
+      setSelectedId(updated.id);
       toast.success(`${id} 已授标`, { description: updated.linkedPo ? `已生成 ${updated.linkedPo} 待审批订单` : "询价结果已写回后端" });
     } catch (error) {
       toast.error("RFQ 授标失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
@@ -7297,6 +7762,10 @@ function PurchasingRFQ() {
   };
 
   const totalSavings = 124800;
+  const rfqStatusStyle = (status: string) => ({
+    color: status === "已授标" || status === "已转PO" ? A.green : status === "比价中" ? A.orange : status === "进行中" ? A.blue : A.gray1,
+    bg: status === "已授标" || status === "已转PO" ? "rgba(52,199,89,0.1)" : status === "比价中" ? "rgba(255,149,0,0.1)" : status === "进行中" ? "rgba(0,113,227,0.1)" : "rgba(142,142,147,0.1)",
+  });
 
   return (
     <div className="space-y-4">
@@ -7320,8 +7789,15 @@ function PurchasingRFQ() {
             </tr>
           </thead>
           <tbody>
-            {rfqs.map((r, i) => (
-              <tr key={r.id} style={{ borderBottom: i < rfqs.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+            {rfqs.map((r, i) => {
+              const style = rfqStatusStyle(r.status);
+              return (
+              <tr key={r.id} onClick={() => setSelectedId(r.id)}
+                className="cursor-pointer hover:bg-blue-50/40 transition-colors"
+                style={{
+                  borderBottom: i < rfqs.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none",
+                  background: selectedRfq?.id === r.id ? "rgba(0,113,227,0.06)" : "transparent",
+                }}>
                 <td className="px-5 py-3 font-medium" style={{ color: A.blue }}>{r.id}</td>
                 <td className="px-5 py-3 font-medium" style={{ color: A.label }}>
                   <div>{r.title}</div>
@@ -7340,18 +7816,54 @@ function PurchasingRFQ() {
                 <td className="px-5 py-3" style={{ color: A.sub }}>{r.bestSupplier}</td>
                 <td className="px-5 py-3" style={{ color: A.label }}>{r.due}</td>
                 <td className="px-5 py-3">
-                  <Chip label={r.status} color={r.status === "已授标" ? A.green : r.status === "比价中" ? A.orange : r.status === "进行中" ? A.blue : A.gray1}
-                    bg={r.status === "已授标" ? "rgba(52,199,89,0.1)" : r.status === "比价中" ? "rgba(255,149,0,0.1)" : r.status === "进行中" ? "rgba(0,113,227,0.1)" : "rgba(142,142,147,0.1)"} />
+                  <Chip label={r.status} color={style.color} bg={style.bg} />
                 </td>
                 <td className="px-5 py-3">
                   {(r.status === "比价中" || r.status === "进行中") &&
                     <button onClick={() => award(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md text-white" style={{ background: A.blue }}>授标</button>}
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </Card>
+
+      {selectedRfq && (
+        <Card className="p-5">
+          <div className="grid grid-cols-5 gap-4">
+            <div className="col-span-2">
+              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>供应商报价请求详情</div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="text-base font-semibold tracking-tight" style={{ color: A.label }}>{selectedRfq.id}</div>
+                <Chip label={selectedRfq.status} {...rfqStatusStyle(selectedRfq.status)} />
+              </div>
+              <div className="space-y-2 text-xs">
+                {[
+                  ["标题", selectedRfq.title],
+                  ["来源申请", selectedRfq.sourceRequest || "—"],
+                  ["最优供应商", selectedRfq.bestSupplier || "—"],
+                  ["授标价格", selectedRfq.bestPrice ? `¥${Number(selectedRfq.bestPrice).toLocaleString()}` : "—"],
+                  ["生成 PO", selectedRfq.linkedPo || "—"],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-3">
+                    <span style={{ color: A.gray1 }}>{label}</span>
+                    <span className="font-medium text-right" style={{ color: A.label }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="col-span-3">
+              <DocumentHistoryPanel
+                entityType="rfq"
+                entityId={selectedRfq.id}
+                title="报价请求历史"
+                refreshKey={selectedRfq.lastAuditId || selectedRfq.auditTrailIds?.join(",") || selectedRfq.status}
+              />
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -7944,6 +8456,7 @@ function ReceivingOps() {
   const [scanOpen, setScanOpen] = useState(false);
   const [qcOpen, setQcOpen] = useState(false);
   const [activeGrn, setActiveGrn] = useState<ReceivingDoc | null>(null);
+  const [selectedGrnId, setSelectedGrnId] = useState(receivingDocs[0]?.grn ?? "");
 
   useEffect(() => {
     let alive = true;
@@ -7955,6 +8468,7 @@ function ReceivingOps() {
         if (!alive) return;
         setDocs(receiving);
         setOrders(purchase);
+        setSelectedGrnId((current) => receiving.some((item) => item.grn === current) ? current : receiving[0]?.grn ?? "");
       })
       .catch(() => toast.error("收货 API 未连接", { description: "请先运行 npm run api，再运行 npm run dev" }))
       .finally(() => { if (alive) setLoading(false); });
@@ -7965,6 +8479,7 @@ function ReceivingOps() {
   const inQC          = docs.filter((d) => d.status === "质检中").length;
   const exceptions    = docs.filter((d) => d.status === "异常处理").length;
   const pending       = docs.filter((d) => d.status === "待收货").length;
+  const selectedGrn = docs.find((item) => item.grn === selectedGrnId) ?? docs[0] ?? null;
 
   async function startReceive(grnId: string, poId: string, lines: ReceivingDocLine[]) {
     const po = orders.find((p) => p.po === poId);
@@ -7985,11 +8500,13 @@ function ReceivingOps() {
       }),
     });
     setDocs((arr) => [created, ...arr]);
+    setSelectedGrnId(created.grn);
     setOrders((arr) => arr.map((o) => o.po === poId && o.status === "已发出" ? { ...o, status: "部分到货" } : o));
   }
 
   function openQC(grn: ReceivingDoc) {
     if (grn.status === "待收货") { toast.error(`${grn.grn} 尚未签收，请先签收`); return; }
+    setSelectedGrnId(grn.grn);
     setActiveGrn(grn);
     setQcOpen(true);
   }
@@ -8000,6 +8517,7 @@ function ReceivingOps() {
       body: JSON.stringify({ status: "质检中", receiver: "刘建华" }),
     });
     setDocs((arr) => arr.map((d) => d.grn === grn.grn ? updated : d));
+    setSelectedGrnId(updated.grn);
     toast.success(`${grn.grn} 已签收`, { description: "已转入质检流程" });
   }
 
@@ -8012,6 +8530,7 @@ function ReceivingOps() {
       body: JSON.stringify({ lines, passed, failed, items, warehouse, status: failed > 0 ? "异常处理" : "已入库" }),
     });
     setDocs((arr) => arr.map((d) => d.grn === grnId ? updated : d));
+    setSelectedGrnId(updated.grn);
     const refreshedOrders = await apiJson<PurchaseOrder[]>("/api/purchase-orders");
     setOrders(refreshedOrders);
   }
@@ -8130,8 +8649,12 @@ function ReceivingOps() {
               const acceptedQty = lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
               const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
               return (
-              <tr key={r.grn} className="hover:bg-blue-50/40 transition-colors"
-                style={{ borderBottom: i < docs.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+              <tr key={r.grn} onClick={() => setSelectedGrnId(r.grn)}
+                className="cursor-pointer hover:bg-blue-50/40 transition-colors"
+                style={{
+                  borderBottom: i < docs.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none",
+                  background: selectedGrn?.grn === r.grn ? "rgba(0,113,227,0.06)" : "transparent",
+                }}>
                 <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>
                   <div>{r.grn}</div>
                   {isPostedGrn(r) && (
@@ -8186,6 +8709,57 @@ function ReceivingOps() {
         </table>
       </Card>
 
+      {selectedGrn && (
+        <Card className="p-5">
+          <div className="grid grid-cols-5 gap-4">
+            <div className="col-span-2">
+              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>收货单详情</div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="text-base font-semibold tracking-tight" style={{ color: A.label }}>{selectedGrn.grn}</div>
+                <RecvStatusPill status={selectedGrn.status} />
+              </div>
+              <div className="space-y-2 text-xs">
+                {[
+                  ["关联 PO", selectedGrn.po],
+                  ["供应商", selectedGrn.supplier],
+                  ["收货人", selectedGrn.receiver || "—"],
+                  ["入库库位", selectedGrn.warehouse || "—"],
+                  ["库存移动", selectedGrn.inventoryMovementIds?.join(", ") || "—"],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-3">
+                    <span style={{ color: A.gray1 }}>{label}</span>
+                    <span className="font-medium text-right truncate" style={{ color: A.label }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-3 text-[10px]">
+                {(() => {
+                  const lines = grnLinesOf(selectedGrn);
+                  return [
+                    ["收货", lines.reduce((sum, line) => sum + toNumber(line.receivedQty), 0)],
+                    ["合格", lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0)],
+                    ["拒收", lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0)],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
+                      <div style={{ color: A.gray2 }}>{label}</div>
+                      <div className="font-semibold tabular-nums" style={{ color: A.label }}>{Number(value).toLocaleString()}</div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+            <div className="col-span-3">
+              <DocumentHistoryPanel
+                entityType="receivingDoc"
+                entityId={selectedGrn.grn}
+                title="收货单历史"
+                refreshKey={selectedGrn.lastAuditId || selectedGrn.auditTrailIds?.join(",") || selectedGrn.status}
+              />
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* QC exceptions */}
       <Card className="p-5">
         <SectionHeader title="质检异常处理"
@@ -8233,10 +8807,10 @@ function ReceivingOps() {
 
 // ─── App Shell ────────────────────────────────────────────────────────────────
 const PAGE_LABELS: Record<string, string> = {
-  overview: "运营总览", inventory: "库存管理",
-  sales: "产品销售", forecast: "预测分析",
-  purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "询价 RFQ", receiving: "收货管理",
-  procurement: "采购费用",
+  overview: "每日工作台", inventory: "库存",
+  sales: "销售表现", forecast: "高级计划",
+  purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
+  procurement: "供应商与绩效",
 };
 
 function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => void }) {
@@ -8475,7 +9049,7 @@ export default function App() {
   const replenishmentItem = replenishmentSku ? inventoryItems.find((item) => item.sku === replenishmentSku) ?? null : null;
 
   const panels: Record<string, React.ReactNode> = {
-    overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} />,
+    overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiVisible(true)} />,
     inventory:   <InventoryPanel />,
     sales:       <SalesPanel />,
     forecast:    <ForecastPanel />,
@@ -8543,22 +9117,30 @@ export default function App() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 space-y-0.5">
-          <div className="text-[10px] font-semibold uppercase tracking-widest px-2 mb-2" style={{ color: A.gray2 }}>模块</div>
-          {navItems.map((item) => {
-            const isActive = active === item.id;
-            return (
-              <button key={item.id} onClick={() => setActive(item.id)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
-                style={isActive
-                  ? { background: A.white, color: A.blue, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
-                  : { background: "transparent", color: A.gray1 }}>
-                <item.icon size={15} strokeWidth={isActive ? 2 : 1.8} />
-                <span>{item.label}</span>
-                {isActive && <ChevronRight size={12} className="ml-auto" style={{ color: A.blue }} />}
-              </button>
-            );
-          })}
+        <nav className="flex-1 px-3 space-y-3 overflow-y-auto">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <div className="text-[10px] font-semibold uppercase tracking-widest px-2 mb-1.5" style={{ color: A.gray2 }}>{group.label}</div>
+              <div className="space-y-0.5">
+                {group.itemIds.map((itemId) => {
+                  const item = navItems.find((entry) => entry.id === itemId);
+                  if (!item) return null;
+                  const isActive = active === item.id;
+                  return (
+                    <button key={item.id} onClick={() => setActive(item.id)}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150"
+                      style={isActive
+                        ? { background: A.white, color: A.blue, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
+                        : { background: "transparent", color: A.gray1 }}>
+                      <item.icon size={15} strokeWidth={isActive ? 2 : 1.8} />
+                      <span className="truncate">{item.label}</span>
+                      {isActive && <ChevronRight size={12} className="ml-auto shrink-0" style={{ color: A.blue }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Bottom */}
@@ -8570,7 +9152,7 @@ export default function App() {
               ? { background: "#f0f6ff", color: A.blue }
               : { background: "transparent", color: A.gray1 }}>
             <Sparkles size={15} strokeWidth={1.8} />
-            <span>AI 分析</span>
+            <span>AI 助手</span>
             <div className={`ml-auto w-2 h-2 rounded-full transition-colors`}
               style={{ background: aiVisible ? A.blue : A.gray4 }} />
           </button>
