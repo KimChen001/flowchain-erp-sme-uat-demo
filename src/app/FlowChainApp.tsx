@@ -25,6 +25,19 @@ import { fmt } from "../lib/format";
 import { exportModulePdf } from "../lib/pdf-export";
 import { A, AppleTooltip, Card, Chip, DocumentHistoryPanel, Field, inputStyle, KpiCard, Modal, SectionHeader, SegmentedControl, SubTabs } from "../components/ui";
 import { AI_INSIGHTS } from "../modules/ai-assistant/ai-insights";
+import type {
+  AiConfidence,
+  ApprovalSnapshot,
+  ChatMessage,
+  DemoUser,
+  MarketPrice,
+  PurchaseIntent,
+  PurchaseOrder,
+  PurchaseRequest,
+  ReceivingDoc,
+  RfqRecord,
+  SupplierRecommendationResult,
+} from "../types/scm";
 import {
   salesData,
   forecastData,
@@ -54,8 +67,7 @@ import {
   SUPPLIER_LIST,
   OWNERS
 } from "../data/demo-data";
-import { lineRemaining, poLinesOf, poTotals, toNumber } from "../domain/purchasing/helpers";
-import { grnLinesOf, isPostedGrn } from "../domain/receiving/helpers";
+import { toNumber } from "../domain/purchasing/helpers";
 import PurchasingRequests from "../modules/purchase-requests/Page";
 import PurchasingOrders from "../modules/purchasing/Page";
 import PurchasingRFQ from "../modules/rfq/Page";
@@ -262,121 +274,6 @@ function overviewReplenishmentActions() {
 }
 
 // ─── Purchase Orders ─────────────────────────────────────────────────────────
-export type POStatus = "草稿" | "待审批" | "已审批" | "已发出" | "部分到货" | "已完成" | "已驳回" | "已取消";
-type PurchaseOrderLine = {
-  poLineId: string;
-  poId?: string;
-  sku: string;
-  itemName: string;
-  quantityOrdered: number;
-  quantityReceived: number;
-  quantityAccepted: number;
-  quantityRejected: number;
-  unit: string;
-  unitPrice: number;
-  currency: string;
-  supplierId?: string;
-  warehouseId?: string;
-  requiredDate?: string;
-  promisedDate?: string;
-  status?: string;
-};
-
-export type PurchaseOrder = typeof purchaseOrders[number] & {
-  lines?: PurchaseOrderLine[];
-  lineCount?: number;
-  totalOrderedQty?: number;
-  totalReceivedQty?: number;
-  totalAcceptedQty?: number;
-  totalRejectedQty?: number;
-  totalAmount?: number;
-  itemsMeaning?: "lineCount" | "totalOrderedQty" | string;
-  currency?: string;
-  supplierId?: string;
-  warehouseId?: string;
-  erpStatus?: string;
-  statusUpdatedAt?: string;
-  lastAuditId?: string;
-  auditTrailIds?: string[];
-};
-type PurchaseOrderDraft = Omit<PurchaseOrder, "po" | "created"> & { po?: string; created?: string };
-export type PurchaseRequestStatus = "草稿" | "待审批" | "已批准" | "已驳回" | "已转PO" | "已取消";
-export type PurchaseRequest = {
-  pr: string;
-  source: string;
-  sourceSku: string;
-  sourceName: string;
-  supplier: string;
-  requester: string;
-  buyer: string;
-  created: string;
-  requiredDate: string;
-  quantity: number;
-  unit: string;
-  unitPrice: number;
-  amount: number;
-  priority: "高" | "中" | "低";
-  status: PurchaseRequestStatus;
-  reason: string;
-  linkedPo?: string;
-  forecastBasis?: {
-    source?: string;
-    peakGap?: number;
-    serviceLevel?: number;
-    safetyFactor?: number;
-    stockoutMonths?: number;
-    firstStockoutMonth?: string | null;
-    projectedAvailable?: number;
-    reorderPoint?: number;
-    daysCover?: number;
-    leadTimeDays?: number;
-    moq?: number;
-    batchMultiple?: number;
-    plannedReceipt?: number;
-    plannedReleasePeriod?: string;
-    mrpException?: string;
-    bomSourceSummary?: string;
-    bomSources?: {
-      parent: string;
-      parentName?: string;
-      top?: string;
-      topName?: string;
-      level?: number;
-      demand: number;
-    }[];
-  } | null;
-  approvalSnapshot?: ApprovalSnapshot | null;
-  statusUpdatedAt?: string;
-  lastAuditId?: string;
-  auditTrailIds?: string[];
-};
-export type PurchaseIntent = {
-  selectedPr?: string;
-  sourceSku?: string;
-  createdAt: number;
-};
-
-type DemoUser = {
-  id: string;
-  company: string;
-  name: string;
-  email: string;
-  role: string;
-  createdAt?: string;
-  lastLoginAt?: string;
-};
-
-const poStatusMeta: Record<POStatus, { color: string; bg: string }> = {
-  "草稿":     { color: A.gray1,  bg: A.gray6  },
-  "待审批":   { color: A.orange, bg: "#fff8f0" },
-  "已审批":   { color: A.indigo, bg: "#eef0ff" },
-  "已发出":   { color: A.blue,   bg: "#f0f6ff" },
-  "部分到货": { color: A.teal,   bg: "#e8f6fc" },
-  "已完成":   { color: A.green,  bg: "#f0faf4" },
-  "已驳回":   { color: A.red,    bg: "#fff1f0" },
-  "已取消":   { color: A.red,    bg: "#fff1f0" },
-};
-
 const poApprovalQueue = [
   { po: "PO-2026-1287", supplier: "深圳新元电气", amount: 1840000, requestor: "陈思远", wait: "4小时", reason: "伺服电机紧急补货" },
   { po: "PO-2026-1279", supplier: "深圳新元电气", amount: 528000,  requestor: "陈思远", wait: "1小时", reason: "驱动板季度备货" },
@@ -392,41 +289,6 @@ const procurementTrend = [
   { day: "周六", po: 3,  amount: 480  },
   { day: "周日", po: 1,  amount: 120  },
 ];
-
-// ─── Receiving ───────────────────────────────────────────────────────────────
-type RecvStatus = "待收货" | "已签收" | "质检中" | "已入库" | "异常处理";
-export type ReceivingDocLine = {
-  grnLineId?: string;
-  poLineId?: string;
-  poId?: string;
-  sku: string;
-  itemName?: string;
-  receivedQty: number;
-  acceptedQty: number;
-  rejectedQty: number;
-  warehouseId?: string;
-  unit?: string;
-  status?: string;
-};
-
-export type ReceivingDoc = typeof receivingDocs[number] & {
-  lines?: ReceivingDocLine[];
-  postedAt?: string;
-  postedBy?: string;
-  inventoryApplied?: boolean;
-  inventoryMovementIds?: string[];
-  statusUpdatedAt?: string;
-  lastAuditId?: string;
-  auditTrailIds?: string[];
-};
-
-const recvStatusMeta: Record<RecvStatus, { color: string; bg: string }> = {
-  "待收货":   { color: A.gray1,  bg: A.gray6  },
-  "已签收":   { color: A.blue,   bg: "#f0f6ff" },
-  "质检中":   { color: A.orange, bg: "#fff8f0" },
-  "已入库":   { color: A.green,  bg: "#f0faf4" },
-  "异常处理": { color: A.red,    bg: "#fff1f0" },
-};
 
 // ─── AI Insights ──────────────────────────────────────────────────────────────
 
@@ -468,44 +330,6 @@ function StatusPill({ status }: { status: string }) {
 }
 
 // Apple-style card with clean shadow
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-  confidence?: AiConfidence;
-};
-
-type AiConfidence = {
-  score: number;
-  level: "高" | "中" | "低";
-  dimensions?: AiConfidenceDimension[];
-  evidence: string[];
-  warnings: string[];
-  recommendedValidation: string;
-  method: string;
-};
-
-type AiConfidenceDimension = {
-  key: "forecast" | "inventory" | "supplier" | "external" | string;
-  label: string;
-  score: number;
-  level: "高" | "中" | "低";
-  evidence: string[];
-  warnings: string[];
-};
-
-type MarketPrice = {
-  symbol: string;
-  name: string;
-  category: string;
-  price: number;
-  unit: string;
-  changePct: number;
-  direction: "up" | "down" | "flat";
-  asOf: string;
-  source: string;
-  procurementImpact: string;
-};
-
 const QUICK_QUESTIONS: Record<string, string[]> = {
   overview: ["本周最重要的风险是什么？", "今天的铁的市场价格"],
   inventory: ["为什么这些 SKU 会断货？", "结合汇率和新闻看补货风险"],
@@ -4939,30 +4763,6 @@ export function ProcurementPanel() {
   );
 }
 
-// ─── Catalog (for new PO line items) ─────────────────────────────────────────
-
-
-// ─── Modal Primitive ─────────────────────────────────────────────────────────
-// ??? Purchasing ? ERP Data ????????????????????????????????????????????????????
-export type RfqRecord = typeof RFQS[number] & {
-  sourceRequest?: string;
-  sourceSku?: string;
-  sourceName?: string;
-  quantity?: number;
-  unit?: string;
-  reason?: string;
-  invitedSuppliers?: string[];
-  linkedPo?: string;
-  createdAt?: string;
-  statusUpdatedAt?: string;
-  lastAuditId?: string;
-  auditTrailIds?: string[];
-};
-
-
-
-
-
 type SupplierPerformance = typeof PORTAL_SUPPLIERS[number] & {
   category?: string;
   received?: number;
@@ -4973,57 +4773,6 @@ type SupplierPerformance = typeof PORTAL_SUPPLIERS[number] & {
   score?: number;
   risk?: string;
   lastIssue?: string;
-};
-
-export type SupplierRecommendationResult = {
-  sku: string;
-  quantity: number;
-  currentSupplier: string;
-  primary: {
-    supplier: string;
-    unitPrice: number;
-    listPrice?: number;
-    listPriceCny?: number;
-    currency?: string;
-    fxRate?: number;
-    contractId?: string;
-    contractLabel?: string;
-    contractDiscount?: number;
-    contractTierMinQty?: number;
-    leadTimeDays: number;
-    responseScore: number;
-    capacity: number;
-    availableCapacity?: number;
-    capacityWindow?: string;
-    capacityReliability?: number;
-    capacityStatus?: "可承诺" | "紧张" | "不足" | string;
-    risk: string;
-    performanceScore: number;
-    quality: number;
-    rejectRate: number;
-    flag: string;
-    score: number;
-    amount: number;
-    isCurrent: boolean;
-    note: string;
-  } | null;
-  backup: SupplierRecommendationResult["primary"];
-  candidates: NonNullable<SupplierRecommendationResult["primary"]>[];
-  split: { supplier: string; quantity: number; unitPrice: number }[];
-  needsRfq: boolean;
-  rfqReason: string;
-};
-
-export type ApprovalSnapshot = {
-  source?: string;
-  summary?: string;
-  explanation?: string;
-  ai?: Record<string, unknown>;
-  mrp?: Record<string, unknown>;
-  inventory?: Record<string, unknown>;
-  forecast?: Record<string, unknown>;
-  supplier?: Record<string, unknown>;
-  createdAt?: string;
 };
 
 type AuditEntry = {
