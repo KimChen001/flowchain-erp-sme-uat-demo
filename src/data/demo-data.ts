@@ -43,6 +43,16 @@ export const procurementData = [
   { category: "物流运输", amount: 4130000,  pct: 12, yoy: 9.3  },
 ];
 
+export const procurementTrend = [
+  { day: "周一", po: 8,  amount: 1240 },
+  { day: "周二", po: 12, amount: 2840 },
+  { day: "周三", po: 6,  amount: 1620 },
+  { day: "周四", po: 15, amount: 3640 },
+  { day: "周五", po: 11, amount: 2380 },
+  { day: "周六", po: 3,  amount: 480  },
+  { day: "周日", po: 1,  amount: 120  },
+];
+
 export const inventoryItems = [
   { sku: "SKU-00142", name: "精密轴承 6204-ZZ",   category: "机械部件", qty: 2840,  min: 500,   max: 5000,  status: "正常", location: "A-03-12", turnover: 8.2,  lastIn: "5月22日" },
   { sku: "SKU-00287", name: "铝合金型材 6063",    category: "原材料",   qty: 148,   min: 300,   max: 2000,  status: "预警", location: "B-01-05", turnover: 12.4, lastIn: "5月06日" },
