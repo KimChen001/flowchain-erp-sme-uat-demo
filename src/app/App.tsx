@@ -18,6 +18,10 @@ import {
   Inbox, ShieldCheck, AlertOctagon, Undo2, Building2, CreditCard,
   Lock, LogOut, Printer, GitBranch,
 } from "lucide-react";
+import { navGroups, navItems } from "./routes";
+import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
+import { apiJson } from "../lib/api-client";
+import { fmt } from "../lib/format";
 
 // ─── Apple System Colors ──────────────────────────────────────────────────────
 const A = {
@@ -640,28 +644,6 @@ const qcExceptions = [
   { grn: "GRN-202605-0415", item: "伺服电机 750W",       po: "PO-2026-1276", qty: 24, failed: 3, type: "测试不通过", action: "已退回", severity: "高" },
 ];
 
-const navItems = [
-  { icon: BarChart2,       label: "每日工作台",     id: "overview"         },
-  { icon: Package,         label: "库存",           id: "inventory"        },
-  { icon: ClipboardCheck,  label: "采购申请",       id: "purchaseRequests" },
-  { icon: ClipboardList,   label: "采购订单",       id: "purchasing"       },
-  { icon: FileSpreadsheet, label: "供应商报价",     id: "rfq"              },
-  { icon: PackageCheck,    label: "收货",           id: "receiving"        },
-  { icon: Handshake,       label: "供应商与绩效",   id: "procurement"      },
-  { icon: ShoppingCart,    label: "销售表现",       id: "sales"            },
-  { icon: TrendingUp,      label: "高级计划",       id: "forecast"         },
-] as const;
-
-const navGroups = [
-  { label: "首页", itemIds: ["overview"] },
-  { label: "库存", itemIds: ["inventory"] },
-  { label: "采购", itemIds: ["purchaseRequests", "purchasing", "rfq"] },
-  { label: "收货", itemIds: ["receiving"] },
-  { label: "供应商", itemIds: ["procurement"] },
-  { label: "报表 / 绩效", itemIds: ["sales"] },
-  { label: "高级计划", itemIds: ["forecast"] },
-] as const;
-
 // ─── AI Insights ──────────────────────────────────────────────────────────────
 const AI_INSIGHTS: Record<string, { type: "risk" | "opportunity" | "info" | "action"; title: string; body: string; metric?: string }[]> = {
   overview: [
@@ -721,33 +703,6 @@ const AI_INSIGHTS: Record<string, { type: "risk" | "opportunity" | "info" | "act
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function fmt(n: number) {
-  if (n >= 1e8) return `¥${(n / 1e8).toFixed(2)}亿`;
-  if (n >= 1e4) return `¥${(n / 1e4).toFixed(0)}万`;
-  return `¥${n.toLocaleString()}`;
-}
-
-async function apiJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    let message = text;
-    try {
-      const payload = JSON.parse(text) as { message?: string; error?: string };
-      message = payload.message || payload.error || message;
-    } catch {
-      // Some endpoints may return plain text in development.
-    }
-    throw new Error(message || `API request failed: ${res.status}`);
-  }
-  return res.json();
-}
 
 function exportModulePdf(moduleLabel: string, company?: string) {
   const source = document.getElementById("module-export-scope");
@@ -1092,9 +1047,6 @@ const AppleTooltip = ({ active, payload, label }: any) => {
     </div>
   );
 };
-
-const PRODUCT_NAME = "FlowChain";
-const PRODUCT_TAGLINE = "智能供应链 ERP";
 
 type ChatMessage = {
   role: "user" | "assistant";

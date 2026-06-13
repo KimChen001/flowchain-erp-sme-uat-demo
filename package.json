@@ -6,8 +6,8 @@
   "scripts": {
     "build": "vite build --configLoader runner",
     "dev": "vite --configLoader runner",
-    "api": "node server/scm-api.mjs",
-    "start": "node server/scm-api.mjs"
+    "api": "node server/index.mjs",
+    "start": "node server/index.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

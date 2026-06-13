@@ -1,36 +1,35 @@
 import http from 'node:http'
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fetch as undiciFetch, ProxyAgent } from 'undici'
+import { loadEnv } from './config/env.mjs'
+import { createJsonDb } from './repositories/json-db.mjs'
+import { contentTypeFor, readBody, send, sendText } from './utils/http.mjs'
+import {
+  actorFromBody,
+  applyWorkflowTransition,
+  createAuditLogEntry,
+  postedReceivingStatuses,
+  priorities,
+  purchaseOrderStatuses,
+  purchaseRequestStatuses,
+  recordValidationBlocked,
+  recordWorkflowCreation,
+  systemRequestSources,
+  workflowDefinitions,
+  workflowError,
+} from './domain/workflow.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const root = path.resolve(__dirname, '..')
 const dataFile = path.join(root, 'data', 'scm-demo.json')
+const jsonDb = createJsonDb(dataFile)
 const port = Number(process.env.SCM_API_PORT || 8787)
 const distDir = path.join(root, 'dist')
 
-async function loadEnv() {
-  for (const name of ['.env.local', '.env']) {
-    try {
-      const raw = await readFile(path.join(root, name), 'utf8')
-      for (const line of raw.split(/\r?\n/)) {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('#')) continue
-        const eq = trimmed.indexOf('=')
-        if (eq === -1) continue
-        const key = trimmed.slice(0, eq).trim().replace(/^\uFEFF/, '')
-        const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '')
-        if (!process.env[key]) process.env[key] = value
-      }
-    } catch {
-      // Optional local env file.
-    }
-  }
-}
-
-await loadEnv()
+await loadEnv(root)
 
 const openaiProxyUrl = process.env.OPENAI_PROXY_URL || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || 'http://127.0.0.1:15236'
 const openaiDispatcher = openaiProxyUrl ? new ProxyAgent(openaiProxyUrl) : undefined
@@ -40,112 +39,13 @@ const webProxyUrl = process.env.WEB_PROXY_URL || process.env.OPENAI_PROXY_URL ||
 const webDispatcher = webProxyUrl ? new ProxyAgent(webProxyUrl) : undefined
 const aiMaxTokens = Number(process.env.AI_MAX_TOKENS || 520)
 let externalCache = { at: 0, data: null }
-const purchaseRequestStatuses = new Set(['草稿', '待审批', '已批准', '已驳回', '已转PO', '已取消'])
-const purchaseOrderStatuses = new Set(['草稿', '待审批', '已审批', '已发出', '部分到货', '已完成', '已驳回', '已取消'])
-const priorities = new Set(['高', '中', '低'])
-const systemRequestSources = new Set(['forecast', 'inventory', 'mrp-release'])
-const postedReceivingStatuses = new Set(['已入库', '异常处理'])
-const workflowDefinitions = {
-  purchaseRequest: {
-    label: '采购申请',
-    idField: 'pr',
-    statuses: purchaseRequestStatuses,
-    transitions: {
-      草稿: ['待审批', '已取消'],
-      待审批: ['已批准', '已驳回', '已取消'],
-      已批准: ['已转PO', '已取消'],
-      已驳回: ['草稿', '已取消'],
-      已转PO: [],
-      已取消: [],
-    },
-  },
-  purchaseOrder: {
-    label: '采购订单',
-    idField: 'po',
-    statuses: purchaseOrderStatuses,
-    transitions: {
-      草稿: ['待审批', '已取消'],
-      待审批: ['已审批', '已驳回', '已取消'],
-      已审批: ['已发出', '已取消'],
-      已发出: ['部分到货', '已完成', '已取消'],
-      部分到货: ['已完成', '已取消'],
-      已完成: [],
-      已驳回: ['草稿', '已取消'],
-      已取消: [],
-    },
-  },
-  rfq: {
-    label: '询价单',
-    idField: 'id',
-    statuses: new Set(['进行中', '比价中', '已授标', '已转PO', '已关闭', '已取消']),
-    transitions: {
-      进行中: ['比价中', '已授标', '已取消'],
-      比价中: ['进行中', '已授标', '已取消'],
-      已授标: ['已转PO', '已关闭'],
-      已转PO: ['已关闭'],
-      已关闭: [],
-      已取消: [],
-    },
-  },
-  receivingDoc: {
-    label: '收货单',
-    idField: 'grn',
-    statuses: new Set(['待收货', '质检中', '已入库', '异常处理']),
-    transitions: {
-      待收货: ['质检中'],
-      质检中: ['已入库', '异常处理'],
-      已入库: [],
-      异常处理: [],
-    },
-  },
-}
 
 async function readDb() {
-  const raw = await readFile(dataFile, 'utf8')
-  return JSON.parse(raw)
+  return jsonDb.read()
 }
 
 async function writeDb(db) {
-  await mkdir(path.dirname(dataFile), { recursive: true })
-  await writeFile(dataFile, JSON.stringify(db, null, 2), 'utf8')
-}
-
-async function readBody(req) {
-  const chunks = []
-  for await (const chunk of req) chunks.push(chunk)
-  const raw = Buffer.concat(chunks).toString('utf8')
-  return raw ? JSON.parse(raw) : {}
-}
-
-function send(res, status, payload) {
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  })
-  res.end(JSON.stringify(payload))
-}
-
-function sendText(res, status, text, contentType = 'text/plain; charset=utf-8') {
-  res.writeHead(status, { 'Content-Type': contentType })
-  res.end(text)
-}
-
-function contentTypeFor(filePath) {
-  const ext = path.extname(filePath).toLowerCase()
-  return {
-    '.html': 'text/html; charset=utf-8',
-    '.js': 'text/javascript; charset=utf-8',
-    '.css': 'text/css; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
-    '.svg': 'image/svg+xml',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.webp': 'image/webp',
-    '.ico': 'image/x-icon',
-  }[ext] || 'application/octet-stream'
+  await jsonDb.write(db)
 }
 
 async function sendStatic(req, res, url) {
@@ -201,149 +101,6 @@ function event(db, type, message, ref) {
     at: new Date().toISOString(),
   })
   db.events = events.slice(0, 50)
-}
-
-function workflowError(message, status = 409) {
-  const error = new Error(message)
-  error.status = status
-  return error
-}
-
-function actorFromBody(body = {}, fallback = 'system') {
-  return body.actor || body.updatedBy || body.postedBy || body.receiver || fallback
-}
-
-function workflowEntityId(definition, entity) {
-  return String(entity?.[definition.idField] || entity?.id || '')
-}
-
-function recordAudit(db, entry) {
-  const auditLog = ensureAuditLog(db)
-  const timestamp = entry.timestamp || new Date().toISOString()
-  const auditId = entry.auditId || nextSequenceId(auditLog, 'auditId', 'AUD-2026-', 1)
-  const record = {
-    auditId,
-    id: auditId,
-    timestamp,
-    actor: entry.actor || 'system',
-    source: entry.source || 'api',
-    action: entry.action || 'status_transition',
-    entityType: entry.entityType,
-    entityId: entry.entityId,
-    fromStatus: entry.fromStatus ?? null,
-    toStatus: entry.toStatus ?? null,
-    reason: entry.reason || '',
-    metadata: entry.metadata || {},
-  }
-  auditLog.unshift(record)
-  db.auditLog = auditLog.slice(0, 500)
-  return record
-}
-
-function createAuditLogEntry(db, entry) {
-  return recordAudit(db, entry)
-}
-
-function appendEntityAudit(entity, audit) {
-  if (!entity || !audit) return
-  entity.statusUpdatedAt = audit.timestamp
-  entity.lastAuditId = audit.auditId
-  entity.auditTrailIds = Array.isArray(entity.auditTrailIds) ? entity.auditTrailIds : []
-  entity.auditTrailIds = [audit.auditId, ...entity.auditTrailIds.filter((id) => id !== audit.auditId)].slice(0, 20)
-}
-
-function recordWorkflowCreation(db, entityType, entity, options = {}) {
-  const definition = workflowDefinitions[entityType]
-  if (!definition) throw workflowError(`unknown workflow entity type: ${entityType}`, 500)
-  const entityId = workflowEntityId(definition, entity)
-  const status = entity.status || options.status
-  if (!entityId) throw workflowError(`${definition.label} is missing workflow id`, 400)
-  if (!definition.statuses.has(status)) {
-    throw workflowError(`invalid ${definition.label} status: ${status}`, 400)
-  }
-  const audit = recordAudit(db, {
-    entityType,
-    entityId,
-    fromStatus: null,
-    toStatus: status,
-    action: options.action || `${entityType}_created`,
-    actor: options.actor || 'system',
-    source: options.source || 'api',
-    reason: options.reason || `${definition.label} created`,
-    metadata: options.metadata,
-  })
-  appendEntityAudit(entity, audit)
-  return audit
-}
-
-function canTransition(entityType, fromStatus, toStatus) {
-  const definition = workflowDefinitions[entityType]
-  if (!definition || !definition.statuses.has(fromStatus) || !definition.statuses.has(toStatus)) return false
-  if (fromStatus === toStatus) return true
-  return new Set(definition.transitions[fromStatus] || []).has(toStatus)
-}
-
-function assertValidTransition(entityType, fromStatus, toStatus) {
-  const definition = workflowDefinitions[entityType]
-  if (!definition) throw workflowError(`unknown workflow entity type: ${entityType}`, 500)
-  if (!definition.statuses.has(toStatus)) {
-    throw workflowError(`invalid ${definition.label} status: ${toStatus}`, 400)
-  }
-  if (!definition.statuses.has(fromStatus)) {
-    throw workflowError(`invalid current ${definition.label} status: ${fromStatus}`, 400)
-  }
-  if (!canTransition(entityType, fromStatus, toStatus)) {
-    throw workflowError(`${definition.label} cannot transition from ${fromStatus} to ${toStatus}`)
-  }
-}
-
-function transitionEntity(db, entityType, entity, nextStatus, options = {}) {
-  const definition = workflowDefinitions[entityType]
-  if (!definition) throw workflowError(`unknown workflow entity type: ${entityType}`, 500)
-  const entityId = workflowEntityId(definition, entity)
-  const currentStatus = entity.status
-  if (!entityId) throw workflowError(`${definition.label} is missing workflow id`, 400)
-  assertValidTransition(entityType, currentStatus, nextStatus)
-  if (currentStatus === nextStatus) return { changed: false, audit: null }
-
-  const audit = createAuditLogEntry(db, {
-    entityType,
-    entityId,
-    fromStatus: currentStatus,
-    toStatus: nextStatus,
-    action: options.action || `${entityType}_status_changed`,
-    actor: options.actor || 'system',
-    source: options.source || 'api',
-    reason: options.reason || '',
-    metadata: options.metadata,
-  })
-  entity.status = nextStatus
-  appendEntityAudit(entity, audit)
-  return { changed: true, audit }
-}
-
-function applyWorkflowTransition(db, entityType, entity, nextStatus, options = {}) {
-  return transitionEntity(db, entityType, entity, nextStatus, options)
-}
-
-function recordValidationBlocked(db, entityType, entity, action, reason, metadata = {}) {
-  const definition = workflowDefinitions[entityType]
-  if (!definition) return null
-  const entityId = workflowEntityId(definition, entity)
-  if (!entityId) return null
-  const audit = createAuditLogEntry(db, {
-    entityType,
-    entityId,
-    fromStatus: entity.status || null,
-    toStatus: entity.status || null,
-    action: 'system_validation_blocked',
-    actor: metadata.actor || 'system',
-    source: metadata.source || 'api',
-    reason: reason || action,
-    metadata: { action, ...metadata },
-  })
-  appendEntityAudit(entity, audit)
-  return audit
 }
 
 function ensureUsers(db) {
