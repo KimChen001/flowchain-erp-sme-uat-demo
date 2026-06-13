@@ -7,8 +7,8 @@ import {
 import { apiJson } from "../../lib/api-client";
 import { fmt } from "../../lib/format";
 import { OWNERS, SKU_CATALOG, SUPPLIER_LIST } from "../../data/demo-data";
-import type { PurchaseIntent, PurchaseOrder, PurchaseRequest, PurchaseRequestStatus, RfqRecord, SupplierRecommendationResult } from "../../app/FlowChainApp";
-import { A, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard, Modal, SegmentedControl } from "../../app/FlowChainApp";
+import type { PurchaseIntent, PurchaseOrder, PurchaseRequest, PurchaseRequestStatus, RfqRecord, SupplierRecommendationResult } from "../../types/scm";
+import { A, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard, Modal, SegmentedControl } from "../../components/ui";
 
 function PRStatusPill({ status }: { status: string }) {
   const map: Record<PurchaseRequestStatus, { color: string; bg: string }> = {

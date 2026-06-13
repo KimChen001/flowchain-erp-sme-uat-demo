@@ -132,6 +132,69 @@ export type PurchaseIntent = {
   createdAt: number;
 };
 
+export type RfqRecord = {
+  id: string;
+  title: string;
+  category: string;
+  suppliers: number;
+  quoted: number;
+  bestPrice: number;
+  bestSupplier: string;
+  due: string;
+  status: string;
+  sourceRequest?: string;
+  sourceSku?: string;
+  sourceName?: string;
+  quantity?: number;
+  unit?: string;
+  reason?: string;
+  invitedSuppliers?: string[];
+  linkedPo?: string;
+  createdAt?: string;
+  statusUpdatedAt?: string;
+  lastAuditId?: string;
+  auditTrailIds?: string[];
+};
+
+export type SupplierRecommendationResult = {
+  sku: string;
+  quantity: number;
+  currentSupplier: string;
+  primary: {
+    supplier: string;
+    unitPrice: number;
+    listPrice?: number;
+    listPriceCny?: number;
+    currency?: string;
+    fxRate?: number;
+    contractId?: string;
+    contractLabel?: string;
+    contractDiscount?: number;
+    contractTierMinQty?: number;
+    leadTimeDays: number;
+    responseScore: number;
+    capacity: number;
+    availableCapacity?: number;
+    capacityWindow?: string;
+    capacityReliability?: number;
+    capacityStatus?: "可承诺" | "紧张" | "不足" | string;
+    risk: string;
+    performanceScore: number;
+    quality: number;
+    rejectRate: number;
+    flag: string;
+    score: number;
+    amount: number;
+    isCurrent: boolean;
+    note: string;
+  } | null;
+  backup: SupplierRecommendationResult["primary"];
+  candidates: NonNullable<SupplierRecommendationResult["primary"]>[];
+  split: { supplier: string; quantity: number; unitPrice: number }[];
+  needsRfq: boolean;
+  rfqReason: string;
+};
+
 export type DemoUser = {
   id: string;
   company: string;

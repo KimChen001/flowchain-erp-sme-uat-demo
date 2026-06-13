@@ -69,3 +69,19 @@ export function poTotals(po?: PurchaseOrder | null) {
 export function lineRemaining(line: PurchaseOrderLine) {
   return Math.max(0, toNumber(line.quantityOrdered) - toNumber(line.quantityReceived));
 }
+
+export function lineStatusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    open: "待收货",
+    partially_received: "部分到货",
+    received: "已收货",
+    closed: "已关闭",
+  };
+  return labels[status || ""] || status || "待收货";
+}
+
+export function lineStatusStyle(status?: string) {
+  if (status === "received" || status === "closed") return { color: "#34c759", bg: "#f0faf4" };
+  if (status === "partially_received") return { color: "#32ade6", bg: "#e8f6fc" };
+  return { color: "#0071e3", bg: "#f0f6ff" };
+}

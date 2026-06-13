@@ -10,8 +10,9 @@ import { arrivalSchedule, purchaseOrders, qcExceptions, receivingDocs } from "..
 import type { PurchaseOrder, ReceivingDoc, ReceivingDocLine, RecvStatus } from "../../types/scm";
 import { lineRemaining, poLinesOf, toNumber } from "../../domain/purchasing/helpers";
 import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
-import { QCModal, ScanReceiveModal } from "../purchasing/Page";
-import { A, Card, Chip, DocumentHistoryPanel, KpiCard, SectionHeader, SubTabs } from "../../app/FlowChainApp";
+import { QCModal } from "./components/QCModal";
+import { ScanReceiveModal } from "./components/ScanReceiveModal";
+import { A, Card, Chip, DocumentHistoryPanel, KpiCard, SectionHeader, SubTabs } from "../../components/ui";
 
 const recvStatusMeta: Record<RecvStatus, { color: string; bg: string }> = {
   "待收货": { color: A.gray1, bg: A.gray6 },

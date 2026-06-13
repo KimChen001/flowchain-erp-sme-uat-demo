@@ -3,8 +3,8 @@ import { Building2, Clock, FileSpreadsheet, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { apiJson } from "../../lib/api-client";
 import { RFQS } from "../../data/demo-data";
-import type { RfqRecord } from "../../app/FlowChainApp";
-import { A, Card, Chip, DocumentHistoryPanel, KpiCard } from "../../app/FlowChainApp";
+import type { RfqRecord } from "../../types/scm";
+import { A, Card, Chip, DocumentHistoryPanel, KpiCard } from "../../components/ui";
 
 export default function PurchasingRFQPage() {
   const [rfqs, setRfqs] = useState<RfqRecord[]>(RFQS);
