@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Toaster, toast } from "sonner";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
@@ -16,7 +16,7 @@ import {
   Layers, ArrowLeftRight, ClipboardCheck, Grid3x3, History, Boxes,
   Users, Receipt, Tag, Repeat, FileSpreadsheet, Handshake, Wallet,
   Inbox, ShieldCheck, AlertOctagon, Undo2, Building2, CreditCard,
-  Lock, LogOut,
+  Lock, LogOut, Printer, GitBranch,
 } from "lucide-react";
 
 // ─── Apple System Colors ──────────────────────────────────────────────────────
@@ -103,6 +103,176 @@ const supplierData = [
   { rank: 5, name: "广州化工耗材",   cat: "耗材",     amount: 12600000, orders: 156, ontime: 92.3, quality: 91.8, grade: "B",  trend: "down"   },
 ];
 
+function supplierRecommendation(name: string) {
+  const supplier = supplierData.find((item) => item.name === name);
+  if (!supplier) {
+    return {
+      score: 68,
+      grade: "待评估",
+      note: "缺少完整供应商绩效，建议补充准时率、质量合格率和报价记录后再自动推荐。",
+      color: A.orange,
+    };
+  }
+  const gradeScore = supplier.grade === "S" ? 100 : supplier.grade === "A" ? 88 : supplier.grade === "B" ? 72 : 60;
+  const trendScore = supplier.trend === "up" ? 5 : supplier.trend === "down" ? -8 : 0;
+  const score = Math.round(supplier.ontime * 0.38 + supplier.quality * 0.42 + gradeScore * 0.16 + trendScore);
+  const color = score >= 92 ? A.green : score >= 84 ? A.blue : score >= 74 ? A.orange : A.red;
+  const grade = score >= 92 ? "优先推荐" : score >= 84 ? "可推荐" : score >= 74 ? "需复核" : "高风险";
+  return {
+    score,
+    grade,
+    color,
+    note: `准时率 ${supplier.ontime}% · 质量 ${supplier.quality}% · ${supplier.grade} 级供应商 · ${supplier.trend === "up" ? "趋势改善" : supplier.trend === "down" ? "趋势下滑" : "趋势稳定"}`,
+  };
+}
+
+type InventoryPlanningProfile = {
+  monthlyDemand: number;
+  unit: string;
+  leadTimeDays: number;
+  serviceLevel: number;
+  moq: number;
+  batchMultiple: number;
+  allocated: number;
+  inbound: number;
+  qaHold: number;
+  abc: "A" | "B" | "C";
+  xyz: "X" | "Y" | "Z";
+};
+
+const INVENTORY_PLANNING_PROFILE: Record<string, InventoryPlanningProfile> = {
+  "SKU-00142": { monthlyDemand: 430, unit: "件", leadTimeDays: 9,  serviceLevel: 95, moq: 200,   batchMultiple: 50,   allocated: 120,  inbound: 300, qaHold: 0,  abc: "B", xyz: "X" },
+  "SKU-00287": { monthlyDemand: 710, unit: "米", leadTimeDays: 12, serviceLevel: 97, moq: 500,   batchMultiple: 100,  allocated: 180,  inbound: 0,   qaHold: 0,  abc: "A", xyz: "Y" },
+  "SKU-00391": { monthlyDemand: 2600, unit: "件", leadTimeDays: 6, serviceLevel: 90, moq: 2000,  batchMultiple: 500,  allocated: 900,  inbound: 0,   qaHold: 0,  abc: "C", xyz: "X" },
+  "SKU-00412": { monthlyDemand: 138, unit: "件", leadTimeDays: 7,  serviceLevel: 99, moq: 20,    batchMultiple: 5,    allocated: 11,   inbound: 0,   qaHold: 0,  abc: "A", xyz: "X" },
+  "SKU-00558": { monthlyDemand: 6800, unit: "件", leadTimeDays: 5, serviceLevel: 88, moq: 10000, batchMultiple: 1000, allocated: 2400, inbound: 0,   qaHold: 0,  abc: "C", xyz: "X" },
+  "SKU-00623": { monthlyDemand: 58, unit: "件", leadTimeDays: 10,  serviceLevel: 99, moq: 10,    batchMultiple: 5,    allocated: 6,    inbound: 0,   qaHold: 1,  abc: "A", xyz: "Y" },
+  "SKU-00744": { monthlyDemand: 260, unit: "桶", leadTimeDays: 8,  serviceLevel: 92, moq: 200,   batchMultiple: 50,   allocated: 80,   inbound: 600, qaHold: 0,  abc: "C", xyz: "Y" },
+  "SKU-00815": { monthlyDemand: 152, unit: "件", leadTimeDays: 14, serviceLevel: 95, moq: 20,    batchMultiple: 5,    allocated: 18,   inbound: 0,   qaHold: 0,  abc: "B", xyz: "Y" },
+  "SKU-00934": { monthlyDemand: 96, unit: "件", leadTimeDays: 9,   serviceLevel: 95, moq: 30,    batchMultiple: 10,   allocated: 16,   inbound: 0,   qaHold: 89, abc: "B", xyz: "Z" },
+  "SKU-01021": { monthlyDemand: 74, unit: "件", leadTimeDays: 11,  serviceLevel: 92, moq: 50,    batchMultiple: 10,   allocated: 22,   inbound: 0,   qaHold: 0,  abc: "B", xyz: "X" },
+};
+
+function roundUpToBatch(value: number, moq: number, batchMultiple: number) {
+  if (value <= 0) return 0;
+  const floor = Math.max(value, moq);
+  return Math.ceil(floor / batchMultiple) * batchMultiple;
+}
+
+function inventoryPlan(item: typeof inventoryItems[number]) {
+  const profile = INVENTORY_PLANNING_PROFILE[item.sku] ?? {
+    monthlyDemand: Math.max(item.min, 1),
+    unit: "件",
+    leadTimeDays: 10,
+    serviceLevel: 92,
+    moq: 1,
+    batchMultiple: 1,
+    allocated: 0,
+    inbound: 0,
+    qaHold: 0,
+    abc: "B",
+    xyz: "Y",
+  } satisfies InventoryPlanningProfile;
+  const procurement = FORECAST_PROCUREMENT_PROFILE[item.sku] ?? { supplier: "待分配供应商", unitPrice: 0, buyer: "张磊" };
+  const dailyDemand = profile.monthlyDemand / 30;
+  const onHandAvailable = Math.max(0, item.qty - profile.allocated - profile.qaHold);
+  const projectedAvailable = Math.max(0, onHandAvailable + profile.inbound);
+  const daysCover = dailyDemand > 0 ? Math.floor(projectedAvailable / dailyDemand) : 999;
+  const leadDemand = Math.ceil(dailyDemand * profile.leadTimeDays);
+  const reorderPoint = Math.ceil(leadDemand + item.min);
+  const targetStock = Math.min(item.max, Math.max(reorderPoint + Math.ceil(profile.monthlyDemand * 0.5), item.min * 2));
+  const rawSuggested = projectedAvailable < reorderPoint ? targetStock - projectedAvailable : 0;
+  const suggestedQty = roundUpToBatch(rawSuggested, profile.moq, profile.batchMultiple);
+  const priority: "高" | "中" | "低" = projectedAvailable <= item.min || daysCover <= profile.leadTimeDays
+    ? "高"
+    : projectedAvailable <= reorderPoint || daysCover <= profile.leadTimeDays + 7
+      ? "中"
+      : "低";
+  const needsSourcing = suggestedQty > 0 && (!procurement.unitPrice || procurement.supplier === "待分配供应商");
+  const action = suggestedQty > 0
+    ? needsSourcing ? "补供应商/报价" : priority === "高" ? "立即生成 PR" : "纳入本周补货"
+    : profile.qaHold > 0 ? "释放冻结库存" : item.qty > item.max * 0.8 && item.turnover < 4 ? "降频采购/清理呆滞" : "保持监控";
+  const policy = profile.abc === "A" && profile.xyz === "X"
+    ? "AX 自动补货"
+    : profile.abc === "A" ? "A 类周滚动复核"
+    : profile.xyz === "Z" ? "Z 类按单采购"
+    : "周期补货";
+  return {
+    ...profile,
+    supplier: procurement.supplier,
+    buyer: procurement.buyer,
+    unitPrice: procurement.unitPrice,
+    dailyDemand,
+    onHandAvailable,
+    projectedAvailable,
+    daysCover,
+    leadDemand,
+    reorderPoint,
+    targetStock,
+    suggestedQty,
+    amount: suggestedQty * procurement.unitPrice,
+    priority,
+    action,
+    policy,
+    needsSourcing,
+  };
+}
+
+function inventoryPurchaseRequestPayload(item: typeof inventoryItems[number], overrides?: {
+  quantity?: number;
+  requiredDate?: string;
+  reason?: string;
+}) {
+  const plan = inventoryPlan(item);
+  const quantity = Math.max(0, Number(overrides?.quantity ?? plan.suggestedQty));
+  return {
+    source: "inventory",
+    sourceSku: item.sku,
+    sourceName: item.name,
+    supplier: plan.supplier,
+    requester: "张磊",
+    buyer: plan.buyer,
+    requiredDate: overrides?.requiredDate || `${plan.leadTimeDays}天内`,
+    quantity,
+    unit: plan.unit,
+    unitPrice: plan.unitPrice,
+    amount: quantity * plan.unitPrice,
+    priority: plan.priority,
+    reason: overrides?.reason || `库存低于再订货点：可用 ${plan.projectedAvailable}${plan.unit}，ROP ${plan.reorderPoint}${plan.unit}，覆盖 ${plan.daysCover} 天。策略 ${plan.policy}。`,
+    forecastBasis: {
+      source: "inventory-control",
+      projectedAvailable: plan.projectedAvailable,
+      reorderPoint: plan.reorderPoint,
+      daysCover: plan.daysCover,
+      leadTimeDays: plan.leadTimeDays,
+      serviceLevel: plan.serviceLevel,
+      moq: plan.moq,
+      batchMultiple: plan.batchMultiple,
+    },
+    approvalSnapshot: {
+      source: "inventory",
+      summary: `${item.sku} ${item.name} · ${plan.policy} · 建议 ${quantity.toLocaleString()} ${plan.unit} · ${fmt(quantity * plan.unitPrice)}`,
+      explanation: `库存控制策略 ${plan.policy} 触发补货：可用 ${plan.projectedAvailable}${plan.unit}，ROP ${plan.reorderPoint}${plan.unit}，覆盖 ${plan.daysCover} 天，建议按 MOQ/批量倍数释放 ${quantity.toLocaleString()} ${plan.unit}。`,
+      inventory: {
+        projectedAvailable: plan.projectedAvailable,
+        reorderPoint: plan.reorderPoint,
+        daysCover: plan.daysCover,
+        serviceLevel: plan.serviceLevel,
+        moq: plan.moq,
+        batchMultiple: plan.batchMultiple,
+        policy: plan.policy,
+      },
+      supplier: {
+        name: plan.supplier,
+        buyer: plan.buyer,
+        unitPrice: plan.unitPrice,
+        amount: quantity * plan.unitPrice,
+      },
+      createdAt: new Date().toISOString(),
+    },
+  };
+}
+
 const monthlyProcurement = [
   { month: "7月",  amount: 2640000, budget: 2800000 },
   { month: "8月",  amount: 2980000, budget: 2800000 },
@@ -114,12 +284,38 @@ const monthlyProcurement = [
 
 const pieColors = [A.blue, A.green, A.orange, A.purple, A.teal];
 
+function overviewReplenishmentActions() {
+  return inventoryItems
+    .filter((item) => item.status !== "正常")
+    .map((item) => {
+      const plan = inventoryPlan(item);
+      const shortage = Math.max(0, item.min - item.qty);
+      return {
+        ...item,
+        shortage,
+        suggestedQty: plan.suggestedQty,
+        amount: plan.amount,
+        supplier: plan.supplier,
+        buyer: plan.buyer,
+        action: plan.action,
+        daysCover: plan.daysCover,
+        reorderPoint: plan.reorderPoint,
+      };
+    })
+    .sort((a, b) => {
+      const score = (row: { status: string; amount: number; shortage: number }) =>
+        (row.status === "不足" ? 100000000 : 0) + row.amount + row.shortage * 1000;
+      return score(b) - score(a);
+    });
+}
+
 // ─── Purchase Orders ─────────────────────────────────────────────────────────
-type POStatus = "草稿" | "待审批" | "已审批" | "已发出" | "部分到货" | "已完成" | "已取消";
+type POStatus = "草稿" | "待审批" | "已审批" | "已发出" | "部分到货" | "已完成" | "已驳回" | "已取消";
 const purchaseOrders: {
   po: string; supplier: string; created: string; eta: string; owner: string;
   amount: number; items: number; received: number; status: POStatus; priority: "高" | "中" | "低";
-  paid: boolean;
+  paid: boolean; source?: string; sourceRequest?: string; sourceRfq?: string; sourceSku?: string; sourceName?: string; recommendedQty?: number;
+  unit?: string; unitPrice?: number; reason?: string; approvalSnapshot?: ApprovalSnapshot | null;
 }[] = [
   { po: "PO-2026-1287", supplier: "深圳新元电气",   created: "5月26日", eta: "6月02日", owner: "陈思远", amount: 1840000, items: 8,  received: 0,  status: "待审批",  priority: "高", paid: false },
   { po: "PO-2026-1286", supplier: "华东精工机械",   created: "5月25日", eta: "6月01日", owner: "李婷",   amount: 2640000, items: 12, received: 0,  status: "已审批",  priority: "高", paid: false },
@@ -131,7 +327,93 @@ const purchaseOrders: {
   { po: "PO-2026-1280", supplier: "江苏铝合金集团", created: "5月14日", eta: "5月21日", owner: "王志强", amount: 760000,  items: 3,  received: 0,  status: "已取消",  priority: "低", paid: false },
   { po: "PO-2026-1279", supplier: "深圳新元电气",   created: "5月26日", eta: "6月03日", owner: "陈思远", amount: 528000,  items: 5,  received: 0,  status: "草稿",    priority: "低", paid: false },
 ];
-type PurchaseOrder = typeof purchaseOrders[number];
+type PurchaseOrderLine = {
+  poLineId: string;
+  poId?: string;
+  sku: string;
+  itemName: string;
+  quantityOrdered: number;
+  quantityReceived: number;
+  quantityAccepted: number;
+  quantityRejected: number;
+  unit: string;
+  unitPrice: number;
+  currency: string;
+  supplierId?: string;
+  warehouseId?: string;
+  requiredDate?: string;
+  promisedDate?: string;
+  status?: string;
+};
+
+type PurchaseOrder = typeof purchaseOrders[number] & {
+  lines?: PurchaseOrderLine[];
+  lineCount?: number;
+  totalOrderedQty?: number;
+  totalReceivedQty?: number;
+  totalAcceptedQty?: number;
+  totalRejectedQty?: number;
+  totalAmount?: number;
+  itemsMeaning?: "lineCount" | "totalOrderedQty" | string;
+  currency?: string;
+  supplierId?: string;
+  warehouseId?: string;
+  erpStatus?: string;
+};
+type PurchaseOrderDraft = Omit<PurchaseOrder, "po" | "created"> & { po?: string; created?: string };
+type PurchaseRequestStatus = "草稿" | "待审批" | "已批准" | "已驳回" | "已转PO" | "已取消";
+type PurchaseRequest = {
+  pr: string;
+  source: string;
+  sourceSku: string;
+  sourceName: string;
+  supplier: string;
+  requester: string;
+  buyer: string;
+  created: string;
+  requiredDate: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  amount: number;
+  priority: "高" | "中" | "低";
+  status: PurchaseRequestStatus;
+  reason: string;
+  linkedPo?: string;
+  forecastBasis?: {
+    source?: string;
+    peakGap?: number;
+    serviceLevel?: number;
+    safetyFactor?: number;
+    stockoutMonths?: number;
+    firstStockoutMonth?: string | null;
+    projectedAvailable?: number;
+    reorderPoint?: number;
+    daysCover?: number;
+    leadTimeDays?: number;
+    moq?: number;
+    batchMultiple?: number;
+    plannedReceipt?: number;
+    plannedReleasePeriod?: string;
+    mrpException?: string;
+    bomSourceSummary?: string;
+    bomSources?: {
+      parent: string;
+      parentName?: string;
+      top?: string;
+      topName?: string;
+      level?: number;
+      demand: number;
+    }[];
+  } | null;
+  approvalSnapshot?: ApprovalSnapshot | null;
+};
+type PurchaseIntent = {
+  selectedPr?: string;
+  sourceSku?: string;
+  createdAt: number;
+};
+
 type DemoUser = {
   id: string;
   company: string;
@@ -182,7 +464,27 @@ const receivingDocs: {
   { grn: "GRN-202605-0422", po: "PO-2026-1283", supplier: "深圳新元电气",   arrived: "5月26日 16:21", dock: "Dock-02", receiver: "孙明",   items: 6,  passed: 6,  failed: 0, status: "已入库",  warehouse: "D 区" },
   { grn: "GRN-202605-0423", po: "PO-2026-1281", supplier: "华东精工机械",   arrived: "5月26日 11:05", dock: "Dock-01", receiver: "刘建华", items: 7,  passed: 7,  failed: 0, status: "已入库",  warehouse: "A 区" },
 ];
-type ReceivingDoc = typeof receivingDocs[number];
+type ReceivingDocLine = {
+  grnLineId?: string;
+  poLineId?: string;
+  poId?: string;
+  sku: string;
+  itemName?: string;
+  receivedQty: number;
+  acceptedQty: number;
+  rejectedQty: number;
+  warehouseId?: string;
+  unit?: string;
+  status?: string;
+};
+
+type ReceivingDoc = typeof receivingDocs[number] & {
+  lines?: ReceivingDocLine[];
+  postedAt?: string;
+  postedBy?: string;
+  inventoryApplied?: boolean;
+  inventoryMovementIds?: string[];
+};
 
 const recvStatusMeta: Record<RecvStatus, { color: string; bg: string }> = {
   "待收货":   { color: A.gray1,  bg: A.gray6  },
@@ -191,6 +493,128 @@ const recvStatusMeta: Record<RecvStatus, { color: string; bg: string }> = {
   "已入库":   { color: A.green,  bg: "#f0faf4" },
   "异常处理": { color: A.red,    bg: "#fff1f0" },
 };
+
+function toNumber(value: unknown, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function poLinesOf(po?: PurchaseOrder | null): PurchaseOrderLine[] {
+  if (!po) return [];
+  if (Array.isArray(po.lines) && po.lines.length > 0) {
+    return po.lines.map((line, index) => ({
+      poLineId: line.poLineId || `${po.po}-L${String(index + 1).padStart(3, "0")}`,
+      poId: line.poId || po.po,
+      sku: line.sku || po.sourceSku || "SKU-UNKNOWN",
+      itemName: line.itemName || po.sourceName || "未命名物料",
+      quantityOrdered: toNumber(line.quantityOrdered, toNumber(po.recommendedQty, toNumber(po.items))),
+      quantityReceived: toNumber(line.quantityReceived),
+      quantityAccepted: toNumber(line.quantityAccepted),
+      quantityRejected: toNumber(line.quantityRejected),
+      unit: line.unit || po.unit || "件",
+      unitPrice: toNumber(line.unitPrice, toNumber(po.unitPrice)),
+      currency: line.currency || po.currency || "CNY",
+      supplierId: line.supplierId || po.supplierId || po.supplier,
+      warehouseId: line.warehouseId || po.warehouseId || "MAIN",
+      requiredDate: line.requiredDate,
+      promisedDate: line.promisedDate || po.eta,
+      status: line.status || "open",
+    }));
+  }
+
+  const orderedQty = toNumber(po.totalOrderedQty, toNumber(po.recommendedQty, toNumber(po.items)));
+  const receivedQty = toNumber(po.totalReceivedQty, toNumber(po.received));
+  return [{
+    poLineId: `${po.po}-LEGACY-001`,
+    poId: po.po,
+    sku: po.sourceSku || "SKU-LEGACY",
+    itemName: po.sourceName || `${po.supplier} 采购项`,
+    quantityOrdered: orderedQty,
+    quantityReceived: receivedQty,
+    quantityAccepted: toNumber(po.totalAcceptedQty, receivedQty),
+    quantityRejected: toNumber(po.totalRejectedQty),
+    unit: po.unit || "件",
+    unitPrice: toNumber(po.unitPrice, orderedQty > 0 ? toNumber(po.amount) / orderedQty : 0),
+    currency: po.currency || "CNY",
+    supplierId: po.supplierId || po.supplier,
+    warehouseId: po.warehouseId || "MAIN",
+    promisedDate: po.eta,
+    status: receivedQty >= orderedQty && orderedQty > 0 ? "received" : receivedQty > 0 ? "partially_received" : "open",
+  }];
+}
+
+function poTotals(po?: PurchaseOrder | null) {
+  const lines = poLinesOf(po);
+  const totalOrderedQty = lines.reduce((sum, line) => sum + toNumber(line.quantityOrdered), 0);
+  const totalReceivedQty = lines.reduce((sum, line) => sum + toNumber(line.quantityReceived), 0);
+  const totalAcceptedQty = lines.reduce((sum, line) => sum + toNumber(line.quantityAccepted), 0);
+  const totalRejectedQty = lines.reduce((sum, line) => sum + toNumber(line.quantityRejected), 0);
+  const totalAmount = lines.reduce((sum, line) => sum + toNumber(line.quantityOrdered) * toNumber(line.unitPrice), 0);
+  return {
+    lineCount: po?.lineCount ?? lines.length,
+    totalOrderedQty: po?.totalOrderedQty ?? totalOrderedQty,
+    totalReceivedQty: po?.totalReceivedQty ?? totalReceivedQty,
+    totalAcceptedQty: po?.totalAcceptedQty ?? totalAcceptedQty,
+    totalRejectedQty: po?.totalRejectedQty ?? totalRejectedQty,
+    totalAmount: po?.totalAmount ?? totalAmount,
+  };
+}
+
+function lineRemaining(line: PurchaseOrderLine) {
+  return Math.max(0, toNumber(line.quantityOrdered) - toNumber(line.quantityReceived));
+}
+
+function lineStatusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    open: "待收货",
+    partially_received: "部分到货",
+    received: "已收货",
+    closed: "已关闭",
+  };
+  return labels[status || ""] || status || "待收货";
+}
+
+function lineStatusStyle(status?: string) {
+  if (status === "received" || status === "closed") return { color: A.green, bg: "#f0faf4" };
+  if (status === "partially_received") return { color: A.teal, bg: "#e8f6fc" };
+  return { color: A.blue, bg: "#f0f6ff" };
+}
+
+function grnLinesOf(grn?: ReceivingDoc | null): ReceivingDocLine[] {
+  if (!grn) return [];
+  if (Array.isArray(grn.lines) && grn.lines.length > 0) {
+    return grn.lines.map((line, index) => ({
+      grnLineId: line.grnLineId || `${grn.grn}-L${String(index + 1).padStart(3, "0")}`,
+      poLineId: line.poLineId,
+      poId: line.poId || grn.po,
+      sku: line.sku || "SKU-UNKNOWN",
+      itemName: line.itemName || "未命名物料",
+      receivedQty: toNumber(line.receivedQty),
+      acceptedQty: toNumber(line.acceptedQty),
+      rejectedQty: toNumber(line.rejectedQty),
+      warehouseId: line.warehouseId || grn.warehouse || "MAIN",
+      unit: line.unit || "件",
+      status: line.status,
+    }));
+  }
+
+  return [{
+    grnLineId: `${grn.grn}-LEGACY-001`,
+    poId: grn.po,
+    sku: "SKU-LEGACY",
+    itemName: `${grn.supplier} 到货项`,
+    receivedQty: toNumber(grn.passed) + toNumber(grn.failed) || toNumber(grn.items),
+    acceptedQty: toNumber(grn.passed),
+    rejectedQty: toNumber(grn.failed),
+    warehouseId: grn.warehouse || "MAIN",
+    unit: "件",
+    status: grn.status,
+  }];
+}
+
+function isPostedGrn(grn?: ReceivingDoc | null) {
+  return Boolean(grn?.postedAt || grn?.inventoryApplied || grn?.status === "已入库" || grn?.status === "异常处理");
+}
 
 const arrivalSchedule = [
   { time: "09:00", supplier: "佛山标准件",     po: "PO-2026-1284", dock: "Dock-02", driver: "王师傅 / 粤B·12846", status: "已到达" },
@@ -212,7 +636,9 @@ const navItems = [
   { icon: Package,       label: "库存管理",   id: "inventory"    },
   { icon: ShoppingCart,  label: "产品销售",   id: "sales"        },
   { icon: TrendingUp,    label: "预测分析",   id: "forecast"     },
+  { icon: ClipboardCheck, label: "采购申请",  id: "purchaseRequests" },
   { icon: ClipboardList, label: "采购订单",   id: "purchasing"   },
+  { icon: FileSpreadsheet, label: "询价 RFQ", id: "rfq"          },
   { icon: PackageCheck,  label: "收货管理",   id: "receiving"    },
   { icon: DollarSign,    label: "采购费用",   id: "procurement"  },
 ];
@@ -242,6 +668,18 @@ const AI_INSIGHTS: Record<string, { type: "risk" | "opportunity" | "info" | "act
     { type: "risk",        title: "2 月现金流压力",    body: "春节效应将导致 2 月订单量环比下降 35-40%，但采购成本相对刚性。预计 2 月经营性现金流承压，建议提前在 1 月末完成 ¥2,000 万以上回款确认。", metric: "现金流预警 ¥2,000 万" },
     { type: "info",        title: "模型准确率 94.2%",  body: "过去 6 个月 MAPE 为 5.8%，预测准确率 94.2%。营收预测优于订单量预测（95.1% vs 92.8%）。模型正持续接入新数据进行迭代优化。" },
     { type: "action",      title: "1 月紧急补货建议",  body: "基于预测模型，建议 1 月 10 日前完成铝合金型材、控制器主板、伺服电机的紧急采购，合计约 ¥340 万，可覆盖至 3 月底需求。", metric: "建议采购 ¥340 万" },
+  ],
+  purchaseRequests: [
+    { type: "action",      title: "Requester 可提交 PR", body: "采购申请应作为需求入口：业务、计划、仓库都可以提交 PR，系统再由采购和财务审批，审批通过后才能转采购订单。", metric: "PR → PO" },
+    { type: "risk",        title: "待审批 PR 影响交付", body: "低库存 SKU 的采购申请如果未及时审批，会延迟转 PO 和供应商下单，建议优先处理高优先级、金额较大或断货窗口较近的 PR。", metric: "审批风险" },
+    { type: "info",        title: "审批依据已锁定", body: "采购申请会保留创建时的库存、预测、MRP、供应商评分和推荐理由，后续供应商报价或绩效变化不会影响历史审批追溯。" },
+    { type: "action",      title: "手工 PR 需补足依据", body: "手工提交 PR 时建议写明用途、需求日期、数量和供应商选择理由；系统会自动把这些字段写入审批快照。", metric: "合规" },
+  ],
+  rfq: [
+    { type: "action", title: "从 PR 发起 RFQ", body: "当供应商候选不足、评分低或需要比价时，可从采购申请详情的推荐卡片直接发起 RFQ，邀请主推和备选供应商报价。", metric: "PR → RFQ" },
+    { type: "info", title: "RFQ 追溯来源 PR", body: "询价单会保存来源采购申请、SKU、数量、邀请供应商和触发原因，便于审批时追溯为什么需要询价。" },
+    { type: "risk", title: "候选不足影响授标", body: "如果报价候选少于两家，建议延长询价截止或补充备选供应商，避免单一来源采购风险。", metric: "比价风险" },
+    { type: "opportunity", title: "比价节省空间", body: "对高金额或价格波动 SKU，RFQ 可用于锁定最优价和交期，同时把供应商绩效纳入授标依据。", metric: "降本" },
   ],
   purchasing: [
     { type: "risk",        title: "3 张高优先级 PO 待审批",  body: "PO-2026-1287（深圳新元电气 ¥184 万）已等待审批超过 4 小时，关联的伺服电机为 SKU-00412 紧急补货。如未在今日 18:00 前审批，预计周一将出现产线停工，影响在制订单约 ¥126 万。", metric: "停工风险 ¥126 万" },
@@ -280,9 +718,86 @@ async function apiJson<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `API request failed: ${res.status}`);
+    let message = text;
+    try {
+      const payload = JSON.parse(text) as { message?: string; error?: string };
+      message = payload.message || payload.error || message;
+    } catch {
+      // Some endpoints may return plain text in development.
+    }
+    throw new Error(message || `API request failed: ${res.status}`);
   }
   return res.json();
+}
+
+function exportModulePdf(moduleLabel: string, company?: string) {
+  const source = document.getElementById("module-export-scope");
+  if (!source) {
+    toast.error("没有可导出的模块内容");
+    return;
+  }
+  const printWindow = window.open("", "_blank", "width=1200,height=900");
+  if (!printWindow) {
+    toast.error("浏览器阻止了导出窗口", { description: "请允许弹窗后重试。" });
+    return;
+  }
+  const clone = source.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll("button,input,textarea,select").forEach((node) => {
+    const element = node as HTMLElement;
+    if (element.tagName === "BUTTON") element.remove();
+    else element.replaceWith(document.createTextNode((element as HTMLInputElement).value || ""));
+  });
+  const styles = Array.from(document.querySelectorAll("style,link[rel='stylesheet']"))
+    .map((node) => node.outerHTML)
+    .join("\n");
+  const now = new Date().toLocaleString("zh-CN", { hour12: false });
+  printWindow.document.write(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${moduleLabel} 报告</title>
+  ${styles}
+  <style>
+    @page { size: A4; margin: 14mm; }
+    body { background: #fff; color: #1d1d1f; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .report-header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 1px solid #d1d1d6; padding-bottom: 16px; margin-bottom: 18px; }
+    .report-title { font-size: 22px; font-weight: 700; letter-spacing: 0; }
+    .report-meta { font-size: 11px; color: #86868b; text-align: right; line-height: 1.7; }
+    .export-body { max-width: 100%; }
+    .export-body * { box-shadow: none !important; }
+    .export-body [class*="overflow"] { overflow: visible !important; }
+    .export-body table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+    .export-body tr { page-break-inside: avoid; }
+    .export-body th, .export-body td { border-bottom: 1px solid rgba(0,0,0,0.08); }
+    .export-body .rounded-xl, .export-body .rounded-2xl, .export-body .rounded-lg { border-radius: 8px !important; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <header class="report-header">
+    <div>
+      <div class="report-title">${moduleLabel} 报告</div>
+      <div style="font-size:12px;color:#86868b;margin-top:6px;">${PRODUCT_NAME} · 智能供应链 ERP</div>
+    </div>
+    <div class="report-meta">
+      <div>${company || "新辰智能制造"}</div>
+      <div>导出时间：${now}</div>
+      <div>来源：当前工作台视图</div>
+    </div>
+  </header>
+  <main class="export-body">${clone.innerHTML}</main>
+  <script>
+    window.onload = () => {
+      setTimeout(() => {
+        window.focus();
+        window.print();
+      }, 300);
+    };
+  </script>
+</body>
+</html>`);
+  printWindow.document.close();
+  toast.success("PDF 导出窗口已打开", { description: "在打印窗口选择“另存为 PDF”。" });
 }
 
 const insightMeta = {
@@ -414,6 +929,26 @@ const PRODUCT_TAGLINE = "智能供应链 ERP";
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  confidence?: AiConfidence;
+};
+
+type AiConfidence = {
+  score: number;
+  level: "高" | "中" | "低";
+  dimensions?: AiConfidenceDimension[];
+  evidence: string[];
+  warnings: string[];
+  recommendedValidation: string;
+  method: string;
+};
+
+type AiConfidenceDimension = {
+  key: "forecast" | "inventory" | "supplier" | "external" | string;
+  label: string;
+  score: number;
+  level: "高" | "中" | "低";
+  evidence: string[];
+  warnings: string[];
 };
 
 type MarketPrice = {
@@ -455,7 +990,7 @@ function buildAiAssistantReply(moduleId: string, question: string, activeInsight
   }
 
   if (q.includes("采购") || q.includes("补货") || q.includes("下单")) {
-    return `${evidence} 采购建议应同时看预测需求、现有库存、在途数量、供应商交期和 MOQ。若预测需求超过可用库存，系统应生成补货数量；若同一供应商存在多张草稿 PO，可以考虑合并下单来锁价和降低物流成本。`;
+    return `${evidence} 采购建议应同时看预测需求、现有库存、在途数量、供应商交期和 MOQ。若预测需求超过可用库存，系统应先生成采购申请 PR，审批后再转 PO；若同一供应商存在多张草稿 PO，可以考虑合并下单来锁价和降低物流成本。`;
   }
 
   if (q.includes("模型") || q.includes("预测") || q.includes("准确")) {
@@ -466,7 +1001,7 @@ function buildAiAssistantReply(moduleId: string, question: string, activeInsight
     return `${evidence} 可以生成一段审批说明：基于历史需求预测和当前库存覆盖天数，系统识别出潜在供应风险。建议按推荐数量发起采购，并优先选择准时率更高、交期更短的供应商，以降低断货和订单延期风险。`;
   }
 
-  return `${evidence} 我的建议是先确认这条 insight 的数据依据，再决定动作：如果影响订单交付，优先生成采购单或催交任务；如果影响成本，优先做供应商对比和合并采购；如果只是趋势提醒，可以先加入下周 S&OP 复盘。`;
+  return `${evidence} 我的建议是先确认这条 insight 的数据依据，再决定动作：如果影响订单交付，优先生成采购申请或催交任务；如果影响成本，优先做供应商对比和合并采购；如果只是趋势提醒，可以先加入下周 S&OP 复盘。`;
 }
 
 // ─── Typewriter ───────────────────────────────────────────────────────────────
@@ -510,6 +1045,7 @@ function AiPanel({ moduleId }: { moduleId: string }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [lastConfidence, setLastConfidence] = useState<AiConfidence | null>(null);
   const [asking, setAsking] = useState(false);
   const [externalStatus, setExternalStatus] = useState("联网信号加载中");
   const [marketPrices, setMarketPrices] = useState<MarketPrice[]>([]);
@@ -536,6 +1072,7 @@ function AiPanel({ moduleId }: { moduleId: string }) {
       role: "assistant",
       content: `${PAGE_LABELS[moduleId] ?? "当前模块"}上下文已载入。我会基于当前页面的指标、预测和 insight 回答，不做脱离数据的建议。`,
     }]);
+    setLastConfidence(null);
     apiJson<{ signals: { type: string }[] }>("/api/external-signals")
       .then((data) => setExternalStatus(`联网信号 ${data.signals.length} 条`))
       .catch(() => setExternalStatus("联网信号暂不可用"));
@@ -570,6 +1107,7 @@ function AiPanel({ moduleId }: { moduleId: string }) {
         timingMs?: number;
         externalMs?: number;
         modelMs?: number;
+        confidence?: AiConfidence;
       }>("/api/ai/chat", {
         method: "POST",
         body: JSON.stringify({ moduleId, question, activeInsight: active }),
@@ -582,7 +1120,8 @@ function AiPanel({ moduleId }: { moduleId: string }) {
       const timing = typeof result.timingMs === "number"
         ? `\n\n耗时 ${result.timingMs}ms · 模型 ${result.modelMs ?? "-"}ms · ${result.usedWeb ? `联网 ${result.externalMs ?? "-"}ms` : "未联网"}`
         : "";
-      setMessages((prev) => [...prev, { role: "assistant", content: `${prefix}${result.content}${timing}` }]);
+      if (result.confidence) setLastConfidence(result.confidence);
+      setMessages((prev) => [...prev, { role: "assistant", content: `${prefix}${result.content}${timing}`, confidence: result.confidence }]);
     } catch {
       const reply = buildAiAssistantReply(moduleId, question, active);
       setMessages((prev) => [...prev, { role: "assistant", content: `本地分析: ${reply}` }]);
@@ -649,7 +1188,9 @@ function AiPanel({ moduleId }: { moduleId: string }) {
             style={{ background: "#f0f6ff", color: A.blue }}>
             SupplyChain-LLM v2.4
           </span>
-          <span className="text-[10px]" style={{ color: A.gray2 }}>置信度 94.2%</span>
+          <span className="text-[10px]" style={{ color: lastConfidence ? (lastConfidence.score >= 85 ? A.green : lastConfidence.score >= 70 ? A.orange : A.red) : A.gray2 }}>
+            置信度 {lastConfidence ? `${lastConfidence.score}% · ${lastConfidence.level}` : "待校准"}
+          </span>
           <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
             style={{ background: "#f0faf4", color: A.green }}>{externalStatus}</span>
         </div>
@@ -799,6 +1340,45 @@ function AiPanel({ moduleId }: { moduleId: string }) {
                       boxShadow: msg.role === "assistant" ? "0 0 0 0.5px rgba(0,0,0,0.06)" : "none",
                     }}>
                     {msg.content}
+                    {msg.role === "assistant" && msg.confidence && (
+                      <div className="mt-2 pt-2 text-[10px] leading-4" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)", color: A.gray2 }}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold" style={{ color: msg.confidence.score >= 85 ? A.green : msg.confidence.score >= 70 ? A.orange : A.red }}>
+                            置信度 {msg.confidence.score}% · {msg.confidence.level}
+                          </span>
+                          <span className="truncate">{msg.confidence.method}</span>
+                        </div>
+                        {msg.confidence.evidence.length > 0 && (
+                          <div className="mt-1">
+                            <span style={{ color: A.label }}>证据：</span>{msg.confidence.evidence.slice(0, 3).join(" · ")}
+                          </div>
+                        )}
+                        {msg.confidence.dimensions?.length ? (
+                          <div className="grid grid-cols-2 gap-1.5 mt-2">
+                            {msg.confidence.dimensions.map((item) => (
+                              <div key={item.key} className="rounded-lg px-2 py-1"
+                                style={{ background: A.gray6, color: A.gray1 }}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate">{item.label}</span>
+                                  <span className="font-semibold" style={{ color: item.score >= 85 ? A.green : item.score >= 70 ? A.orange : A.red }}>
+                                    {item.score}%
+                                  </span>
+                                </div>
+                                {item.warnings.length > 0 && (
+                                  <div className="truncate" style={{ color: A.orange }}>{item.warnings[0]}</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        {msg.confidence.warnings.length > 0 && (
+                          <div className="mt-1" style={{ color: A.orange }}>
+                            注意：{msg.confidence.warnings.slice(0, 2).join("；")}
+                          </div>
+                        )}
+                        <div className="mt-1">{msg.confidence.recommendedValidation}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -875,8 +1455,153 @@ function SectionHeader({ title, right }: { title: string; right?: React.ReactNod
   );
 }
 
+function ReplenishmentRequestModal({
+  item,
+  open,
+  onClose,
+  onSubmit,
+}: {
+  item: typeof inventoryItems[number] | null;
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (item: typeof inventoryItems[number], values: { quantity: number; requiredDate: string; reason: string }) => void;
+}) {
+  const plan = item ? inventoryPlan(item) : null;
+  const [quantity, setQuantity] = useState(0);
+  const [requiredDate, setRequiredDate] = useState("");
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    if (!item || !plan) return;
+    setQuantity(plan.suggestedQty);
+    setRequiredDate(`${plan.leadTimeDays}天内`);
+    setReason(`库存低于再订货点：可用 ${plan.projectedAvailable}${plan.unit}，ROP ${plan.reorderPoint}${plan.unit}，覆盖 ${plan.daysCover} 天。策略 ${plan.policy}。`);
+  }, [item?.sku]);
+
+  if (!item || !plan) return null;
+  const amount = quantity * plan.unitPrice;
+  const score = supplierRecommendation(plan.supplier);
+  const canSubmit = quantity > 0 && !plan.needsSourcing;
+
+  return (
+    <Modal open={open} onClose={onClose} width={680}
+      title="生成补货采购申请" subtitle={`${item.sku} · ${item.name}`}>
+      <div className="grid grid-cols-4 gap-2 mb-4">
+        {[
+          { label: "可用库存", value: `${plan.projectedAvailable.toLocaleString()} ${plan.unit}`, color: plan.projectedAvailable <= item.min ? A.red : A.label },
+          { label: "ROP", value: `${plan.reorderPoint.toLocaleString()} ${plan.unit}`, color: A.label },
+          { label: "覆盖天数", value: `${plan.daysCover} 天`, color: plan.daysCover <= plan.leadTimeDays ? A.red : A.label },
+          { label: "MOQ/倍量", value: `${plan.moq}/${plan.batchMultiple}`, color: A.label },
+        ].map((metric) => (
+          <div key={metric.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
+            <div className="text-[10px]" style={{ color: A.gray2 }}>{metric.label}</div>
+            <div className="text-sm font-semibold mt-1" style={{ color: metric.color }}>{metric.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="建议供应商">
+          <div className="rounded-lg px-3 py-2 text-xs" style={{ background: A.gray6, color: A.label }}>
+            {plan.supplier} · 评分 {score.score} · {score.grade}
+          </div>
+        </Field>
+        <Field label="采购负责人">
+          <div className="rounded-lg px-3 py-2 text-xs" style={{ background: A.gray6, color: A.label }}>{plan.buyer}</div>
+        </Field>
+        <Field label={`申请数量 (${plan.unit}) *`}>
+          <input type="number" min={1} step={plan.batchMultiple}
+            value={quantity}
+            onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
+            style={inputStyle} />
+        </Field>
+        <Field label="需求日期 *">
+          <input value={requiredDate} onChange={(e) => setRequiredDate(e.target.value)} style={inputStyle} />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mt-4">
+        {[
+          { label: "系统建议量", value: `${plan.suggestedQty.toLocaleString()} ${plan.unit}` },
+          { label: "预估金额", value: fmt(amount) },
+          { label: "优先级", value: plan.priority },
+        ].map((metric) => (
+          <div key={metric.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
+            <div className="text-[10px]" style={{ color: A.gray2 }}>{metric.label}</div>
+            <div className="text-sm font-semibold mt-1" style={{ color: metric.label === "优先级" && plan.priority === "高" ? A.red : A.label }}>{metric.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4">
+        <Field label="申请理由 / 审批说明">
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)}
+            rows={3} style={{ ...inputStyle, resize: "none", fontFamily: "inherit" }} />
+        </Field>
+      </div>
+
+      {plan.needsSourcing && (
+        <div className="mt-4 rounded-xl p-3 text-xs" style={{ background: "#fff8f0", color: A.label }}>
+          当前 SKU 缺少有效供应商或单价，请先发起 RFQ 或维护报价后再生成 PR。
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 mt-5">
+        <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg font-medium"
+          style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.1)" }}>取消</button>
+        <button onClick={() => onSubmit(item, { quantity, requiredDate, reason })} disabled={!canSubmit}
+          className="text-xs px-3 py-1.5 rounded-lg font-medium text-white"
+          style={{ background: canSubmit ? A.blue : A.gray3 }}>
+          提交采购申请
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Panels ──────────────────────────────────────────────────────────────────
-function OverviewPanel() {
+function OverviewPanel({
+  onNavigate,
+  onPrepareReplenishmentRequest,
+}: {
+  onNavigate: (moduleId: string) => void;
+  onPrepareReplenishmentRequest: (sku: string) => void;
+}) {
+  const replenishmentActions = overviewReplenishmentActions();
+  const [sopDraft, setSopDraft] = useState<SopCycle | null>(null);
+  const [sopHistory, setSopHistory] = useState<SopCycle[]>([]);
+  const [publishingSop, setPublishingSop] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    apiJson<{ draft: SopCycle; history: SopCycle[] }>("/api/sop-cycle")
+      .then((data) => {
+        if (!alive) return;
+        setSopDraft(data.draft);
+        setSopHistory(data.history || []);
+      })
+      .catch(() => setSopDraft(null));
+    return () => { alive = false; };
+  }, []);
+
+  async function publishSopCycle() {
+    if (!sopDraft) return;
+    setPublishingSop(true);
+    try {
+      const published = await apiJson<SopCycle>("/api/sop-cycle", {
+        method: "POST",
+        body: JSON.stringify({ ...sopDraft, status: "已发布", approvedBy: "张磊" }),
+      });
+      setSopDraft({ ...published, latestPublished: published });
+      setSopHistory((items) => [published, ...items].slice(0, 8));
+      toast.success(`S&OP ${published.cycle} v${published.version} 已发布`, { description: published.consensus.recommendation });
+    } catch (error) {
+      toast.error("S&OP 发布失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    } finally {
+      setPublishingSop(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* KPIs */}
@@ -886,6 +1611,59 @@ function OverviewPanel() {
         <KpiCard label="本月订单" value="612" sub="完成率 96.4%" delta="+11.7%" positive icon={ShoppingCart} color={A.green} />
         <KpiCard label="采购支出" value="¥3,412万" sub="预算 ¥3,600万" delta="+4.1%" positive={false} icon={Truck} color={A.orange} />
       </div>
+
+      <Card>
+        <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>S&OP 本周期共识</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>
+              {sopDraft ? `${sopDraft.cycle} · v${sopDraft.version} · ${sopDraft.status}` : "正在读取预测、供应和财务约束"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {sopHistory[0] && (
+              <span className="text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: "#f0faf4", color: A.green }}>
+                最新发布 {sopHistory[0].cycle} v{sopHistory[0].version}
+              </span>
+            )}
+            <button onClick={publishSopCycle} disabled={!sopDraft || publishingSop}
+              className="h-8 px-3 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed"
+              style={{ background: sopDraft ? A.blue : A.gray3, opacity: publishingSop ? 0.72 : 1 }}>
+              {publishingSop ? <Loader2 size={12} className="animate-spin" /> : <FileCheck2 size={12} />}
+              发布本期共识
+            </button>
+          </div>
+        </div>
+        {sopDraft ? (
+          <div className="grid grid-cols-4 gap-0">
+            {[
+              { label: "需求计划", value: `${sopDraft.demandPlan.totalMonthlyDemand.toLocaleString()} /月`, sub: `${sopDraft.demandPlan.highRiskSku} 个高风险 SKU · ${sopDraft.demandPlan.source}`, color: A.blue },
+              { label: "供应计划", value: fmt(sopDraft.supplyPlan.plannedAmount), sub: `${sopDraft.supplyPlan.urgentCount} 加急 · ${sopDraft.supplyPlan.exceptionCount} 例外`, color: sopDraft.supplyPlan.urgentCount > 0 ? A.red : A.green },
+              { label: "财务约束", value: `${sopDraft.financialConstraint.budgetUsagePct}%`, sub: sopDraft.financialConstraint.decision, color: sopDraft.financialConstraint.constrainedAmount > 0 ? A.orange : A.green },
+              { label: "审批角色", value: sopDraft.consensus.approvers.join(" / "), sub: sopDraft.consensus.recommendation, color: A.purple },
+            ].map((item, idx) => (
+              <div key={item.label} className="p-4" style={{ borderRight: idx < 3 ? "0.5px solid rgba(0,0,0,0.06)" : "none" }}>
+                <div className="text-[10px] font-semibold" style={{ color: A.gray2 }}>{item.label}</div>
+                <div className="text-sm font-semibold mt-1 truncate" style={{ color: item.color }}>{item.value}</div>
+                <div className="text-[10px] leading-4 mt-1 line-clamp-2" style={{ color: A.sub }}>{item.sub}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-8 text-center text-xs" style={{ color: A.gray2 }}>S&OP API 暂不可用，首页其余模块仍可使用。</div>
+        )}
+        {sopDraft?.consensus.decisions?.length ? (
+          <div className="px-5 py-3 flex gap-2 overflow-x-auto" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
+            {sopDraft.consensus.decisions.slice(0, 4).map((decision) => (
+              <div key={`${decision.type}-${decision.title}`} className="shrink-0 rounded-lg px-3 py-2 min-w-[210px]" style={{ background: A.gray6 }}>
+                <div className="text-[10px] font-semibold" style={{ color: decision.type === "加急" ? A.red : A.blue }}>{decision.type}</div>
+                <div className="text-xs font-semibold mt-0.5 truncate" style={{ color: A.label }}>{decision.title}</div>
+                <div className="text-[10px] mt-0.5 truncate" style={{ color: A.sub }}>{decision.action}</div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </Card>
 
       {/* Main chart + alerts */}
       <div className="grid grid-cols-3 gap-3">
@@ -944,6 +1722,64 @@ function OverviewPanel() {
         </Card>
       </div>
 
+      <Card>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>补货控制塔</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>按库存缺口、建议采购量和供应商动作组织的执行队列</p>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#fff8f0", color: A.orange }}>
+            {replenishmentActions.length} 个待处理
+          </span>
+        </div>
+        <div className="grid grid-cols-4 gap-0">
+          {replenishmentActions.map((item, idx) => (
+            <div key={item.sku} className="p-4"
+              style={{
+                borderRight: idx < replenishmentActions.length - 1 ? "0.5px solid rgba(0,0,0,0.06)" : "none",
+              }}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold" style={{ color: A.blue }}>{item.sku}</div>
+                  <div className="text-xs font-semibold mt-1 truncate" style={{ color: A.label }}>{item.name}</div>
+                </div>
+                <StatusPill status={item.status} />
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <div className="rounded-lg p-2" style={{ background: A.gray6 }}>
+                  <div className="text-[9px]" style={{ color: A.gray2 }}>缺口</div>
+                  <div className="text-xs font-semibold" style={{ color: item.shortage > 0 ? A.red : A.green }}>
+                    {item.shortage.toLocaleString()}
+                  </div>
+                </div>
+                <div className="rounded-lg p-2" style={{ background: A.gray6 }}>
+                  <div className="text-[9px]" style={{ color: A.gray2 }}>建议量</div>
+                  <div className="text-xs font-semibold" style={{ color: A.label }}>{item.suggestedQty.toLocaleString()}</div>
+                </div>
+              </div>
+              <div className="mt-3 text-[11px] leading-5" style={{ color: A.sub }}>
+                {item.supplier} · {item.buyer} · {fmt(item.amount)}
+              </div>
+              <div className="mt-2 text-[11px] font-semibold" style={{ color: item.status === "不足" ? A.red : A.orange }}>
+                {item.action}
+              </div>
+              <div className="flex gap-1.5 mt-3">
+                <button onClick={() => onNavigate("forecast")}
+                  className="flex-1 h-7 rounded-md text-[11px] font-medium"
+                  style={{ background: "#f0f6ff", color: A.blue }}>
+                  看预测
+                </button>
+                <button onClick={() => onPrepareReplenishmentRequest(item.sku)}
+                  className="flex-1 h-7 rounded-md text-[11px] font-medium text-white"
+                  style={{ background: item.status === "不足" ? A.red : A.orange }}>
+                  申请补货
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {/* Health metrics */}
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -975,20 +1811,89 @@ function OverviewPanel() {
 function InventoryOverview() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("全部");
-  const filtered = inventoryItems.filter((i) => {
+  const [generatedRequests, setGeneratedRequests] = useState<Record<string, string>>({});
+  const plannedItems = inventoryItems.map((item) => ({ ...item, plan: inventoryPlan(item) }));
+  const filtered = plannedItems.filter((i) => {
     const matchSearch = i.name.includes(search) || i.sku.includes(search);
     const matchStatus = filterStatus === "全部" || i.status === filterStatus;
     return matchSearch && matchStatus;
   });
+  const shortageItems = plannedItems.filter((i) => i.plan.suggestedQty > 0);
+  const highPriority = shortageItems.filter((i) => i.plan.priority === "高").length;
+  const replenishmentAmount = shortageItems.reduce((sum, item) => sum + item.plan.amount, 0);
+  const avgTurnover = inventoryItems.reduce((sum, item) => sum + item.turnover, 0) / inventoryItems.length;
+  const weightedCoverage = plannedItems.reduce((sum, item) => sum + item.plan.daysCover * Math.max(item.plan.monthlyDemand, 1), 0) /
+    plannedItems.reduce((sum, item) => sum + Math.max(item.plan.monthlyDemand, 1), 0);
+
+  async function createInventoryRequest(item: typeof plannedItems[number]) {
+    if (item.plan.suggestedQty <= 0) {
+      toast("当前无需生成 PR", { description: `${item.sku} 仍高于再订货点，建议继续监控。` });
+      return;
+    }
+    if (item.plan.needsSourcing) {
+      toast("请先补齐供应商与报价", { description: `${item.sku} 已低于 ROP，但缺少有效供应商或单价，建议先发起 RFQ。` });
+      return;
+    }
+    if (generatedRequests[item.sku]) {
+      toast("已生成库存 PR", { description: `${generatedRequests[item.sku]} 已在采购申请队列中。` });
+      return;
+    }
+    try {
+      const created = await apiJson<PurchaseRequest>("/api/purchase-requests", {
+        method: "POST",
+        body: JSON.stringify(inventoryPurchaseRequestPayload(item)),
+      });
+      setGeneratedRequests((current) => ({ ...current, [item.sku]: created.pr }));
+      toast.success(`${created.pr} 已生成`, { description: `${item.sku} · ${item.plan.suggestedQty.toLocaleString()} ${item.plan.unit}` });
+    } catch (error) {
+      toast.error("库存 PR 生成失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    }
+  }
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="库存总 SKU" value="8,412" sub="活跃品种" icon={Package} color={A.blue} />
-        <KpiCard label="库存不足" value="127" sub="低于安全线" delta="+8 vs 昨日" positive={false} icon={XCircle} color={A.red} />
-        <KpiCard label="预警品种" value="89" sub="即将不足" delta="-3 vs 昨日" positive icon={AlertTriangle} color={A.orange} />
-        <KpiCard label="库存周转率" value="4.8x" sub="年化均值" delta="+0.3x" positive icon={Activity} color={A.green} />
+        <KpiCard label="样本 SKU" value={String(inventoryItems.length)} sub="库存控制台" icon={Package} color={A.blue} />
+        <KpiCard label="需补货 SKU" value={String(shortageItems.length)} sub={`${highPriority} 个高优先级`} delta="按 ROP 计算" positive={false} icon={XCircle} color={A.red} />
+        <KpiCard label="建议 PR 金额" value={fmt(replenishmentAmount)} sub="MOQ/批量修正后" icon={ClipboardCheck} color={A.orange} />
+        <KpiCard label="加权覆盖天数" value={`${weightedCoverage.toFixed(0)}天`} sub={`周转 ${avgTurnover.toFixed(1)}x`} positive icon={Activity} color={A.green} />
       </div>
+
+      <Card className="p-5">
+        <SectionHeader title="库存补货控制台" right={
+          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#fff8f0", color: A.orange }}>
+            ROP + MOQ + 在途/分配
+          </span>
+        } />
+        <div className="grid grid-cols-4 gap-3">
+          {shortageItems.slice(0, 4).map((item) => {
+            const score = supplierRecommendation(item.plan.supplier);
+            return (
+              <div key={item.sku} className="p-3 rounded-lg" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold tabular-nums" style={{ color: A.blue }}>{item.sku}</div>
+                  <Chip label={item.plan.priority} color={item.plan.priority === "高" ? A.red : item.plan.priority === "中" ? A.orange : A.green} bg={item.plan.priority === "高" ? "#fff1f0" : item.plan.priority === "中" ? "#fff8f0" : "#f0faf4"} />
+                </div>
+                <div className="text-xs font-medium mt-1 truncate" style={{ color: A.label }}>{item.name}</div>
+                <div className="grid grid-cols-3 gap-2 mt-3 text-[10px]">
+                  <div><div style={{ color: A.gray2 }}>覆盖</div><div className="font-semibold" style={{ color: item.plan.daysCover <= item.plan.leadTimeDays ? A.red : A.label }}>{item.plan.daysCover}天</div></div>
+                  <div><div style={{ color: A.gray2 }}>ROP</div><div className="font-semibold" style={{ color: A.label }}>{item.plan.reorderPoint}</div></div>
+                  <div><div style={{ color: A.gray2 }}>建议</div><div className="font-semibold" style={{ color: A.label }}>{item.plan.suggestedQty}</div></div>
+                </div>
+                <div className="text-[10px] mt-2 leading-relaxed" style={{ color: A.sub }}>
+                  {item.plan.supplier} · 评分 {score.score} · {item.plan.policy}
+                </div>
+                <button onClick={() => createInventoryRequest(item)}
+                  className="mt-3 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium text-white flex items-center justify-center gap-1.5"
+                  style={{ background: generatedRequests[item.sku] ? A.green : A.blue }}>
+                  <ClipboardCheck size={11} />
+                  {generatedRequests[item.sku] ? generatedRequests[item.sku] : item.plan.action}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
 
       {/* Category health bars */}
       <Card className="p-5">
@@ -1049,7 +1954,7 @@ function InventoryOverview() {
           <table className="w-full text-xs">
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {["SKU", "品名", "分类", "库存", "安全线", "库存率", "周转率", "库位", "末次入库", "状态"].map((h) => (
+                {["SKU", "品名", "库存/可用", "安全线", "覆盖", "ROP", "建议量", "策略", "供应商", "状态", "动作"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
                 ))}
               </tr>
@@ -1062,9 +1967,14 @@ function InventoryOverview() {
                     className="transition-colors hover:bg-blue-50/40"
                     style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                     <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>{item.sku}</td>
-                    <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{item.name}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{item.category}</td>
-                    <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{item.qty.toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium" style={{ color: A.label }}>{item.name}</div>
+                      <div className="text-[10px]" style={{ color: A.sub }}>{item.category} · {item.location}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium" style={{ color: A.label }}>{item.qty.toLocaleString()}</div>
+                      <div className="text-[10px]" style={{ color: A.sub }}>可用 {item.plan.projectedAvailable.toLocaleString()} {item.plan.unit}</div>
+                    </td>
                     <td className="px-4 py-3" style={{ color: A.gray1 }}>{item.min.toLocaleString()}</td>
                     <td className="px-4 py-3 w-28">
                       <div className="flex items-center gap-2">
@@ -1072,13 +1982,27 @@ function InventoryOverview() {
                           <div className="h-full rounded-full"
                             style={{ width: `${pct}%`, background: pct < 30 ? A.red : pct < 60 ? A.orange : A.green }} />
                         </div>
-                        <span className="w-8 text-right text-[11px]" style={{ color: A.gray1 }}>{Math.round(pct)}%</span>
+                        <span className="w-10 text-right text-[11px]" style={{ color: item.plan.daysCover <= item.plan.leadTimeDays ? A.red : A.gray1 }}>{item.plan.daysCover}天</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3" style={{ color: A.label }}>{item.turnover}x</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{item.location}</td>
-                    <td className="px-4 py-3" style={{ color: A.gray1 }}>{item.lastIn}</td>
+                    <td className="px-4 py-3 tabular-nums" style={{ color: A.label }}>{item.plan.reorderPoint.toLocaleString()}</td>
+                    <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: item.plan.suggestedQty > 0 ? A.orange : A.gray2 }}>
+                      {item.plan.suggestedQty > 0 ? `${item.plan.suggestedQty.toLocaleString()} ${item.plan.unit}` : "—"}
+                    </td>
+                    <td className="px-4 py-3" style={{ color: A.sub }}>{item.plan.policy}</td>
+                    <td className="px-4 py-3" style={{ color: A.label }}>{item.plan.supplier}</td>
                     <td className="px-4 py-3"><StatusPill status={item.status} /></td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => createInventoryRequest(item)}
+                        disabled={item.plan.suggestedQty <= 0}
+                        className="text-[11px] px-2 py-1 rounded-md font-medium"
+                        style={{
+                          background: item.plan.suggestedQty > 0 ? (generatedRequests[item.sku] ? "#f0faf4" : item.plan.needsSourcing ? "#fff8f0" : A.gray6) : A.gray6,
+                          color: item.plan.suggestedQty > 0 ? (generatedRequests[item.sku] ? A.green : item.plan.needsSourcing ? A.orange : A.label) : A.gray2,
+                        }}>
+                        {generatedRequests[item.sku] ? generatedRequests[item.sku] : item.plan.suggestedQty > 0 ? item.plan.needsSourcing ? "补报价" : "生成 PR" : "监控"}
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -1647,23 +2571,71 @@ const MOVEMENTS = [
   { ts: "5月26日 10:30", type: "入库", sku: "SKU-00287", qty: +148, ref: "GRN-260514-B14", from: "—",     to: "B-01-05", op: "刘建华", reason: "采购入库" },
   { ts: "5月25日 15:50", type: "冻结", sku: "SKU-00934", qty: 0,    ref: "QA-26-0117",  from: "D-03-07", to: "D-03-07",  op: "QA",     reason: "质量复检" },
 ];
+type InventoryMovement = typeof MOVEMENTS[number] & {
+  id?: string;
+  movementId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  grnId?: string;
+  poId?: string;
+  poLineId?: string;
+  warehouseId?: string;
+  quantity?: number;
+  timestamp?: string;
+  po?: string;
+  operator?: string;
+  status?: string;
+};
 
 function InventoryMovements() {
   const [typeFilter, setTypeFilter] = useState<"全部" | "入库" | "出库" | "调拨" | "调整" | "退货" | "冻结">("全部");
-  const list = typeFilter === "全部" ? MOVEMENTS : MOVEMENTS.filter((m) => m.type === typeFilter);
+  const [apiMovements, setApiMovements] = useState<InventoryMovement[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    apiJson<InventoryMovement[]>("/api/inventory-movements")
+      .then((data) => {
+        if (!alive) return;
+        setApiMovements(data.map((item) => ({
+          ...item,
+          id: item.id || item.movementId,
+          ts: item.ts || item.timestamp || "",
+          type: item.type || (toNumber(item.quantity, toNumber(item.qty)) >= 0 ? "入库" : "出库"),
+          qty: toNumber(item.qty, toNumber(item.quantity)),
+          ref: item.ref || item.sourceId || item.grnId || item.movementId || "—",
+          from: item.from || (item.sourceType === "GRN" ? "供应商" : "—"),
+          to: item.to || item.warehouseId || "MAIN",
+          op: item.op || item.operator || "系统",
+        })));
+      })
+      .catch(() => toast.error("库存流水 API 未连接", { description: "将显示本地样例流水" }))
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+  const sourceList = [...apiMovements, ...MOVEMENTS];
+  const list = typeFilter === "全部" ? sourceList : sourceList.filter((m) => m.type === typeFilter);
+  const inboundQty = list.filter((m) => m.type === "入库").reduce((sum, item) => sum + Math.max(0, toNumber(item.qty, toNumber(item.quantity))), 0);
+  const outboundQty = list.filter((m) => m.type === "出库").reduce((sum, item) => sum + Math.abs(Math.min(0, toNumber(item.qty, toNumber(item.quantity)))), 0);
+  const apiCount = apiMovements.length;
 
   const typeColor = (t: string) => ({
     入库: A.green, 出库: A.blue, 调拨: A.purple, 调整: A.orange, 退货: A.teal, 冻结: A.red,
   } as Record<string, string>)[t];
+  const formatMovementTime = (value: string) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  };
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
         {[
-          { l: "今日入库",  v: "748",     d: "+12% vs 昨", c: A.green  },
-          { l: "今日出库",  v: "424",     d: "+8% vs 昨",  c: A.blue   },
-          { l: "今日调拨",  v: "46",      d: "3 笔",       c: A.purple },
-          { l: "异常调整",  v: "1",       d: "盘亏 ¥11",   c: A.orange },
+          { l: "今日入库",  v: String(inboundQty || 748), d: apiCount ? `${apiCount} 条 API 流水` : "+12% vs 昨", c: A.green  },
+          { l: "今日出库",  v: String(outboundQty || 424), d: loading ? "加载中" : "+8% vs 昨",  c: A.blue   },
+          { l: "今日调拨",  v: String(list.filter((m) => m.type === "调拨").length), d: "调拨笔数", c: A.purple },
+          { l: "异常调整",  v: String(list.filter((m) => m.type === "调整" || m.type === "冻结").length), d: "调整/冻结", c: A.orange },
         ].map((m) => (
           <Card key={m.l} className="p-5">
             <div className="text-xs" style={{ color: A.sub }}>{m.l}</div>
@@ -1687,7 +2659,7 @@ function InventoryMovements() {
         <table className="w-full text-xs">
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["时间", "类型", "SKU", "数量", "来源 → 去向", "凭证号", "操作员", "事由"].map((h) => (
+              {["时间", "Movement", "类型", "SKU", "数量", "来源凭证", "PO / Line", "库位", "操作员", "事由"].map((h) => (
                 <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
@@ -1696,18 +2668,27 @@ function InventoryMovements() {
             {list.map((m, i) => (
               <tr key={i} className="hover:bg-blue-50/40 transition-colors"
                 style={{ borderBottom: i < list.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className="px-4 py-3 tabular-nums" style={{ color: A.sub }}>{m.ts}</td>
+                <td className="px-4 py-3 tabular-nums" style={{ color: A.sub }}>{formatMovementTime(m.timestamp || m.ts)}</td>
+                <td className="px-4 py-3 tabular-nums" style={{ color: A.blue }}>
+                  <div className="max-w-28 truncate">{m.movementId || m.id || "legacy"}</div>
+                  <div className="text-[9px]" style={{ color: A.gray2 }}>{m.sourceType || m.type}</div>
+                </td>
                 <td className="px-4 py-3"><Chip label={m.type} color={typeColor(m.type)} bg={`${typeColor(m.type)}18`} /></td>
                 <td className="px-4 py-3" style={{ color: A.blue }}>{m.sku}</td>
-                <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: m.qty > 0 ? A.green : m.qty < 0 ? A.red : A.gray2 }}>
-                  {m.qty > 0 ? "+" : ""}{m.qty || "—"}
+                <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: toNumber(m.qty, toNumber(m.quantity)) > 0 ? A.green : toNumber(m.qty, toNumber(m.quantity)) < 0 ? A.red : A.gray2 }}>
+                  {toNumber(m.qty, toNumber(m.quantity)) > 0 ? "+" : ""}{toNumber(m.qty, toNumber(m.quantity)) || "—"}
                 </td>
                 <td className="px-4 py-3" style={{ color: A.label }}>
-                  <span style={{ color: A.sub }}>{m.from}</span>
-                  {" "}<ArrowRight size={9} className="inline" style={{ color: A.gray3 }} />{" "}
-                  <span>{m.to}</span>
+                  <div className="font-medium">{m.sourceId || m.grnId || m.ref}</div>
+                  <div className="text-[9px]" style={{ color: A.gray2 }}>
+                    <span>{m.from}</span>{" "}<ArrowRight size={9} className="inline" style={{ color: A.gray3 }} />{" "}<span>{m.to}</span>
+                  </div>
                 </td>
-                <td className="px-4 py-3 tabular-nums" style={{ color: A.indigo }}>{m.ref}</td>
+                <td className="px-4 py-3 tabular-nums" style={{ color: A.indigo }}>
+                  <div>{m.poId || m.po || "—"}</div>
+                  <div className="text-[9px] max-w-28 truncate" style={{ color: A.gray2 }}>{m.poLineId || "—"}</div>
+                </td>
+                <td className="px-4 py-3" style={{ color: A.label }}>{m.warehouseId || m.to || "—"}</td>
                 <td className="px-4 py-3" style={{ color: A.label }}>{m.op}</td>
                 <td className="px-4 py-3" style={{ color: A.sub }}>{m.reason}</td>
               </tr>
@@ -2582,6 +3563,186 @@ const FORECAST_SKUS = [
   { sku: "SKU-00815", name: "液压油缸 50mm",     onHand: 67,   open: 0,   history: genSeries(140, 1.8,  0.16, 5.2), unit: "件" },
 ];
 
+const FORECAST_PROCUREMENT_PROFILE: Record<string, { supplier: string; unitPrice: number; buyer: string }> = {
+  "SKU-00412": { supplier: "深圳新元电气", unitPrice: 2980, buyer: "陈思远" },
+  "SKU-00623": { supplier: "深圳新元电气", unitPrice: 12400, buyer: "陈思远" },
+  "SKU-00287": { supplier: "江苏铝合金集团", unitPrice: 142, buyer: "王志强" },
+  "SKU-00142": { supplier: "华东精工机械", unitPrice: 86, buyer: "李婷" },
+  "SKU-00815": { supplier: "华东精工机械", unitPrice: 4600, buyer: "李婷" },
+};
+
+function parseDemandSeries(text: string): number[] {
+  return text
+    .split(/[\s,，;；\n\r\t]+/)
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isFinite(item) && item >= 0);
+}
+
+function formatDemandSeries(values: number[]) {
+  return values.join(", ");
+}
+
+function formatEta(days: number) {
+  const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  return `${d.getMonth() + 1}月${String(d.getDate()).padStart(2, "0")}日`;
+}
+
+function demandDiagnostics(history: number[]) {
+  const n = history.length || 1;
+  const total = history.reduce((a, b) => a + b, 0);
+  const mean = total / n;
+  const sorted = [...history].sort((a, b) => a - b);
+  const min = sorted[0] ?? 0;
+  const max = sorted[sorted.length - 1] ?? 0;
+  const median = sorted.length % 2
+    ? sorted[Math.floor(sorted.length / 2)]
+    : ((sorted[sorted.length / 2 - 1] ?? 0) + (sorted[sorted.length / 2] ?? 0)) / 2;
+  const std = Math.sqrt(history.reduce((s, v) => s + (v - mean) ** 2, 0) / n);
+  const cov = mean ? std / mean : 0;
+  const last3 = history.slice(-3).reduce((a, b) => a + b, 0) / Math.max(1, history.slice(-3).length);
+  const prev3 = history.slice(-6, -3).reduce((a, b) => a + b, 0) / Math.max(1, history.slice(-6, -3).length);
+  const recentTrend = prev3 ? ((last3 - prev3) / prev3) * 100 : 0;
+  const zeros = history.filter((item) => item === 0).length;
+  return { n, total, mean, median, min, max, std, cov, recentTrend, zeros };
+}
+
+type SavedForecastPlan = {
+  id: string;
+  sku: string;
+  name: string;
+  unit?: string;
+  method: Method;
+  horizon: number;
+  metrics: { mape?: number; wmape?: number; rmse?: number };
+  procurementSuggestion?: {
+    supplier?: string;
+    quantity?: number;
+    amount?: number;
+    priority?: "高" | "中" | "低";
+    firstStockoutMonth?: string | null;
+  } | null;
+  createdAt: string;
+};
+
+type MrpScheduleLine = {
+  period: string;
+  grossRequirement: number;
+  independentDemand: number;
+  dependentDemand: number;
+  dependentDemandSources?: {
+    parent: string;
+    parentName?: string;
+    top?: string;
+    topName?: string;
+    level?: number;
+    demand: number;
+    qtyPer?: number;
+    scrapPct?: number;
+    leadTimeOffset?: number;
+  }[];
+  scheduledReceipt: number;
+  projectedAvailable: number;
+  netRequirement: number;
+  plannedReceipt: number;
+  plannedRelease: number;
+  plannedReleasePeriod: string;
+  exception: "正常" | "加急" | "释放" | "推迟/取消";
+};
+
+type MrpPlanRow = {
+  sku: string;
+  name: string;
+  category: string;
+  unit: string;
+  supplier: string;
+  unitPrice: number;
+  serviceLevel: number;
+  abc: string;
+  xyz: string;
+  onHand: number;
+  allocated: number;
+  safetyStock: number;
+  moq: number;
+  batchMultiple: number;
+  leadTimePeriods: number;
+  totalPlannedReceipt: number;
+  firstShortagePeriod: string | null;
+  maxNetRequirement: number;
+  amount: number;
+  exception: "正常" | "加急" | "释放" | "推迟/取消";
+  bomSources?: {
+    parent: string;
+    parentName?: string;
+    top?: string;
+    topName?: string;
+    level?: number;
+    demand: number;
+  }[];
+  schedule: MrpScheduleLine[];
+};
+
+type MrpPlan = {
+  generatedAt: string;
+  horizon: number;
+  periods: string[];
+  summary: {
+    skuCount: number;
+    exceptionCount: number;
+    urgentCount: number;
+    plannedAmount: number;
+    plannedQty: number;
+    bomRootCount?: number;
+    bomComponentCount?: number;
+  };
+  rows: MrpPlanRow[];
+  exceptions: {
+    sku: string;
+    name: string;
+    type: "加急" | "释放" | "推迟/取消";
+    period: string;
+    quantity: number;
+    amount: number;
+    action: string;
+  }[];
+};
+
+type SopCycle = {
+  id?: string;
+  cycle: string;
+  version: number;
+  status: "草案" | "待审批" | "已发布" | "已驳回";
+  demandPlan: {
+    forecastVersions: number;
+    totalMonthlyDemand: number;
+    highRiskSku: number;
+    source: string;
+  };
+  supplyPlan: {
+    plannedQty: number;
+    plannedAmount: number;
+    exceptionCount: number;
+    urgentCount: number;
+    openPoAmount: number;
+    pendingPrAmount: number;
+  };
+  financialConstraint: {
+    budgetLimit: number;
+    totalCommitment: number;
+    constrainedAmount: number;
+    budgetUsagePct: number;
+    decision: string;
+  };
+  consensus: {
+    recommendation: string;
+    approvers: string[];
+    decisions: { type: string; title: string; amount: number; action: string }[];
+  };
+  latestPublished?: SopCycle | null;
+  approvers?: string[];
+  approvedBy?: string;
+  createdAt?: string;
+};
+
 // Generate the trailing 24 months ending at the current month (May 2026 → 24-month window 2024-06 ~ 2026-05)
 const MONTHS_24 = (() => {
   const NOW_Y = 2026, NOW_M = 5;        // 2026 年 5 月作为最后一格
@@ -2605,6 +3766,14 @@ const FUTURE_LABEL = (i: number) => {
 
 function ForecastPanel() {
   const [skuIdx, setSkuIdx] = useState(0);
+  const baseSku = FORECAST_SKUS[skuIdx];
+  const [historyText, setHistoryText] = useState(() => formatDemandSeries(baseSku.history));
+  const [useCustomHistory, setUseCustomHistory] = useState(false);
+  const [savedPlans, setSavedPlans] = useState<SavedForecastPlan[]>([]);
+  const [mrpPlan, setMrpPlan] = useState<MrpPlan | null>(null);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [generatingRequest, setGeneratingRequest] = useState(false);
+  const [lastGeneratedRequest, setLastGeneratedRequest] = useState("");
   const [method, setMethod] = useState<Method>("hw");
   const [alpha, setAlpha] = useState(0.4);
   const [beta,  setBeta]  = useState(0.15);
@@ -2618,7 +3787,29 @@ function ForecastPanel() {
   const [progress, setProgress] = useState(0);
   const [committed, setCommitted] = useState(false);
 
-  const sku = FORECAST_SKUS[skuIdx];
+  const parsedHistory = useMemo(() => parseDemandSeries(historyText), [historyText]);
+  const effectiveHistory = useCustomHistory && parsedHistory.length >= 6 ? parsedHistory.slice(-36) : baseSku.history;
+  const sku = useMemo(() => ({ ...baseSku, history: effectiveHistory }), [baseSku, effectiveHistory]);
+  const diag = useMemo(() => demandDiagnostics(sku.history), [sku.history]);
+
+  useEffect(() => {
+    setHistoryText(formatDemandSeries(baseSku.history));
+    setUseCustomHistory(false);
+  }, [baseSku]);
+
+  useEffect(() => {
+    apiJson<SavedForecastPlan[]>("/api/forecast-plans")
+      .then(setSavedPlans)
+      .catch(() => setSavedPlans([]));
+  }, [committed]);
+
+  useEffect(() => {
+    let alive = true;
+    apiJson<MrpPlan>("/api/mrp-plan?periods=6")
+      .then((data) => { if (alive) setMrpPlan(data); })
+      .catch(() => setMrpPlan(null));
+    return () => { alive = false; };
+  }, [committed]);
 
   const result = useMemo(() => runForecast(sku.history, method, { alpha, beta, gamma, season: 12 }, horizon),
     [sku, method, alpha, beta, gamma, horizon]);
@@ -2697,8 +3888,88 @@ function ForecastPanel() {
     });
   }, [sku, adjustedForecast]);
 
-  const totalGap = reconciliation.reduce((s, r) => s + r.gap, 0);
+  const peakGap = Math.max(0, ...reconciliation.map((r) => r.gap));
+  const firstStockoutIndex = reconciliation.findIndex((r) => r.risk === "高");
   const stockoutMonths = reconciliation.filter((r) => r.risk === "高").length;
+  const procurementProfile = FORECAST_PROCUREMENT_PROFILE[sku.sku] ?? { supplier: "未选择供应商", unitPrice: 0, buyer: "张磊" };
+  const currentMrpRow = mrpPlan?.rows.find((row) => row.sku === sku.sku) ?? null;
+  const safetyFactor = serviceLevel >= 98 ? 1.18 : serviceLevel >= 95 ? 1.1 : 1.05;
+  const recommendedQty = peakGap > 0 ? Math.ceil(peakGap * safetyFactor) : 0;
+  const recommendedAmount = recommendedQty * procurementProfile.unitPrice;
+  const purchasePriority = firstStockoutIndex >= 0 && firstStockoutIndex <= 1 ? "高" : stockoutMonths > 0 ? "中" : "低";
+  const executableRecommendedQty = Number(currentMrpRow?.totalPlannedReceipt || 0) > 0 ? Number(currentMrpRow?.totalPlannedReceipt || 0) : recommendedQty;
+  const executableRecommendedAmount = executableRecommendedQty * procurementProfile.unitPrice;
+  const executablePriority = currentMrpRow?.exception === "加急" ? "高" : purchasePriority;
+  const mrpBomSourceSummary = currentMrpRow?.bomSources?.length
+    ? currentMrpRow.bomSources
+      .map((source) => `${source.parentName || source.parent} ${Number(source.demand || 0).toLocaleString()} ${sku.unit}`)
+      .join("；")
+    : "";
+  const mrpScheduleEvidence = currentMrpRow?.schedule
+    .filter((line) => line.dependentDemand > 0 || line.plannedReceipt > 0)
+    .slice(0, 6)
+    .map((line) => ({
+      period: line.period,
+      grossRequirement: line.grossRequirement,
+      independentDemand: line.independentDemand,
+      dependentDemand: line.dependentDemand,
+      plannedReceipt: line.plannedReceipt,
+      plannedReleasePeriod: line.plannedReleasePeriod,
+      exception: line.exception,
+      sources: line.dependentDemandSources || [],
+    })) || [];
+  const mrpBomEvidence = currentMrpRow ? {
+    bomSources: currentMrpRow.bomSources || [],
+    dependentDemandTotal: currentMrpRow.schedule.reduce((sum, line) => sum + Number(line.dependentDemand || 0), 0),
+    grossRequirementTotal: currentMrpRow.schedule.reduce((sum, line) => sum + Number(line.grossRequirement || 0), 0),
+    schedule: mrpScheduleEvidence,
+  } : null;
+  const supplierScore = supplierRecommendation(procurementProfile.supplier);
+  const backendMrpExceptions = (mrpPlan?.exceptions || [])
+    .filter((item) => item.sku === sku.sku)
+    .slice(0, 2)
+    .map((item) => ({
+      type: `MRP ${item.type}`,
+      title: `${item.period} ${item.name} 计划例外`,
+      body: item.action,
+      metric: `${Number(item.quantity || 0).toLocaleString()} ${sku.unit}`,
+      color: item.type === "加急" ? A.red : item.type === "释放" ? A.blue : A.orange,
+    }));
+  const mrpExceptions = [
+    ...backendMrpExceptions,
+    ...(firstStockoutIndex >= 0 ? [{
+      type: "加急释放",
+      title: `${reconciliation[firstStockoutIndex]?.month} 出现首个净缺口`,
+      body: `预计期末库存转负，需在本周释放采购申请，避免计划收货晚于需求窗口。`,
+      metric: `${recommendedQty.toLocaleString()} ${sku.unit}`,
+      color: A.red,
+    }] : []),
+    ...(stockoutMonths >= 3 ? [{
+      type: "供应风险",
+      title: `${stockoutMonths} 个月连续缺料`,
+      body: `建议检查供应商产能与物流提前期，必要时拆单或引入备选供应商。`,
+      metric: fmt(recommendedAmount),
+      color: A.orange,
+    }] : []),
+    ...(Math.abs(result.trackingSignal) > 4 ? [{
+      type: "预测偏差",
+      title: `Tracking Signal ${result.trackingSignal.toFixed(1)}`,
+      body: `模型存在系统性偏差，释放采购前建议复核最近订单和促销/项目需求。`,
+      metric: `MAPE ${result.mape.toFixed(1)}%`,
+      color: A.purple,
+    }] : []),
+    ...(supplierScore.score < 84 ? [{
+      type: "供应商复核",
+      title: `${procurementProfile.supplier} 评分 ${supplierScore.score}`,
+      body: `供应商评分低于自动推荐阈值，建议触发 RFQ 或选择备选供应商。`,
+      metric: supplierScore.grade,
+      color: A.orange,
+    }] : []),
+  ].slice(0, 4);
+
+  useEffect(() => {
+    setLastGeneratedRequest("");
+  }, [sku.sku, method, horizon, scenario, promoLift, serviceLevel, leadTimeDays, peakGap]);
 
   function runEngine() {
     setRunning(true); setProgress(0); setCommitted(false);
@@ -2718,11 +3989,242 @@ function ForecastPanel() {
     });
   }
 
-  function commitPlan() {
-    setCommitted(true);
-    toast.success(`${sku.sku} 共识需求计划已发布`, {
-      description: `${horizon} 个月 · 累计需求 ${reconciliation.reduce((s, r) => s + r.demand, 0).toLocaleString()} ${sku.unit} · 已同步至 MRP`,
-    });
+  async function saveForecastPlan() {
+    setSavingPlan(true);
+    try {
+      const recommendation = peakGap > 0
+        ? `建议追加采购 ${recommendedQty.toLocaleString()} ${sku.unit}，优先覆盖 ${stockoutMonths} 个月断货风险。`
+        : "当前供需平衡，建议维持现有采购节奏并持续监控 MAPE 与 Tracking Signal。";
+      const plan = await apiJson<SavedForecastPlan>("/api/forecast-plans", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: sku.sku,
+          name: sku.name,
+          unit: sku.unit,
+          method,
+          horizon,
+          scenario,
+          promoLift,
+          serviceLevel,
+          leadTimeDays,
+          history: sku.history,
+          metrics: {
+            mape: Number(result.mape.toFixed(2)),
+            wmape: Number(result.wmape.toFixed(2)),
+            smape: Number(result.smape.toFixed(2)),
+            rmse: Number(result.rmse.toFixed(2)),
+            mae: Number(result.mae.toFixed(2)),
+            trackingSignal: Number(result.trackingSignal.toFixed(2)),
+            theilU: Number(result.theilU.toFixed(2)),
+            cov: Number(diag.cov.toFixed(3)),
+          },
+          reconciliation,
+          procurementSuggestion: {
+            supplier: procurementProfile.supplier,
+            buyer: procurementProfile.buyer,
+            unitPrice: procurementProfile.unitPrice,
+            quantity: recommendedQty,
+            amount: recommendedAmount,
+            priority: purchasePriority,
+            firstStockoutMonth: firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : null,
+            safetyFactor,
+            basis: "peak-net-shortage",
+          },
+          recommendation,
+        }),
+      });
+      setSavedPlans((prev) => [plan, ...prev].slice(0, 8));
+      setCommitted(true);
+      toast.success("预测方案已保存到后端", { description: `${plan.id} · ${sku.sku}` });
+    } catch {
+      toast.error("保存失败，请检查 API 服务");
+    } finally {
+      setSavingPlan(false);
+    }
+  }
+
+  async function createRequestFromForecast() {
+    if (executableRecommendedQty <= 0) {
+      toast("当前无需生成采购申请", { description: "供需对账未识别到净缺口，建议继续监控预测偏差。" });
+      return;
+    }
+    if (lastGeneratedRequest) {
+      toast("已生成采购申请", { description: `${lastGeneratedRequest} 已在采购申请待审批队列中。` });
+      return;
+    }
+    setGeneratingRequest(true);
+    try {
+      const created = await apiJson<PurchaseRequest>("/api/purchase-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          supplier: procurementProfile.supplier,
+          requester: "张磊",
+          buyer: procurementProfile.buyer,
+          requiredDate: formatEta(leadTimeDays),
+          amount: executableRecommendedAmount,
+          status: "待审批",
+          priority: executablePriority,
+          source: "forecast",
+          sourceSku: sku.sku,
+          sourceName: sku.name,
+          quantity: executableRecommendedQty,
+          unit: sku.unit,
+          unitPrice: procurementProfile.unitPrice,
+          reason: currentMrpRow
+            ? `MRP 净需求计划建议入库 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，例外 ${currentMrpRow.exception}`
+            : `预测净缺口 ${peakGap.toLocaleString()} ${sku.unit}，服务水平 ${serviceLevel}%`,
+          forecastBasis: {
+            peakGap,
+            serviceLevel,
+            safetyFactor,
+            stockoutMonths,
+            firstStockoutMonth: firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : null,
+            source: currentMrpRow ? "mrp-net-requirements" : "forecast",
+            plannedReceipt: executableRecommendedQty,
+            mrpException: currentMrpRow?.exception,
+            bomSourceSummary: currentMrpRow ? mrpBomSourceSummary : "",
+            bomSources: currentMrpRow?.bomSources || [],
+          },
+          approvalSnapshot: {
+            source: currentMrpRow ? "mrp-assisted-forecast" : "forecast",
+            summary: `${sku.sku} ${sku.name} · 建议 ${executableRecommendedQty.toLocaleString()} ${sku.unit} · ${fmt(executableRecommendedAmount)}`,
+            explanation: currentMrpRow
+              ? `预测补货数量已按后端 MRP 净需求校准：MRP 例外 ${currentMrpRow.exception}，计划入库 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，优先级 ${executablePriority}。${mrpBomSourceSummary ? `BOM 来源：${mrpBomSourceSummary}。` : ""}`
+              : `预测供需对账识别峰值净缺口 ${peakGap.toLocaleString()} ${sku.unit}，服务水平 ${serviceLevel}% 下建议采购 ${executableRecommendedQty.toLocaleString()} ${sku.unit}。`,
+            forecast: {
+              method,
+              horizon,
+              scenario,
+              promoLift,
+              mape: Number(result.mape.toFixed(2)),
+              rmse: Number(result.rmse.toFixed(2)),
+              peakGap,
+              stockoutMonths,
+              firstStockoutMonth: firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : null,
+            },
+            mrp: currentMrpRow ? {
+              exception: currentMrpRow.exception,
+              totalPlannedReceipt: currentMrpRow.totalPlannedReceipt,
+              maxNetRequirement: currentMrpRow.maxNetRequirement,
+              firstShortagePeriod: currentMrpRow.firstShortagePeriod,
+              ...mrpBomEvidence,
+            } : null,
+            supplier: {
+              name: procurementProfile.supplier,
+              buyer: procurementProfile.buyer,
+              unitPrice: procurementProfile.unitPrice,
+              score: supplierScore.score,
+              grade: supplierScore.grade,
+              note: supplierScore.note,
+            },
+            createdAt: new Date().toISOString(),
+          },
+        }),
+      });
+      toast.success(`${created.pr} 已生成待审批采购申请`, {
+        description: `${procurementProfile.supplier} · ${executableRecommendedQty.toLocaleString()} ${sku.unit} · ${fmt(executableRecommendedAmount)}`,
+      });
+      setLastGeneratedRequest(created.pr);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const duplicate = message.match(/PR-\d{4}-\d{4}/)?.[0];
+      if (duplicate) {
+        setLastGeneratedRequest(duplicate);
+        toast("预测采购申请已存在", { description: `${duplicate} 已在待审批或执行中，无需重复生成。` });
+      } else {
+        toast.error("采购申请生成失败", { description: "请确认 API 服务正在运行。" });
+      }
+    } finally {
+      setGeneratingRequest(false);
+    }
+  }
+
+  async function releaseMrpAsPr() {
+    if (!currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0) {
+      toast("当前没有可释放的 MRP 计划", { description: "净需求计划未产生 planned order release。" });
+      return;
+    }
+    if (lastGeneratedRequest) {
+      toast("已生成采购申请", { description: `${lastGeneratedRequest} 已在采购申请待审批队列中。` });
+      return;
+    }
+    const releaseLine = currentMrpRow.schedule.find((line) => line.plannedRelease > 0 && line.exception !== "正常")
+      || currentMrpRow.schedule.find((line) => line.plannedRelease > 0);
+    const releaseQty = Number(currentMrpRow.totalPlannedReceipt || 0);
+    const unitPrice = Number(currentMrpRow.unitPrice || procurementProfile.unitPrice || 0);
+    const amount = releaseQty * unitPrice;
+    setGeneratingRequest(true);
+    try {
+      const created = await apiJson<PurchaseRequest>("/api/purchase-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          supplier: currentMrpRow.supplier || procurementProfile.supplier,
+          requester: "张磊",
+          buyer: procurementProfile.buyer,
+          requiredDate: formatEta(Math.max(7, Number(currentMrpRow.leadTimePeriods || 1) * 7)),
+          amount,
+          status: "待审批",
+          priority: currentMrpRow.exception === "加急" ? "高" : currentMrpRow.exception === "释放" ? "中" : executablePriority,
+          source: "mrp-release",
+          sourceSku: currentMrpRow.sku,
+          sourceName: currentMrpRow.name,
+          quantity: releaseQty,
+          unit: currentMrpRow.unit,
+          unitPrice,
+          reason: `MRP planned order release：${currentMrpRow.exception}，计划入库 ${releaseQty.toLocaleString()} ${currentMrpRow.unit}，释放期 ${releaseLine?.plannedReleasePeriod || "—"}。`,
+          forecastBasis: {
+            source: "mrp-release",
+            plannedReceipt: releaseQty,
+            plannedReleasePeriod: releaseLine?.plannedReleasePeriod || "",
+            mrpException: currentMrpRow.exception,
+            firstStockoutMonth: currentMrpRow.firstShortagePeriod,
+            peakGap: currentMrpRow.maxNetRequirement,
+            serviceLevel: currentMrpRow.serviceLevel,
+            leadTimeDays: Number(currentMrpRow.leadTimePeriods || 1) * 7,
+            moq: currentMrpRow.moq,
+            batchMultiple: currentMrpRow.batchMultiple,
+            bomSourceSummary: mrpBomSourceSummary,
+            bomSources: currentMrpRow.bomSources || [],
+          },
+          approvalSnapshot: {
+            source: "mrp-release",
+            summary: `${currentMrpRow.sku} ${currentMrpRow.name} · ${currentMrpRow.exception} · ${releaseQty.toLocaleString()} ${currentMrpRow.unit} · ${fmt(amount)}`,
+            explanation: `MRP 根据独立需求、BOM 相关需求、库存、在途和批量规则生成 planned order release。${mrpBomSourceSummary ? `BOM 来源：${mrpBomSourceSummary}。` : ""}采购申请需由审批人确认释放期、供应商产能和预算。`,
+            mrp: {
+              generatedAt: mrpPlan?.generatedAt,
+              horizon: mrpPlan?.horizon,
+              firstShortagePeriod: currentMrpRow.firstShortagePeriod,
+              maxNetRequirement: currentMrpRow.maxNetRequirement,
+              totalPlannedReceipt: currentMrpRow.totalPlannedReceipt,
+              releasePeriod: releaseLine?.plannedReleasePeriod || "",
+              ...mrpBomEvidence,
+            },
+            supplier: {
+              name: currentMrpRow.supplier || procurementProfile.supplier,
+              score: supplierScore.score,
+              grade: supplierScore.grade,
+              note: supplierScore.note,
+            },
+            createdAt: new Date().toISOString(),
+          },
+        }),
+      });
+      toast.success(`${created.pr} 已由 MRP 释放为待审批 PR`, {
+        description: `${currentMrpRow.sku} · ${releaseQty.toLocaleString()} ${currentMrpRow.unit} · ${fmt(amount)}`,
+      });
+      setLastGeneratedRequest(created.pr);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      const duplicate = message.match(/PR-\d{4}-\d{4}/)?.[0];
+      if (duplicate) {
+        setLastGeneratedRequest(duplicate);
+        toast("MRP 释放申请已存在", { description: `${duplicate} 已在待审批或执行中。` });
+      } else {
+        toast.error("MRP 释放失败", { description: message || "请确认 API 服务正在运行。" });
+      }
+    } finally {
+      setGeneratingRequest(false);
+    }
   }
 
   return (
@@ -2737,10 +4239,10 @@ function ForecastPanel() {
           sub={sku.unit}
           delta={scenario !== "base" ? (scenario === "opt" ? "+12%" : "-12%") : promoLift ? `促销 +${promoLift}%` : "基准"}
           positive={scenario === "opt"} icon={TrendingUp} color={A.blue} />
-        <KpiCard label="供需缺口" value={totalGap > 0 ? totalGap.toLocaleString() : "0"}
+        <KpiCard label="峰值净缺口" value={peakGap > 0 ? peakGap.toLocaleString() : "0"}
           sub={`${stockoutMonths} 个月断货风险`}
-          delta={totalGap > 0 ? "需采购" : "充足"} positive={totalGap === 0}
-          icon={AlertTriangle} color={totalGap > 0 ? A.red : A.green} />
+          delta={peakGap > 0 ? "需采购" : "充足"} positive={peakGap === 0}
+          icon={AlertTriangle} color={peakGap > 0 ? A.red : A.green} />
         <KpiCard label="计划状态" value={committed ? "已发布" : "草稿"} sub="S&OP 共识需求"
           icon={committed ? CheckCircle2 : Clock} color={committed ? A.green : A.orange} />
       </div>
@@ -2761,6 +4263,72 @@ function ForecastPanel() {
           ))}
         </div>
       </Card>
+
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="col-span-2 p-5">
+          <SectionHeader title="历史需求输入"
+            right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+              style={{ background: useCustomHistory ? "#f0faf4" : A.gray6, color: useCustomHistory ? A.green : A.gray1 }}>
+              {useCustomHistory ? "使用用户输入" : "使用系统样本"}
+            </span>} />
+          <textarea
+            value={historyText}
+            onChange={(e) => setHistoryText(e.target.value)}
+            className="w-full h-24 rounded-xl p-3 text-xs outline-none resize-none"
+            style={{ background: A.gray6, color: A.label, border: "0.5px solid rgba(0,0,0,0.08)" }}
+            placeholder="粘贴历史月需求，例如：120, 132, 141, 138..."
+          />
+          <div className="flex items-center justify-between mt-3">
+            <div className="text-[10px]" style={{ color: parsedHistory.length >= 6 ? A.green : A.orange }}>
+              已识别 {parsedHistory.length} 个历史点 · 至少 6 个点才可用于预测，建议 18-36 个点
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setHistoryText(formatDemandSeries(baseSku.history)); setUseCustomHistory(false); }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                style={{ background: A.gray6, color: A.label }}>
+                恢复样本
+              </button>
+              <button onClick={() => {
+                  if (parsedHistory.length < 6) {
+                    toast.error("历史数据不足", { description: "请至少输入 6 个非负数字。" });
+                    return;
+                  }
+                  setUseCustomHistory(true);
+                  setCommitted(false);
+                  toast.success("历史需求已应用", { description: `${parsedHistory.slice(-36).length} 个数据点已进入预测引擎` });
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                style={{ background: A.blue }}>
+                应用输入数据
+              </button>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <SectionHeader title="客观数据诊断" />
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ["样本数", `${diag.n}`],
+              ["均值", `${diag.mean.toFixed(0)} ${sku.unit}`],
+              ["中位数", `${diag.median.toFixed(0)} ${sku.unit}`],
+              ["范围", `${diag.min.toFixed(0)}-${diag.max.toFixed(0)}`],
+              ["标准差", `${diag.std.toFixed(0)}`],
+              ["CoV", `${diag.cov.toFixed(2)}`],
+              ["近3月趋势", `${diag.recentTrend >= 0 ? "+" : ""}${diag.recentTrend.toFixed(1)}%`],
+              ["零需求点", `${diag.zeros}`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg p-2" style={{ background: A.gray6 }}>
+                <div className="text-[9px]" style={{ color: A.gray2 }}>{label}</div>
+                <div className="text-xs font-semibold mt-0.5" style={{ color: label === "近3月趋势" ? (diag.recentTrend >= 0 ? A.green : A.red) : A.label }}>{value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-[10px] leading-relaxed" style={{ color: A.sub }}>
+            诊断基于当前进入模型的历史需求，不依赖 AI 生成。CoV 越高，预测越不稳定。
+          </div>
+        </Card>
+      </div>
 
       {/* Engine controls */}
       <div className="grid grid-cols-3 gap-3">
@@ -3071,13 +4639,13 @@ function ForecastPanel() {
                 t: stockoutMonths > 0 ? "risk" : "info" as const,
                 title: stockoutMonths > 0 ? `${stockoutMonths} 个月断货风险` : "供需平衡",
                 body: stockoutMonths > 0
-                  ? `当前在手 ${sku.onHand} + 在途 ${sku.open}，未来 ${horizon} 月需求超出 ${totalGap.toLocaleString()} ${sku.unit}。`
+                  ? `当前在手 ${sku.onHand} + 在途 ${sku.open}，预测期最大净缺口 ${peakGap.toLocaleString()} ${sku.unit}。`
                   : `在手 ${sku.onHand} + 在途 ${sku.open} 充足覆盖未来 ${horizon} 月需求。`,
               },
               {
                 t: "action" as const,
-                title: totalGap > 0 ? `建议追加采购 ${Math.ceil(totalGap * 1.1).toLocaleString()} ${sku.unit}` : "无需追加采购",
-                body: totalGap > 0 ? `含 10% 安全库存系数，AI 建议于本月末前下单以避免断货。` : `当前计划已满足安全库存要求。`,
+                title: peakGap > 0 ? `建议追加采购 ${recommendedQty.toLocaleString()} ${sku.unit}` : "无需追加采购",
+                body: peakGap > 0 ? `按峰值净缺口叠加 ${(safetyFactor * 100 - 100).toFixed(0)}% 安全系数，建议转待审批采购单。` : `当前计划已满足安全库存要求。`,
               },
             ].map((it, i) => {
               const m = insightMeta[it.t];
@@ -3231,6 +4799,157 @@ function ForecastPanel() {
         );
       })()}
 
+      <Card className="p-5">
+        <SectionHeader title="MRP 例外消息"
+          right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+            style={{ background: mrpExceptions.length ? "#fff8f0" : "#f0faf4", color: mrpExceptions.length ? A.orange : A.green }}>
+            {mrpExceptions.length ? `${mrpExceptions.length} 条异常` : "无异常"}
+          </span>} />
+        {mrpExceptions.length === 0 ? (
+          <div className="text-xs py-6 text-center" style={{ color: A.gray2 }}>
+            当前预测、库存和供应商评分未触发 MRP 例外消息。
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-3">
+            {mrpExceptions.map((item) => (
+              <div key={item.type} className="rounded-xl p-3" style={{ background: A.gray6 }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-semibold" style={{ color: item.color }}>{item.type}</span>
+                  <span className="text-[10px] font-semibold tabular-nums" style={{ color: item.color }}>{item.metric}</span>
+                </div>
+                <div className="text-xs font-semibold" style={{ color: A.label }}>{item.title}</div>
+                <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{item.body}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <div className="px-5 py-4 flex items-start justify-between gap-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>后端 MRP 净需求计划</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>
+              {currentMrpRow
+                ? `${currentMrpRow.sku} · 在手 ${currentMrpRow.onHand.toLocaleString()} ${currentMrpRow.unit} · 已分配 ${currentMrpRow.allocated.toLocaleString()} · MOQ ${currentMrpRow.moq} · 提前期 ${currentMrpRow.leadTimePeriods} 期`
+                : "等待 MRP 接口返回计划结果"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="grid grid-cols-4 gap-2 min-w-[460px]">
+              {[
+                { label: "计划入库", value: currentMrpRow ? `${currentMrpRow.totalPlannedReceipt.toLocaleString()} ${currentMrpRow.unit}` : "—", color: A.blue },
+                { label: "最大净需求", value: currentMrpRow ? currentMrpRow.maxNetRequirement.toLocaleString() : "—", color: currentMrpRow?.maxNetRequirement ? A.red : A.green },
+                { label: "BOM来源", value: currentMrpRow?.bomSources?.length ? `${currentMrpRow.bomSources.length} 个父项` : "—", color: A.orange },
+                { label: "计划金额", value: currentMrpRow ? fmt(currentMrpRow.amount) : "—", color: A.purple },
+              ].map((item) => (
+                <div key={item.label} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
+                  <div className="text-[9px]" style={{ color: A.gray2 }}>{item.label}</div>
+                  <div className="text-xs font-semibold truncate" style={{ color: item.color }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+            <button onClick={releaseMrpAsPr} disabled={generatingRequest || !currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0 || Boolean(lastGeneratedRequest)}
+              className="h-10 px-3 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed"
+              style={{ background: lastGeneratedRequest ? A.green : currentMrpRow && currentMrpRow.totalPlannedReceipt > 0 ? A.purple : A.gray3, opacity: generatingRequest ? 0.7 : 1 }}>
+              {generatingRequest ? <Loader2 size={13} className="animate-spin" /> : lastGeneratedRequest ? <CheckCircle2 size={13} /> : <GitBranch size={13} />}
+              {lastGeneratedRequest ? `已生成 ${lastGeneratedRequest}` : "释放为 PR"}
+            </button>
+          </div>
+        </div>
+        {currentMrpRow ? (
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                {["周期", "毛需求", "独立/BOM", "计划到货", "预计可用", "净需求", "计划入库", "计划释放", "例外"].map((h) => (
+                  <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {currentMrpRow.schedule.map((line, index) => {
+                const exceptionColor = line.exception === "加急" ? A.red : line.exception === "释放" ? A.blue : line.exception === "推迟/取消" ? A.orange : A.green;
+                return (
+                  <tr key={line.period} className="hover:bg-blue-50/40 transition-colors"
+                    style={{ borderBottom: index < currentMrpRow.schedule.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                    <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{line.period}</td>
+                    <td className="px-4 py-3 tabular-nums" style={{ color: A.label }}>{line.grossRequirement.toLocaleString()}</td>
+                    <td className="px-4 py-3 tabular-nums min-w-[190px]" style={{ color: A.sub }}>
+                      <div>{line.independentDemand.toLocaleString()} / {line.dependentDemand.toLocaleString()}</div>
+                      {line.dependentDemandSources?.length ? (
+                        <div className="mt-1 text-[10px] leading-4 tabular-nums" style={{ color: A.gray2 }}>
+                          {line.dependentDemandSources.map((source) => `${source.parentName || source.parent} ${source.demand.toLocaleString()}`).join(" · ")}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums" style={{ color: line.scheduledReceipt > 0 ? A.blue : A.gray3 }}>
+                      {line.scheduledReceipt > 0 ? `+${line.scheduledReceipt.toLocaleString()}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: line.projectedAvailable < currentMrpRow.safetyStock ? A.red : A.label }}>
+                      {line.projectedAvailable.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums" style={{ color: line.netRequirement > 0 ? A.red : A.gray3 }}>
+                      {line.netRequirement > 0 ? line.netRequirement.toLocaleString() : "—"}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: line.plannedReceipt > 0 ? A.blue : A.gray3 }}>
+                      {line.plannedReceipt > 0 ? line.plannedReceipt.toLocaleString() : "—"}
+                    </td>
+                    <td className="px-4 py-3" style={{ color: line.plannedRelease > 0 ? A.purple : A.gray3 }}>
+                      {line.plannedRelease > 0 ? `${line.plannedReleasePeriod} · ${line.plannedRelease.toLocaleString()}` : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Chip label={line.exception} color={exceptionColor} bg={`${exceptionColor}16`} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <div className="py-10 text-center text-xs" style={{ color: A.gray2 }}>MRP 接口暂不可用，预测页仍可使用本地供需对账。</div>
+        )}
+      </Card>
+
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <SectionHeader title="预测转采购建议"
+              right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                style={{ background: peakGap > 0 ? "#fff1f0" : "#f0faf4", color: peakGap > 0 ? A.red : A.green }}>
+                {peakGap > 0 ? "需要补货" : "无需补货"}
+              </span>} />
+            <p className="text-xs leading-5 max-w-3xl" style={{ color: A.sub }}>
+              基于峰值净缺口、服务水平和提前期生成采购申请；审批通过后再转采购订单。
+            </p>
+          </div>
+          <button onClick={createRequestFromForecast} disabled={generatingRequest || executableRecommendedQty <= 0 || Boolean(lastGeneratedRequest)}
+            className="h-9 px-4 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed"
+            style={{ background: lastGeneratedRequest ? A.green : executableRecommendedQty > 0 ? A.blue : A.gray3, opacity: generatingRequest ? 0.7 : 1 }}>
+            {generatingRequest ? <Loader2 size={13} className="animate-spin" /> : lastGeneratedRequest ? <CheckCircle2 size={13} /> : <ShoppingCart size={13} />}
+            {lastGeneratedRequest ? `已生成 ${lastGeneratedRequest}` : "生成采购申请"}
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-2 mt-4">
+          {[
+            { label: currentMrpRow ? "MRP 建议量" : "建议采购量", value: executableRecommendedQty > 0 ? `${executableRecommendedQty.toLocaleString()} ${sku.unit}` : "0", color: executableRecommendedQty > 0 ? A.red : A.green },
+            { label: "峰值净缺口", value: `${peakGap.toLocaleString()} ${sku.unit}`, color: peakGap > 0 ? A.red : A.green },
+            { label: "推荐供应商", value: procurementProfile.supplier, color: A.blue },
+            { label: "供应商评分", value: `${supplierScore.score} · ${supplierScore.grade}`, color: supplierScore.color },
+            { label: "预估金额", value: fmt(executableRecommendedAmount), color: A.purple },
+            { label: "优先级", value: executablePriority, color: executablePriority === "高" ? A.red : executablePriority === "中" ? A.orange : A.green },
+            { label: "预计到货", value: formatEta(leadTimeDays), color: A.label },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
+              <div className="text-[10px]" style={{ color: A.gray2 }}>{item.label}</div>
+              <div className="text-xs font-semibold mt-1 truncate" style={{ color: item.color }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.sub }}>
+          <span className="font-semibold" style={{ color: supplierScore.color }}>供应商推荐依据：</span>{supplierScore.note}
+        </div>
+      </Card>
+
       {/* Demand-Supply Reconciliation */}
       <Card>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
@@ -3240,10 +4959,12 @@ function ForecastPanel() {
               起始在手 {sku.onHand.toLocaleString()} {sku.unit} · 待入库 {sku.open.toLocaleString()} {sku.unit}
             </p>
           </div>
-          <button onClick={commitPlan} disabled={committed}
+          <button onClick={saveForecastPlan} disabled={savingPlan}
             className="text-xs px-4 py-2 rounded-xl font-medium text-white flex items-center gap-1.5 transition-opacity hover:opacity-90"
-            style={{ background: committed ? A.green : A.blue, opacity: committed ? 0.7 : 1 }}>
-            {committed ? <><CheckCircle2 size={12} /> 已发布 MRP</> : <><FileCheck2 size={12} /> 发布共识需求计划</>}
+            style={{ background: committed ? A.green : A.blue, opacity: savingPlan ? 0.7 : 1 }}>
+            {savingPlan ? <><Loader2 size={12} className="animate-spin" /> 保存中</>
+              : committed ? <><CheckCircle2 size={12} /> 已保存方案</>
+                : <><FileCheck2 size={12} /> 保存共识预测方案</>}
           </button>
         </div>
         <table className="w-full text-xs">
@@ -3276,6 +4997,44 @@ function ForecastPanel() {
             })}
           </tbody>
         </table>
+      </Card>
+
+      <Card className="p-5">
+        <SectionHeader title="已保存预测方案"
+          right={<span className="text-[10px]" style={{ color: A.gray2 }}>{savedPlans.length} 条后端记录</span>} />
+        {savedPlans.length === 0 ? (
+          <div className="text-xs py-6 text-center" style={{ color: A.gray2 }}>
+            还没有保存方案。运行预测后点击“保存共识预测方案”，结果会写入后端数据。
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-2">
+            {savedPlans.slice(0, 8).map((plan) => (
+              <div key={plan.id} className="rounded-xl p-3" style={{ background: A.gray6 }}>
+                <div className="text-[10px] font-semibold truncate" style={{ color: A.blue }}>{plan.id}</div>
+                <div className="text-xs font-semibold mt-1 truncate" style={{ color: A.label }}>{plan.sku}</div>
+                <div className="text-[10px] mt-0.5 truncate" style={{ color: A.sub }}>{plan.name}</div>
+                <div className="flex items-center justify-between mt-2 text-[10px]">
+                  <span style={{ color: A.gray1 }}>{METHOD_LABEL[plan.method] ?? plan.method}</span>
+                  <span style={{ color: A.green }}>MAPE {Number(plan.metrics?.mape ?? 0).toFixed(1)}%</span>
+                </div>
+                {plan.procurementSuggestion && Number(plan.procurementSuggestion.quantity || 0) > 0 && (
+                  <div className="mt-2 pt-2 text-[10px]" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
+                    <div className="flex items-center justify-between">
+                      <span style={{ color: A.gray2 }}>建议采购</span>
+                      <span className="font-semibold" style={{ color: A.red }}>
+                        {Number(plan.procurementSuggestion.quantity).toLocaleString()} {plan.unit || ""}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="truncate" style={{ color: A.gray2 }}>{plan.procurementSuggestion.supplier || "—"}</span>
+                      <span style={{ color: A.purple }}>{fmt(Number(plan.procurementSuggestion.amount || 0))}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -3560,7 +5319,7 @@ const inputStyle: React.CSSProperties = {
 // ─── New PO Modal ────────────────────────────────────────────────────────────
 function NewPOModal({ open, onClose, onCreate }: {
   open: boolean; onClose: () => void;
-  onCreate: (po: typeof purchaseOrders[number]) => void;
+  onCreate: (po: PurchaseOrderDraft) => Promise<PurchaseOrder>;
 }) {
   const [supplier, setSupplier] = useState(SUPPLIER_LIST[0]);
   const [owner, setOwner] = useState(OWNERS[0]);
@@ -3585,29 +5344,30 @@ function NewPOModal({ open, onClose, onCreate }: {
     setEta("6月03日"); setLines([{ sku: SKU_CATALOG[0].sku, qty: 10 }]);
   }
 
-  function submit(asDraft: boolean) {
+  async function submit(asDraft: boolean) {
     if (lines.length === 0) { toast.error("请至少添加一行物料"); return; }
     if (lines.some((l) => l.qty <= 0)) { toast.error("数量必须大于 0"); return; }
     setSubmitting(true);
-    setTimeout(() => {
+    try {
       const po = {
-        po: `PO-2026-${1288 + Math.floor(Math.random() * 50)}`,
         supplier, owner, priority, eta,
-        created: "5月27日",
         amount: total,
         items: lines.length,
         received: 0,
         status: (asDraft ? "草稿" : "待审批") as POStatus,
         paid: false,
       };
-      onCreate(po);
-      setSubmitting(false);
+      const created = await onCreate(po);
       reset();
       onClose();
-      toast.success(asDraft ? `${po.po} 已保存为草稿` : `${po.po} 已提交审批`, {
+      toast.success(asDraft ? `${created.po} 已保存为草稿` : `${created.po} 已提交审批`, {
         description: `${supplier} · ${fmt(total)} · ${lines.length} 行物料`,
       });
-    }, 600);
+    } catch (error) {
+      toast.error("采购订单保存失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -3772,11 +5532,12 @@ function TrackShipmentModal({ open, onClose, po }: {
 }
 
 // ─── Purchasing Panel ────────────────────────────────────────────────────────
-function POStatusPill({ status }: { status: POStatus }) {
-  const m = poStatusMeta[status];
+function POStatusPill({ status }: { status: string }) {
+  const displayStatus = status || "未知";
+  const m = poStatusMeta[displayStatus as POStatus] ?? { color: A.gray1, bg: A.gray6 };
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
-      style={{ color: m.color, background: m.bg }}>{status}</span>
+      style={{ color: m.color, background: m.bg }}>{displayStatus}</span>
   );
 }
 
@@ -3791,6 +5552,17 @@ const RFQS: {
   { id: "RFQ-26-0045", title: "切削液 12 个月供货",     category: "耗材",     suppliers: 5, quoted: 4, bestPrice: 24.8,  bestSupplier: "广州化工耗材",   due: "2026-06-08", status: "比价中" },
   { id: "RFQ-26-0046", title: "高精度数控刀具",         category: "工具",     suppliers: 3, quoted: 2, bestPrice:312.0,  bestSupplier: "华东精工机械",   due: "2026-06-22", status: "进行中" },
 ];
+type RfqRecord = typeof RFQS[number] & {
+  sourceRequest?: string;
+  sourceSku?: string;
+  sourceName?: string;
+  quantity?: number;
+  unit?: string;
+  reason?: string;
+  invitedSuppliers?: string[];
+  linkedPo?: string;
+  createdAt?: string;
+};
 
 const CONTRACTS: {
   id: string; supplier: string; scope: string; commitVol: string; price: string;
@@ -3837,12 +5609,76 @@ const PORTAL_SUPPLIERS: {
   { name: "华东精工机械",   rating: 4.2, onTime: 91.6, quality: 97.4, resp: 82, po: 12, spend:  920000, flag: "备选" },
 ];
 
+type SupplierPerformance = typeof PORTAL_SUPPLIERS[number] & {
+  category?: string;
+  received?: number;
+  passed?: number;
+  failed?: number;
+  exceptions?: number;
+  rejectRate?: number;
+  score?: number;
+  risk?: string;
+  lastIssue?: string;
+};
+
+type SupplierRecommendationResult = {
+  sku: string;
+  quantity: number;
+  currentSupplier: string;
+  primary: {
+    supplier: string;
+    unitPrice: number;
+    listPrice?: number;
+    listPriceCny?: number;
+    currency?: string;
+    fxRate?: number;
+    contractId?: string;
+    contractLabel?: string;
+    contractDiscount?: number;
+    contractTierMinQty?: number;
+    leadTimeDays: number;
+    responseScore: number;
+    capacity: number;
+    availableCapacity?: number;
+    capacityWindow?: string;
+    capacityReliability?: number;
+    capacityStatus?: "可承诺" | "紧张" | "不足" | string;
+    risk: string;
+    performanceScore: number;
+    quality: number;
+    rejectRate: number;
+    flag: string;
+    score: number;
+    amount: number;
+    isCurrent: boolean;
+    note: string;
+  } | null;
+  backup: SupplierRecommendationResult["primary"];
+  candidates: NonNullable<SupplierRecommendationResult["primary"]>[];
+  split: { supplier: string; quantity: number; unitPrice: number }[];
+  needsRfq: boolean;
+  rfqReason: string;
+};
+
+type ApprovalSnapshot = {
+  source?: string;
+  summary?: string;
+  explanation?: string;
+  ai?: Record<string, unknown>;
+  mrp?: Record<string, unknown>;
+  inventory?: Record<string, unknown>;
+  forecast?: Record<string, unknown>;
+  supplier?: Record<string, unknown>;
+  createdAt?: string;
+};
+
 // ─── Purchasing · Master Wrapper ──────────────────────────────────────────────
-type PurTab = "orders" | "rfq" | "contracts" | "match" | "payment" | "portal";
-function PurchasingPanel() {
-  const [tab, setTab] = useState<PurTab>("orders");
+type PurTab = "requests" | "orders" | "rfq" | "contracts" | "match" | "payment" | "portal";
+function PurchasingPanel({ intent }: { intent: PurchaseIntent | null }) {
+  const [tab, setTab] = useState<PurTab>("requests");
   const tabs = [
-    { id: "orders",    label: "采购订单",   icon: FileText,        count: purchaseOrders.length },
+    { id: "requests",  label: "采购申请",   icon: ClipboardCheck },
+    { id: "orders",    label: "采购订单",   icon: FileText },
     { id: "rfq",       label: "询价 RFQ",   icon: FileSpreadsheet, count: RFQS.length },
     { id: "contracts", label: "框架合同",   icon: Handshake,       count: CONTRACTS.length },
     { id: "match",     label: "三单匹配",   icon: ShieldCheck,     count: MATCH_QUEUE.length },
@@ -3850,9 +5686,14 @@ function PurchasingPanel() {
     { id: "portal",    label: "供应商门户", icon: Building2,       count: PORTAL_SUPPLIERS.length },
   ] as const;
 
+  useEffect(() => {
+    if (intent) setTab("requests");
+  }, [intent?.createdAt]);
+
   return (
     <div className="space-y-4">
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as PurTab)} />
+      {tab === "requests"  && <PurchasingRequests intent={intent} />}
       {tab === "orders"    && <PurchasingOrders />}
       {tab === "rfq"       && <PurchasingRFQ />}
       {tab === "contracts" && <PurchasingContracts />}
@@ -3863,11 +5704,646 @@ function PurchasingPanel() {
   );
 }
 
+function PRStatusPill({ status }: { status: string }) {
+  const map: Record<PurchaseRequestStatus, { color: string; bg: string }> = {
+    草稿: { color: A.gray1, bg: A.gray6 },
+    待审批: { color: A.orange, bg: "#fff8f0" },
+    已批准: { color: A.blue, bg: "#f0f6ff" },
+    已驳回: { color: A.red, bg: "#fff1f0" },
+    已转PO: { color: A.green, bg: "#f0faf4" },
+    已取消: { color: A.gray1, bg: A.gray6 },
+  };
+  const displayStatus = status || "未知";
+  const m = map[displayStatus as PurchaseRequestStatus] ?? { color: A.gray1, bg: A.gray6 };
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
+      style={{ color: m.color, background: m.bg }}>{displayStatus}</span>
+  );
+}
+
+function purchaseRequestSourceMeta(source: string) {
+  if (source === "forecast") return { label: "预测", icon: Sparkles, color: A.blue, bg: "#f0f6ff" };
+  if (source === "inventory") return { label: "库存补货", icon: Package, color: A.orange, bg: "#fff8f0" };
+  if (source === "mrp-release") return { label: "MRP释放", icon: GitBranch, color: A.purple, bg: "#f5f0ff" };
+  return { label: "手工", icon: FileText, color: A.gray1, bg: A.gray6 };
+}
+
+function NewPRModal({ open, onClose, onCreate }: {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (request: Partial<PurchaseRequest>) => Promise<PurchaseRequest>;
+}) {
+  const [sku, setSku] = useState(SKU_CATALOG[0].sku);
+  const [supplier, setSupplier] = useState(SUPPLIER_LIST[0]);
+  const [requester, setRequester] = useState("张磊");
+  const [buyer, setBuyer] = useState(OWNERS[0]);
+  const [priority, setPriority] = useState<"高" | "中" | "低">("中");
+  const [requiredDate, setRequiredDate] = useState("6月20日");
+  const [quantity, setQuantity] = useState(10);
+  const [reason, setReason] = useState("生产计划新增需求，需要采购补料。");
+  const [submitting, setSubmitting] = useState(false);
+
+  const item = SKU_CATALOG.find((entry) => entry.sku === sku) || SKU_CATALOG[0];
+  const amount = Math.max(0, Number(quantity || 0)) * Number(item.price || 0);
+
+  function reset() {
+    setSku(SKU_CATALOG[0].sku);
+    setSupplier(SUPPLIER_LIST[0]);
+    setRequester("张磊");
+    setBuyer(OWNERS[0]);
+    setPriority("中");
+    setRequiredDate("6月20日");
+    setQuantity(10);
+    setReason("生产计划新增需求，需要采购补料。");
+  }
+
+  async function submit(asDraft: boolean) {
+    if (!sku || quantity <= 0) {
+      toast.error("请选择物料并填写大于 0 的数量");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const created = await onCreate({
+        source: "manual",
+        sourceSku: item.sku,
+        sourceName: item.name,
+        supplier,
+        requester,
+        buyer,
+        requiredDate,
+        quantity,
+        unit: "件",
+        unitPrice: item.price,
+        amount,
+        priority,
+        status: asDraft ? "草稿" : "待审批",
+        reason,
+        approvalSnapshot: {
+          source: "manual",
+          summary: `${item.sku} ${item.name} · ${quantity.toLocaleString()} 件 · ${fmt(amount)}`,
+          explanation: `Requester ${requester} 手工提交采购申请：${reason}`,
+          supplier: { name: supplier, buyer, unitPrice: item.price, amount },
+          createdAt: new Date().toISOString(),
+        },
+      });
+      reset();
+      onClose();
+      toast.success(asDraft ? `${created.pr} 已保存草稿` : `${created.pr} 已提交审批`, {
+        description: `${item.name} · ${quantity.toLocaleString()} 件 · ${fmt(amount)}`,
+      });
+    } catch (error) {
+      toast.error("采购申请提交失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} width={720}
+      title="新建采购申请" subtitle="Requester 填写需求，审批通过后再转采购订单"
+      footer={
+        <>
+          <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg font-medium"
+            style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.1)" }}>取消</button>
+          <button onClick={() => submit(true)} disabled={submitting}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium"
+            style={{ background: A.gray5, color: A.label }}>存为草稿</button>
+          <button onClick={() => submit(false)} disabled={submitting}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium text-white flex items-center gap-1.5"
+            style={{ background: A.blue, opacity: submitting ? 0.6 : 1 }}>
+            {submitting ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+            提交审批
+          </button>
+        </>
+      }>
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <Field label="申请人 / Requester *">
+          <input value={requester} onChange={(e) => setRequester(e.target.value)} style={inputStyle} />
+        </Field>
+        <Field label="采购负责人">
+          <select value={buyer} onChange={(e) => setBuyer(e.target.value)} style={inputStyle}>
+            {OWNERS.map((owner) => <option key={owner}>{owner}</option>)}
+          </select>
+        </Field>
+        <Field label="物料 *">
+          <select value={sku} onChange={(e) => setSku(e.target.value)} style={inputStyle}>
+            {SKU_CATALOG.map((entry) => <option key={entry.sku} value={entry.sku}>{entry.sku} · {entry.name}</option>)}
+          </select>
+        </Field>
+        <Field label="建议供应商">
+          <select value={supplier} onChange={(e) => setSupplier(e.target.value)} style={inputStyle}>
+            {SUPPLIER_LIST.map((entry) => <option key={entry}>{entry}</option>)}
+          </select>
+        </Field>
+        <Field label="需求日期">
+          <input value={requiredDate} onChange={(e) => setRequiredDate(e.target.value)} style={inputStyle} />
+        </Field>
+        <Field label="优先级">
+          <select value={priority} onChange={(e) => setPriority(e.target.value as "高" | "中" | "低")} style={inputStyle}>
+            {(["高", "中", "低"] as const).map((entry) => <option key={entry}>{entry}</option>)}
+          </select>
+        </Field>
+        <Field label="数量 *">
+          <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value || 0))} style={inputStyle} />
+        </Field>
+        <Field label="预估金额">
+          <div className="h-[35px] rounded-lg px-3 flex items-center text-sm font-semibold" style={{ background: A.gray6, color: A.label }}>
+            {fmt(amount)}
+          </div>
+        </Field>
+      </div>
+      <Field label="申请原因 / 用途">
+        <textarea value={reason} onChange={(e) => setReason(e.target.value)}
+          className="w-full min-h-[92px] rounded-lg px-3 py-2 text-sm outline-none resize-none"
+          style={{ background: A.white, color: A.label, border: `0.5px solid ${A.gray4}` }} />
+      </Field>
+    </Modal>
+  );
+}
+
+function PurchasingRequests({ intent, onOpenRfq }: { intent: PurchaseIntent | null; onOpenRfq?: () => void }) {
+  const [requests, setRequests] = useState<PurchaseRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"全部" | PurchaseRequestStatus>("全部");
+  const [selectedId, setSelectedId] = useState("");
+  const [supplierRecommendationResult, setSupplierRecommendationResult] = useState<SupplierRecommendationResult | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [creatingRfq, setCreatingRfq] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    apiJson<PurchaseRequest[]>("/api/purchase-requests")
+      .then((data) => {
+        if (!alive) return;
+        setRequests(data);
+        setSelectedId((current) => {
+          if (intent?.selectedPr && data.some((item) => item.pr === intent.selectedPr)) return intent.selectedPr;
+          if (intent?.sourceSku) {
+            const bySku = data.find((item) => item.sourceSku === intent.sourceSku && !["已转PO", "已驳回", "已取消"].includes(item.status));
+            if (bySku) return bySku.pr;
+          }
+          return data.some((item) => item.pr === current) ? current : data[0]?.pr ?? "";
+        });
+      })
+      .catch(() => toast.error("采购申请 API 未连接", { description: "请确认 API 服务正在运行" }))
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [intent?.createdAt]);
+
+  const filtered = filter === "全部" ? requests : requests.filter((item) => item.status === filter);
+  const selected = requests.find((item) => item.pr === selectedId) ?? requests[0];
+  const pending = requests.filter((item) => item.status === "待审批").length;
+  const approved = requests.filter((item) => item.status === "已批准").length;
+  const converted = requests.filter((item) => item.status === "已转PO").length;
+  const amount = requests.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+  useEffect(() => {
+    if (!selected?.sourceSku) {
+      setSupplierRecommendationResult(null);
+      return;
+    }
+    let alive = true;
+    const params = new URLSearchParams({
+      sku: selected.sourceSku,
+      quantity: String(Number(selected.quantity || 0)),
+      supplier: selected.supplier || "",
+    });
+    apiJson<SupplierRecommendationResult>(`/api/supplier-recommendations?${params.toString()}`)
+      .then((data) => { if (alive) setSupplierRecommendationResult(data); })
+      .catch(() => { if (alive) setSupplierRecommendationResult(null); });
+    return () => { alive = false; };
+  }, [selected?.pr, selected?.sourceSku, selected?.quantity, selected?.supplier]);
+
+  async function updateRequestStatus(pr: string, status: PurchaseRequestStatus) {
+    const updated = await apiJson<PurchaseRequest>(`/api/purchase-requests/${encodeURIComponent(pr)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    setRequests((arr) => arr.map((item) => item.pr === pr ? updated : item));
+    return updated;
+  }
+
+  async function approveRequest(pr: string) {
+    try {
+      await updateRequestStatus(pr, "已批准");
+      toast.success(`${pr} 已批准`, { description: "可转为采购订单继续执行" });
+    } catch (error) {
+      toast.error("采购申请审批失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    }
+  }
+
+  async function rejectRequest(pr: string) {
+    try {
+      await updateRequestStatus(pr, "已驳回");
+      toast.error(`${pr} 已驳回`, { description: "状态已写入后端" });
+    } catch (error) {
+      toast.error("采购申请驳回失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    }
+  }
+
+  async function convertRequest(pr: string) {
+    try {
+      const result = await apiJson<{ request: PurchaseRequest; po: PurchaseOrder }>(`/api/purchase-requests/${encodeURIComponent(pr)}/convert-to-po`, {
+        method: "POST",
+      });
+      setRequests((arr) => arr.map((item) => item.pr === pr ? result.request : item));
+      toast.success(`${pr} 已转为 ${result.po.po}`, { description: "采购订单已进入待审批队列" });
+    } catch (error) {
+      toast.error("采购申请转 PO 失败", { description: error instanceof Error ? error.message : "请先批准申请，再转采购订单" });
+    }
+  }
+
+  async function createManualRequest(payload: Partial<PurchaseRequest>) {
+    const created = await apiJson<PurchaseRequest>("/api/purchase-requests", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    setRequests((arr) => [created, ...arr]);
+    setSelectedId(created.pr);
+    setFilter("全部");
+    return created;
+  }
+
+  async function createRfqFromSelected() {
+    if (!selected) return;
+    const candidates = supplierRecommendationResult?.candidates || [];
+    const invitedSuppliers = Array.from(new Set([
+      supplierRecommendationResult?.primary?.supplier,
+      supplierRecommendationResult?.backup?.supplier,
+      selected.supplier,
+      ...candidates.map((item) => item.supplier),
+    ].filter(Boolean) as string[]));
+    setCreatingRfq(true);
+    try {
+      const rfq = await apiJson<RfqRecord>("/api/rfqs", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `${selected.sourceSku || "SKU"} ${selected.sourceName || ""} 采购询价`.trim(),
+          category: selected.source || "采购申请",
+          suppliers: invitedSuppliers.length,
+          quoted: 0,
+          bestPrice: Number(supplierRecommendationResult?.primary?.unitPrice || selected.unitPrice || 0),
+          bestSupplier: supplierRecommendationResult?.primary?.supplier || selected.supplier || "",
+          due: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+          status: "进行中",
+          sourceRequest: selected.pr,
+          sourceSku: selected.sourceSku,
+          sourceName: selected.sourceName,
+          quantity: selected.quantity,
+          unit: selected.unit,
+          reason: supplierRecommendationResult?.primary
+            ? `${supplierRecommendationResult?.rfqReason || "替代询价"} 主推 ${supplierRecommendationResult.primary.supplier}，合同 ${supplierRecommendationResult.primary.contractId || "无"}，产能 ${supplierRecommendationResult.primary.capacityStatus || "未知"}，币种 ${supplierRecommendationResult.primary.currency || "CNY"}。`
+            : supplierRecommendationResult?.rfqReason || selected.reason || "采购申请需要补充报价或备选供应商。",
+          invitedSuppliers,
+        }),
+      });
+      toast.success(`${rfq.id} 已发起`, { description: `${selected.pr} · 已邀请 ${invitedSuppliers.length} 家供应商` });
+      onOpenRfq?.();
+    } catch (error) {
+      toast.error("RFQ 发起失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    } finally {
+      setCreatingRfq(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      {intent?.sourceSku && (
+        <div className="rounded-xl px-4 py-3 flex items-center justify-between gap-3"
+          style={{ background: "#f0f6ff", border: `0.5px solid ${A.blue}30` }}>
+          <div className="flex items-center gap-2 min-w-0">
+            <ClipboardCheck size={14} style={{ color: A.blue }} />
+            <div className="text-xs" style={{ color: A.label }}>
+              已从首页补货动作定位到 <span className="font-semibold tabular-nums">{intent.sourceSku}</span>
+              {selected ? ` · ${selected.pr}` : ""}
+            </div>
+          </div>
+          <button onClick={() => setFilter("全部")}
+            className="text-[11px] px-2.5 py-1 rounded-md font-medium"
+            style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,113,227,0.18)" }}>
+            查看全部
+          </button>
+        </div>
+      )}
+      <div className="grid grid-cols-4 gap-3">
+        <KpiCard label="采购申请金额" value={fmt(amount)} sub={loading ? "加载中" : `${requests.length} 张申请`} icon={ClipboardCheck} color={A.blue} />
+        <KpiCard label="待审批 PR" value={String(pending)} sub="预测/库存/手工申请" positive={pending === 0} icon={AlertCircle} color={A.orange} />
+        <KpiCard label="已批准" value={String(approved)} sub="等待转 PO" positive icon={CheckCircle2} color={A.green} />
+        <KpiCard label="已转 PO" value={String(converted)} sub="进入采购执行" positive icon={FileText} color={A.purple} />
+      </div>
+
+      <div className="grid grid-cols-5 gap-3">
+        <Card className="col-span-3">
+          <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
+            <Filter size={13} style={{ color: A.gray2 }} />
+            <SegmentedControl
+              options={(["全部", "待审批", "已批准", "已驳回", "已转PO"] as const).map((s) => ({ label: s, value: s }))}
+              value={filter} onChange={(v) => setFilter(v as any)}
+            />
+            <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{filtered.length} 条</span>
+            <button onClick={() => setNewOpen(true)}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
+              style={{ background: A.blue }}>
+              <Plus size={11} /> 新建 PR
+            </button>
+          </div>
+          {filtered.length === 0 ? (
+            <div className="py-12 text-center text-xs" style={{ color: A.gray2 }}>
+              暂无采购申请。可在预测分析中生成预测补货申请。
+            </div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                  {["PR 编号", "来源", "物料", "供应商", "数量", "金额", "状态"].map((h) => (
+                    <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item, idx) => {
+                  const isSelected = selected?.pr === item.pr;
+                  const sourceMeta = purchaseRequestSourceMeta(item.source);
+                  const SourceIcon = sourceMeta.icon;
+                  return (
+                    <tr key={item.pr} onClick={() => setSelectedId(item.pr)}
+                      className="cursor-pointer hover:bg-blue-50/40 transition-colors"
+                      style={{
+                        borderBottom: idx < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none",
+                        background: isSelected ? "rgba(0,113,227,0.06)" : "transparent",
+                      }}>
+                      <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>{item.pr}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                          style={{ background: sourceMeta.bg, color: sourceMeta.color }}>
+                          <SourceIcon size={10} />
+                          {sourceMeta.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium" style={{ color: A.label }}>{item.sourceSku || "—"}</div>
+                        <div className="text-[10px] mt-0.5 truncate max-w-28" style={{ color: A.gray2 }}>{item.sourceName}</div>
+                      </td>
+                      <td className="px-4 py-3" style={{ color: A.label }}>{item.supplier}</td>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: A.sub }}>{Number(item.quantity || 0).toLocaleString()} {item.unit}</td>
+                      <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(item.amount)}</td>
+                      <td className="px-4 py-3"><PRStatusPill status={item.status} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </Card>
+
+        <Card className="col-span-2 p-5">
+          {selected ? (
+            <>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>采购申请详情</div>
+                  <div className="text-base font-semibold tracking-tight" style={{ color: A.label }}>{selected.pr}</div>
+                </div>
+                <PRStatusPill status={selected.status} />
+              </div>
+
+              <div className="space-y-3 pb-4 mb-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                {[
+                  { label: "物料", value: `${selected.sourceSku || "—"} ${selected.sourceName || ""}` },
+                  { label: "供应商", value: selected.supplier },
+                  { label: "申请 / 采购", value: `${selected.requester} / ${selected.buyer}` },
+                  { label: "需求日期", value: selected.requiredDate },
+                  { label: "建议数量", value: `${Number(selected.quantity || 0).toLocaleString()} ${selected.unit}` },
+                  { label: "预估金额", value: fmt(selected.amount) },
+                ].map((row) => (
+                  <div key={row.label} className="flex justify-between gap-3 text-xs">
+                    <span style={{ color: A.gray1 }}>{row.label}</span>
+                    <span className="font-medium text-right" style={{ color: A.label }}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-xl p-3 mb-4" style={{
+                background: supplierRecommendationResult?.needsRfq ? "#fff8f0" : "#f0faf4",
+                border: `1px solid ${supplierRecommendationResult?.needsRfq ? "rgba(255,149,0,0.16)" : "rgba(52,199,89,0.12)"}`,
+              }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: supplierRecommendationResult?.needsRfq ? A.orange : A.green }}>
+                    <ShieldCheck size={12} /> 后端供应商推荐
+                  </div>
+                  {supplierRecommendationResult?.primary ? (
+                    <span className="text-xs font-semibold tabular-nums" style={{ color: supplierRecommendationResult.primary.score >= 84 ? A.green : A.orange }}>
+                      {supplierRecommendationResult.primary.score}
+                    </span>
+                  ) : (
+                    <span className="text-[10px]" style={{ color: A.gray2 }}>加载中</span>
+                  )}
+                </div>
+                {supplierRecommendationResult?.primary ? (
+                  <>
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="font-semibold truncate" style={{ color: A.label }}>{supplierRecommendationResult.primary.supplier}</span>
+                      <span style={{ color: A.sub }}>
+                        ¥{Number(supplierRecommendationResult.primary.unitPrice || 0).toLocaleString()} · {supplierRecommendationResult.primary.leadTimeDays}天
+                      </span>
+                    </div>
+                    <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{supplierRecommendationResult.primary.note}</div>
+                    <div className="grid grid-cols-3 gap-2 mt-2 text-[10px]">
+                      <div><span style={{ color: A.gray2 }}>备选</span><div className="font-medium truncate" style={{ color: A.label }}>{supplierRecommendationResult.backup?.supplier || "—"}</div></div>
+                      <div><span style={{ color: A.gray2 }}>拆单</span><div className="font-medium" style={{ color: supplierRecommendationResult.split.length ? A.blue : A.gray1 }}>{supplierRecommendationResult.split.length ? `${supplierRecommendationResult.split.length} 家` : "无需"}</div></div>
+                      <div><span style={{ color: A.gray2 }}>RFQ</span><div className="font-medium" style={{ color: supplierRecommendationResult.needsRfq ? A.orange : A.green }}>{supplierRecommendationResult.needsRfq ? "建议" : "不需要"}</div></div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-2 text-[10px]">
+                      <div>
+                        <span style={{ color: A.gray2 }}>合同</span>
+                        <div className="font-medium truncate" style={{ color: supplierRecommendationResult.primary.contractId ? A.purple : A.gray1 }}>
+                          {supplierRecommendationResult.primary.contractId
+                            ? `${supplierRecommendationResult.primary.contractId} · ${Math.round(Number(supplierRecommendationResult.primary.contractDiscount || 0) * 100)}%`
+                            : "无框架"}
+                        </div>
+                      </div>
+                      <div>
+                        <span style={{ color: A.gray2 }}>币种</span>
+                        <div className="font-medium" style={{ color: supplierRecommendationResult.primary.currency && supplierRecommendationResult.primary.currency !== "CNY" ? A.orange : A.label }}>
+                          {supplierRecommendationResult.primary.currency || "CNY"}{supplierRecommendationResult.primary.currency && supplierRecommendationResult.primary.currency !== "CNY" ? ` ×${Number(supplierRecommendationResult.primary.fxRate || 1).toFixed(2)}` : ""}
+                        </div>
+                      </div>
+                      <div>
+                        <span style={{ color: A.gray2 }}>产能</span>
+                        <div className="font-medium truncate" style={{ color: supplierRecommendationResult.primary.capacityStatus === "不足" ? A.red : supplierRecommendationResult.primary.capacityStatus === "紧张" ? A.orange : A.green }}>
+                          {supplierRecommendationResult.primary.capacityStatus || "可承诺"} · {Number(supplierRecommendationResult.primary.availableCapacity || supplierRecommendationResult.primary.capacity || 0).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    {supplierRecommendationResult.needsRfq && (
+                      <div className="mt-2 text-[10px] leading-4" style={{ color: A.orange }}>{supplierRecommendationResult.rfqReason}</div>
+                    )}
+                    <button onClick={createRfqFromSelected} disabled={creatingRfq}
+                      className="mt-2 h-7 px-2.5 rounded-md text-[11px] font-semibold text-white inline-flex items-center gap-1.5 disabled:opacity-60"
+                      style={{ background: supplierRecommendationResult.needsRfq ? A.orange : A.blue }}>
+                      {creatingRfq ? <Loader2 size={11} className="animate-spin" /> : <FileSpreadsheet size={11} />}
+                      {supplierRecommendationResult.needsRfq ? "发起 RFQ" : "替代询价"}
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-[10px] leading-4" style={{ color: A.sub }}>
+                    当前 SKU 缺少后端报价候选，建议先维护供应商报价或发起 RFQ。
+                    <div>
+                      <button onClick={createRfqFromSelected} disabled={creatingRfq}
+                        className="mt-2 h-7 px-2.5 rounded-md text-[11px] font-semibold text-white inline-flex items-center gap-1.5 disabled:opacity-60"
+                        style={{ background: A.orange }}>
+                        {creatingRfq ? <Loader2 size={11} className="animate-spin" /> : <FileSpreadsheet size={11} />}
+                        发起 RFQ
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {selected.forecastBasis && (
+                <div className="rounded-xl p-3 mb-4" style={{
+                  background: selected.source === "inventory" ? "#fff8f0" : selected.source === "mrp-release" ? "#f5f0ff" : "#f0f6ff",
+                  border: `1px solid ${selected.source === "inventory" ? "rgba(255,149,0,0.16)" : selected.source === "mrp-release" ? "rgba(175,82,222,0.14)" : "rgba(0,113,227,0.12)"}`,
+                }}>
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold mb-2" style={{ color: selected.source === "inventory" ? A.orange : selected.source === "mrp-release" ? A.purple : A.blue }}>
+                    {selected.source === "inventory" ? <Package size={12} /> : selected.source === "mrp-release" ? <GitBranch size={12} /> : <Sparkles size={12} />}
+                    {selected.source === "inventory" ? "库存控制证据" : selected.source === "mrp-release" ? "MRP 释放证据" : "预测证据"}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    {(selected.source === "inventory" ? [
+                      ["可用库存", `${Number(selected.forecastBasis.projectedAvailable || 0).toLocaleString()} ${selected.unit}`],
+                      ["再订货点 ROP", `${Number(selected.forecastBasis.reorderPoint || 0).toLocaleString()} ${selected.unit}`],
+                      ["覆盖天数", `${selected.forecastBasis.daysCover ?? "—"} 天`],
+                      ["提前期 / MOQ", `${selected.forecastBasis.leadTimeDays ?? "—"} 天 / ${selected.forecastBasis.moq ?? "—"}`],
+                    ] : selected.source === "mrp-release" ? [
+                      ["计划入库", `${Number(selected.forecastBasis.plannedReceipt || 0).toLocaleString()} ${selected.unit}`],
+                      ["计划释放期", selected.forecastBasis.plannedReleasePeriod || "—"],
+                      ["最大净需求", `${Number(selected.forecastBasis.peakGap || 0).toLocaleString()} ${selected.unit}`],
+                      ["例外 / 服务水平", `${selected.forecastBasis.mrpException || "—"} / ${selected.forecastBasis.serviceLevel || "—"}%`],
+                    ] : [
+                      ["峰值缺口", `${Number(selected.forecastBasis.peakGap || 0).toLocaleString()} ${selected.unit}`],
+                      ["服务水平", `${selected.forecastBasis.serviceLevel || "—"}%`],
+                      ["安全系数", `${Math.round(Number(selected.forecastBasis.safetyFactor || 1) * 100)}%`],
+                      ["首个断货月", selected.forecastBasis.firstStockoutMonth || "—"],
+                    ]).map(([label, value]) => (
+                      <div key={label}>
+                        <div style={{ color: A.gray2 }}>{label}</div>
+                        <div className="font-medium mt-0.5" style={{ color: A.label }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {selected.source === "mrp-release" && selected.forecastBasis.bomSourceSummary && (
+                    <div className="mt-2 rounded-lg p-2 text-[10px] leading-4" style={{ background: "rgba(175,82,222,0.08)", color: A.sub }}>
+                      <span className="font-semibold" style={{ color: A.purple }}>BOM 来源：</span>
+                      {selected.forecastBasis.bomSourceSummary}
+                    </div>
+                  )}
+                  <div className="mt-2 text-[10px] leading-4" style={{ color: A.sub }}>{selected.reason}</div>
+                </div>
+              )}
+
+              {selected.approvalSnapshot && (
+                <div className="rounded-xl p-3 mb-4" style={{ background: A.gray6, border: "1px solid rgba(0,0,0,0.05)" }}>
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold mb-2" style={{ color: A.label }}>
+                    <FileCheck2 size={12} /> 审批快照
+                  </div>
+                  <div className="text-xs font-semibold leading-5" style={{ color: A.label }}>
+                    {selected.approvalSnapshot.summary || "已锁定本次申请依据"}
+                  </div>
+                  {selected.approvalSnapshot.explanation && (
+                    <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{selected.approvalSnapshot.explanation}</div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]">
+                    {[
+                      ["来源", selected.approvalSnapshot.source || selected.source],
+                      ["供应商", String((selected.approvalSnapshot.supplier as any)?.name || selected.supplier || "—")],
+                      ["评分", String((selected.approvalSnapshot.supplier as any)?.score || (selected.approvalSnapshot.supplier as any)?.grade || "—")],
+                      ["快照时间", selected.approvalSnapshot.createdAt ? new Date(selected.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—"],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <div style={{ color: A.gray2 }}>{label}</div>
+                        <div className="font-medium truncate" style={{ color: A.label }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {Array.isArray((selected.approvalSnapshot.mrp as any)?.bomSources) && (selected.approvalSnapshot.mrp as any).bomSources.length > 0 && (
+                    <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
+                      <div className="text-[10px] font-semibold mb-1.5" style={{ color: A.purple }}>BOM 展开证据</div>
+                      <div className="space-y-1.5">
+                        {((selected.approvalSnapshot.mrp as any).bomSources as any[]).slice(0, 4).map((source, index) => (
+                          <div key={`${source.parent || index}-${source.top || index}`} className="flex items-center justify-between gap-3 text-[10px]">
+                            <span className="truncate" style={{ color: A.sub }}>
+                              L{source.level || 1} · {source.parentName || source.parent || "父项"}{source.topName ? ` / ${source.topName}` : ""}
+                            </span>
+                            <span className="font-semibold tabular-nums" style={{ color: A.label }}>
+                              {Number(source.demand || 0).toLocaleString()} {selected.unit}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {Array.isArray((selected.approvalSnapshot.mrp as any)?.schedule) && (selected.approvalSnapshot.mrp as any).schedule.length > 0 && (
+                    <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
+                      <div className="text-[10px] font-semibold mb-1.5" style={{ color: A.label }}>MRP 分期证据</div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {((selected.approvalSnapshot.mrp as any).schedule as any[]).slice(0, 3).map((line) => (
+                          <div key={line.period} className="rounded-lg px-2 py-1.5" style={{ background: A.white }}>
+                            <div className="text-[9px]" style={{ color: A.gray2 }}>{line.period}</div>
+                            <div className="text-[10px] font-semibold" style={{ color: A.label }}>
+                              BOM {Number(line.dependentDemand || 0).toLocaleString()} / 入库 {Number(line.plannedReceipt || 0).toLocaleString()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                {selected.status === "待审批" && (
+                  <>
+                    <button onClick={() => approveRequest(selected.pr)}
+                      className="h-8 px-3 rounded-lg text-xs font-semibold text-white" style={{ background: A.blue }}>
+                      批准申请
+                    </button>
+                    <button onClick={() => rejectRequest(selected.pr)}
+                      className="h-8 px-3 rounded-lg text-xs font-semibold" style={{ background: "#fff1f0", color: A.red }}>
+                      驳回
+                    </button>
+                  </>
+                )}
+                {selected.status === "已批准" && (
+                  <button onClick={() => convertRequest(selected.pr)}
+                    className="h-8 px-3 rounded-lg text-xs font-semibold text-white" style={{ background: A.green }}>
+                    转采购订单
+                  </button>
+                )}
+                {selected.linkedPo && (
+                  <span className="h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center"
+                    style={{ background: "#f0faf4", color: A.green }}>
+                    已生成 {selected.linkedPo}
+                  </span>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="py-16 text-center text-xs" style={{ color: A.gray2 }}>选择一张采购申请查看详情</div>
+          )}
+        </Card>
+      </div>
+      <NewPRModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={createManualRequest} />
+    </div>
+  );
+}
+
 function PurchasingOrders() {
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"全部" | POStatus>("全部");
-  const [selectedId, setSelectedId] = useState(orders[1].po);
+  const [selectedId, setSelectedId] = useState(purchaseOrders[0]?.po ?? "");
   const [newOpen, setNewOpen] = useState(false);
   const [trackOpen, setTrackOpen] = useState(false);
 
@@ -3884,7 +6360,9 @@ function PurchasingOrders() {
     return () => { alive = false; };
   }, []);
 
-  const selectedPO = orders.find((o) => o.po === selectedId) ?? orders[0];
+  const selectedPO = orders.find((o) => o.po === selectedId) ?? orders[0] ?? null;
+  const selectedPOLines = poLinesOf(selectedPO);
+  const selectedPOTotals = poTotals(selectedPO);
   const filtered = filter === "全部" ? orders : orders.filter((o) => o.status === filter);
 
   const totalAmount   = orders.reduce((s, o) => s + o.amount, 0);
@@ -3901,24 +6379,40 @@ function PurchasingOrders() {
   }
 
   async function approve(poId: string) {
-    await updatePOStatus(poId, "已审批");
-    toast.success(`${poId} 已批准`, { description: "已写入后端，刷新后仍会保留" });
+    try {
+      await updatePOStatus(poId, "已审批");
+      toast.success(`${poId} 已批准`, { description: "已写入后端，刷新后仍会保留" });
+    } catch (error) {
+      toast.error("采购订单审批失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    }
   }
   async function reject(poId: string) {
-    await updatePOStatus(poId, "已取消");
-    toast.error(`${poId} 已驳回`, { description: "状态已保存到 API 数据源" });
+    try {
+      await updatePOStatus(poId, "已驳回");
+      toast.error(`${poId} 已驳回`, { description: "状态已保存到 API 数据源" });
+    } catch (error) {
+      toast.error("采购订单驳回失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    }
   }
   async function cancel(poId: string) {
     if (!confirm(`确认取消 ${poId}？此操作不可撤销。`)) return;
-    await updatePOStatus(poId, "已取消");
-    toast(`${poId} 已取消`);
+    try {
+      await updatePOStatus(poId, "已取消");
+      toast(`${poId} 已取消`);
+    } catch (error) {
+      toast.error("采购订单取消失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    }
   }
   async function send(poId: string) {
-    await updatePOStatus(poId, "已发出");
-    toast.success(`${poId} 已下发至供应商`, { description: "后端已记录状态变更" });
+    try {
+      await updatePOStatus(poId, "已发出");
+      toast.success(`${poId} 已下发至供应商`, { description: "后端已记录状态变更" });
+    } catch (error) {
+      toast.error("采购订单下发失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    }
   }
   function downloadPDF(poId: string) {
-    toast(`正在生成 ${poId}.pdf …`, { description: "完成后将自动下载" });
+    exportModulePdf(`采购订单 ${poId}`, "新辰智能制造");
   }
 
   return (
@@ -3956,7 +6450,9 @@ function PurchasingOrders() {
                           style={{ background: "#fff8f0", color: A.orange }}>优先级 {q.priority}</span>
                       </div>
                       <div className="text-xs font-medium mb-1" style={{ color: A.label }}>{q.supplier}</div>
-                      <div className="text-[11px] mb-2.5" style={{ color: A.sub }}>{q.items} 行 · {q.owner} 提交</div>
+                      <div className="text-[11px] mb-2.5" style={{ color: A.sub }}>
+                        {q.source === "forecast" ? `${q.sourceSku} · 预测补货` : `${q.items} 行`} · {q.owner} 提交
+                      </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-semibold tracking-tight" style={{ color: A.label }}>{fmt(q.amount)}</span>
                         <div className="flex gap-1.5">
@@ -4016,15 +6512,16 @@ function PurchasingOrders() {
             <table className="w-full text-xs">
               <thead>
                 <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                  {["PO 编号", "供应商", "金额", "项目", "到货进度", "ETA", "状态"].map((h) => (
+                  {["PO 编号", "供应商", "来源", "金额", "项目", "到货进度", "ETA", "状态"].map((h) => (
                     <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((o, i) => {
-                  const pct = o.items === 0 ? 0 : (o.received / o.items) * 100;
-                  const isSel = selectedPO.po === o.po;
+                  const totals = poTotals(o);
+                  const pct = totals.totalOrderedQty === 0 ? 0 : (totals.totalReceivedQty / totals.totalOrderedQty) * 100;
+                  const isSel = selectedPO?.po === o.po;
                   return (
                     <tr key={o.po} onClick={() => setSelectedId(o.po)}
                       className="cursor-pointer transition-colors hover:bg-blue-50/40"
@@ -4034,14 +6531,21 @@ function PurchasingOrders() {
                       }}>
                       <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>{o.po}</td>
                       <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{o.supplier}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                          style={{ background: o.source === "forecast" ? "#f0f6ff" : A.gray6, color: o.source === "forecast" ? A.blue : A.gray1 }}>
+                          {o.source === "forecast" ? <Sparkles size={10} /> : <FileText size={10} />}
+                          {o.source === "forecast" ? "预测" : "手工"}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(o.amount)}</td>
-                      <td className="px-4 py-3" style={{ color: A.sub }}>{o.items}</td>
+                      <td className="px-4 py-3" style={{ color: A.sub }}>{totals.lineCount}</td>
                       <td className="px-4 py-3 w-28">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? A.green : pct > 0 ? A.teal : A.gray4 }} />
                           </div>
-                          <span className="text-[10px] w-8 text-right" style={{ color: A.gray1 }}>{o.received}/{o.items}</span>
+                          <span className="text-[10px] w-12 text-right" style={{ color: A.gray1 }}>{totals.totalReceivedQty}/{totals.totalOrderedQty}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3" style={{ color: A.sub }}>{o.eta}</td>
@@ -4056,6 +6560,12 @@ function PurchasingOrders() {
 
         {/* PO Detail */}
         <Card className="col-span-2 p-5">
+          {!selectedPO ? (
+            <div className="py-16 text-center text-xs" style={{ color: A.gray2 }}>
+              暂无采购订单。可从采购申请批准后转为 PO，或手工新建订单。
+            </div>
+          ) : (
+            <>
           <div className="flex items-start justify-between mb-4">
             <div>
               <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>采购订单详情</div>
@@ -4069,7 +6579,9 @@ function PurchasingOrders() {
               { icon: Truck,    label: "供应商", value: selectedPO.supplier },
               { icon: User,     label: "负责人", value: selectedPO.owner    },
               { icon: Calendar, label: "下单 / ETA", value: `${selectedPO.created} → ${selectedPO.eta}` },
-              { icon: Hash,     label: "明细行 / 已收", value: `${selectedPO.items} 行 / ${selectedPO.received} 行` },
+              { icon: Hash,     label: "明细行 / 数量", value: `${selectedPOTotals.lineCount} 行 / ${selectedPOTotals.totalOrderedQty.toLocaleString()} ${selectedPOLines[0]?.unit || ""}` },
+              { icon: PackageCheck, label: "已收 / 合格", value: `${selectedPOTotals.totalReceivedQty.toLocaleString()} / ${selectedPOTotals.totalAcceptedQty.toLocaleString()}` },
+              { icon: DollarSign, label: "订单金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount) },
             ].map((row) => {
               const Icon = row.icon;
               return (
@@ -4083,6 +6595,107 @@ function PurchasingOrders() {
               );
             })}
           </div>
+
+          <div className="mb-4 pb-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: A.gray2 }}>PO Lines</div>
+              <span className="text-[10px]" style={{ color: A.gray2 }}>
+                items = 明细行数 · 数量看 totalOrderedQty
+              </span>
+            </div>
+            <div className="space-y-2 max-h-72 overflow-auto pr-1">
+              {selectedPOLines.map((line) => {
+                const style = lineStatusStyle(line.status);
+                return (
+                  <div key={line.poLineId} className="rounded-xl p-3" style={{ background: A.gray6 }}>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-[10px] font-semibold truncate" style={{ color: A.blue }}>{line.poLineId}</span>
+                      <span className="text-[10px] px-1.5 py-px rounded-full font-medium shrink-0" style={{ color: style.color, background: style.bg }}>
+                        {lineStatusLabel(line.status)}
+                      </span>
+                    </div>
+                    <div className="text-xs font-semibold truncate" style={{ color: A.label }}>
+                      {line.sku} · {line.itemName}
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 mt-2">
+                      {[
+                        ["订购", line.quantityOrdered],
+                        ["已收", line.quantityReceived],
+                        ["合格", line.quantityAccepted],
+                        ["拒收", line.quantityRejected],
+                      ].map(([label, value]) => (
+                        <div key={label as string} className="rounded-lg px-2 py-1.5" style={{ background: A.white }}>
+                          <div className="text-[9px]" style={{ color: A.gray2 }}>{label}</div>
+                          <div className="text-[11px] font-semibold tabular-nums" style={{ color: A.label }}>
+                            {Number(value).toLocaleString()} {line.unit}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]" style={{ color: A.sub }}>
+                      <span>单价 {line.currency} {toNumber(line.unitPrice).toLocaleString()}</span>
+                      <span className="text-right">仓库 {line.warehouseId || "MAIN"}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {selectedPOLines.length === 0 && (
+                <div className="rounded-xl p-4 text-center text-xs" style={{ background: A.gray6, color: A.gray2 }}>
+                  该订单暂无明细行，已保留原有头信息展示。
+                </div>
+              )}
+            </div>
+          </div>
+
+          {["forecast", "purchase-request", "rfq-award"].includes(selectedPO.source || "") && (
+            <div className="rounded-xl p-3 mb-4" style={{ background: "#f0f6ff", border: "1px solid rgba(0,113,227,0.12)" }}>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold mb-2" style={{ color: A.blue }}>
+                <Sparkles size={12} /> {selectedPO.source === "rfq-award" ? "RFQ 授标依据" : selectedPO.source === "purchase-request" ? "采购申请依据" : "预测生成依据"}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                {[
+                  ...(selectedPO.sourceRequest ? [["来源申请", selectedPO.sourceRequest]] : []),
+                  ...(selectedPO.sourceRfq ? [["来源 RFQ", selectedPO.sourceRfq]] : []),
+                  ["SKU", `${selectedPO.sourceSku || "—"} ${selectedPO.sourceName || ""}`],
+                  ["建议数量", `${Number(selectedPO.recommendedQty || 0).toLocaleString()} ${selectedPO.unit || ""}`],
+                  ["单价", selectedPO.unitPrice ? fmt(selectedPO.unitPrice) : "—"],
+                  ["原因", selectedPO.reason || "预测净缺口触发"],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <div style={{ color: A.gray2 }}>{label}</div>
+                    <div className="font-medium mt-0.5" style={{ color: A.label }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedPO.approvalSnapshot && (
+            <div className="rounded-xl p-3 mb-4" style={{ background: A.gray6, border: "1px solid rgba(0,0,0,0.05)" }}>
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold mb-2" style={{ color: A.label }}>
+                <FileCheck2 size={12} /> 继承审批快照
+              </div>
+              <div className="text-xs font-semibold leading-5" style={{ color: A.label }}>
+                {selectedPO.approvalSnapshot.summary || selectedPO.reason || "已继承采购申请审批依据"}
+              </div>
+              {selectedPO.approvalSnapshot.explanation && (
+                <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{selectedPO.approvalSnapshot.explanation}</div>
+              )}
+              <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]">
+                {[
+                  ["来源", selectedPO.approvalSnapshot.source || selectedPO.source || "—"],
+                  ["来源申请", selectedPO.sourceRequest || "—"],
+                  ["供应商", String((selectedPO.approvalSnapshot.supplier as any)?.name || selectedPO.supplier || "—")],
+                  ["快照时间", selectedPO.approvalSnapshot.createdAt ? new Date(selectedPO.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—"],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <div style={{ color: A.gray2 }}>{label}</div>
+                    <div className="font-medium truncate" style={{ color: A.label }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Timeline */}
           <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: A.gray2 }}>流程进度</div>
@@ -4147,6 +6760,8 @@ function PurchasingOrders() {
               </button>
             )}
           </div>
+            </>
+          )}
         </Card>
       </div>
 
@@ -4158,7 +6773,7 @@ function PurchasingOrders() {
           });
           setOrders((arr) => [created, ...arr]);
           setSelectedId(created.po);
-          toast.success(`${created.po} 已提交`, { description: "采购申请已写入后端数据文件" });
+          return created;
         }} />
       <TrackShipmentModal open={trackOpen} onClose={() => setTrackOpen(false)} po={selectedPO} />
     </div>
@@ -4166,14 +6781,38 @@ function PurchasingOrders() {
 }
 
 // ─── Scan Receive Modal ─────────────────────────────────────────────────────
-function ScanReceiveModal({ open, onClose, onReceive }: {
+function ScanReceiveModal({ open, onClose, candidates, onReceive }: {
   open: boolean; onClose: () => void;
   candidates: PurchaseOrder[];
-  onReceive: (grn: string, po: string) => void;
+  onReceive: (grn: string, po: string, lines: ReceivingDocLine[]) => void | Promise<void>;
 }) {
   const [scan, setScan] = useState("");
   const [scanning, setScanning] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
+  const selectedPO = candidates.find((c) => c.po === scan);
+  const openLines = poLinesOf(selectedPO).filter((line) => lineRemaining(line) > 0);
+  const [lineDrafts, setLineDrafts] = useState<ReceivingDocLine[]>([]);
+
+  useEffect(() => {
+    if (!selectedPO) {
+      setLineDrafts([]);
+      return;
+    }
+    setLineDrafts(openLines.map((line) => {
+      const remaining = lineRemaining(line);
+      return {
+        poLineId: line.poLineId,
+        poId: selectedPO.po,
+        sku: line.sku,
+        itemName: line.itemName,
+        receivedQty: remaining,
+        acceptedQty: remaining,
+        rejectedQty: 0,
+        warehouseId: line.warehouseId || "MAIN",
+        unit: line.unit,
+      };
+    }));
+  }, [selectedPO?.po]);
 
   function simulateScan() {
     if (candidates.length === 0) {
@@ -4188,14 +6827,40 @@ function ScanReceiveModal({ open, onClose, onReceive }: {
     }, 900);
   }
 
-  function confirm() {
+  function updateLine(index: number, field: keyof ReceivingDocLine, value: string | number) {
+    setLineDrafts((arr) => arr.map((line, i) => i === index ? { ...line, [field]: value } : line));
+  }
+
+  function validationMessage() {
+    if (!selectedPO) return "PO 编号无效或不在可收货状态";
+    if (lineDrafts.length === 0) return "该 PO 没有剩余可收货明细";
+    for (const [index, line] of lineDrafts.entries()) {
+      const received = toNumber(line.receivedQty);
+      const accepted = toNumber(line.acceptedQty);
+      const rejected = toNumber(line.rejectedQty);
+      const sourceLine = openLines[index];
+      if ([received, accepted, rejected].some((n) => n < 0)) return `${line.sku} 数量不能为负数`;
+      if (accepted + rejected !== received) return `${line.sku} 合格 + 拒收必须等于本次收货`;
+      if (received > lineRemaining(sourceLine)) return `${line.sku} 超过剩余可收货数量`;
+    }
+    return "";
+  }
+
+  async function confirm() {
     const po = candidates.find((c) => c.po === scan);
     if (!po) { toast.error("PO 编号无效或不在可收货状态"); return; }
+    const error = validationMessage();
+    if (error) { toast.error(error); return; }
     const grn = `GRN-202605-${String(424 + recent.length).padStart(4, "0")}`;
-    onReceive(grn, po.po);
+    await onReceive(grn, po.po, lineDrafts.map((line) => ({
+      ...line,
+      receivedQty: toNumber(line.receivedQty),
+      acceptedQty: toNumber(line.acceptedQty),
+      rejectedQty: toNumber(line.rejectedQty),
+    })));
     setRecent([grn, ...recent].slice(0, 5));
     setScan("");
-    toast.success(`${grn} 已创建`, { description: `${po.supplier} · ${po.items} 行待质检` });
+    toast.success(`${grn} 已创建`, { description: `${po.supplier} · ${lineDrafts.length} 行待质检` });
   }
 
   return (
@@ -4230,21 +6895,70 @@ function ScanReceiveModal({ open, onClose, onReceive }: {
         </Field>
       </div>
 
+      {selectedPO && (
+        <div className="mt-5">
+          <div className="text-[11px] mb-2 font-medium" style={{ color: A.sub }}>本次收货明细</div>
+          <div className="space-y-2 max-h-72 overflow-auto pr-1">
+            {lineDrafts.map((line, index) => {
+              const remaining = lineRemaining(openLines[index]);
+              return (
+                <div key={line.poLineId || `${line.sku}-${index}`} className="rounded-xl p-3" style={{ background: A.gray6 }}>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold truncate" style={{ color: A.blue }}>{line.poLineId}</div>
+                      <div className="text-xs font-medium truncate" style={{ color: A.label }}>{line.sku} · {line.itemName}</div>
+                    </div>
+                    <span className="text-[10px] shrink-0" style={{ color: A.gray2 }}>剩余 {remaining} {line.unit}</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      ["receivedQty", "收货"],
+                      ["acceptedQty", "合格"],
+                      ["rejectedQty", "拒收"],
+                    ].map(([field, label]) => (
+                      <Field key={field} label={label}>
+                        <input type="number" min={0}
+                          value={String((line as any)[field] ?? 0)}
+                          onChange={(e) => updateLine(index, field as keyof ReceivingDocLine, Number(e.target.value))}
+                          style={inputStyle} />
+                      </Field>
+                    ))}
+                    <Field label="仓库">
+                      <input value={line.warehouseId || ""}
+                        onChange={(e) => updateLine(index, "warehouseId", e.target.value)}
+                        style={inputStyle} />
+                    </Field>
+                  </div>
+                </div>
+              );
+            })}
+            {lineDrafts.length === 0 && (
+              <div className="rounded-xl p-4 text-center text-xs" style={{ background: A.gray6, color: A.gray2 }}>
+                该 PO 没有剩余可收货明细。
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="mt-5">
         <div className="text-[11px] mb-2 font-medium" style={{ color: A.sub }}>可收货 PO ({candidates.length})</div>
         <div className="space-y-1.5 max-h-40 overflow-auto">
-          {candidates.map((p) => (
-            <button key={p.po} onClick={() => setScan(p.po)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors"
-              style={{
-                background: scan === p.po ? "#f0f6ff" : A.gray6,
-                border: `1px solid ${scan === p.po ? A.blue + "40" : "transparent"}`,
-              }}>
-              <span className="font-medium" style={{ color: A.blue }}>{p.po}</span>
-              <span style={{ color: A.label }}>{p.supplier}</span>
-              <span style={{ color: A.sub }}>{p.received}/{p.items} 行</span>
-            </button>
-          ))}
+          {candidates.map((p) => {
+            const totals = poTotals(p);
+            return (
+              <button key={p.po} onClick={() => setScan(p.po)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors"
+                style={{
+                  background: scan === p.po ? "#f0f6ff" : A.gray6,
+                  border: `1px solid ${scan === p.po ? A.blue + "40" : "transparent"}`,
+                }}>
+                <span className="font-medium" style={{ color: A.blue }}>{p.po}</span>
+                <span style={{ color: A.label }}>{p.supplier}</span>
+                <span style={{ color: A.sub }}>{totals.totalReceivedQty}/{totals.totalOrderedQty}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -4265,6 +6979,174 @@ function ScanReceiveModal({ open, onClose, onReceive }: {
 
 // ─── QC Inspection Modal ────────────────────────────────────────────────────
 function QCModal({ open, onClose, grn, onComplete }: {
+  open: boolean; onClose: () => void;
+  grn: ReceivingDoc | null;
+  onComplete: (grnId: string, lines: ReceivingDocLine[], warehouse: string) => void;
+}) {
+  const [lineDrafts, setLineDrafts] = useState<ReceivingDocLine[]>([]);
+  const [warehouse, setWarehouse] = useState("MAIN");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (!grn) return;
+    const lines = grnLinesOf(grn);
+    setLineDrafts(lines.map((line) => ({
+      ...line,
+      acceptedQty: toNumber(line.acceptedQty, toNumber(line.receivedQty)),
+      rejectedQty: toNumber(line.rejectedQty),
+      warehouseId: line.warehouseId || grn.warehouse || "MAIN",
+    })));
+    setWarehouse(lines[0]?.warehouseId || grn.warehouse || "MAIN");
+  }, [grn?.grn, grn?.status]);
+
+  if (!grn) return null;
+  const posted = isPostedGrn(grn);
+  const totalReceived = lineDrafts.reduce((sum, line) => sum + toNumber(line.receivedQty), 0);
+  const totalAccepted = lineDrafts.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
+  const totalRejected = lineDrafts.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
+
+  function updateLine(index: number, field: keyof ReceivingDocLine, value: string | number) {
+    if (posted) return;
+    setLineDrafts((arr) => arr.map((line, i) => i === index ? { ...line, [field]: value } : line));
+  }
+
+  function validationMessage() {
+    for (const line of lineDrafts) {
+      const received = toNumber(line.receivedQty);
+      const accepted = toNumber(line.acceptedQty);
+      const rejected = toNumber(line.rejectedQty);
+      if ([received, accepted, rejected].some((n) => n < 0)) return `${line.sku} 数量不能为负数`;
+      if (accepted > received) return `${line.sku} 合格数不能超过收货数`;
+      if (rejected > received) return `${line.sku} 拒收数不能超过收货数`;
+      if (accepted + rejected !== received) return `${line.sku} 合格 + 拒收必须等于本次收货`;
+      if (!line.poLineId) return `${line.sku} 缺少 PO line 引用`;
+    }
+    return "";
+  }
+
+  function submit() {
+    const error = validationMessage();
+    if (error) { toast.error(error); return; }
+    onComplete(grn.grn, lineDrafts.map((line) => ({
+      ...line,
+      receivedQty: toNumber(line.receivedQty),
+      acceptedQty: toNumber(line.acceptedQty),
+      rejectedQty: toNumber(line.rejectedQty),
+      warehouseId: line.warehouseId || warehouse,
+    })), warehouse);
+    toast.success(`${grn.grn} 质检完成`, {
+      description: `合格 ${totalAccepted} · 拒收 ${totalRejected} · 收货 ${totalReceived}`,
+    });
+    onClose();
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} width={760}
+      title={`质检 · ${grn.grn}`} subtitle={`${grn.supplier} · 关联 ${grn.po} · ${lineDrafts.length} 行明细`}
+      footer={
+        <>
+          <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg font-medium"
+            style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.1)" }}>
+            {posted ? "关闭" : "稍后处理"}
+          </button>
+          {!posted && (
+            <button onClick={submit}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium text-white flex items-center gap-1.5"
+              style={{ background: A.blue }}>
+              <FileCheck2 size={11} /> 完成质检并入库
+            </button>
+          )}
+        </>
+      }>
+      {posted && (
+        <div className="rounded-xl p-3 mb-4" style={{ background: "#fff8f0", border: "1px solid rgba(255,149,0,0.18)" }}>
+          <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: A.orange }}>
+            <Lock size={12} /> 已过账 GRN 只读
+          </div>
+          <div className="text-[11px] mt-1 leading-5" style={{ color: A.sub }}>
+            已过账收货单不能直接修改数量、SKU、PO line 或仓库；后续需要正式冲销/退货流程。
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
+          <div className="text-[10px]" style={{ color: A.gray1 }}>本次收货</div>
+          <div className="text-xl font-semibold tabular-nums" style={{ color: A.label }}>{totalReceived}</div>
+        </div>
+        <div className="rounded-xl p-3" style={{ background: "#f0faf4" }}>
+          <div className="text-[10px]" style={{ color: A.green }}>合格入库</div>
+          <div className="text-xl font-semibold tabular-nums" style={{ color: A.green }}>{totalAccepted}</div>
+        </div>
+        <div className="rounded-xl p-3" style={{ background: "#fff1f0" }}>
+          <div className="text-[10px]" style={{ color: A.red }}>拒收隔离</div>
+          <div className="text-xl font-semibold tabular-nums" style={{ color: A.red }}>{totalRejected}</div>
+        </div>
+      </div>
+
+      {(grn.postedAt || grn.postedBy || typeof grn.inventoryApplied === "boolean" || grn.inventoryMovementIds?.length) && (
+        <div className="rounded-xl p-3 mb-4" style={{ background: A.gray6 }}>
+          <div className="text-[11px] font-semibold mb-2" style={{ color: A.label }}>过账与库存应用</div>
+          <div className="grid grid-cols-2 gap-2 text-[10px]">
+            <div><span style={{ color: A.gray2 }}>postedAt</span><div className="font-medium" style={{ color: A.label }}>{grn.postedAt ? new Date(grn.postedAt).toLocaleString("zh-CN") : "—"}</div></div>
+            <div><span style={{ color: A.gray2 }}>postedBy</span><div className="font-medium" style={{ color: A.label }}>{grn.postedBy || "—"}</div></div>
+            <div><span style={{ color: A.gray2 }}>inventoryApplied</span><div className="font-medium" style={{ color: grn.inventoryApplied ? A.green : A.gray1 }}>{grn.inventoryApplied ? "true" : "false"}</div></div>
+            <div><span style={{ color: A.gray2 }}>movementIds</span><div className="font-medium truncate" style={{ color: A.blue }}>{grn.inventoryMovementIds?.join(", ") || "—"}</div></div>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-xl overflow-hidden" style={{ border: `0.5px solid ${A.gray4}` }}>
+        <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_1fr] gap-2 px-3 py-2 text-[10px] font-medium" style={{ color: A.gray1, background: A.gray6 }}>
+          <span>PO Line / SKU</span><span>收货</span><span>合格</span><span>拒收</span><span>仓库</span>
+        </div>
+        <div className="max-h-72 overflow-auto">
+          {lineDrafts.map((line, index) => (
+            <div key={line.grnLineId || line.poLineId || index}
+              className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_1fr] gap-2 px-3 py-2.5 text-xs items-center"
+              style={{ borderTop: index > 0 ? "0.5px solid rgba(0,0,0,0.05)" : "none" }}>
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold truncate" style={{ color: A.blue }}>{line.poLineId || "legacy-match-by-sku"}</div>
+                <div className="font-medium truncate" style={{ color: A.label }}>{line.sku} · {line.itemName}</div>
+              </div>
+              {(["receivedQty", "acceptedQty", "rejectedQty"] as const).map((field) => (
+                <input key={field} type="number" min={0} disabled={posted}
+                  value={String(line[field] ?? 0)}
+                  onChange={(e) => updateLine(index, field, Number(e.target.value))}
+                  style={{ ...inputStyle, height: 32, color: posted ? A.gray1 : A.label }} />
+              ))}
+              <input disabled={posted} value={line.warehouseId || ""}
+                onChange={(e) => updateLine(index, "warehouseId", e.target.value)}
+                style={{ ...inputStyle, height: 32, color: posted ? A.gray1 : A.label }} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mt-5">
+        <Field label="默认入库库区">
+          <input value={warehouse} disabled={posted}
+            onChange={(e) => setWarehouse(e.target.value)}
+            style={{ ...inputStyle, color: posted ? A.gray1 : A.label }} />
+        </Field>
+        <Field label="质检员">
+          <input value={grn.receiver || "刘建华"} disabled style={{ ...inputStyle, color: A.sub }} />
+        </Field>
+      </div>
+
+      <div className="mt-4">
+        <Field label="备注（异常说明）">
+          <textarea value={notes} disabled={posted}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={posted ? "已过账记录只读" : "可记录拒收、短装、破损、让步接收原因"}
+            style={{ ...inputStyle, minHeight: 72, resize: "vertical", color: posted ? A.gray1 : A.label }} />
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+function LegacyQCModal({ open, onClose, grn, onComplete }: {
   open: boolean; onClose: () => void;
   grn: ReceivingDoc | null;
   onComplete: (grnId: string, passed: number, failed: number, warehouse: string) => void;
@@ -4389,10 +7271,29 @@ function QCModal({ open, onClose, grn, onComplete }: {
 
 // ─── Purchasing · RFQ ─────────────────────────────────────────────────────────
 function PurchasingRFQ() {
-  const [rfqs, setRfqs] = useState(RFQS);
-  const award = (id: string) => {
-    setRfqs(prev => prev.map(r => r.id === id ? { ...r, status: "已授标" as const } : r));
-    toast.success(`${id} 已授标`, { description: "已自动生成 PO 草稿并发送给供应商" });
+  const [rfqs, setRfqs] = useState<RfqRecord[]>(RFQS);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    apiJson<RfqRecord[]>("/api/rfqs")
+      .then((data) => { if (alive) setRfqs(data); })
+      .catch(() => toast.error("RFQ API 未连接", { description: "已显示本地样例询价单" }))
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const award = async (id: string) => {
+    try {
+      const updated = await apiJson<RfqRecord>(`/api/rfqs/${encodeURIComponent(id)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "已授标" }),
+      });
+      setRfqs(prev => prev.map(r => r.id === id ? updated : r));
+      toast.success(`${id} 已授标`, { description: updated.linkedPo ? `已生成 ${updated.linkedPo} 待审批订单` : "询价结果已写回后端" });
+    } catch (error) {
+      toast.error("RFQ 授标失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    }
   };
 
   const totalSavings = 124800;
@@ -4400,7 +7301,7 @@ function PurchasingRFQ() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="活动询价" value={String(rfqs.length)} sub="近 30 天" delta="+2" positive icon={FileSpreadsheet} color={A.blue} />
+        <KpiCard label="活动询价" value={String(rfqs.length)} sub={loading ? "加载中" : "近 30 天"} delta="+2" positive icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="参与供应商" value={String(rfqs.reduce((a, b) => a + b.suppliers, 0))} sub="累计邀请" icon={Building2} color={A.purple} />
         <KpiCard label="本月节省" value={`¥${(totalSavings / 1e4).toFixed(1)}万`} sub="vs 目录价" delta="+18%" positive icon={TrendingUp} color={A.green} />
         <KpiCard label="平均周期" value="4.8 天" sub="发出 → 授标" delta="-1.2d" positive icon={Clock} color={A.teal} />
@@ -4422,7 +7323,14 @@ function PurchasingRFQ() {
             {rfqs.map((r, i) => (
               <tr key={r.id} style={{ borderBottom: i < rfqs.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                 <td className="px-5 py-3 font-medium" style={{ color: A.blue }}>{r.id}</td>
-                <td className="px-5 py-3 font-medium" style={{ color: A.label }}>{r.title}</td>
+                <td className="px-5 py-3 font-medium" style={{ color: A.label }}>
+                  <div>{r.title}</div>
+                {(r.sourceRequest || r.linkedPo) && (
+                  <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>
+                    {[r.sourceRequest, r.sourceSku, r.linkedPo ? `已生成 ${r.linkedPo}` : ""].filter(Boolean).join(" · ")}
+                  </div>
+                )}
+                </td>
                 <td className="px-5 py-3" style={{ color: A.sub }}>{r.category}</td>
                 <td className="px-5 py-3" style={{ color: A.label }}>
                   <span style={{ color: A.green, fontWeight: 500 }}>{r.quoted}</span>
@@ -4621,32 +7529,55 @@ function PurchasingPayment() {
 
 // ─── Purchasing · Supplier Portal ─────────────────────────────────────────────
 function PurchasingPortal() {
+  const [suppliers, setSuppliers] = useState<SupplierPerformance[]>(PORTAL_SUPPLIERS);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    apiJson<SupplierPerformance[]>("/api/supplier-performance")
+      .then((data) => { if (alive) setSuppliers(data); })
+      .catch(() => toast.error("供应商绩效 API 未连接", { description: "已显示本地样例绩效" }))
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  const strategic = suppliers.filter(s => s.flag === "战略").length;
+  const avgRating = suppliers.length ? suppliers.reduce((a, b) => a + Number(b.rating || 0), 0) / suppliers.length : 0;
+  const rectifying = suppliers.filter(s => s.flag === "整改").length;
+  const exceptions = suppliers.reduce((sum, item) => sum + Number(item.exceptions || 0), 0);
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="注册供应商" value={String(PORTAL_SUPPLIERS.length)} sub="活动" icon={Building2}    color={A.blue} />
-        <KpiCard label="战略供应商" value={String(PORTAL_SUPPLIERS.filter(s => s.flag === "战略").length)} sub="核心合作" icon={Handshake} color={A.purple} />
-        <KpiCard label="平均评分"   value={(PORTAL_SUPPLIERS.reduce((a, b) => a + b.rating, 0) / PORTAL_SUPPLIERS.length).toFixed(1)} sub="5 分制" delta="+0.2" positive icon={Sparkles} color={A.green} />
-        <KpiCard label="整改中"     value={String(PORTAL_SUPPLIERS.filter(s => s.flag === "整改").length)} sub="质量 / 交付预警" icon={AlertTriangle} color={A.red} />
+        <KpiCard label="注册供应商" value={String(suppliers.length)} sub={loading ? "加载绩效" : "活动"} icon={Building2} color={A.blue} />
+        <KpiCard label="战略供应商" value={String(strategic)} sub="核心合作" icon={Handshake} color={A.purple} />
+        <KpiCard label="平均评分"   value={avgRating.toFixed(1)} sub="5 分制" delta={exceptions ? `${exceptions} 起质检异常` : "+0.2"} positive={!exceptions} icon={Sparkles} color={A.green} />
+        <KpiCard label="整改中"     value={String(rectifying)} sub="质量 / 交付预警" icon={AlertTriangle} color={A.red} />
       </div>
 
       <Card>
         <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商绩效记分卡</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商绩效记分卡</h2>
+            <span className="text-[11px]" style={{ color: A.gray2 }}>PO + GRN 质检动态评分</span>
+          </div>
         </div>
         <table className="w-full text-xs">
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["供应商", "评级", "准时率", "合格率", "响应度", "YTD PO", "YTD 采购额", "战略分级"].map(h => (
+              {["供应商", "评级", "准时率", "动态合格率", "质检异常", "YTD PO", "YTD 采购额", "战略分级"].map(h => (
                 <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {PORTAL_SUPPLIERS.map((s, i) => (
-              <tr key={s.name} style={{ borderBottom: i < PORTAL_SUPPLIERS.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className="px-5 py-3 font-medium" style={{ color: A.label }}>{s.name}</td>
-                <td className="px-5 py-3 font-medium" style={{ color: s.rating >= 4.5 ? A.green : s.rating >= 4.0 ? A.blue : A.orange }}>{s.rating.toFixed(1)} ★</td>
+            {suppliers.map((s, i) => (
+              <tr key={s.name} style={{ borderBottom: i < suppliers.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                <td className="px-5 py-3 font-medium" style={{ color: A.label }}>
+                  <div>{s.name}</div>
+                  <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>{s.category || "供应商"}{s.lastIssue ? ` · ${s.lastIssue}` : ""}</div>
+                </td>
+                <td className="px-5 py-3 font-medium" style={{ color: s.rating >= 4.5 ? A.green : s.rating >= 4.0 ? A.blue : A.orange }}>{Number(s.rating || 0).toFixed(1)} ★</td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2">
                     <div className="w-14 h-1 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
@@ -4663,7 +7594,10 @@ function PurchasingPortal() {
                     <span className="text-[11px] font-medium" style={{ color: A.label }}>{s.quality}%</span>
                   </div>
                 </td>
-                <td className="px-5 py-3" style={{ color: A.sub }}>{s.resp}</td>
+                <td className="px-5 py-3">
+                  <div className="font-medium" style={{ color: Number(s.exceptions || 0) > 0 ? A.red : A.green }}>{Number(s.exceptions || 0)} 起</div>
+                  <div className="text-[10px]" style={{ color: A.gray2 }}>拒收率 {Number(s.rejectRate || 0).toFixed(1)}%</div>
+                </td>
                 <td className="px-5 py-3" style={{ color: A.label }}>{s.po}</td>
                 <td className="px-5 py-3 font-medium" style={{ color: A.blue }}>¥{(s.spend / 1e4).toFixed(0)}万</td>
                 <td className="px-5 py-3">
@@ -4681,11 +7615,12 @@ function PurchasingPortal() {
 }
 
 // ─── Receiving Panel ─────────────────────────────────────────────────────────
-function RecvStatusPill({ status }: { status: RecvStatus }) {
-  const m = recvStatusMeta[status];
+function RecvStatusPill({ status }: { status: string }) {
+  const displayStatus = status || "未知状态";
+  const m = recvStatusMeta[displayStatus as RecvStatus] ?? { color: A.gray1, bg: A.gray6 };
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
-      style={{ color: m.color, background: m.bg }}>{status}</span>
+      style={{ color: m.color, background: m.bg }}>{displayStatus}</span>
   );
 }
 
@@ -5031,15 +7966,21 @@ function ReceivingOps() {
   const exceptions    = docs.filter((d) => d.status === "异常处理").length;
   const pending       = docs.filter((d) => d.status === "待收货").length;
 
-  async function startReceive(grnId: string, poId: string) {
+  async function startReceive(grnId: string, poId: string, lines: ReceivingDocLine[]) {
     const po = orders.find((p) => p.po === poId);
+    const receivedQty = lines.reduce((sum, line) => sum + toNumber(line.receivedQty), 0);
+    const acceptedQty = lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
+    const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
     const created = await apiJson<ReceivingDoc>("/api/receiving-docs", {
       method: "POST",
       body: JSON.stringify({
         grn: grnId,
         po: poId,
         supplier: po?.supplier,
-        items: po?.items,
+        items: receivedQty,
+        passed: acceptedQty,
+        failed: rejectedQty,
+        lines,
         status: "质检中",
       }),
     });
@@ -5048,7 +7989,6 @@ function ReceivingOps() {
   }
 
   function openQC(grn: ReceivingDoc) {
-    if (grn.status === "已入库") { toast(`${grn.grn} 已完成入库`); return; }
     if (grn.status === "待收货") { toast.error(`${grn.grn} 尚未签收，请先签收`); return; }
     setActiveGrn(grn);
     setQcOpen(true);
@@ -5063,10 +8003,13 @@ function ReceivingOps() {
     toast.success(`${grn.grn} 已签收`, { description: "已转入质检流程" });
   }
 
-  async function completeQC(grnId: string, passed: number, failed: number, warehouse: string) {
+  async function completeQC(grnId: string, lines: ReceivingDocLine[], warehouse: string) {
+    const passed = lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
+    const failed = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
+    const items = lines.reduce((sum, line) => sum + toNumber(line.receivedQty), 0);
     const updated = await apiJson<ReceivingDoc>(`/api/receiving-docs/${encodeURIComponent(grnId)}`, {
       method: "PATCH",
-      body: JSON.stringify({ passed, failed, warehouse, status: failed > 0 ? "异常处理" : "已入库" }),
+      body: JSON.stringify({ lines, passed, failed, items, warehouse, status: failed > 0 ? "异常处理" : "已入库" }),
     });
     setDocs((arr) => arr.map((d) => d.grn === grnId ? updated : d));
     const refreshedOrders = await apiJson<PurchaseOrder[]>("/api/purchase-orders");
@@ -5074,12 +8017,9 @@ function ReceivingOps() {
   }
 
   async function resolveException(grnId: string, action: string) {
-    const updated = await apiJson<ReceivingDoc>(`/api/receiving-docs/${encodeURIComponent(grnId)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "已入库", failed: 0 }),
+    toast.warning(`异常处理需要退货/冲销流程：${action}`, {
+      description: `${grnId} 已过账数据不能直接改为已入库，避免重复加库存。`,
     });
-    setDocs((arr) => arr.map((d) => d.grn === grnId ? updated : d));
-    toast.success(`异常已处理：${action}`);
   }
 
   return (
@@ -5184,21 +8124,34 @@ function ReceivingOps() {
             </tr>
           </thead>
           <tbody>
-            {docs.map((r, i) => (
+            {docs.map((r, i) => {
+              const lines = grnLinesOf(r);
+              const receivedQty = lines.reduce((sum, line) => sum + toNumber(line.receivedQty), 0);
+              const acceptedQty = lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
+              const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
+              return (
               <tr key={r.grn} className="hover:bg-blue-50/40 transition-colors"
                 style={{ borderBottom: i < docs.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>{r.grn}</td>
+                <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>
+                  <div>{r.grn}</div>
+                  {isPostedGrn(r) && (
+                    <div className="text-[9px] font-normal truncate" style={{ color: A.gray2 }}>
+                      {r.postedAt ? `posted ${new Date(r.postedAt).toLocaleString("zh-CN")}` : "posted"}
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-3" style={{ color: A.indigo }}>{r.po}</td>
                 <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{r.supplier}</td>
                 <td className="px-4 py-3" style={{ color: A.sub }}>{r.arrived}</td>
                 <td className="px-4 py-3"><Chip label={r.dock} color={A.indigo} bg="#eef0ff" /></td>
                 <td className="px-4 py-3" style={{ color: A.label }}>{r.receiver}</td>
                 <td className="px-4 py-3 tabular-nums">
-                  <span style={{ color: A.green }}>{r.passed}</span>
+                  <span style={{ color: A.green }}>{acceptedQty}</span>
                   <span style={{ color: A.gray3 }}> / </span>
-                  <span style={{ color: r.failed > 0 ? A.red : A.gray3 }}>{r.failed}</span>
+                  <span style={{ color: rejectedQty > 0 ? A.red : A.gray3 }}>{rejectedQty}</span>
                   <span style={{ color: A.gray3 }}> / </span>
-                  <span style={{ color: A.label }}>{r.items}</span>
+                  <span style={{ color: A.label }}>{receivedQty}</span>
+                  <div className="text-[9px]" style={{ color: A.gray2 }}>{lines.length} lines</div>
                 </td>
                 <td className="px-4 py-3" style={{ color: r.warehouse === "—" ? A.gray3 : A.label }}>{r.warehouse}</td>
                 <td className="px-4 py-3"><RecvStatusPill status={r.status} /></td>
@@ -5216,18 +8169,19 @@ function ReceivingOps() {
                     </button>
                   )}
                   {r.status === "异常处理" && (
-                    <button onClick={() => resolveException(r.grn, "已退货并补发")}
+                    <button onClick={() => openQC(r)}
                       className="text-[11px] px-2 py-1 rounded-md font-medium hover:bg-red-100 transition-colors"
-                      style={{ background: "#fff1f0", color: A.red }}>处理异常</button>
+                      style={{ background: "#fff1f0", color: A.red }}>查看异常</button>
                   )}
                   {r.status === "已入库" && (
-                    <button onClick={() => toast(`${r.grn} 详情`, { description: `入库 ${r.warehouse} · ${r.passed} 件合格` })}
+                    <button onClick={() => openQC(r)}
                       className="text-[11px] px-2 py-1 rounded-md font-medium hover:bg-gray-200 transition-colors"
                       style={{ background: A.gray6, color: A.label }}>查看</button>
                   )}
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </Card>
@@ -5270,7 +8224,7 @@ function ReceivingOps() {
       </Card>
 
       <ScanReceiveModal open={scanOpen} onClose={() => setScanOpen(false)}
-        candidates={orders.filter((p) => ["已发出", "部分到货"].includes(p.status))}
+        candidates={orders.filter((p) => ["已发出", "部分到货"].includes(p.status) && poLinesOf(p).some((line) => lineRemaining(line) > 0))}
         onReceive={startReceive} />
       <QCModal open={qcOpen} onClose={() => setQcOpen(false)} grn={activeGrn} onComplete={completeQC} />
     </div>
@@ -5281,7 +8235,7 @@ function ReceivingOps() {
 const PAGE_LABELS: Record<string, string> = {
   overview: "运营总览", inventory: "库存管理",
   sales: "产品销售", forecast: "预测分析",
-  purchasing: "采购订单", receiving: "收货管理",
+  purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "询价 RFQ", receiving: "收货管理",
   procurement: "采购费用",
 };
 
@@ -5399,8 +8353,59 @@ function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => 
   );
 }
 
+type PanelErrorBoundaryProps = {
+  children: React.ReactNode;
+  moduleLabel: string;
+};
+
+type PanelErrorBoundaryState = {
+  hasError: boolean;
+  errorMessage: string;
+};
+
+class PanelErrorBoundary extends React.Component<PanelErrorBoundaryProps, PanelErrorBoundaryState> {
+  state: PanelErrorBoundaryState = { hasError: false, errorMessage: "" };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMessage: error.message || "未知错误" };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("FlowChain module crashed", error);
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <Card className="p-8">
+        <div className="max-w-xl">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+            style={{ background: "#fff1f0", color: A.red }}>
+            <AlertTriangle size={18} />
+          </div>
+          <h2 className="text-base font-semibold mb-2" style={{ color: A.label }}>
+            {this.props.moduleLabel}模块加载失败
+          </h2>
+          <p className="text-sm leading-6 mb-5" style={{ color: A.gray1 }}>
+            页面数据已经保留，当前只是这个模块渲染时遇到异常，不会退出登录。错误信息：{this.state.errorMessage}
+          </p>
+          <button
+            onClick={() => this.setState({ hasError: false, errorMessage: "" })}
+            className="h-9 px-4 rounded-lg text-sm font-semibold text-white"
+            style={{ background: A.blue }}>
+            重新加载模块
+          </button>
+        </div>
+      </Card>
+    );
+  }
+}
+
 export default function App() {
   const [active, setActive] = useState("overview");
+  const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(null);
+  const [replenishmentSku, setReplenishmentSku] = useState<string | null>(null);
   const [aiVisible, setAiVisible] = useState(true);
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
   const [user, setUser] = useState<DemoUser | null>(() => {
@@ -5412,12 +8417,71 @@ export default function App() {
     }
   });
 
+  function prepareReplenishmentRequest(sku: string) {
+    const item = inventoryItems.find((entry) => entry.sku === sku);
+    if (!item) {
+      toast.error("未找到库存 SKU", { description: sku });
+      return;
+    }
+    const plan = inventoryPlan(item);
+    if (plan.suggestedQty <= 0) {
+      toast("当前无需生成 PR", { description: `${item.sku} 仍高于再订货点，建议继续监控。` });
+      setActive("inventory");
+      return;
+    }
+    if (plan.needsSourcing) {
+      toast("请先补齐供应商与报价", { description: `${item.sku} 已低于 ROP，但缺少有效供应商或单价，建议先发起 RFQ。` });
+      setPurchaseIntent({ sourceSku: item.sku, createdAt: Date.now() });
+      setActive("purchaseRequests");
+      return;
+    }
+    setReplenishmentSku(sku);
+  }
+
+  async function submitReplenishmentRequest(item: typeof inventoryItems[number], values: { quantity: number; requiredDate: string; reason: string }) {
+    const quantity = Number(values.quantity || 0);
+    if (quantity <= 0) {
+      toast.error("申请数量必须大于 0");
+      return;
+    }
+    try {
+      const created = await apiJson<PurchaseRequest>("/api/purchase-requests", {
+        method: "POST",
+        body: JSON.stringify(inventoryPurchaseRequestPayload(item, values)),
+      });
+      setPurchaseIntent({ selectedPr: created.pr, sourceSku: item.sku, createdAt: Date.now() });
+      setReplenishmentSku(null);
+      setActive("purchaseRequests");
+      toast.success(`${created.pr} 已生成`, { description: `${item.name} · ${quantity.toLocaleString()} ${created.unit}` });
+    } catch (error) {
+      const existing = await apiJson<PurchaseRequest[]>("/api/purchase-requests")
+        .then((requests) => requests.find((request) =>
+          request.source === "inventory" &&
+          request.sourceSku === item.sku &&
+          !["已转PO", "已驳回", "已取消"].includes(request.status)
+        ))
+        .catch(() => null);
+      if (existing) {
+        setPurchaseIntent({ selectedPr: existing.pr, sourceSku: item.sku, createdAt: Date.now() });
+        setReplenishmentSku(null);
+        setActive("purchaseRequests");
+        toast("已有未关闭采购申请", { description: `${existing.pr} 已自动定位。` });
+        return;
+      }
+      toast.error("补货 PR 生成失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+    }
+  }
+
+  const replenishmentItem = replenishmentSku ? inventoryItems.find((item) => item.sku === replenishmentSku) ?? null : null;
+
   const panels: Record<string, React.ReactNode> = {
-    overview:    <OverviewPanel />,
+    overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} />,
     inventory:   <InventoryPanel />,
     sales:       <SalesPanel />,
     forecast:    <ForecastPanel />,
-    purchasing:  <PurchasingPanel />,
+    purchaseRequests: <PurchasingRequests intent={purchaseIntent} onOpenRfq={() => setActive("rfq")} />,
+    purchasing:  <PurchasingOrders />,
+    rfq:         <PurchasingRFQ />,
     receiving:   <ReceivingPanel />,
     procurement: <ProcurementPanel />,
   };
@@ -5443,6 +8507,12 @@ export default function App() {
       <Toaster position="top-right" toastOptions={{
         style: { borderRadius: 14, fontSize: 12, fontFamily: "Inter", boxShadow: "0 8px 24px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)" },
       }} />
+      <ReplenishmentRequestModal
+        open={Boolean(replenishmentItem)}
+        item={replenishmentItem}
+        onClose={() => setReplenishmentSku(null)}
+        onSubmit={submitReplenishmentRequest}
+      />
 
       {/* Sidebar — frosted glass, macOS-style */}
       <aside className="w-52 shrink-0 flex flex-col"
@@ -5539,6 +8609,12 @@ export default function App() {
             <span className="text-xs ml-2" style={{ color: A.gray2 }}>{user.company}</span>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => exportModulePdf(PAGE_LABELS[active] || active, user.company)}
+              className="h-8 px-3 rounded-xl flex items-center gap-1.5 text-xs font-medium transition-colors hover:bg-white"
+              style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
+              <Printer size={13} />
+              导出 PDF
+            </button>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs cursor-pointer"
               style={{ background: A.white, borderColor: "rgba(0,0,0,0.08)", color: A.gray1 }}>
               <Search size={12} />
@@ -5556,8 +8632,10 @@ export default function App() {
         {/* Content + AI panel */}
         <div className="flex-1 flex overflow-hidden">
           <main className="flex-1 overflow-auto p-6">
-            <div className="max-w-6xl mx-auto">
-              {panels[active]}
+            <div id="module-export-scope" className="max-w-6xl mx-auto">
+              <PanelErrorBoundary key={active} moduleLabel={PAGE_LABELS[active] || active}>
+                {panels[active] || panels.overview}
+              </PanelErrorBoundary>
             </div>
           </main>
 

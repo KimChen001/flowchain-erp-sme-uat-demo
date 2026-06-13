@@ -350,110 +350,119 @@
   "products": [
     {
       "sku": "SKU-00412",
-      "name": "???? 750W",
-      "category": "????",
+      "name": "伺服电机 750W",
+      "category": "电气元件",
       "currentStock": 34,
       "safetyStock": 50,
       "monthlyDemand": 138,
-      "unit": "?",
-      "stockoutRisk": "?"
+      "unit": "台",
+      "stockoutRisk": "高"
     },
     {
       "sku": "SKU-00623",
-      "name": "????? V3.2",
-      "category": "????",
+      "name": "控制器主板 V3.2",
+      "category": "电气元件",
       "currentStock": 12,
       "safetyStock": 20,
       "monthlyDemand": 58,
-      "unit": "?",
-      "stockoutRisk": "?"
+      "unit": "件",
+      "stockoutRisk": "高"
     },
     {
       "sku": "SKU-00287",
-      "name": "????? 6063",
-      "category": "???",
+      "name": "铝合金型材 6063",
+      "category": "原材料",
       "currentStock": 148,
       "safetyStock": 300,
       "monthlyDemand": 710,
-      "unit": "?",
-      "stockoutRisk": "?"
+      "unit": "米",
+      "stockoutRisk": "中"
     },
     {
       "sku": "SKU-00142",
-      "name": "???? 6204-ZZ",
-      "category": "????",
+      "name": "精密轴承 6204-ZZ",
+      "category": "机械部件",
       "currentStock": 2840,
       "safetyStock": 500,
       "monthlyDemand": 430,
-      "unit": "?",
-      "stockoutRisk": "?"
+      "unit": "件",
+      "stockoutRisk": "低"
     },
     {
       "sku": "SKU-00815",
-      "name": "???? 50mm",
-      "category": "????",
+      "name": "液压油缸 50mm",
+      "category": "机械部件",
       "currentStock": 67,
       "safetyStock": 80,
       "monthlyDemand": 152,
-      "unit": "?",
-      "stockoutRisk": "?"
+      "unit": "件",
+      "stockoutRisk": "中"
     },
     {
       "sku": "SKU-00744",
-      "name": "??????",
-      "category": "??",
+      "name": "聚氨酯密封胶",
+      "category": "耗材",
       "currentStock": 920,
       "safetyStock": 200,
       "monthlyDemand": 260,
-      "unit": "?",
-      "stockoutRisk": "?"
+      "unit": "桶",
+      "stockoutRisk": "低"
     }
   ],
   "suppliers": [
     {
-      "name": "??????",
-      "category": "????",
+      "name": "深圳新元电气",
+      "category": "电气元件",
       "onTimeRate": 96.7,
       "qualityRate": 97.8,
       "leadTimeDays": 7,
-      "risk": "?",
-      "country": "??"
+      "risk": "中",
+      "country": "中国"
     },
     {
-      "name": "??????",
-      "category": "????",
+      "name": "华东精工机械",
+      "category": "机械部件",
       "onTimeRate": 98.4,
       "qualityRate": 99.1,
       "leadTimeDays": 9,
-      "risk": "?",
-      "country": "??"
+      "risk": "低",
+      "country": "中国"
     },
     {
-      "name": "???????",
-      "category": "???",
+      "name": "江苏铝合金集团",
+      "category": "原材料",
       "onTimeRate": 99.2,
       "qualityRate": 98.4,
       "leadTimeDays": 12,
-      "risk": "?",
-      "country": "??"
+      "risk": "低",
+      "country": "中国"
     },
     {
-      "name": "??????",
-      "category": "??",
+      "name": "广州化工耗材",
+      "category": "耗材",
       "onTimeRate": 92.3,
       "qualityRate": 91.8,
       "leadTimeDays": 14,
-      "risk": "?",
-      "country": "??"
+      "risk": "高",
+      "country": "中国"
     },
     {
-      "name": "?????",
-      "category": "???",
+      "name": "佛山标准件",
+      "category": "标准件",
       "onTimeRate": 97.1,
       "qualityRate": 96.2,
       "leadTimeDays": 5,
-      "risk": "?",
-      "country": "??"
+      "risk": "中",
+      "country": "中国"
+    },
+    {
+      "name": "上海仪表科技",
+      "category": "仪器仪表",
+      "onTimeRate": 95.1,
+      "qualityRate": 99,
+      "leadTimeDays": 10,
+      "risk": "低",
+      "country": "中国"
     }
   ],
   "salesForecasts": [
@@ -530,43 +539,43 @@
       "type": "news",
       "title": "新闻联网限频，使用风险主题 fallback",
       "severity": "低",
-      "value": "429 Too Many Requests",
+      "value": "This operation was aborted",
       "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
     },
     {
       "type": "fx",
-      "title": "USD/CNY 6.7694",
+      "title": "汇率数据暂不可用",
+      "severity": "低",
+      "value": "This operation was aborted",
+      "recommendedAction": "稍后重试或改用内部财务汇率表。"
+    },
+    {
+      "type": "news",
+      "title": "新闻联网限频，使用风险主题 fallback",
+      "severity": "低",
+      "value": "This operation was aborted",
+      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
+    },
+    {
+      "type": "fx",
+      "title": "汇率数据暂不可用",
+      "severity": "低",
+      "value": "This operation was aborted",
+      "recommendedAction": "稍后重试或改用内部财务汇率表。"
+    },
+    {
+      "type": "news",
+      "title": "新闻联网限频，使用风险主题 fallback",
+      "severity": "低",
+      "value": "This operation was aborted",
+      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
+    },
+    {
+      "type": "fx",
+      "title": "USD/CNY 6.7623",
       "severity": "中",
-      "value": "Frankfurter 2026-06-03: USD/CNY=6.7694, USD/EUR=0.86103, USD/JPY=159.86",
+      "value": "Frankfurter 2026-06-12: USD/CNY=6.7623, USD/EUR=0.86453, USD/JPY=160.2",
       "recommendedAction": "检查美元计价采购合同和进口件报价有效期。"
-    },
-    {
-      "type": "news",
-      "title": "新闻联网限频，使用风险主题 fallback",
-      "severity": "低",
-      "value": "This operation was aborted",
-      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
-    },
-    {
-      "type": "fx",
-      "title": "汇率数据暂不可用",
-      "severity": "低",
-      "value": "This operation was aborted",
-      "recommendedAction": "稍后重试或改用内部财务汇率表。"
-    },
-    {
-      "type": "news",
-      "title": "新闻联网限频，使用风险主题 fallback",
-      "severity": "低",
-      "value": "This operation was aborted",
-      "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
-    },
-    {
-      "type": "fx",
-      "title": "汇率数据暂不可用",
-      "severity": "低",
-      "value": "This operation was aborted",
-      "recommendedAction": "稍后重试或改用内部财务汇率表。"
     },
     {
       "type": "news",
@@ -576,7 +585,18 @@
       "recommendedAction": "保留内部 ERP 风险判断，稍后刷新外部信号。"
     }
   ],
-  "users": [],
+  "users": [
+    {
+      "id": "USR-1781279478301",
+      "token": "demo-1781279478301-f35ae514db88c8",
+      "createdAt": "2026-06-12T15:51:18.301Z",
+      "email": "zhanglei@example.com",
+      "name": "kim",
+      "company": "新辰智能制造",
+      "role": "供应链经理",
+      "lastLoginAt": "2026-06-12T15:51:18.301Z"
+    }
+  ],
   "marketPrices": [
     {
       "symbol": "FE-ORE-62",
@@ -649,6 +669,197 @@
       "asOf": "2026-06-04 07:39",
       "source": "Frankfurter/缓存",
       "procurementImpact": "美元计价进口件需确认报价有效期和锁汇策略。"
+    }
+  ],
+  "forecastPlans": [],
+  "purchaseRequests": [
+    {
+      "pr": "PR-2026-2400",
+      "source": "inventory",
+      "sourceSku": "SKU-00287",
+      "sourceName": "铝合金型材 6063",
+      "supplier": "江苏铝合金集团",
+      "requester": "张磊",
+      "buyer": "王志强",
+      "created": "6月12日",
+      "requiredDate": "12天内",
+      "quantity": 1000,
+      "unit": "米",
+      "unitPrice": 142,
+      "amount": 142000,
+      "priority": "高",
+      "status": "待审批",
+      "reason": "库存低于再订货点：可用 0米，ROP 584米，覆盖 0 天。策略 A 类周滚动复核。",
+      "forecastBasis": {
+        "source": "inventory-control",
+        "projectedAvailable": 0,
+        "reorderPoint": 584,
+        "daysCover": 0,
+        "leadTimeDays": 12,
+        "serviceLevel": 97,
+        "moq": 500,
+        "batchMultiple": 100
+      },
+      "approvalSnapshot": {
+        "source": "inventory",
+        "summary": "SKU-00287 铝合金型材 6063 · A 类周滚动复核 · 建议 1,000 米 · ¥14万",
+        "explanation": "库存控制策略 A 类周滚动复核 触发补货：可用 0米，ROP 584米，覆盖 0 天，建议按 MOQ/批量倍数释放 1,000 米。",
+        "inventory": {
+          "projectedAvailable": 0,
+          "reorderPoint": 584,
+          "daysCover": 0,
+          "serviceLevel": 97,
+          "moq": 500,
+          "batchMultiple": 100,
+          "policy": "A 类周滚动复核"
+        },
+        "supplier": {
+          "name": "江苏铝合金集团",
+          "buyer": "王志强",
+          "unitPrice": 142,
+          "amount": 142000
+        },
+        "createdAt": "2026-06-12T15:52:31.013Z"
+      },
+      "linkedPo": "",
+      "approvedAt": "",
+      "convertedAt": ""
+    }
+  ],
+  "inventoryMovements": [],
+  "sopCycles": [
+    {
+      "id": "SOP-2026-0001",
+      "cycle": "2026-06",
+      "version": 1,
+      "status": "已发布",
+      "demandPlan": {
+        "forecastVersions": 0,
+        "totalMonthlyDemand": 1748,
+        "highRiskSku": 2,
+        "source": "MRP profile"
+      },
+      "supplyPlan": {
+        "plannedQty": 8590,
+        "plannedAmount": 13511300,
+        "exceptionCount": 6,
+        "urgentCount": 4,
+        "openPoAmount": 6220000,
+        "pendingPrAmount": 0
+      },
+      "financialConstraint": {
+        "budgetLimit": 3600000,
+        "totalCommitment": 19731300,
+        "constrainedAmount": 16131300,
+        "budgetUsagePct": 548.1,
+        "decision": "需要削减或分期释放"
+      },
+      "consensus": {
+        "recommendation": "优先释放 4 条加急 MRP 计划，预算超出部分分期审批。",
+        "approvers": [
+          "销售计划",
+          "供应链计划",
+          "采购",
+          "财务"
+        ],
+        "decisions": [
+          {
+            "type": "加急",
+            "title": "SKU-00623 控制器主板 V3.2",
+            "amount": 4960000,
+            "action": "立即释放计划订单，并复核供应商交期"
+          },
+          {
+            "type": "加急",
+            "title": "SKU-00815 液压油缸 50mm",
+            "amount": 4784000,
+            "action": "立即释放计划订单，并复核供应商交期"
+          },
+          {
+            "type": "加急",
+            "title": "SKU-00412 伺服电机 750W",
+            "amount": 2831000,
+            "action": "立即释放计划订单，并复核供应商交期"
+          },
+          {
+            "type": "加急",
+            "title": "SKU-00287 铝合金型材 6063",
+            "amount": 695800,
+            "action": "立即释放计划订单，并复核供应商交期"
+          },
+          {
+            "type": "供应商整改",
+            "title": "广州化工耗材",
+            "amount": 0,
+            "action": "拒收率 28.6% ，采购前需要复核质检异常。"
+          }
+        ]
+      },
+      "approvers": [
+        "销售计划",
+        "供应链计划",
+        "采购",
+        "财务"
+      ],
+      "approvedBy": "张磊",
+      "createdAt": "2026-06-12T15:49:25.262Z"
+    }
+  ],
+  "rfqs": [
+    {
+      "id": "RFQ-26-0042",
+      "title": "Q3 铝合金型材集采",
+      "category": "原材料",
+      "suppliers": 6,
+      "quoted": 5,
+      "bestPrice": 18.6,
+      "bestSupplier": "江苏铝合金集团",
+      "due": "2026-06-10",
+      "status": "比价中"
+    },
+    {
+      "id": "RFQ-26-0043",
+      "title": "标准紧固件年框",
+      "category": "通用件",
+      "suppliers": 8,
+      "quoted": 8,
+      "bestPrice": 0.42,
+      "bestSupplier": "佛山标准件",
+      "due": "2026-05-30",
+      "status": "已授标"
+    },
+    {
+      "id": "RFQ-26-0044",
+      "title": "PCB 板代工",
+      "category": "电子",
+      "suppliers": 4,
+      "quoted": 3,
+      "bestPrice": 86.4,
+      "bestSupplier": "深圳新元电气",
+      "due": "2026-06-15",
+      "status": "进行中"
+    },
+    {
+      "id": "RFQ-26-0045",
+      "title": "切削液 12 个月供货",
+      "category": "耗材",
+      "suppliers": 5,
+      "quoted": 4,
+      "bestPrice": 24.8,
+      "bestSupplier": "广州化工耗材",
+      "due": "2026-06-08",
+      "status": "比价中"
+    },
+    {
+      "id": "RFQ-26-0046",
+      "title": "高精度数控刀具",
+      "category": "工具",
+      "suppliers": 3,
+      "quoted": 2,
+      "bestPrice": 312,
+      "bestSupplier": "华东精工机械",
+      "due": "2026-06-22",
+      "status": "进行中"
     }
   ]
 }
