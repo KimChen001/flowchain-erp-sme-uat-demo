@@ -1,6 +1,6 @@
 # FlowChain Project Handoff
 
-Last updated: 2026-06-04
+Last updated: 2026-06-13
 
 ## Project Location
 
@@ -30,18 +30,25 @@ Do not store server passwords or API keys in this document.
 
 ## What This App Is
 
-FlowChain is an internal UAT demo for a supply-chain ERP SaaS product. It currently includes:
+FlowChain is an internal UAT demo for a lightweight AI-assisted ERP/SCM product aimed at small and medium-sized businesses. It is not a production-ready SaaS system and is not a replacement for SAP, Oracle, or a full ERP implementation.
+
+It currently includes:
 
 - Login demo with user profile persistence
 - Overview dashboard
 - Inventory module
 - Sales module
 - Forecasting module
+- Purchase request workflow
+- RFQ workflow
 - Purchase order workflow
-- Receiving and QC workflow
+- Line-level GRN receiving and QC workflow
+- MRP release and S&OP cycle views
 - Procurement cost module
+- Supplier performance and recommendation scoring
 - Right-side AI insight panel
 - Embedded AI assistant
+- AI confidence metadata
 - Market price data cards for iron/steel/aluminum/copper/USD-CNY
 
 ## Current Data Model
@@ -61,7 +68,11 @@ Server-side data on Aliyun is stored in:
 Important arrays:
 
 - `purchaseOrders`
+- `purchaseRequests`
 - `receivingDocs`
+- `rfqs`
+- `inventoryMovements`
+- `sopCycles`
 - `products`
 - `suppliers`
 - `salesForecasts`
@@ -93,12 +104,37 @@ POST /api/purchase-orders
 PATCH /api/purchase-orders/:po/status
 ```
 
+Purchase requests:
+
+```text
+GET /api/purchase-requests
+POST /api/purchase-requests
+PATCH /api/purchase-requests/:pr/status
+POST /api/purchase-requests/:pr/convert-to-po
+```
+
+RFQ:
+
+```text
+GET /api/rfqs
+POST /api/rfqs
+PATCH /api/rfqs/:id/status
+```
+
 Receiving:
 
 ```text
 GET /api/receiving-docs
 POST /api/receiving-docs
 PATCH /api/receiving-docs/:grn
+```
+
+Planning:
+
+```text
+GET /api/mrp-plan
+GET /api/sop-cycle
+POST /api/sop-cycle
 ```
 
 AI and signals:
@@ -108,6 +144,14 @@ POST /api/ai/chat
 GET /api/external-signals
 GET /api/market-prices
 POST /api/market-prices/refresh
+```
+
+Engineering checks:
+
+```bash
+npm run build
+npm run typecheck
+npm test
 ```
 
 ## AI Behavior
@@ -250,4 +294,3 @@ Use this at the start of a new Codex conversation:
 ```text
 请继续 FlowChain 项目。项目路径是 C:\Users\chinc\Documents\Codex\2026-06-04\erp-saas\scm-source。请先读取 PROJECT_HANDOFF.md、package.json、server/scm-api.mjs 和 src/app/App.tsx，然后继续开发。不要读取或输出 .env.local 里的密钥。
 ```
-

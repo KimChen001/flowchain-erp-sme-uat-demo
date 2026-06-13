@@ -1,1 +1,3 @@
-import './scm-api.mjs'
+import { startScmServer } from './scm-api.mjs'
+
+startScmServer()

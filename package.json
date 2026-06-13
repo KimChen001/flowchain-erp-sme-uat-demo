@@ -7,7 +7,9 @@
     "build": "vite build --configLoader runner",
     "dev": "vite --configLoader runner",
     "api": "node server/index.mjs",
-    "start": "node server/index.mjs"
+    "start": "node server/index.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test server/domain/*.test.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -69,8 +71,11 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
+    "@types/node": "^22.19.21",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
+    "typescript": "^5.9.3",
     "vite": "6.3.5"
   },
   "peerDependencies": {
