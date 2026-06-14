@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Clock,
   DollarSign,
+  FileSpreadsheet,
   Plus,
   Receipt,
   ShoppingCart,
@@ -30,6 +31,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
+import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, AppleTooltip, Card, Chip, Field, KpiCard, Modal, SectionHeader, SegmentedControl, SubTabs } from "../../components/ui";
 import { salesData, topProducts, FULFILLMENT_STAGES } from "../../data/demo-data";
@@ -263,6 +265,20 @@ function SalesOrders() {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: "已发货" as const } : o));
     toast.success(`订单 ${id} 已发货`, { description: "已通知物流系统创建运单" });
   };
+  const exportCsv = () => {
+    exportRowsToCsv("sales-export.csv", filtered.map((order) => ({
+      订单号: order.id,
+      客户: order.customer,
+      渠道: order.channel,
+      金额: order.amount,
+      行项: order.items,
+      创建日期: order.createdAt,
+      承诺交付: order.promiseDate,
+      付款条款: order.payTerms,
+      状态: order.status,
+      负责人: order.owner,
+    })));
+  };
   const createSO = () => {
     const amount = Number(form.amount);
     const items = Number(form.items);
@@ -295,11 +311,18 @@ function SalesOrders() {
               value={filter} onChange={(v) => setFilter(v as any)}
             />
           </div>
-          <button onClick={() => setOpenNew(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-white transition-all hover:opacity-90"
-            style={{ background: A.blue }}>
-            <Plus size={13} /> 新建销售订单
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={exportCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+              style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={13} /> 导出 CSV
+            </button>
+            <button onClick={() => setOpenNew(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-white transition-all hover:opacity-90"
+              style={{ background: A.blue }}>
+              <Plus size={13} /> 新建销售订单
+            </button>
+          </div>
         </div>
         <table className="w-full text-xs">
           <thead>
