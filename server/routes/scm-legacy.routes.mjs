@@ -17,6 +17,14 @@ import { handleAuditLogRoute } from './audit-log.routes.mjs'
 import { buildMrpPlan, handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import {
+  ensureMarketPrices,
+  ensureMarketSignals,
+  fetchExternalSignals,
+  handleMarketRoute,
+  marketPriceReply,
+  normalizeMarketSignal,
+} from './market.routes.mjs'
+import {
   actorFromBody,
   applyWorkflowTransition,
   createAuditLogEntry,
@@ -48,7 +56,6 @@ const arkDispatcher = arkProxyUrl ? new ProxyAgent(arkProxyUrl) : undefined
 const webProxyUrl = process.env.WEB_PROXY_URL || process.env.OPENAI_PROXY_URL || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || 'http://127.0.0.1:15236'
 const webDispatcher = webProxyUrl ? new ProxyAgent(webProxyUrl) : undefined
 const aiMaxTokens = Number(process.env.AI_MAX_TOKENS || 520)
-let externalCache = { at: 0, data: null }
 
 async function readDb() {
   return jsonDb.read()
@@ -842,123 +849,6 @@ function supplierRecommendations(db, { sku = '', quantity = 0, currentSupplier =
   }
 }
 
-function demoMarketPrices() {
-  const asOf = new Date().toISOString().slice(0, 16).replace('T', ' ')
-  return [
-    {
-      symbol: 'FE-ORE-62',
-      name: '铁矿石 62%粉矿',
-      category: '黑色原料',
-      price: 828,
-      unit: '元/吨',
-      changePct: 1.18,
-      direction: 'up',
-      asOf,
-      source: 'UAT行情样本',
-      procurementImpact: '影响钢结构件、铝型材替代方案和华东精工机械报价复核。',
-    },
-    {
-      symbol: 'RB-HRB400E',
-      name: '螺纹钢 HRB400E',
-      category: '黑色成材',
-      price: 3420,
-      unit: '元/吨',
-      changePct: 0.64,
-      direction: 'up',
-      asOf,
-      source: 'UAT行情样本',
-      procurementImpact: '若连续上涨，建议锁定本周钢材采购报价并复核安全库存。',
-    },
-    {
-      symbol: 'HC-Q235B',
-      name: '热轧卷板 Q235B',
-      category: '黑色成材',
-      price: 3568,
-      unit: '元/吨',
-      changePct: -0.22,
-      direction: 'down',
-      asOf,
-      source: 'UAT行情样本',
-      procurementImpact: '价格回落时可暂缓低优先级补采，优先处理高风险缺料订单。',
-    },
-    {
-      symbol: 'AL-SHFE',
-      name: '电解铝',
-      category: '有色金属',
-      price: 20480,
-      unit: '元/吨',
-      changePct: 0.35,
-      direction: 'up',
-      asOf,
-      source: 'UAT行情样本',
-      procurementImpact: '关联 SKU-00287 铝合金型材，当前库存低于安全线，应优先补采。',
-    },
-    {
-      symbol: 'CU-SHFE',
-      name: '电解铜',
-      category: '有色金属',
-      price: 78260,
-      unit: '元/吨',
-      changePct: -0.48,
-      direction: 'down',
-      asOf,
-      source: 'UAT行情样本',
-      procurementImpact: '可复核电气元件供应商报价，争取铜价回落带来的成本让利。',
-    },
-    {
-      symbol: 'USD-CNY',
-      name: '美元兑人民币',
-      category: '汇率',
-      price: 6.7694,
-      unit: 'CNY',
-      changePct: 0.12,
-      direction: 'up',
-      asOf,
-      source: 'Frankfurter/缓存',
-      procurementImpact: '美元计价进口件需确认报价有效期和锁汇策略。',
-    },
-  ]
-}
-
-function ensureMarketPrices(db) {
-  if (!Array.isArray(db.marketPrices) || db.marketPrices.length === 0) {
-    db.marketPrices = demoMarketPrices()
-  }
-  return db.marketPrices
-}
-
-function findMarketPrices(question = '', db) {
-  const prices = ensureMarketPrices(db)
-  const q = String(question).toLowerCase()
-  if (/铁|钢|黑色|螺纹|热轧|iron|steel/.test(q)) {
-    return prices.filter((item) => /铁|钢|热轧|螺纹/.test(item.name + item.category))
-  }
-  if (/铝|aluminium|aluminum/.test(q)) return prices.filter((item) => /铝/.test(item.name))
-  if (/铜|copper/.test(q)) return prices.filter((item) => /铜/.test(item.name))
-  if (/美元|汇率|usd|cny/.test(q)) return prices.filter((item) => /美元|USD/.test(item.name + item.symbol))
-  if (/价格|行情|市场/.test(q)) return prices.slice(0, 5)
-  return []
-}
-
-function marketPriceReply(question, db) {
-  const matches = findMarketPrices(question, db)
-  if (!matches.length) return null
-  const lines = matches.map((item) => {
-    const arrow = item.direction === 'up' ? '上涨' : item.direction === 'down' ? '下跌' : '持平'
-    return `${item.name}: ${item.price}${item.unit}，${arrow} ${Math.abs(item.changePct)}%，${item.asOf}，${item.source}`
-  })
-  const impacts = matches.map((item) => `- ${item.procurementImpact}`).join('\n')
-  return [
-    '当前系统已有行情数据，可以回答这类问题。',
-    lines.join('\n'),
-    '',
-    '采购影响建议:',
-    impacts,
-    '',
-    '说明: 这是 UAT 行情样本/缓存数据，用于功能测试和业务链路验证；正式版应接入交易所、钢联、卓创、Wind 或企业采购行情源。',
-  ].join('\n')
-}
-
 function localAiReply({ moduleId, question, activeInsight }, db) {
   const priceAnswer = marketPriceReply(question, db)
   if (priceAnswer) return priceAnswer
@@ -1189,7 +1079,7 @@ function buildAiContext({ moduleId, activeInsight }, db) {
       split: topRecommendation.split,
     } : null,
     marketPrices: ensureMarketPrices(db).slice(0, 12),
-    marketSignals: (db.marketSignals || []).slice(0, 8),
+    marketSignals: ensureMarketSignals(db).slice(0, 8),
     recentEvents: ensureEvents(db).slice(0, 8),
     recentAuditLog: ensureAuditLog(db).slice(0, 12),
   }
@@ -1308,110 +1198,12 @@ async function callConfiguredAi(body, db) {
   if (priceAnswer) return { provider: 'market-data', content: priceAnswer }
   if (body.externalSignals) {
     db.marketSignals = [
-      ...(db.marketSignals || []),
-      ...body.externalSignals.signals,
+      ...ensureMarketSignals(db),
+      ...(body.externalSignals.signals || []).map(normalizeMarketSignal),
     ].slice(-12)
   }
   if (provider === 'doubao' || provider === 'ark') return callDoubao(body, db)
   return callOpenAI(body, db)
-}
-
-async function fetchJson(url, timeoutMs = 4500, dispatcher = webDispatcher) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const res = await undiciFetch(url, withOptionalDispatcher({
-      signal: controller.signal,
-      headers: { 'User-Agent': 'scm-saas-demo/0.1' },
-    }, dispatcher))
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-    return await res.json()
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-async function fetchExternalSignals() {
-  const now = Date.now()
-  if (externalCache.data && now - externalCache.at < 15 * 60 * 1000) return externalCache.data
-
-  const signals = []
-  let fx = null
-  let news = []
-
-  const [fxResult, newsResult] = await Promise.allSettled([
-    fetchJson('https://api.frankfurter.app/latest?from=USD&to=CNY,EUR,JPY', 3500),
-    fetchJson('https://api.gdeltproject.org/api/v2/doc/doc?query=%22supply%20chain%22&mode=artlist&format=json&maxrecords=5', 3500),
-  ])
-
-  if (fxResult.status === 'fulfilled') {
-    fx = fxResult.value
-    signals.push({
-      type: 'fx',
-      title: `USD/CNY ${fx.rates?.CNY ?? 'N/A'}`,
-      severity: '中',
-      value: `Frankfurter ${fx.date}: USD/CNY=${fx.rates?.CNY}, USD/EUR=${fx.rates?.EUR}, USD/JPY=${fx.rates?.JPY}`,
-      recommendedAction: '检查美元计价采购合同和进口件报价有效期。',
-    })
-  } else {
-    signals.push({
-      type: 'fx',
-      title: '汇率数据暂不可用',
-      severity: '低',
-      value: fxResult.reason?.message || '外部汇率接口超时',
-      recommendedAction: '稍后重试或改用内部财务汇率表。',
-    })
-  }
-
-  if (newsResult.status === 'fulfilled') {
-    const gdelt = newsResult.value
-    news = (gdelt.articles || []).slice(0, 5).map((article) => ({
-      title: article.title,
-      url: article.url,
-      domain: article.domain,
-      seendate: article.seendate,
-      sourcecountry: article.sourcecountry,
-    }))
-    if (news.length) {
-      signals.push({
-        type: 'news',
-        title: '供应链相关新闻已联网更新',
-        severity: '中',
-        value: news.map((item) => `${item.title} (${item.domain})`).join('；'),
-        recommendedAction: '结合供应商地区、品类和交期风险判断是否需要调整采购计划。',
-      })
-    }
-  } else {
-    news = [
-      {
-        title: '产业链供应链安全与物流韧性成为采购风险关注点',
-        url: 'https://api.gdeltproject.org/',
-        domain: 'gdeltproject.org',
-        seendate: 'fallback',
-        sourcecountry: 'Global',
-      },
-      {
-        title: '制造业企业继续关注核心零部件交期与合规要求',
-        url: 'https://api.gdeltproject.org/',
-        domain: 'gdeltproject.org',
-        seendate: 'fallback',
-        sourcecountry: 'Global',
-      },
-    ]
-    signals.push({
-      type: 'news',
-      title: '新闻联网限频，使用风险主题 fallback',
-      severity: '低',
-      value: newsResult.reason?.message || '外部新闻接口超时',
-      recommendedAction: '保留内部 ERP 风险判断，稍后刷新外部信号。',
-    })
-  }
-
-  externalCache = {
-    at: now,
-    data: { fetchedAt: new Date(now).toISOString(), fx, news, signals },
-  }
-  return externalCache.data
 }
 
 export function createScmServer() {
@@ -1473,40 +1265,6 @@ export function createScmServer() {
       const user = ensureUsers(db).find((item) => item.token === token)
       if (!user) return send(res, 401, { error: 'invalid demo token' })
       return send(res, 200, publicUser(user))
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/external-signals') {
-      const external = await fetchExternalSignals()
-      return send(res, 200, external)
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/market-prices') {
-      const prices = ensureMarketPrices(db)
-      return send(res, 200, {
-        asOf: prices[0]?.asOf || null,
-        source: 'UAT 行情数据',
-        prices,
-      })
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/market-prices/refresh') {
-      const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
-      const prices = ensureMarketPrices(db).map((item, index) => {
-        const wave = ((Date.now() / 1000 + index * 7) % 9 - 4) / 100
-        const nextChange = Number((item.changePct + wave).toFixed(2))
-        return {
-          ...item,
-          price: Number((item.price * (1 + wave / 100)).toFixed(item.price < 10 ? 4 : 0)),
-          changePct: nextChange,
-          direction: nextChange > 0 ? 'up' : nextChange < 0 ? 'down' : 'flat',
-          asOf: now,
-          source: item.source.includes('UAT') ? 'UAT行情刷新' : item.source,
-        }
-      })
-      db.marketPrices = prices
-      event(db, 'market_prices_refresh', '行情数据已刷新', 'market-prices')
-      await writeDb(db)
-      return send(res, 200, { asOf: now, source: 'UAT 行情数据', prices })
     }
 
     if (req.method === 'GET' && url.pathname === '/api/forecast-plans') {
@@ -1608,6 +1366,7 @@ export function createScmServer() {
 
     if (await handleMrpRoute(routeContext)) return
     if (await handleSopRoute(routeContext)) return
+    if (await handleMarketRoute(routeContext)) return
     if (await handleRfqsRoute(routeContext)) return
     if (await handlePurchaseRequestsRoute(routeContext)) return
     if (await handlePurchaseOrdersRoute(routeContext)) return
