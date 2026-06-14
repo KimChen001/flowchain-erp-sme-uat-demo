@@ -6,9 +6,10 @@ import {
 } from "recharts";
 import {
   Activity, AlertTriangle, CheckCircle2, Clock,
-  Eye, FileCheck2, GitBranch, Loader2, ShoppingCart, Sparkles, TrendingUp, Zap,
+  Eye, FileCheck2, FileSpreadsheet, GitBranch, Loader2, ShoppingCart, Sparkles, TrendingUp, Zap,
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
+import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 import type { PurchaseRequest } from "../../types/scm";
@@ -92,6 +93,15 @@ function StatusPill({ status }: { status: string }) {
       {status}
     </span>
   );
+}
+
+function exportCsv(filename: string, rows: Record<string, unknown>[]) {
+  if (rows.length === 0) {
+    toast.warning("暂无可导出的数据");
+    return;
+  }
+  exportRowsToCsv(filename, rows);
+  toast.success("CSV 已导出");
 }
 
 // Apple-style card with clean shadow
@@ -578,6 +588,137 @@ export default function ForecastPanel() {
     }
   }
 
+  function exportForecastResultCsv() {
+    const rows = [
+      ...historyData.map((row) => ({
+        "SKU": sku.sku,
+        "品名": sku.name,
+        "月份": row.month,
+        "数据类型": "历史",
+        "实际需求": row.actual,
+        "拟合值": row.fitted ?? "",
+        "预测值": "",
+        "下限": "",
+        "上限": "",
+        "方法": METHOD_LABEL[method],
+        "场景": scenario,
+        "促销提升百分比": promoLift,
+        "预测期数": horizon,
+        "MAPE": Number(result.mape.toFixed(2)),
+        "WMAPE": Number(result.wmape.toFixed(2)),
+        "RMSE": Number(result.rmse.toFixed(2)),
+        "MAE": Number(result.mae.toFixed(2)),
+        "TrackingSignal": Number(result.trackingSignal.toFixed(2)),
+        "TheilU": Number(result.theilU.toFixed(2)),
+      })),
+      ...forecastChart.slice(1).map((row) => ({
+        "SKU": sku.sku,
+        "品名": sku.name,
+        "月份": row.month,
+        "数据类型": "预测",
+        "实际需求": "",
+        "拟合值": "",
+        "预测值": Math.round(row.forecast),
+        "下限": Math.round(row.lower),
+        "上限": Math.round(row.upper),
+        "方法": METHOD_LABEL[method],
+        "场景": scenario,
+        "促销提升百分比": promoLift,
+        "预测期数": horizon,
+        "MAPE": Number(result.mape.toFixed(2)),
+        "WMAPE": Number(result.wmape.toFixed(2)),
+        "RMSE": Number(result.rmse.toFixed(2)),
+        "MAE": Number(result.mae.toFixed(2)),
+        "TrackingSignal": Number(result.trackingSignal.toFixed(2)),
+        "TheilU": Number(result.theilU.toFixed(2)),
+      })),
+    ];
+    exportCsv("forecast-result-export.csv", rows);
+  }
+
+  function exportReconciliationCsv() {
+    const firstStockoutMonth = firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : "";
+    exportCsv("forecast-reconciliation-export.csv", reconciliation.map((row) => ({
+      "SKU": sku.sku,
+      "品名": sku.name,
+      "月份": row.month,
+      "预测需求": row.demand,
+      "计划入库": row.inbound,
+      "期末库存": row.ending,
+      "缺口": row.gap,
+      "覆盖倍数": Number(row.cover.toFixed(2)),
+      "风险等级": row.risk,
+      "服务水平": serviceLevel,
+      "建议采购量": executableRecommendedQty,
+      "建议采购金额": executableRecommendedAmount,
+      "首个缺料月份": firstStockoutMonth || "",
+      "供应商": currentMrpRow?.supplier || procurementProfile.supplier,
+      "采购负责人": procurementProfile.buyer,
+    })));
+  }
+
+  function exportBenchmarkCsv() {
+    exportCsv("forecast-benchmark-export.csv", benchmark.map((row, index) => ({
+      "SKU": sku.sku,
+      "品名": sku.name,
+      "方法": row.method,
+      "方法名称": METHOD_LABEL[row.method],
+      "MAPE": Number(row.mape.toFixed(2)),
+      "RMSE": Number(row.rmse.toFixed(2)),
+      "是否Champion": index === 0 ? "是" : "否",
+      "当前选择方法": row.method === method ? "是" : "否",
+    })));
+  }
+
+  function exportSavedPlansCsv() {
+    exportCsv("forecast-saved-plans-export.csv", savedPlans.map((plan) => ({
+      "方案ID": plan.id,
+      "SKU": plan.sku,
+      "品名": plan.name,
+      "单位": plan.unit || "",
+      "方法": METHOD_LABEL[plan.method] ?? plan.method,
+      "预测期数": plan.horizon,
+      "MAPE": plan.metrics?.mape ?? "",
+      "WMAPE": plan.metrics?.wmape ?? "",
+      "RMSE": plan.metrics?.rmse ?? "",
+      "建议供应商": plan.procurementSuggestion?.supplier || "",
+      "建议采购量": plan.procurementSuggestion?.quantity ?? "",
+      "建议采购金额": plan.procurementSuggestion?.amount ?? "",
+      "优先级": plan.procurementSuggestion?.priority || "",
+      "首个缺料月份": plan.procurementSuggestion?.firstStockoutMonth || "",
+      "创建时间": plan.createdAt,
+    })));
+  }
+
+  function exportMrpExceptionsCsv() {
+    exportCsv("mrp-exceptions-export.csv", (mrpPlan?.exceptions || []).map((exception) => ({
+      "SKU": exception.sku,
+      "品名": exception.name,
+      "期间": exception.period,
+      "异常类型": exception.type,
+      "数量": exception.quantity,
+      "建议动作": exception.action,
+    })));
+  }
+
+  function exportMrpPlannedOrdersCsv() {
+    const rows = currentMrpRow?.schedule.map((line) => ({
+      "SKU": currentMrpRow.sku,
+      "品名": currentMrpRow.name,
+      "期间": line.period,
+      "需求": line.grossRequirement,
+      "计划收货": line.scheduledReceipt,
+      "计划释放": line.plannedRelease,
+      "预计库存": line.projectedAvailable,
+      "净需求": line.netRequirement,
+      "异常": line.exception,
+      "BOM来源摘要": line.dependentDemandSources?.length
+        ? line.dependentDemandSources.map((source) => `${source.parentName || source.parent}:${source.demand}`).join(" | ")
+        : mrpBomSourceSummary,
+    })) || [];
+    exportCsv("mrp-planned-orders-export.csv", rows);
+  }
+
   return (
     <div className="space-y-5">
       {/* Header KPIs */}
@@ -799,6 +940,10 @@ export default function ForecastPanel() {
                 <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5" style={{ background: A.blue }} /><span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: A.blue, marginLeft: -2 }} /><span style={{ color: A.gray1 }}>实际 (历史)</span></span>
                 <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0" style={{ borderTop: `1.5px dotted ${A.green}` }} /><span style={{ color: A.gray1 }}>拟合 (训练)</span></span>
                 <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0" style={{ borderTop: `2px dashed ${A.orange}` }} /><span style={{ color: A.gray1 }}>预测 (未来)</span></span>
+                <button onClick={exportForecastResultCsv}
+                  className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+                  <FileSpreadsheet size={11} /> 导出 CSV
+                </button>
               </div>
             } />
 
@@ -944,7 +1089,11 @@ export default function ForecastPanel() {
 
         {/* Model benchmark */}
         <Card className="p-5">
-          <SectionHeader title="模型对比 (Champion / Challenger)" />
+          <SectionHeader title="模型对比 (Champion / Challenger)"
+            right={<button onClick={exportBenchmarkCsv}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={11} /> 导出 CSV
+            </button>} />
           <div className="space-y-2">
             {benchmark.map((b, i) => {
               const max = Math.max(...benchmark.map((x) => x.mape));
@@ -1152,10 +1301,16 @@ export default function ForecastPanel() {
 
       <Card className="p-5">
         <SectionHeader title="MRP 例外消息"
-          right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-            style={{ background: mrpExceptions.length ? "#fff8f0" : "#f0faf4", color: mrpExceptions.length ? A.orange : A.green }}>
-            {mrpExceptions.length ? `${mrpExceptions.length} 条异常` : "无异常"}
-          </span>} />
+          right={<div className="flex items-center gap-2">
+            <button onClick={exportMrpExceptionsCsv}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={11} /> 导出 CSV
+            </button>
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+              style={{ background: mrpExceptions.length ? "#fff8f0" : "#f0faf4", color: mrpExceptions.length ? A.orange : A.green }}>
+              {mrpExceptions.length ? `${mrpExceptions.length} 条异常` : "无异常"}
+            </span>
+          </div>} />
         {mrpExceptions.length === 0 ? (
           <div className="text-xs py-6 text-center" style={{ color: A.gray2 }}>
             当前预测、库存和供应商评分未触发 MRP 例外消息。
@@ -1200,6 +1355,11 @@ export default function ForecastPanel() {
                 </div>
               ))}
             </div>
+            <button onClick={exportMrpPlannedOrdersCsv}
+              className="h-10 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+              style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={13} /> 导出 CSV
+            </button>
             <button onClick={releaseMrpAsPr} disabled={generatingRequest || !currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0 || Boolean(lastGeneratedRequest)}
               className="h-10 px-3 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed"
               style={{ background: lastGeneratedRequest ? A.green : currentMrpRow && currentMrpRow.totalPlannedReceipt > 0 ? A.purple : A.gray3, opacity: generatingRequest ? 0.7 : 1 }}>
@@ -1310,13 +1470,20 @@ export default function ForecastPanel() {
               起始在手 {sku.onHand.toLocaleString()} {sku.unit} · 待入库 {sku.open.toLocaleString()} {sku.unit}
             </p>
           </div>
-          <button onClick={saveForecastPlan} disabled={savingPlan}
-            className="text-xs px-4 py-2 rounded-xl font-medium text-white flex items-center gap-1.5 transition-opacity hover:opacity-90"
-            style={{ background: committed ? A.green : A.blue, opacity: savingPlan ? 0.7 : 1 }}>
-            {savingPlan ? <><Loader2 size={12} className="animate-spin" /> 保存中</>
-              : committed ? <><CheckCircle2 size={12} /> 已保存方案</>
-                : <><FileCheck2 size={12} /> 保存共识预测方案</>}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={exportReconciliationCsv}
+              className="text-xs px-3 py-2 rounded-xl font-medium flex items-center gap-1.5 transition-opacity hover:opacity-90"
+              style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={12} /> 导出 CSV
+            </button>
+            <button onClick={saveForecastPlan} disabled={savingPlan}
+              className="text-xs px-4 py-2 rounded-xl font-medium text-white flex items-center gap-1.5 transition-opacity hover:opacity-90"
+              style={{ background: committed ? A.green : A.blue, opacity: savingPlan ? 0.7 : 1 }}>
+              {savingPlan ? <><Loader2 size={12} className="animate-spin" /> 保存中</>
+                : committed ? <><CheckCircle2 size={12} /> 已保存方案</>
+                  : <><FileCheck2 size={12} /> 保存共识预测方案</>}
+            </button>
+          </div>
         </div>
         <table className="w-full text-xs">
           <thead>
@@ -1352,7 +1519,13 @@ export default function ForecastPanel() {
 
       <Card className="p-5">
         <SectionHeader title="已保存预测方案"
-          right={<span className="text-[10px]" style={{ color: A.gray2 }}>{savedPlans.length} 条后端记录</span>} />
+          right={<div className="flex items-center gap-2">
+            <button onClick={exportSavedPlansCsv}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={11} /> 导出 CSV
+            </button>
+            <span className="text-[10px]" style={{ color: A.gray2 }}>{savedPlans.length} 条后端记录</span>
+          </div>} />
         {savedPlans.length === 0 ? (
           <div className="text-xs py-6 text-center" style={{ color: A.gray2 }}>
             还没有保存方案。运行预测后点击“保存共识预测方案”，结果会写入后端数据。

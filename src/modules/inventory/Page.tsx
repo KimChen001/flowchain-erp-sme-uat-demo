@@ -7,6 +7,7 @@ import {
   Loader2, Package, Plus, Search, ShieldCheck, Truck, X, XCircle,
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
+import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { toNumber } from "../../domain/purchasing/helpers";
 import { inventoryPlan } from "../../domain/inventory/planning";
@@ -56,6 +57,16 @@ function StatusPill({ status }: { status: string }) {
     </span>
   );
 }
+
+function exportCsv(filename: string, rows: Record<string, unknown>[]) {
+  if (rows.length === 0) {
+    toast.warning("暂无可导出的数据");
+    return;
+  }
+  exportRowsToCsv(filename, rows);
+  toast.success("CSV 已导出");
+}
+
 function InventoryOverview() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("全部");
@@ -96,6 +107,31 @@ function InventoryOverview() {
     } catch (error) {
       toast.error("库存 PR 生成失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
     }
+  }
+
+  function exportStockCsv() {
+    exportCsv("inventory-stock-export.csv", filtered.map((item) => ({
+      "SKU": item.sku,
+      "品名": item.name,
+      "品类": item.category,
+      "库位": item.location,
+      "当前库存": item.qty,
+      "可用库存": item.plan.projectedAvailable,
+      "安全库存": item.min,
+      "最大库存": item.max,
+      "月需求": item.plan.monthlyDemand,
+      "提前期天数": item.plan.leadTimeDays,
+      "覆盖天数": item.plan.daysCover,
+      "ROP": item.plan.reorderPoint,
+      "建议补货量": item.plan.suggestedQty,
+      "单位": item.plan.unit,
+      "补货策略": item.plan.policy,
+      "供应商": item.plan.supplier,
+      "状态": item.status,
+      "是否需要询价": item.plan.needsSourcing ? "是" : "否",
+      "建议PR金额": item.plan.amount,
+      "已生成PR": generatedRequests[item.sku] || "",
+    })));
   }
 
   return (
@@ -197,6 +233,11 @@ function InventoryOverview() {
             onChange={setFilterStatus}
           />
           <span className="text-xs ml-1" style={{ color: A.gray2 }}>{filtered.length}</span>
+          <button onClick={exportStockCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+            style={{ background: A.gray6, color: A.blue }}>
+            <FileSpreadsheet size={13} /> 导出 CSV
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -284,6 +325,32 @@ function InventoryLots() {
       : "#f0f6ff";
   }
 
+  function exportLotsCsv() {
+    if (tab === "lot") {
+      exportCsv("inventory-lots-export.csv", lots.map((lot) => ({
+        "批次号": lot.lot,
+        "SKU": lot.sku,
+        "品名": lot.name,
+        "数量": lot.qty,
+        "供应商": lot.supplier,
+        "入库日": lot.received,
+        "效期": lot.expiry,
+        "库位": lot.warehouse,
+        "COA": lot.coa ? "有" : "无",
+        "状态": lot.status,
+      })));
+      return;
+    }
+    exportCsv("inventory-serials-export.csv", serials.map((serial) => ({
+      "序列号": serial.sn,
+      "SKU": serial.sku,
+      "所属批次": serial.lot,
+      "状态": serial.status,
+      "当前库位": serial.warehouse,
+      "入库日": serial.received,
+    })));
+  }
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
@@ -302,8 +369,10 @@ function InventoryLots() {
             options={["全部", "可用", "冻结", "近效期"].map((s) => ({ label: s, value: s }))}
             value={filter} onChange={(v) => setFilter(v as any)} />
           <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{tab === "lot" ? lots.length : serials.length} 条</span>
-          <button onClick={() => toast.success("已导出 FIFO 拣货清单")}
-            className="text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.label }}>导出 FIFO</button>
+          <button onClick={exportLotsCsv}
+            className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+            <FileSpreadsheet size={11} /> 导出 CSV
+          </button>
           <button onClick={() => toast("批次冻结提交 QA")}
             className="text-[11px] px-2.5 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>冻结批次</button>
         </div>
@@ -432,6 +501,22 @@ function InventoryTransfers() {
     toast.success(`${id} 调拨单已创建`, { description: `${form.from} → ${form.to} · ${form.qty} ${item.unit}` });
   }
 
+  function exportTransfersCsv() {
+    exportCsv("inventory-transfers-export.csv", list.map((transfer) => ({
+      "调拨号": transfer.id,
+      "源仓库": transfer.from,
+      "目标仓库": transfer.to,
+      "SKU": transfer.sku,
+      "品名": transfer.name,
+      "数量": transfer.qty,
+      "申请人": transfer.requester,
+      "承运商": transfer.carrier,
+      "创建日期": transfer.created,
+      "ETA": transfer.eta,
+      "状态": transfer.status,
+    })));
+  }
+
   const onTransit = list.filter((t) => t.status === "在途" || t.status === "已发出").length;
   const pending = list.filter((t) => t.status === "待审批").length;
 
@@ -448,8 +533,13 @@ function InventoryTransfers() {
         <div className="flex items-center px-5 py-3.5 gap-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>仓间调拨单</h2>
           <span className="text-xs" style={{ color: A.gray2 }}>{list.length} 条</span>
+          <button onClick={exportTransfersCsv}
+            className="ml-auto flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity"
+            style={{ background: A.gray6, color: A.blue }}>
+            <FileSpreadsheet size={11} /> 导出 CSV
+          </button>
           <button onClick={() => setCreateOpen(true)}
-            className="ml-auto flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
             style={{ background: A.blue }}>
             <Plus size={11} /> 新建调拨单
           </button>
@@ -546,6 +636,34 @@ function InventoryCycleCount() {
     toast.success(`${id} 盘点完成`);
   }
 
+  function exportCountPlansCsv() {
+    exportCsv("inventory-cycle-count-plans-export.csv", plans.map((plan) => ({
+      "计划号": plan.id,
+      "库区": plan.zone,
+      "排期": plan.scheduled,
+      "盘点员": plan.counter,
+      "方法": plan.method,
+      "计划范围": plan.scope,
+      "已盘点": plan.counted,
+      "进度百分比": Number(((plan.counted / plan.scope) * 100).toFixed(1)),
+      "差异": plan.variance,
+      "状态": plan.status,
+    })));
+  }
+
+  function exportVariancesCsv() {
+    exportCsv("inventory-count-variances-export.csv", VARIANCES.map((variance) => ({
+      "批次号": variance.lot,
+      "SKU": variance.sku,
+      "品名": variance.name,
+      "账面数": variance.book,
+      "实盘数": variance.actual,
+      "差异": variance.diff,
+      "差异原因": variance.reason,
+      "差异金额": variance.value,
+    })));
+  }
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
@@ -558,10 +676,16 @@ function InventoryCycleCount() {
       <Card>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>循环盘点计划 (Cycle Count)</h2>
-          <button onClick={() => toast("已按 ABC 重新生成下周计划")}
-            className="text-[11px] px-2.5 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>
-            生成下周计划
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={exportCountPlansCsv}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={11} /> 导出 CSV
+            </button>
+            <button onClick={() => toast("已按 ABC 重新生成下周计划")}
+              className="text-[11px] px-2.5 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>
+              生成下周计划
+            </button>
+          </div>
         </div>
         <table className="w-full text-xs">
           <thead>
@@ -617,9 +741,15 @@ function InventoryCycleCount() {
       <Card>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>盘点差异待审批</h2>
-          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#fff8f0", color: A.orange }}>
-            {VARIANCES.length} 项 · 合计 ¥{VARIANCES.reduce((s, v) => s + Math.abs(v.value), 0).toLocaleString()}
-          </span>
+          <div className="flex items-center gap-2">
+            <button onClick={exportVariancesCsv}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={11} /> 导出 CSV
+            </button>
+            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#fff8f0", color: A.orange }}>
+              {VARIANCES.length} 项 · 合计 ¥{VARIANCES.reduce((s, v) => s + Math.abs(v.value), 0).toLocaleString()}
+            </span>
+          </div>
         </div>
         <table className="w-full text-xs">
           <thead>
@@ -682,6 +812,21 @@ function InventoryABCXYZ() {
     CY: { policy: "按需采购",                     color: A.gray1   },
     CZ: { policy: "按订单采购 · 不备库",          color: A.red     },
   };
+  const sortedItems = [...items].sort((a, b) => b.annualValue - a.annualValue);
+
+  function exportAbcXyzCsv() {
+    exportCsv("inventory-abc-xyz-export.csv", sortedItems.map((item) => ({
+      "SKU": item.sku,
+      "品名": item.name,
+      "品类": item.category,
+      "当前库存": item.qty,
+      "年价值": item.annualValue,
+      "CoV": Number(item.cov.toFixed(2)),
+      "ABC分类": item.abc,
+      "XYZ分类": item.xyz,
+      "策略": strategy[item.abc + item.xyz].policy,
+    })));
+  }
 
   return (
     <div className="space-y-5">
@@ -738,8 +883,12 @@ function InventoryABCXYZ() {
       </Card>
 
       <Card>
-        <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>SKU 分类明细</h2>
+          <button onClick={exportAbcXyzCsv}
+            className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+            <FileSpreadsheet size={11} /> 导出 CSV
+          </button>
         </div>
         <table className="w-full text-xs">
           <thead>
@@ -750,7 +899,7 @@ function InventoryABCXYZ() {
             </tr>
           </thead>
           <tbody>
-            {items.sort((a, b) => b.annualValue - a.annualValue).map((it, i) => {
+            {sortedItems.map((it, i) => {
               const s = strategy[it.abc + it.xyz];
               return (
                 <tr key={it.sku} style={{ borderBottom: i < items.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
@@ -829,6 +978,23 @@ function InventoryMovements() {
     return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   };
 
+  function exportMovementsCsv() {
+    exportCsv("inventory-movements-export.csv", list.map((movement) => ({
+      "事务号": movement.movementId || movement.id || "legacy",
+      "时间": formatMovementTime(movement.timestamp || movement.ts),
+      "类型": movement.type,
+      "SKU": movement.sku,
+      "数量": toNumber(movement.qty, toNumber(movement.quantity)),
+      "仓库": movement.warehouseId || movement.to || "—",
+      "来源单据": movement.sourceId || movement.grnId || movement.ref,
+      "PO": movement.poId || movement.po || "",
+      "PO Line": movement.poLineId || "",
+      "操作人": movement.op,
+      "状态": movement.status || "",
+      "事由": movement.reason || "",
+    })));
+  }
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
@@ -852,9 +1018,9 @@ function InventoryMovements() {
           <SegmentedControl
             options={["全部", "入库", "出库", "调拨", "调整", "退货", "冻结"].map((s) => ({ label: s, value: s }))}
             value={typeFilter} onChange={(v) => setTypeFilter(v as any)} />
-          <button onClick={() => toast.success("已导出 Excel 全量流水")}
+          <button onClick={exportMovementsCsv}
             className="ml-auto text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.label }}>
-            <FileSpreadsheet size={11} className="inline mr-1" /> 导出
+            <FileSpreadsheet size={11} className="inline mr-1" /> 导出 CSV
           </button>
         </div>
         <table className="w-full text-xs">
@@ -915,6 +1081,14 @@ function InventoryWarehouseMap() {
   const usedBins = grid.flat().filter((g) => g.fill > 0).length;
   const overflow = grid.flat().filter((g) => g.fill > 90).length;
 
+  function exportBinsCsv() {
+    exportCsv("inventory-bin-utilization-export.csv", grid.flat().map((bin) => ({
+      "库位": bin.code,
+      "占用率": bin.fill,
+      "状态": bin.status,
+    })));
+  }
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
@@ -927,6 +1101,10 @@ function InventoryWarehouseMap() {
       <Card className="p-5">
         <SectionHeader title="实时库位热力图"
           right={<div className="flex items-center gap-2 text-[10px]" style={{ color: A.sub }}>
+            <button onClick={exportBinsCsv}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={11} /> 导出 CSV
+            </button>
             <span>低</span>
             <div className="flex h-2 w-32 rounded-full overflow-hidden">
               {[10, 30, 50, 70, 90].map((p, i) => (
