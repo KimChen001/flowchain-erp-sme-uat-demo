@@ -13,6 +13,7 @@ import { handleRfqsRoute } from './rfqs.routes.mjs'
 import { handleInventoryMovementsRoute } from './inventory-movements.routes.mjs'
 import { handleSupplierPerformanceRoute } from './supplier-performance.routes.mjs'
 import { handleSupplierRecommendationsRoute } from './supplier-recommendations.routes.mjs'
+import { handleAuditLogRoute } from './audit-log.routes.mjs'
 import {
   actorFromBody,
   applyWorkflowTransition,
@@ -1979,6 +1980,7 @@ export function createScmServer() {
       postedReceivingStatuses, normalizeGrnLines, applyReceivingToPoAndInventory,
       postedGrnProtectedChangeError, warehouseIdFor, toNumber,
       ensureInventoryMovements, supplierPerformance, supplierRecommendations,
+      ensureAuditLog,
     }
 
     if (await handleRfqsRoute(routeContext)) return
@@ -1988,17 +1990,7 @@ export function createScmServer() {
     if (await handleInventoryMovementsRoute(routeContext)) return
     if (await handleSupplierPerformanceRoute(routeContext)) return
     if (await handleSupplierRecommendationsRoute(routeContext)) return
-
-    if (req.method === 'GET' && url.pathname === '/api/audit-log') {
-      const entityType = url.searchParams.get('entityType') || ''
-      const entityId = url.searchParams.get('entityId') || ''
-      const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') || 100)))
-      const entries = ensureAuditLog(db)
-        .filter((entry) => !entityType || entry.entityType === entityType)
-        .filter((entry) => !entityId || entry.entityId === entityId)
-        .slice(0, limit)
-      return send(res, 200, entries)
-    }
+    if (await handleAuditLogRoute(routeContext)) return
 
     if (!url.pathname.startsWith('/api/')) return sendStatic(req, res, url)
     return send(res, 404, { error: 'Not found' })
