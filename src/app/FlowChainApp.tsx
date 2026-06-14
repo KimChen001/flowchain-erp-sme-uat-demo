@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Toaster, toast } from "sonner";
 import {
-  BarChart, Bar, Line,
+  BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, ComposedChart,
+  PieChart, Pie, Cell,
 } from "recharts";
 import {
-  Package, ShoppingCart, TrendingUp, DollarSign, AlertTriangle,
+  ShoppingCart, TrendingUp, DollarSign, AlertTriangle,
   ArrowUpRight, ArrowDownRight, Bell, Search, ChevronRight,
   Activity, Truck, Sparkles, RefreshCw, Zap, Eye, Clock,
   CheckCircle2, Minus, BarChart2,
@@ -83,23 +83,6 @@ function supplierRecommendation(name: string) {
 }
 
 const pieColors = [A.blue, A.green, A.orange, A.purple, A.teal];
-
-// ─── Purchase Orders ─────────────────────────────────────────────────────────
-const poApprovalQueue = [
-  { po: "PO-2026-1287", supplier: "深圳新元电气", amount: 1840000, requestor: "陈思远", wait: "4小时", reason: "伺服电机紧急补货" },
-  { po: "PO-2026-1279", supplier: "深圳新元电气", amount: 528000,  requestor: "陈思远", wait: "1小时", reason: "驱动板季度备货" },
-  { po: "PO-2026-1278", supplier: "上海仪表科技", amount: 92000,   requestor: "周浩",   wait: "30分钟", reason: "测量仪表更换" },
-];
-
-const procurementTrend = [
-  { day: "周一", po: 8,  amount: 1240 },
-  { day: "周二", po: 12, amount: 2840 },
-  { day: "周三", po: 6,  amount: 1620 },
-  { day: "周四", po: 15, amount: 3640 },
-  { day: "周五", po: 11, amount: 2380 },
-  { day: "周六", po: 3,  amount: 480  },
-  { day: "周日", po: 1,  amount: 120  },
-];
 
 // ─── AI Insights ──────────────────────────────────────────────────────────────
 
