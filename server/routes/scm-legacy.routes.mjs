@@ -10,6 +10,7 @@ import { handlePurchaseOrdersRoute } from './purchase-orders.routes.mjs'
 import { handlePurchaseRequestsRoute } from './purchase-requests.routes.mjs'
 import { handleReceivingRoute } from './receiving.routes.mjs'
 import { handleRfqsRoute } from './rfqs.routes.mjs'
+import { handleInventoryMovementsRoute } from './inventory-movements.routes.mjs'
 import {
   actorFromBody,
   applyWorkflowTransition,
@@ -1975,12 +1976,14 @@ export function createScmServer() {
       ensureRfqs, workflowDefinitions, createPoLineFromRfq,
       postedReceivingStatuses, normalizeGrnLines, applyReceivingToPoAndInventory,
       postedGrnProtectedChangeError, warehouseIdFor, toNumber,
+      ensureInventoryMovements,
     }
 
     if (await handleRfqsRoute(routeContext)) return
     if (await handlePurchaseRequestsRoute(routeContext)) return
     if (await handlePurchaseOrdersRoute(routeContext)) return
     if (await handleReceivingRoute(routeContext)) return
+    if (await handleInventoryMovementsRoute(routeContext)) return
 
     if (req.method === 'GET' && url.pathname === '/api/audit-log') {
       const entityType = url.searchParams.get('entityType') || ''
@@ -1991,10 +1994,6 @@ export function createScmServer() {
         .filter((entry) => !entityId || entry.entityId === entityId)
         .slice(0, limit)
       return send(res, 200, entries)
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/inventory-movements') {
-      return send(res, 200, ensureInventoryMovements(db))
     }
 
     if (req.method === 'GET' && url.pathname === '/api/supplier-performance') {
