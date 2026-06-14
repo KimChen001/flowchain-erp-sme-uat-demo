@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Toaster, toast } from "sonner";
 import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
+  Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, ComposedChart, ReferenceLine, ReferenceArea,
+  PieChart, Pie, Cell, ComposedChart,
 } from "recharts";
 import {
   Package, ShoppingCart, TrendingUp, DollarSign, AlertTriangle,
   ArrowUpRight, ArrowDownRight, Bell, Search, ChevronRight,
   Activity, Truck, Sparkles, RefreshCw, Zap, Eye, Clock,
-  CheckCircle2, XCircle, Minus, ChevronDown, BarChart2,
-  ClipboardList, PackageCheck, FileText, ScanLine, MapPin, User,
-  AlertCircle, ArrowRight, Plus, Filter, Calendar, Hash,
-  X, Trash2, Check, Loader2, Camera, FileCheck2, Send,
-  Layers, ArrowLeftRight, ClipboardCheck, Grid3x3, History, Boxes,
-  Users, Receipt, Tag, Repeat, FileSpreadsheet, Handshake, Wallet,
-  Inbox, ShieldCheck, AlertOctagon, Undo2, Building2, CreditCard,
+  CheckCircle2, Minus, BarChart2,
+  ClipboardList, PackageCheck, FileText,
+  AlertCircle, Plus,
+  X, Loader2, FileCheck2, Send,
+  ClipboardCheck,
+  Users, Receipt, Tag, FileSpreadsheet, Handshake, Wallet,
+  ShieldCheck, AlertOctagon, Undo2, Building2, CreditCard,
   Lock, LogOut, Printer, GitBranch,
 } from "lucide-react";
 import { navGroups, navItems } from "./routes";
@@ -23,7 +23,7 @@ import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
 import { apiJson } from "../lib/api-client";
 import { fmt } from "../lib/format";
 import { exportModulePdf } from "../lib/pdf-export";
-import { A, AppleTooltip, Card, Chip, DocumentHistoryPanel, Field, inputStyle, KpiCard, Modal, SectionHeader, SegmentedControl, SubTabs } from "../components/ui";
+import { A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, Modal, SectionHeader, SegmentedControl, SubTabs } from "../components/ui";
 import { AI_INSIGHTS } from "../modules/ai-assistant/ai-insights";
 import type {
   AiConfidence,
@@ -48,14 +48,6 @@ import {
   monthlyProcurement,
   purchaseOrders,
   receivingDocs,
-  arrivalSchedule,
-  qcExceptions,
-  LOTS,
-  SERIALS,
-  TRANSFERS,
-  COUNT_PLANS,
-  VARIANCES,
-  MOVEMENTS,
   FULFILLMENT_STAGES,
   FORECAST_SKUS,
   RFQS,
@@ -63,9 +55,6 @@ import {
   MATCH_QUEUE,
   PAYABLES,
   PORTAL_SUPPLIERS,
-  SKU_CATALOG,
-  SUPPLIER_LIST,
-  OWNERS
 } from "../data/demo-data";
 import { toNumber } from "../domain/purchasing/helpers";
 import { inventoryPlan } from "../domain/inventory/planning";
