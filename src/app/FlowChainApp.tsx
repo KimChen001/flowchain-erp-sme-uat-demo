@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Toaster, toast } from "sonner";
 import {
   BarChart, Bar,
@@ -11,7 +11,7 @@ import {
   Activity, Truck, Sparkles, RefreshCw, Zap, Eye, Clock,
   CheckCircle2, Minus, BarChart2,
   FileText,
-  AlertCircle, Plus,
+  AlertCircle,
   Loader2, Send,
   ClipboardCheck,
   FileSpreadsheet, Handshake, Wallet,
@@ -23,7 +23,7 @@ import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
 import { apiJson } from "../lib/api-client";
 import { fmt } from "../lib/format";
 import { exportModulePdf } from "../lib/pdf-export";
-import { A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, Modal, SectionHeader, SegmentedControl, SubTabs } from "../components/ui";
+import { A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, Modal, SectionHeader, SubTabs } from "../components/ui";
 import { AI_INSIGHTS } from "../modules/ai-assistant/ai-insights";
 import type {
   AiConfidence,
