@@ -34,8 +34,6 @@ import SuppliersPanel from "../modules/suppliers/Page";
 import ProcurementPanel from "../modules/procurement/Page";
 import AiPanel from "../modules/ai-assistant/Panel";
 
-// ─── Apple System Colors ──────────────────────────────────────────────────────
-
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
   if (!supplier) {
@@ -59,7 +57,6 @@ function supplierRecommendation(name: string) {
   };
 }
 
-// ─── Sub-Tabs (ERP module navigation) ─────────────────────────────────────────
 function ReplenishmentRequestModal({
   item,
   open,
@@ -164,13 +161,6 @@ function ReplenishmentRequestModal({
   );
 }
 
-
-
-
-
-
-
-// ─── Receiving Panel ─────────────────────────────────────────────────────────
 const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存",
   sales: "销售表现", forecast: "高级计划",
