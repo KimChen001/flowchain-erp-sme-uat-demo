@@ -26,6 +26,13 @@ import {
   type Method,
 } from "../../domain/forecast";
 import { forecastProcurementProfileForSku } from "../../domain/forecast/purchase-request";
+import {
+  buildMrpBomEvidence,
+  buildMrpBomSourceSummary,
+  buildMrpScheduleEvidence,
+  selectMrpRow,
+  type MrpPlan,
+} from "../../domain/mrp";
 
 const insightMeta = {
   risk:        { color: A.red,    bg: "#fff1f0", label: "风险预警", icon: AlertTriangle },
@@ -106,88 +113,6 @@ type SavedForecastPlan = {
     firstStockoutMonth?: string | null;
   } | null;
   createdAt: string;
-};
-
-type MrpScheduleLine = {
-  period: string;
-  grossRequirement: number;
-  independentDemand: number;
-  dependentDemand: number;
-  dependentDemandSources?: {
-    parent: string;
-    parentName?: string;
-    top?: string;
-    topName?: string;
-    level?: number;
-    demand: number;
-    qtyPer?: number;
-    scrapPct?: number;
-    leadTimeOffset?: number;
-  }[];
-  scheduledReceipt: number;
-  projectedAvailable: number;
-  netRequirement: number;
-  plannedReceipt: number;
-  plannedRelease: number;
-  plannedReleasePeriod: string;
-  exception: "正常" | "加急" | "释放" | "推迟/取消";
-};
-
-type MrpPlanRow = {
-  sku: string;
-  name: string;
-  category: string;
-  unit: string;
-  supplier: string;
-  unitPrice: number;
-  serviceLevel: number;
-  abc: string;
-  xyz: string;
-  onHand: number;
-  allocated: number;
-  safetyStock: number;
-  moq: number;
-  batchMultiple: number;
-  leadTimePeriods: number;
-  totalPlannedReceipt: number;
-  firstShortagePeriod: string | null;
-  maxNetRequirement: number;
-  amount: number;
-  exception: "正常" | "加急" | "释放" | "推迟/取消";
-  bomSources?: {
-    parent: string;
-    parentName?: string;
-    top?: string;
-    topName?: string;
-    level?: number;
-    demand: number;
-  }[];
-  schedule: MrpScheduleLine[];
-};
-
-type MrpPlan = {
-  generatedAt: string;
-  horizon: number;
-  periods: string[];
-  summary: {
-    skuCount: number;
-    exceptionCount: number;
-    urgentCount: number;
-    plannedAmount: number;
-    plannedQty: number;
-    bomRootCount?: number;
-    bomComponentCount?: number;
-  };
-  rows: MrpPlanRow[];
-  exceptions: {
-    sku: string;
-    name: string;
-    type: "加急" | "释放" | "推迟/取消";
-    period: string;
-    quantity: number;
-    amount: number;
-    action: string;
-  }[];
 };
 
 // Generate the trailing 24 months ending at the current month (May 2026 → 24-month window 2024-06 ~ 2026-05)
@@ -339,7 +264,7 @@ export default function ForecastPanel() {
   const firstStockoutIndex = reconciliation.findIndex((r) => r.risk === "高");
   const stockoutMonths = reconciliation.filter((r) => r.risk === "高").length;
   const procurementProfile = forecastProcurementProfileForSku(sku.sku);
-  const currentMrpRow = mrpPlan?.rows.find((row) => row.sku === sku.sku) ?? null;
+  const currentMrpRow = selectMrpRow(mrpPlan, sku.sku);
   const safetyFactor = serviceLevel >= 98 ? 1.18 : serviceLevel >= 95 ? 1.1 : 1.05;
   const recommendedQty = peakGap > 0 ? Math.ceil(peakGap * safetyFactor) : 0;
   const recommendedAmount = recommendedQty * procurementProfile.unitPrice;
@@ -347,30 +272,9 @@ export default function ForecastPanel() {
   const executableRecommendedQty = Number(currentMrpRow?.totalPlannedReceipt || 0) > 0 ? Number(currentMrpRow?.totalPlannedReceipt || 0) : recommendedQty;
   const executableRecommendedAmount = executableRecommendedQty * procurementProfile.unitPrice;
   const executablePriority = currentMrpRow?.exception === "加急" ? "高" : purchasePriority;
-  const mrpBomSourceSummary = currentMrpRow?.bomSources?.length
-    ? currentMrpRow.bomSources
-      .map((source) => `${source.parentName || source.parent} ${Number(source.demand || 0).toLocaleString()} ${sku.unit}`)
-      .join("；")
-    : "";
-  const mrpScheduleEvidence = currentMrpRow?.schedule
-    .filter((line) => line.dependentDemand > 0 || line.plannedReceipt > 0)
-    .slice(0, 6)
-    .map((line) => ({
-      period: line.period,
-      grossRequirement: line.grossRequirement,
-      independentDemand: line.independentDemand,
-      dependentDemand: line.dependentDemand,
-      plannedReceipt: line.plannedReceipt,
-      plannedReleasePeriod: line.plannedReleasePeriod,
-      exception: line.exception,
-      sources: line.dependentDemandSources || [],
-    })) || [];
-  const mrpBomEvidence = currentMrpRow ? {
-    bomSources: currentMrpRow.bomSources || [],
-    dependentDemandTotal: currentMrpRow.schedule.reduce((sum, line) => sum + Number(line.dependentDemand || 0), 0),
-    grossRequirementTotal: currentMrpRow.schedule.reduce((sum, line) => sum + Number(line.grossRequirement || 0), 0),
-    schedule: mrpScheduleEvidence,
-  } : null;
+  const mrpBomSourceSummary = buildMrpBomSourceSummary(currentMrpRow, sku.unit);
+  const mrpScheduleEvidence = buildMrpScheduleEvidence(currentMrpRow);
+  const mrpBomEvidence = buildMrpBomEvidence(currentMrpRow);
   const supplierScore = supplierRecommendation(procurementProfile.supplier);
   const backendMrpExceptions = (mrpPlan?.exceptions || [])
     .filter((item) => item.sku === sku.sku)
