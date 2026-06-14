@@ -5,6 +5,7 @@ import {
   Loader2, Package, Plus, Send, Sparkles, XCircle, ShieldCheck,
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
+import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { OWNERS, SKU_CATALOG, SUPPLIER_LIST } from "../../data/demo-data";
 import type { PurchaseIntent, PurchaseOrder, PurchaseRequest, PurchaseRequestStatus, RfqRecord, SupplierRecommendationResult } from "../../types/scm";
@@ -203,6 +204,30 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
   const approved = requests.filter((item) => item.status === "已批准").length;
   const converted = requests.filter((item) => item.status === "已转PO").length;
   const amount = requests.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const exportCsv = () => {
+    if (filtered.length === 0) {
+      toast.warning("暂无可导出的数据");
+      return;
+    }
+    exportRowsToCsv("procurement-purchase-requests-export.csv", filtered.map((item) => ({
+      PR编号: item.pr,
+      来源: item.source,
+      来源SKU: item.sourceSku,
+      来源名称: item.sourceName,
+      供应商: item.supplier,
+      申请人: item.requester,
+      采购员: item.buyer,
+      数量: item.quantity,
+      单位: item.unit,
+      单价: item.unitPrice,
+      金额: item.amount,
+      需求日期: item.requiredDate,
+      优先级: item.priority,
+      状态: item.status,
+      申请原因: item.reason,
+    })));
+    toast.success("CSV 已导出");
+  };
 
   useEffect(() => {
     if (!selected?.sourceSku) {
@@ -348,6 +373,11 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
               value={filter} onChange={(v) => setFilter(v as any)}
             />
             <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{filtered.length} 条</span>
+            <button onClick={exportCsv}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity"
+              style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={11} /> 导出 CSV
+            </button>
             <button onClick={() => setNewOpen(true)}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
               style={{ background: A.blue }}>

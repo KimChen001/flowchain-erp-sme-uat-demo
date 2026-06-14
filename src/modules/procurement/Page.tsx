@@ -19,6 +19,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
+import { exportRowsToCsv } from "../../lib/data-export";
 import { A, Card, Chip, KpiCard, SubTabs } from "../../components/ui";
 import type { PurchaseIntent } from "../../types/scm";
 import { CONTRACTS, MATCH_QUEUE, PAYABLES, PORTAL_SUPPLIERS, RFQS } from "../../data/demo-data";
@@ -89,6 +90,25 @@ function PurchasingPanel({ intent }: { intent: PurchaseIntent | null }) {
 }
 
 function PurchasingContracts() {
+  const exportCsv = () => {
+    if (CONTRACTS.length === 0) {
+      toast.warning("暂无可导出的数据");
+      return;
+    }
+    exportRowsToCsv("procurement-contracts-export.csv", CONTRACTS.map((contract) => ({
+      合同编号: contract.id,
+      供应商: contract.supplier,
+      范围: contract.scope,
+      承诺量: contract.commitVol,
+      价格条款: contract.price,
+      起始日期: contract.start,
+      到期日期: contract.end,
+      消耗进度百分比: Math.round(contract.consumed * 100),
+      状态: contract.status,
+    })));
+    toast.success("CSV 已导出");
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-3">
@@ -99,8 +119,13 @@ function PurchasingContracts() {
       </div>
 
       <Card>
-        <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>框架合同 (BPA)</h2>
+          <button onClick={exportCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+            style={{ background: A.gray6, color: A.blue }}>
+            <FileSpreadsheet size={13} /> 导出 CSV
+          </button>
         </div>
         <table className="w-full text-xs">
           <thead>
@@ -143,6 +168,25 @@ function PurchasingContracts() {
 
 function PurchasingMatch() {
   const [queue, setQueue] = useState(MATCH_QUEUE);
+  const exportCsv = () => {
+    if (queue.length === 0) {
+      toast.warning("暂无可导出的数据");
+      return;
+    }
+    exportRowsToCsv("procurement-match-queue-export.csv", queue.map((item) => ({
+      匹配号: item.id,
+      采购订单: item.po,
+      收货单: item.grn,
+      发票: item.invoice,
+      供应商: item.supplier,
+      PO金额: item.poAmt,
+      GRN金额: item.grnAmt,
+      发票金额: item.invAmt,
+      差异: item.variance,
+      状态: item.status,
+    })));
+    toast.success("CSV 已导出");
+  };
   const resolve = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, status: "已匹配" as const, variance: 0 } : q));
     toast.success(`${id} 差异已解决`, { description: "已生成调整凭证并通知供应商" });
@@ -158,8 +202,13 @@ function PurchasingMatch() {
       </div>
 
       <Card>
-        <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>三单匹配 (PO · GRN · Invoice)</h2>
+          <button onClick={exportCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+            style={{ background: A.gray6, color: A.blue }}>
+            <FileSpreadsheet size={13} /> 导出 CSV
+          </button>
         </div>
         <table className="w-full text-xs">
           <thead>
@@ -199,6 +248,23 @@ function PurchasingMatch() {
 
 function PurchasingPayment() {
   const [payables, setPayables] = useState(PAYABLES);
+  const exportCsv = () => {
+    if (payables.length === 0) {
+      toast.warning("暂无可导出的数据");
+      return;
+    }
+    exportRowsToCsv("procurement-payables-export.csv", payables.map((item) => ({
+      应付编号: item.id,
+      供应商: item.supplier,
+      发票: item.invoice,
+      金额: item.amount,
+      条款: item.terms,
+      到期日: item.due,
+      账龄天数: item.aging,
+      状态: item.status,
+    })));
+    toast.success("CSV 已导出");
+  };
   const pay = (id: string) => {
     setPayables(prev => prev.map(p => p.id === id ? { ...p, status: "已付款" as const } : p));
     toast.success(`${id} 已付款`, { description: "已生成银行付款指令" });
@@ -217,8 +283,13 @@ function PurchasingPayment() {
       </div>
 
       <Card>
-        <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>应付账款</h2>
+          <button onClick={exportCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+            style={{ background: A.gray6, color: A.blue }}>
+            <FileSpreadsheet size={13} /> 导出 CSV
+          </button>
         </div>
         <table className="w-full text-xs">
           <thead>
@@ -259,6 +330,26 @@ function PurchasingPayment() {
 function PurchasingPortal() {
   const [suppliers, setSuppliers] = useState<SupplierPerformance[]>(PORTAL_SUPPLIERS);
   const [loading, setLoading] = useState(true);
+  const exportCsv = () => {
+    if (suppliers.length === 0) {
+      toast.warning("暂无可导出的数据");
+      return;
+    }
+    exportRowsToCsv("supplier-performance-export.csv", suppliers.map((supplier) => ({
+      供应商: supplier.name,
+      品类: supplier.category || "供应商",
+      评级: supplier.rating,
+      准时率: supplier.onTime,
+      质量合格率: supplier.quality,
+      质检异常: Number(supplier.exceptions || 0),
+      拒收率: Number(supplier.rejectRate || 0),
+      YTD采购订单: supplier.po,
+      YTD采购额: supplier.spend,
+      战略分级: supplier.flag,
+      最近问题: supplier.lastIssue || "",
+    })));
+    toast.success("CSV 已导出");
+  };
 
   useEffect(() => {
     let alive = true;
@@ -287,7 +378,14 @@ function PurchasingPortal() {
         <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商绩效记分卡</h2>
-            <span className="text-[11px]" style={{ color: A.gray2 }}>PO + GRN 质检动态评分</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px]" style={{ color: A.gray2 }}>PO + GRN 质检动态评分</span>
+              <button onClick={exportCsv}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+                style={{ background: A.gray6, color: A.blue }}>
+                <FileSpreadsheet size={13} /> 导出 CSV
+              </button>
+            </div>
           </div>
         </div>
         <table className="w-full text-xs">

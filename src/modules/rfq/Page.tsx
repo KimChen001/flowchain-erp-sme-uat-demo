@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Building2, Clock, FileSpreadsheet, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { apiJson } from "../../lib/api-client";
+import { exportRowsToCsv } from "../../lib/data-export";
 import { RFQS } from "../../data/demo-data";
 import type { RfqRecord } from "../../types/scm";
 import { A, Card, Chip, DocumentHistoryPanel, KpiCard } from "../../components/ui";
@@ -25,6 +26,27 @@ export default function PurchasingRFQPage() {
   }, []);
 
   const selectedRfq = rfqs.find((item) => item.id === selectedId) ?? rfqs[0] ?? null;
+  const exportCsv = () => {
+    if (rfqs.length === 0) {
+      toast.warning("暂无可导出的数据");
+      return;
+    }
+    exportRowsToCsv("procurement-rfq-export.csv", rfqs.map((rfq) => ({
+      RFQ编号: rfq.id,
+      标题: rfq.title,
+      品类: rfq.category,
+      邀请供应商数: rfq.suppliers,
+      已报价供应商数: rfq.quoted,
+      最优价: rfq.bestPrice,
+      最优供应商: rfq.bestSupplier,
+      截止日期: rfq.due,
+      状态: rfq.status,
+      来源申请: rfq.sourceRequest || "",
+      来源SKU: rfq.sourceSku || "",
+      关联PO: rfq.linkedPo || "",
+    })));
+    toast.success("CSV 已导出");
+  };
 
   const award = async (id: string) => {
     try {
@@ -56,8 +78,13 @@ export default function PurchasingRFQPage() {
       </div>
 
       <Card>
-        <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>询价单</h2>
+          <button onClick={exportCsv}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+            style={{ background: A.gray6, color: A.blue }}>
+            <FileSpreadsheet size={13} /> 导出 CSV
+          </button>
         </div>
         <table className="w-full text-xs">
           <thead>

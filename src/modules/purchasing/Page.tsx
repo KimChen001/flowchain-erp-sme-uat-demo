@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  AlertCircle, Camera, Calendar, Check, CheckCircle2, Clock, DollarSign, Eye, FileCheck2,
+  AlertCircle, Camera, Calendar, Check, CheckCircle2, Clock, DollarSign, Eye, FileCheck2, FileSpreadsheet,
   FileText, Filter, Hash, Lock, PackageCheck, Plus, Printer, Send, Sparkles, Trash2, Truck,
   User, X, XCircle,
 } from "lucide-react";
@@ -9,6 +9,7 @@ import {
   Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { apiJson } from "../../lib/api-client";
+import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { procurementTrend, purchaseOrders } from "../../data/demo-data";
 import type { POStatus, PurchaseOrder, ReceivingDoc, ReceivingDocLine } from "../../types/scm";
@@ -98,6 +99,33 @@ export default function PurchasingOrdersPage() {
   function downloadPDF(poId: string) {
     exportModulePdf(`采购订单 ${poId}`, "新辰智能制造");
   }
+  function exportCsv() {
+    if (filtered.length === 0) {
+      toast.warning("暂无可导出的数据");
+      return;
+    }
+    exportRowsToCsv("procurement-purchase-orders-export.csv", filtered.map((order) => {
+      const totals = poTotals(order);
+      const progress = totals.totalOrderedQty === 0 ? 0 : (totals.totalReceivedQty / totals.totalOrderedQty) * 100;
+      return {
+        PO编号: order.po,
+        供应商: order.supplier,
+        来源: order.source || "manual",
+        来源SKU: order.sourceSku || "",
+        来源名称: order.sourceName || "",
+        金额: order.amount,
+        明细行数: totals.lineCount,
+        优先级: order.priority,
+        负责人: order.owner,
+        ETA: order.eta,
+        状态: order.status,
+        总订购数量: totals.totalOrderedQty,
+        总收货数量: totals.totalReceivedQty,
+        收货进度百分比: Number(progress.toFixed(1)),
+      };
+    }));
+    toast.success("CSV 已导出");
+  }
 
   return (
     <div className="space-y-5">
@@ -186,6 +214,11 @@ export default function PurchasingOrdersPage() {
               value={filter} onChange={(v) => setFilter(v as any)}
             />
             <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{filtered.length} 条</span>
+            <button onClick={exportCsv}
+              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity"
+              style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={11} /> 导出 CSV
+            </button>
             <button onClick={() => setNewOpen(true)}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
               style={{ background: A.blue }}>
