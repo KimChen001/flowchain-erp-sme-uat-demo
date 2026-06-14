@@ -72,36 +72,6 @@ const insightMeta = {
   action:      { color: A.orange, bg: "#fff8f0", label: "行动建议", icon: Zap           },
 };
 
-function StatusPill({ status }: { status: string }) {
-  const map: Record<string, { color: string; bg: string }> = {
-    正常:   { color: A.green,  bg: "#f0faf4" },
-    预警:   { color: A.orange, bg: "#fff8f0" },
-    不足:   { color: A.red,    bg: "#fff1f0" },
-    关注:   { color: A.orange, bg: "#fff8f0" },
-    高风险: { color: A.red,    bg: "#fff1f0" },
-    草稿:   { color: A.gray1,  bg: "#f2f2f7" },
-    已确认: { color: A.blue,   bg: "#eff6ff" },
-    拣货中: { color: A.orange, bg: "#fff8f0" },
-    已发货: { color: A.purple, bg: "#faf3ff" },
-    已交付: { color: A.green,  bg: "#f0faf4" },
-    已关闭: { color: A.gray1,  bg: "#f2f2f7" },
-    待审批: { color: A.orange, bg: "#fff8f0" },
-    已审批: { color: A.blue,   bg: "#eff6ff" },
-    已收货: { color: A.purple, bg: "#faf3ff" },
-    已结案: { color: A.green,  bg: "#f0faf4" },
-    生效中: { color: A.green,  bg: "#f0faf4" },
-    待生效: { color: A.blue,   bg: "#eff6ff" },
-    已停用: { color: A.gray1,  bg: "#f2f2f7" },
-  };
-  const s = map[status] ?? { color: A.gray1, bg: "#f2f2f7" };
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
-      style={{ color: s.color, background: s.bg }}>
-      {status}
-    </span>
-  );
-}
-
 // Apple-style card with clean shadow
 const QUICK_QUESTIONS: Record<string, string[]> = {
   overview: ["本周最重要的风险是什么？", "今天的铁的市场价格"],
