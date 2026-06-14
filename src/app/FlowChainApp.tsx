@@ -59,6 +59,19 @@ import {
 import { toNumber } from "../domain/purchasing/helpers";
 import { inventoryPlan } from "../domain/inventory/planning";
 import { inventoryPurchaseRequestPayload } from "../domain/inventory/purchase-request";
+import {
+  METHOD_LABEL,
+  demandDiagnostics,
+  formatDemandSeries,
+  formatEta,
+  mapeGrade,
+  parseDemandSeries,
+  runForecast,
+  xyzClass,
+  zScore,
+  type Method,
+} from "../domain/forecast";
+import { forecastProcurementProfileForSku } from "../domain/forecast/purchase-request";
 import PurchasingRequests from "../modules/purchase-requests/Page";
 import PurchasingOrders from "../modules/purchasing/Page";
 import PurchasingRFQ from "../modules/rfq/Page";
@@ -1831,189 +1844,7 @@ function SalesPricing() {
   );
 }
 
-// ─── Forecast Engine (real statistics) ───────────────────────────────────────
-type Method = "naive" | "sma" | "ses" | "holt" | "hw";
-const METHOD_LABEL: Record<Method, string> = {
-  naive: "朴素法 (Naive)",
-  sma:   "移动平均 (SMA-3)",
-  ses:   "一次指数平滑 (SES)",
-  holt:  "Holt 双参数 (含趋势)",
-  hw:    "Holt-Winters (含趋势+季节)",
-};
-
-// Lewis (1982) industry standard MAPE bands
-function mapeGrade(mape: number): { grade: string; color: string; band: string } {
-  if (mape < 10) return { grade: "A", color: A.green,  band: "高度精确" };
-  if (mape < 20) return { grade: "B", color: A.blue,   band: "良好" };
-  if (mape < 50) return { grade: "C", color: A.orange, band: "合理" };
-  return                  { grade: "D", color: A.red,    band: "不准确" };
-}
-
-// Coefficient-of-Variation based forecastability (XYZ classification)
-function xyzClass(history: number[]): { cls: "X" | "Y" | "Z"; cov: number; note: string; color: string } {
-  const mean = history.reduce((a, b) => a + b, 0) / history.length;
-  const std  = Math.sqrt(history.reduce((s, v) => s + (v - mean) ** 2, 0) / history.length);
-  const cov  = std / mean;
-  if (cov < 0.25) return { cls: "X", cov, color: A.green,  note: "需求平稳 · 易预测" };
-  if (cov < 0.50) return { cls: "Y", cov, color: A.orange, note: "中度波动 · 可预测" };
-  return                   { cls: "Z", cov, color: A.red,    note: "高度不规则 · 难预测" };
-}
-
-// Z-score for normal distribution at a service level α
-function zScore(serviceLevel: number): number {
-  const table: Record<number, number> = { 50: 0, 80: 0.84, 85: 1.04, 90: 1.28, 95: 1.65, 97: 1.88, 98: 2.05, 99: 2.33, 99.5: 2.58 };
-  const keys = Object.keys(table).map(Number).sort((a, b) => a - b);
-  for (const k of keys) if (Math.abs(k - serviceLevel) < 0.01) return table[k];
-  return 1.65;
-}
-
-function runForecast(
-  history: number[], method: Method,
-  params: { alpha: number; beta: number; gamma: number; season: number },
-  horizon: number
-): {
-  fitted: (number | null)[]; forecast: number[];
-  mape: number; rmse: number; mae: number; bias: number;
-  wmape: number; smape: number; trackingSignal: number; theilU: number;
-} {
-  const { alpha, beta, gamma, season } = params;
-  const n = history.length;
-  const fitted: (number | null)[] = Array(n).fill(null);
-  const forecast: number[] = [];
-
-  if (method === "naive") {
-    for (let i = 1; i < n; i++) fitted[i] = history[i - 1];
-    for (let h = 0; h < horizon; h++) forecast.push(history[n - 1]);
-  } else if (method === "sma") {
-    const w = 3;
-    for (let i = w; i < n; i++) {
-      fitted[i] = (history[i - 1] + history[i - 2] + history[i - 3]) / w;
-    }
-    const last3 = (history[n - 1] + history[n - 2] + history[n - 3]) / w;
-    for (let h = 0; h < horizon; h++) forecast.push(last3);
-  } else if (method === "ses") {
-    let level = history[0];
-    fitted[0] = level;
-    for (let i = 1; i < n; i++) {
-      level = alpha * history[i] + (1 - alpha) * level;
-      fitted[i] = level;
-    }
-    for (let h = 0; h < horizon; h++) forecast.push(level);
-  } else if (method === "holt") {
-    let level = history[0];
-    let trend = history[1] - history[0];
-    fitted[0] = level;
-    for (let i = 1; i < n; i++) {
-      const prevLevel = level;
-      level = alpha * history[i] + (1 - alpha) * (level + trend);
-      trend = beta * (level - prevLevel) + (1 - beta) * trend;
-      fitted[i] = level + trend;
-    }
-    for (let h = 1; h <= horizon; h++) forecast.push(level + h * trend);
-  } else if (method === "hw") {
-    const seasonals: number[] = Array(season).fill(0);
-    let level = history.slice(0, season).reduce((a, b) => a + b, 0) / season;
-    let trend = (history.slice(season, season * 2).reduce((a, b) => a + b, 0) -
-                 history.slice(0, season).reduce((a, b) => a + b, 0)) / (season * season);
-    for (let i = 0; i < season; i++) seasonals[i] = history[i] / level;
-
-    fitted[0] = level * seasonals[0];
-    for (let i = 1; i < n; i++) {
-      const s = seasonals[i % season];
-      const prevLevel = level;
-      level   = alpha * (history[i] / s) + (1 - alpha) * (level + trend);
-      trend   = beta * (level - prevLevel) + (1 - beta) * trend;
-      seasonals[i % season] = gamma * (history[i] / level) + (1 - gamma) * s;
-      fitted[i] = (level + trend) * seasonals[i % season];
-    }
-    for (let h = 1; h <= horizon; h++) {
-      forecast.push((level + h * trend) * seasonals[(n + h - 1) % season]);
-    }
-  }
-
-  let sumAbsPct = 0, sumSq = 0, sumAbs = 0, sumErr = 0, cnt = 0;
-  let sumActual = 0, sumSMAPE = 0;
-  let sumNaiveSq = 0;
-  for (let i = 0; i < n; i++) {
-    if (fitted[i] == null || history[i] === 0) continue;
-    const err = history[i] - (fitted[i] as number);
-    sumAbsPct += Math.abs(err / history[i]);
-    sumSq += err * err; sumAbs += Math.abs(err); sumErr += err; cnt++;
-    sumActual += history[i];
-    const denom = (Math.abs(history[i]) + Math.abs(fitted[i] as number)) / 2;
-    if (denom > 0) sumSMAPE += Math.abs(err) / denom;
-    if (i > 0) sumNaiveSq += (history[i] - history[i - 1]) ** 2;
-  }
-  const mae   = cnt ? sumAbs / cnt : 0;
-  const rmse  = cnt ? Math.sqrt(sumSq / cnt) : 0;
-  const bias  = cnt ? sumErr / cnt : 0;
-  return {
-    fitted, forecast: forecast.map((v) => Math.max(0, v)),
-    mape:           cnt ? (sumAbsPct / cnt) * 100 : 0,
-    rmse, mae, bias,
-    wmape:          sumActual ? (sumAbs / sumActual) * 100 : 0,
-    smape:          cnt ? (sumSMAPE / cnt) * 100 : 0,
-    trackingSignal: mae ? sumErr / mae : 0,           // |TS| > 4 → bias warning
-    theilU:         sumNaiveSq ? Math.sqrt(sumSq / sumNaiveSq) : 0, // <1 better than naive
-  };
-}
-
-// 24 months of demand per SKU (with trend + seasonality + noise)
-function genSeries(base: number, trend: number, seasonAmp: number, seed: number): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < 24; i++) {
-    const t = base + trend * i;
-    const s = 1 + seasonAmp * Math.sin(((i % 12) / 12) * Math.PI * 2 - Math.PI / 2);
-    const noise = 0.94 + ((Math.sin(i * 7.1 + seed) + 1) / 2) * 0.12;
-    out.push(Math.round(t * s * noise));
-  }
-  return out;
-}
-
-
-const FORECAST_PROCUREMENT_PROFILE: Record<string, { supplier: string; unitPrice: number; buyer: string }> = {
-  "SKU-00412": { supplier: "深圳新元电气", unitPrice: 2980, buyer: "陈思远" },
-  "SKU-00623": { supplier: "深圳新元电气", unitPrice: 12400, buyer: "陈思远" },
-  "SKU-00287": { supplier: "江苏铝合金集团", unitPrice: 142, buyer: "王志强" },
-  "SKU-00142": { supplier: "华东精工机械", unitPrice: 86, buyer: "李婷" },
-  "SKU-00815": { supplier: "华东精工机械", unitPrice: 4600, buyer: "李婷" },
-};
-
-function parseDemandSeries(text: string): number[] {
-  return text
-    .split(/[\s,，;；\n\r\t]+/)
-    .map((item) => Number(item.trim()))
-    .filter((item) => Number.isFinite(item) && item >= 0);
-}
-
-function formatDemandSeries(values: number[]) {
-  return values.join(", ");
-}
-
-function formatEta(days: number) {
-  const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-  return `${d.getMonth() + 1}月${String(d.getDate()).padStart(2, "0")}日`;
-}
-
-function demandDiagnostics(history: number[]) {
-  const n = history.length || 1;
-  const total = history.reduce((a, b) => a + b, 0);
-  const mean = total / n;
-  const sorted = [...history].sort((a, b) => a - b);
-  const min = sorted[0] ?? 0;
-  const max = sorted[sorted.length - 1] ?? 0;
-  const median = sorted.length % 2
-    ? sorted[Math.floor(sorted.length / 2)]
-    : ((sorted[sorted.length / 2 - 1] ?? 0) + (sorted[sorted.length / 2] ?? 0)) / 2;
-  const std = Math.sqrt(history.reduce((s, v) => s + (v - mean) ** 2, 0) / n);
-  const cov = mean ? std / mean : 0;
-  const last3 = history.slice(-3).reduce((a, b) => a + b, 0) / Math.max(1, history.slice(-3).length);
-  const prev3 = history.slice(-6, -3).reduce((a, b) => a + b, 0) / Math.max(1, history.slice(-6, -3).length);
-  const recentTrend = prev3 ? ((last3 - prev3) / prev3) * 100 : 0;
-  const zeros = history.filter((item) => item === 0).length;
-  return { n, total, mean, median, min, max, std, cov, recentTrend, zeros };
-}
-
+// ??? Forecast Engine (real statistics) ???????????????????????????????????????
 type SavedForecastPlan = {
   id: string;
   sku: string;
@@ -2299,7 +2130,7 @@ export function ForecastPanel() {
   const peakGap = Math.max(0, ...reconciliation.map((r) => r.gap));
   const firstStockoutIndex = reconciliation.findIndex((r) => r.risk === "高");
   const stockoutMonths = reconciliation.filter((r) => r.risk === "高").length;
-  const procurementProfile = FORECAST_PROCUREMENT_PROFILE[sku.sku] ?? { supplier: "未选择供应商", unitPrice: 0, buyer: "张磊" };
+  const procurementProfile = forecastProcurementProfileForSku(sku.sku);
   const currentMrpRow = mrpPlan?.rows.find((row) => row.sku === sku.sku) ?? null;
   const safetyFactor = serviceLevel >= 98 ? 1.18 : serviceLevel >= 95 ? 1.1 : 1.05;
   const recommendedQty = peakGap > 0 ? Math.ceil(peakGap * safetyFactor) : 0;
