@@ -253,9 +253,9 @@ export function AiPanel({ moduleId }: { moduleId: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [lastConfidence, setLastConfidence] = useState<AiConfidence | null>(null);
   const [asking, setAsking] = useState(false);
-  const [externalStatus, setExternalStatus] = useState("联网信号加载中");
+  const [externalStatus, setExternalStatus] = useState("外部信号样本加载中");
   const [marketPrices, setMarketPrices] = useState<MarketPrice[]>([]);
-  const [marketStatus, setMarketStatus] = useState("行情加载中");
+  const [marketStatus, setMarketStatus] = useState("行情样本加载中");
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   const startScan = useCallback(() => {
@@ -280,14 +280,14 @@ export function AiPanel({ moduleId }: { moduleId: string }) {
     }]);
     setLastConfidence(null);
     apiJson<{ signals: { type: string }[] }>("/api/external-signals")
-      .then((data) => setExternalStatus(`联网信号 ${data.signals.length} 条`))
-      .catch(() => setExternalStatus("联网信号暂不可用"));
+      .then((data) => setExternalStatus(`外部信号样本 ${data.signals.length} 条`))
+      .catch(() => setExternalStatus("外部信号样本暂不可用"));
     apiJson<{ asOf: string; prices: MarketPrice[] }>("/api/market-prices")
       .then((data) => {
         setMarketPrices(data.prices);
-        setMarketStatus(`行情 ${data.prices.length} 条`);
+        setMarketStatus(`行情样本 ${data.prices.length} 条`);
       })
-      .catch(() => setMarketStatus("行情暂不可用"));
+      .catch(() => setMarketStatus("行情样本暂不可用"));
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [moduleId, refreshKey, startScan]);
 
@@ -321,10 +321,10 @@ export function AiPanel({ moduleId }: { moduleId: string }) {
       const prefix = result.provider === "local"
         ? "本地分析: "
         : result.provider === "market-data"
-          ? "行情数据: "
+          ? "行情样本: "
         : `${result.provider === "doubao" ? "豆包" : "GPT"}: `;
       const timing = typeof result.timingMs === "number"
-        ? `\n\n耗时 ${result.timingMs}ms · 模型 ${result.modelMs ?? "-"}ms · ${result.usedWeb ? `联网 ${result.externalMs ?? "-"}ms` : "未联网"}`
+        ? `\n\n耗时 ${result.timingMs}ms · 模型 ${result.modelMs ?? "-"}ms · ${result.usedWeb ? `外部信号样本 ${result.externalMs ?? "-"}ms` : "未使用外部信号样本"}`
         : "";
       if (result.confidence) setLastConfidence(result.confidence);
       setMessages((prev) => [...prev, { role: "assistant", content: `${prefix}${result.content}${timing}`, confidence: result.confidence }]);
@@ -338,14 +338,14 @@ export function AiPanel({ moduleId }: { moduleId: string }) {
 
   async function refreshMarketPrices() {
     try {
-      setMarketStatus("行情刷新中");
+      setMarketStatus("行情样本更新中");
       const data = await apiJson<{ asOf: string; prices: MarketPrice[] }>("/api/market-prices/refresh", { method: "POST" });
       setMarketPrices(data.prices);
-      setMarketStatus(`行情 ${data.prices.length} 条`);
-      toast.success("行情数据已刷新");
+      setMarketStatus(`行情样本 ${data.prices.length} 条`);
+      toast.success("行情样本已更新");
     } catch {
-      setMarketStatus("行情刷新失败");
-      toast.error("行情刷新失败，请检查 API");
+      setMarketStatus("行情样本更新失败");
+      toast.error("行情样本更新失败，请检查 API");
     }
   }
 
@@ -475,14 +475,14 @@ export function AiPanel({ moduleId }: { moduleId: string }) {
             <span className="text-[10px]" style={{ color: A.gray2 }}>{activeIdx + 1} / {insights.length}</span>
           </div>
           <p className="text-[10px] mt-2 mb-3" style={{ color: A.gray2 }}>
-            基于 180 天历史数据 · 实时更新 · 仅供参考
+            基于 180 天历史数据 · 行情样本更新 · 仅供参考
           </p>
 
           <div className="rounded-xl p-2.5 mb-2.5" style={{ background: A.gray6 }}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
                 <BarChart2 size={11} style={{ color: A.orange }} />
-                <span className="text-[11px] font-semibold" style={{ color: A.label }}>行情数据</span>
+                <span className="text-[11px] font-semibold" style={{ color: A.label }}>行情样本</span>
               </div>
               <button onClick={refreshMarketPrices}
                 className="text-[10px] px-2 py-1 rounded-lg transition-colors hover:bg-white flex items-center gap-1"
@@ -513,7 +513,7 @@ export function AiPanel({ moduleId }: { moduleId: string }) {
               })}
             </div>
             <div className="text-[9px] mt-1.5" style={{ color: A.gray2 }}>
-              UAT 样本行情 · 点击卡片生成采购影响分析
+              非实时市场样本 · 点击卡片生成采购影响分析
             </div>
           </div>
 

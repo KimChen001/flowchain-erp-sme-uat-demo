@@ -131,13 +131,13 @@ function aiConfidence(body, db, result = {}, ctx) {
   }
   if (result.provider === 'market-data') {
     externalScore += 20
-    externalEvidence.push('命中内部行情数据')
+    externalEvidence.push('命中内部行情样本')
   }
   if (/外部|新闻|汇率|市场|价格|风险|铁|钢|铝|铜|美元|原油/.test(q)) {
     externalScore += 4
     if (!externalSignalCount && result.provider !== 'market-data') {
       externalScore -= 12
-      externalWarnings.push('缺少实时外部信号')
+      externalWarnings.push('缺少可用的外部信号样本')
     }
   } else if (!externalSignalCount && result.provider !== 'market-data') {
     externalWarnings.push('外部市场未参与本次判断')
