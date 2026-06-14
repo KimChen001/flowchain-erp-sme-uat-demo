@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Toaster, toast } from "sonner";
 import {
-  Area, BarChart, Bar, LineChart, Line,
+  BarChart, Bar, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, ComposedChart,
 } from "recharts";
@@ -12,11 +12,11 @@ import {
   CheckCircle2, Minus, BarChart2,
   ClipboardList, PackageCheck, FileText,
   AlertCircle, Plus,
-  X, Loader2, FileCheck2, Send,
+  Loader2, FileCheck2, Send,
   ClipboardCheck,
   Users, Receipt, Tag, FileSpreadsheet, Handshake, Wallet,
   ShieldCheck, AlertOctagon, Undo2, Building2, CreditCard,
-  Lock, LogOut, Printer, GitBranch,
+  Lock, LogOut, Printer,
 } from "lucide-react";
 import { navGroups, navItems } from "./routes";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
@@ -27,7 +27,6 @@ import { A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, Modal, Section
 import { AI_INSIGHTS } from "../modules/ai-assistant/ai-insights";
 import type {
   AiConfidence,
-  ApprovalSnapshot,
   ChatMessage,
   DemoUser,
   MarketPrice,
@@ -36,7 +35,6 @@ import type {
   PurchaseRequest,
   ReceivingDoc,
   RfqRecord,
-  SupplierRecommendationResult,
 } from "../types/scm";
 import {
   salesData,
@@ -54,7 +52,6 @@ import {
   PAYABLES,
   PORTAL_SUPPLIERS,
 } from "../data/demo-data";
-import { toNumber } from "../domain/purchasing/helpers";
 import { inventoryPlan } from "../domain/inventory/planning";
 import { inventoryPurchaseRequestPayload } from "../domain/inventory/purchase-request";
 import PurchasingRequests from "../modules/purchase-requests/Page";
