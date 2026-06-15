@@ -25,6 +25,17 @@ import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, Card, Chip, KpiCard, Modal, SectionHeader, SubTabs, inputStyle } from "../../components/ui";
+import {
+  DocumentActionBar,
+  DocumentEvidencePanel,
+  DocumentHeader,
+  DocumentLinesTable,
+  DocumentShell,
+  DocumentStatusTimeline,
+  DocumentTotals,
+  statusTone,
+  type TimelineStep,
+} from "../../components/document/DocumentShell";
 import type { SupplierInvoice, SupplierInvoiceStatus, SupplierInvoiceMatchStatus, PurchaseIntent } from "../../types/scm";
 import { CONTRACTS, PAYABLES, PORTAL_SUPPLIERS, RFQS, SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/demo-data";
 import {
@@ -36,6 +47,7 @@ import {
   supplierInvoiceExportRows,
   type InvoiceMatchQueueItem,
 } from "../../domain/procurement/invoice-matching";
+import { getInvoiceLinkedDocuments } from "../../domain/procurement/document-links";
 import PurchasingRequests from "../purchase-requests/Page";
 import PurchasingOrders from "../purchasing/Page";
 import PurchasingRFQ from "../rfq/Page";
@@ -205,6 +217,23 @@ function invoiceSourceLabel(source: SupplierInvoice["source"]) {
   } satisfies Record<SupplierInvoice["source"], string>)[source];
 }
 
+function invoiceTimeline(invoice: SupplierInvoice): TimelineStep[] {
+  const blocked = invoice.status === "已驳回" || invoice.varianceType === "重复发票";
+  const hasVariance = invoice.status === "存在差异" || invoice.matchStatus === "差异待处理" || invoice.varianceType !== "无差异";
+  const isPaid = invoice.status === "已付款" || invoice.paid;
+  const isPosted = invoice.status === "已过账应付" || invoice.postedToAp || isPaid;
+  const isApproved = invoice.status === "已审批" || isPosted;
+  const isMatched = invoice.status === "已匹配" || invoice.matchStatus === "自动匹配" || invoice.matchStatus === "已解决" || isApproved;
+  return [
+    { label: "已接收", status: "done", helper: invoice.receivedDate },
+    { label: "待匹配", status: isMatched || hasVariance ? "done" : "current", helper: invoice.matchStatus },
+    { label: hasVariance ? "存在差异" : "已匹配", status: blocked ? "blocked" : hasVariance ? "warning" : isMatched ? "done" : "pending", helper: invoice.varianceType },
+    { label: "已审批", status: isApproved ? "done" : blocked || hasVariance ? "pending" : "current", helper: invoice.approvalStatus || "等待 AP 审批" },
+    { label: "已过账应付", status: isPosted ? "done" : "pending", helper: invoice.postedToAp ? "已进入应付" : "未过账" },
+    { label: "已付款", status: isPaid ? "done" : "pending", helper: invoice.paid ? "付款完成" : "演示待付" },
+  ];
+}
+
 function SupplierInvoiceRegister() {
   const [invoices, setInvoices] = useState<SupplierInvoice[]>(SUPPLIER_INVOICES);
   const [statusFilter, setStatusFilter] = useState("全部");
@@ -283,24 +312,46 @@ function SupplierInvoiceRegister() {
   }
 
   function exportInvoice(invoice: SupplierInvoice) {
-    exportRowsToCsv(`supplier-invoice-${invoice.invoiceNumber}.csv`, invoice.lines.map((line) => ({
-      发票号码: invoice.invoiceNumber,
-      供应商: invoice.supplier,
-      PO: invoice.relatedPo,
-      GRN: invoice.relatedGrn || "",
-      SKU: line.sku,
-      品名: line.name,
+    const headerRows = [
+      ["发票ID", invoice.id],
+      ["发票号码", invoice.invoiceNumber],
+      ["供应商", invoice.supplier],
+      ["PO", invoice.relatedPo || ""],
+      ["GRN", invoice.relatedGrn || ""],
+      ["发票日期", invoice.invoiceDate],
+      ["接收日期", invoice.receivedDate],
+      ["到期日", invoice.dueDate],
+      ["付款条款", invoice.paymentTerms],
+      ["AP负责人", invoice.apOwner || ""],
+      ["来源", invoiceSourceLabel(invoice.source)],
+      ["匹配状态", invoice.matchStatus],
+      ["发票状态", invoice.status],
+      ["审批状态", invoice.approvalStatus || ""],
+      ["重复风险", invoice.duplicateRisk ? "是" : "否"],
+      ["未税金额", invoice.subtotal],
+      ["税额", invoice.tax],
+      ["运费", invoice.freight || 0],
+      ["发票总额", invoice.total],
+      ["差异金额", invoice.varianceAmount],
+    ].map(([field, value]) => ({ section: "header", field, value }));
+    const lineRows = invoice.lines.map((line) => ({
+      section: "line",
+      field: line.lineId,
+      value: `${line.sku} ${line.name}`,
       发票数量: line.quantity,
       单位: line.unit,
       单价: line.unitPrice,
+      税率: line.taxRate,
       税额: line.taxAmount,
-      行总额: line.lineTotal,
+      行金额: line.lineTotal,
       订购数量: line.orderedQty ?? "",
       收货数量: line.receivedQty ?? "",
+      匹配数量: line.matchedQty ?? "",
       差异类型: line.varianceType || invoice.varianceType,
       差异金额: line.varianceAmount ?? invoice.varianceAmount,
-    })));
-    toast.success("发票明细 CSV 已导出");
+    }));
+    exportRowsToCsv(`supplier-invoice-detail-${invoice.invoiceNumber}.csv`, [...headerRows, ...lineRows]);
+    toast.success("供应商发票详情 CSV 已导出");
   }
 
   const selectedSnapshot = selectedInvoice
@@ -399,101 +450,89 @@ function SupplierInvoiceRegister() {
       <Modal
         open={Boolean(selectedInvoice)}
         onClose={() => setSelectedInvoice(null)}
-        width={900}
-        title={selectedInvoice?.invoiceNumber || "供应商发票"}
-        subtitle={selectedInvoice ? `${selectedInvoice.supplier} · ${selectedInvoice.status}` : undefined}
-        footer={selectedInvoice && (
-          <>
-            <button onClick={() => runMatch(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>运行匹配</button>
-            <button onClick={() => approve(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
-            <button onClick={() => postToAp(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>过账到应付</button>
-            <button onClick={() => exportInvoice(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
-            <button onClick={() => setSelectedInvoice(null)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
-          </>
-        )}>
+        width={980}
+        title="供应商发票"
+        subtitle="AP Invoice · ERP document form">
         {selectedInvoice && selectedSnapshot && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-5 gap-2">
-              {[
-                ["PO", selectedInvoice.relatedPo || "—", A.blue],
-                ["GRN", selectedInvoice.relatedGrn || "缺少", selectedInvoice.relatedGrn ? A.label : A.orange],
-                ["发票总额", fmt(selectedInvoice.total), A.label],
-                ["差异", selectedInvoice.varianceAmount ? fmt(selectedInvoice.varianceAmount) : "无", selectedInvoice.varianceAmount ? A.red : A.green],
-                ["置信度", `${selectedInvoice.confidence || 0}%`, A.green],
-              ].map(([label, value, color]) => (
-                <div key={String(label)} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
-                  <div className="text-sm font-semibold mt-1 truncate" style={{ color: String(color) }}>{value}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl p-3" style={{ background: "#f0f6ff" }}>
-                <div className="text-[11px] font-semibold" style={{ color: A.blue }}>匹配快照</div>
-                <div className="grid grid-cols-2 gap-y-1 mt-2 text-[10px]">
-                  <span style={{ color: A.gray2 }}>PO 金额</span><span style={{ color: A.label }}>{fmt(selectedSnapshot.poAmount)}</span>
-                  <span style={{ color: A.gray2 }}>GRN 金额</span><span style={{ color: A.label }}>{fmt(selectedSnapshot.grnAmount)}</span>
-                  <span style={{ color: A.gray2 }}>发票金额</span><span style={{ color: A.label }}>{fmt(selectedSnapshot.invoiceAmount)}</span>
-                  <span style={{ color: A.gray2 }}>差异类型</span><span style={{ color: selectedSnapshot.varianceType === "无差异" ? A.green : A.red }}>{selectedSnapshot.varianceType}</span>
-                  <span style={{ color: A.gray2 }}>匹配状态</span><span style={{ color: A.label }}>{selectedSnapshot.matchStatus}</span>
-                </div>
-              </div>
-              <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                <div className="text-[11px] font-semibold" style={{ color: A.label }}>发票摘要</div>
-                <div className="grid grid-cols-2 gap-y-1 mt-2 text-[10px]">
-                  <span style={{ color: A.gray2 }}>发票日期</span><span>{selectedInvoice.invoiceDate}</span>
-                  <span style={{ color: A.gray2 }}>接收日期</span><span>{selectedInvoice.receivedDate}</span>
-                  <span style={{ color: A.gray2 }}>到期日</span><span>{selectedInvoice.dueDate}</span>
-                  <span style={{ color: A.gray2 }}>付款条款</span><span>{selectedInvoice.paymentTerms}</span>
-                  <span style={{ color: A.gray2 }}>未税/税额</span><span>{fmt(selectedInvoice.subtotal)} / {fmt(selectedInvoice.tax)}</span>
-                  <span style={{ color: A.gray2 }}>运费</span><span>{fmt(selectedInvoice.freight || 0)}</span>
-                </div>
-              </div>
-              <div className="rounded-xl p-3" style={{ background: "#fff8f0" }}>
-                <div className="text-[11px] font-semibold" style={{ color: A.orange }}>来源与证据</div>
-                <div className="text-[10px] leading-5 mt-2" style={{ color: A.sub }}>
-                  来源：{invoiceSourceLabel(selectedInvoice.source)}<br />
-                  AP 负责人：{selectedInvoice.apOwner}<br />
-                  备注：{selectedInvoice.notes || getInvoiceVarianceSummary(selectedInvoice)}
-                </div>
-              </div>
-            </div>
-
-            <Card>
-              <div className="px-4 py-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                <h3 className="text-xs font-semibold" style={{ color: A.label }}>发票行项目</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                      {["SKU", "品名", "发票数量", "单价", "税额", "行总额", "订购数", "收货数", "差异类型"].map((header) => (
-                        <th key={header} className="text-left px-4 py-2 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedInvoice.lines.map((line) => (
-                      <tr key={line.lineId}>
-                        <td className="px-4 py-2" style={{ color: A.blue }}>{line.sku}</td>
-                        <td className="px-4 py-2 font-medium" style={{ color: A.label }}>{line.name}</td>
-                        <td className="px-4 py-2">{line.quantity.toLocaleString()} {line.unit}</td>
-                        <td className="px-4 py-2">{fmt(line.unitPrice)}</td>
-                        <td className="px-4 py-2">{fmt(line.taxAmount)}</td>
-                        <td className="px-4 py-2 font-semibold">{fmt(line.lineTotal)}</td>
-                        <td className="px-4 py-2">{line.orderedQty ?? "—"}</td>
-                        <td className="px-4 py-2">{line.receivedQty ?? "—"}</td>
-                        <td className="px-4 py-2" style={{ color: (line.varianceType || selectedInvoice.varianceType) === "无差异" ? A.green : A.red }}>
-                          {line.varianceType || selectedInvoice.varianceType}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          </div>
+          <DocumentShell
+            title="供应商发票"
+            documentNo={selectedInvoice.invoiceNumber}
+            moduleLabel="采购 / 应付"
+            status={selectedInvoice.status}
+            subtitle={`${selectedInvoice.supplier} · PO ${selectedInvoice.relatedPo || "—"} · GRN ${selectedInvoice.relatedGrn || "缺少"}`}
+          >
+            <DocumentHeader
+              fields={[
+                { label: "发票ID", value: selectedInvoice.id },
+                { label: "发票号码", value: selectedInvoice.invoiceNumber },
+                { label: "供应商", value: selectedInvoice.supplier },
+                { label: "PO", value: selectedInvoice.relatedPo || "—", tone: selectedInvoice.relatedPo ? "info" : "warning" },
+                { label: "GRN", value: selectedInvoice.relatedGrn || "缺少", tone: selectedInvoice.relatedGrn ? "info" : "warning" },
+                { label: "发票日期", value: selectedInvoice.invoiceDate },
+                { label: "接收日期", value: selectedInvoice.receivedDate },
+                { label: "到期日", value: selectedInvoice.dueDate },
+                { label: "付款条款", value: selectedInvoice.paymentTerms },
+                { label: "AP负责人", value: selectedInvoice.apOwner || "—" },
+                { label: "来源", value: invoiceSourceLabel(selectedInvoice.source) },
+                { label: "匹配状态", value: selectedInvoice.matchStatus, tone: statusTone(selectedInvoice.matchStatus) },
+                { label: "发票状态", value: selectedInvoice.status, tone: statusTone(selectedInvoice.status) },
+                { label: "审批状态", value: selectedInvoice.approvalStatus || "—" },
+                { label: "重复风险", value: selectedInvoice.duplicateRisk ? "是" : "否", tone: selectedInvoice.duplicateRisk ? "danger" : "success" },
+                { label: "差异类型", value: selectedSnapshot.varianceType, tone: selectedSnapshot.varianceType === "无差异" ? "success" : "danger" },
+              ]}
+            />
+            <DocumentStatusTimeline steps={invoiceTimeline(selectedInvoice)} />
+            <DocumentLinesTable
+              rows={selectedInvoice.lines}
+              columns={[
+                { key: "sku", label: "SKU", render: (line) => <span style={{ color: A.blue }}>{String(line.sku)}</span> },
+                { key: "name", label: "品名" },
+                { key: "quantity", label: "发票数量", align: "right", render: (line) => Number(line.quantity).toLocaleString() },
+                { key: "unit", label: "单位" },
+                { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+                { key: "taxRate", label: "税率", align: "right", render: (line) => `${Math.round(Number(line.taxRate || 0) * 100)}%` },
+                { key: "taxAmount", label: "税额", align: "right", render: (line) => fmt(Number(line.taxAmount || 0)) },
+                { key: "lineTotal", label: "行金额", align: "right", render: (line) => fmt(Number(line.lineTotal || 0)) },
+                { key: "orderedQty", label: "订购数量", align: "right", render: (line) => line.orderedQty ?? "—" },
+                { key: "receivedQty", label: "收货数量", align: "right", render: (line) => line.receivedQty ?? "—" },
+                { key: "matchedQty", label: "匹配数量", align: "right", render: (line) => line.matchedQty ?? "—" },
+                { key: "varianceType", label: "差异类型", render: (line) => String(line.varianceType || selectedInvoice.varianceType) },
+                { key: "varianceAmount", label: "差异金额", align: "right", render: (line) => fmt(Number(line.varianceAmount ?? selectedInvoice.varianceAmount ?? 0)) },
+              ]}
+            />
+            <DocumentTotals
+              totals={[
+                { label: "未税金额", value: fmt(selectedInvoice.subtotal) },
+                { label: "税额", value: fmt(selectedInvoice.tax) },
+                { label: "运费", value: fmt(selectedInvoice.freight || 0) },
+                { label: "发票总额", value: fmt(selectedInvoice.total), tone: "info" },
+                { label: "差异金额", value: fmt(selectedSnapshot.varianceAmount), tone: selectedSnapshot.varianceAmount ? "danger" : "success" },
+              ]}
+              columns={5}
+            />
+            <DocumentEvidencePanel
+              linkedDocuments={getInvoiceLinkedDocuments(selectedInvoice, purchaseOrders, receivingDocs)}
+              confidence={`${selectedInvoice.confidence || 0}%`}
+              provenance={invoiceSourceLabel(selectedInvoice.source)}
+              notes={selectedInvoice.notes || getInvoiceVarianceSummary(selectedInvoice)}
+              evidence={[
+                { label: "PO 金额", value: fmt(selectedSnapshot.poAmount) },
+                { label: "GRN 金额", value: fmt(selectedSnapshot.grnAmount) },
+                { label: "发票金额", value: fmt(selectedSnapshot.invoiceAmount) },
+                { label: "匹配状态", value: selectedSnapshot.matchStatus, tone: statusTone(selectedSnapshot.matchStatus) },
+                { label: "差异类型", value: selectedSnapshot.varianceType, tone: selectedSnapshot.varianceType === "无差异" ? "success" : "danger" },
+                { label: "重复风险", value: selectedInvoice.duplicateRisk ? "是" : "否", tone: selectedInvoice.duplicateRisk ? "danger" : "success" },
+              ]}
+            />
+            <DocumentActionBar>
+              <button onClick={() => runMatch(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>运行匹配</button>
+              <button onClick={() => approve(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
+              <button onClick={() => postToAp(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>过账到应付</button>
+              <button onClick={() => reject(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
+              <button onClick={() => exportInvoice(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
+              <button onClick={() => setSelectedInvoice(null)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
+            </DocumentActionBar>
+          </DocumentShell>
         )}
       </Modal>
     </div>

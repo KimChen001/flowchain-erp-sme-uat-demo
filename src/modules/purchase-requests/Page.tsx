@@ -7,9 +7,60 @@ import {
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
-import { OWNERS, SKU_CATALOG, SUPPLIER_LIST } from "../../data/demo-data";
+import { OWNERS, SKU_CATALOG, SUPPLIER_LIST, purchaseOrders } from "../../data/demo-data";
 import type { PurchaseIntent, PurchaseOrder, PurchaseRequest, PurchaseRequestStatus, RfqRecord, SupplierRecommendationResult } from "../../types/scm";
 import { A, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard, Modal, SegmentedControl } from "../../components/ui";
+import {
+  DocumentActionBar,
+  DocumentEvidencePanel,
+  DocumentHeader,
+  DocumentLinesTable,
+  DocumentShell,
+  DocumentStatusTimeline,
+  DocumentTotals,
+  statusTone,
+  type TimelineStep,
+} from "../../components/document/DocumentShell";
+
+function prTimeline(pr: PurchaseRequest): TimelineStep[] {
+  const rejected = pr.status === "已驳回" || pr.status === "已取消";
+  const approved = pr.status === "已批准" || pr.status === "已转PO";
+  return [
+    { label: "草稿", status: pr.status === "草稿" ? "current" : "done", helper: pr.created },
+    { label: "待审批", status: rejected ? "blocked" : approved ? "done" : pr.status === "待审批" ? "current" : "pending" },
+    { label: "已审批", status: approved ? "done" : rejected ? "blocked" : "pending" },
+    { label: "已转 PO/RFQ", status: pr.status === "已转PO" ? "done" : approved ? "current" : "pending", helper: pr.linkedPo || "等待转单" },
+    { label: rejected ? pr.status : "已关闭", status: rejected ? "blocked" : pr.status === "已转PO" ? "done" : "pending" },
+  ];
+}
+
+function exportPurchaseRequestDetail(pr: PurchaseRequest) {
+  const headerRows = [
+    ["PR编号", pr.pr],
+    ["申请人", pr.requester],
+    ["采购负责人", pr.buyer],
+    ["需求日期", pr.requiredDate],
+    ["优先级", pr.priority],
+    ["状态", pr.status],
+    ["供应商", pr.supplier],
+    ["来源", pr.source],
+    ["来源SKU", pr.sourceSku],
+    ["金额", pr.amount],
+    ["原因", pr.reason],
+  ].map(([field, value]) => ({ section: "header", field, value }));
+  const lineRows = [{
+    section: "line",
+    field: pr.sourceSku || pr.pr,
+    value: pr.sourceName,
+    数量: pr.quantity,
+    单位: pr.unit,
+    单价: pr.unitPrice,
+    金额: pr.amount,
+    供应商: pr.supplier,
+  }];
+  exportRowsToCsv(`purchase-request-detail-${pr.pr}.csv`, [...headerRows, ...lineRows]);
+  toast.success("采购申请详情 CSV 已导出");
+}
 
 function PRStatusPill({ status }: { status: string }) {
   const map: Record<PurchaseRequestStatus, { color: string; bg: string }> = {
@@ -177,6 +228,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
   const [supplierRecommendationResult, setSupplierRecommendationResult] = useState<SupplierRecommendationResult | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [creatingRfq, setCreatingRfq] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -646,6 +698,11 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
               />
 
               <div className="flex flex-wrap gap-2">
+                <button onClick={() => setDetailOpen(true)}
+                  className="h-8 px-3 rounded-lg text-xs font-semibold"
+                  style={{ background: "#f0f6ff", color: A.blue }}>
+                  查看详情
+                </button>
                 {selected.status === "待审批" && (
                   <>
                     <button onClick={() => approveRequest(selected.pr)}
@@ -677,6 +734,91 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
           )}
         </Card>
       </div>
+      <Modal open={detailOpen && Boolean(selected)} onClose={() => setDetailOpen(false)} width={920}
+        title="采购申请" subtitle="PR · ERP document form">
+        {selected && (
+          <DocumentShell
+            title="采购申请"
+            documentNo={selected.pr}
+            moduleLabel="采购申请 / PR"
+            status={selected.status}
+            subtitle={`${selected.requester} → ${selected.buyer} · ${selected.sourceSku || "—"}`}
+          >
+            <DocumentHeader
+              fields={[
+                { label: "PR编号", value: selected.pr },
+                { label: "申请人", value: selected.requester },
+                { label: "采购负责人", value: selected.buyer },
+                { label: "需求日期", value: selected.requiredDate },
+                { label: "优先级", value: selected.priority, tone: selected.priority === "高" ? "danger" : selected.priority === "中" ? "warning" : "success" },
+                { label: "状态", value: selected.status, tone: statusTone(selected.status) },
+                { label: "供应商", value: selected.supplier || "—" },
+                { label: "来源", value: purchaseRequestSourceMeta(selected.source).label },
+                { label: "来源 SKU", value: selected.sourceSku || "—", helper: selected.sourceName },
+                { label: "数量", value: `${Number(selected.quantity || 0).toLocaleString()} ${selected.unit}` },
+                { label: "单价", value: fmt(selected.unitPrice || 0) },
+                { label: "金额", value: fmt(selected.amount || 0), tone: "info" },
+              ]}
+            />
+            <DocumentStatusTimeline steps={prTimeline(selected)} />
+            <DocumentLinesTable
+              rows={[{
+                id: selected.pr,
+                sku: selected.sourceSku || "—",
+                name: selected.sourceName || "采购申请物料",
+                quantity: selected.quantity,
+                unit: selected.unit,
+                unitPrice: selected.unitPrice,
+                amount: selected.amount,
+                supplier: selected.supplier,
+                reason: selected.reason,
+              }]}
+              columns={[
+                { key: "sku", label: "SKU", render: (line) => <span style={{ color: A.blue }}>{String(line.sku)}</span> },
+                { key: "name", label: "品名" },
+                { key: "quantity", label: "数量", align: "right", render: (line) => Number(line.quantity || 0).toLocaleString() },
+                { key: "unit", label: "单位" },
+                { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+                { key: "amount", label: "金额", align: "right", render: (line) => fmt(Number(line.amount || 0)) },
+                { key: "supplier", label: "建议供应商" },
+                { key: "reason", label: "备注" },
+              ]}
+            />
+            <DocumentTotals
+              totals={[
+                { label: "申请数量", value: `${Number(selected.quantity || 0).toLocaleString()} ${selected.unit}` },
+                { label: "申请金额", value: fmt(selected.amount || 0), tone: "info" },
+                { label: "推荐单价", value: fmt(selected.unitPrice || 0) },
+                { label: "后续 PO", value: selected.linkedPo || purchaseOrders.find((order) => order.sourceRequest === selected.pr)?.po || "—" },
+              ]}
+            />
+            <DocumentEvidencePanel
+              linkedDocuments={[
+                ...(selected.linkedPo ? [{ label: "PO / 采购订单", value: selected.linkedPo, moduleId: "purchasing", tone: "success" as const }] : []),
+                ...purchaseOrders.filter((order) => order.sourceRequest === selected.pr).slice(0, 2).map((order) => ({ label: "PO / 采购订单", value: order.po, moduleId: "purchasing", tone: statusTone(order.status) })),
+                ...(selected.source === "forecast" || selected.source === "mrp-release" ? [{ label: "高级计划", value: selected.source, moduleId: "forecast", tone: "info" as const }] : []),
+              ]}
+              provenance={selected.approvalSnapshot?.source || selected.source}
+              notes={selected.reason || selected.approvalSnapshot?.summary}
+              evidence={[
+                { label: "来源", value: purchaseRequestSourceMeta(selected.source).label },
+                { label: "审批快照", value: selected.approvalSnapshot?.createdAt ? new Date(selected.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—" },
+                { label: "推荐供应商", value: supplierRecommendationResult?.primary?.supplier || selected.supplier || "—" },
+                { label: "推荐评分", value: supplierRecommendationResult?.primary?.score || "—" },
+                { label: "RFQ建议", value: supplierRecommendationResult?.needsRfq ? "建议 RFQ" : "可直接采购", tone: supplierRecommendationResult?.needsRfq ? "warning" : "success" },
+                { label: "状态", value: selected.status, tone: statusTone(selected.status) },
+              ]}
+            />
+            <DocumentActionBar>
+              {selected.status === "待审批" && <button onClick={() => approveRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>批准申请</button>}
+              {selected.status === "待审批" && <button onClick={() => rejectRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>}
+              {selected.status === "已批准" && <button onClick={() => convertRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>转采购订单</button>}
+              <button onClick={() => exportPurchaseRequestDetail(selected)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
+              <button onClick={() => setDetailOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
+            </DocumentActionBar>
+          </DocumentShell>
+        )}
+      </Modal>
       <NewPRModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={createManualRequest} />
     </div>
   );

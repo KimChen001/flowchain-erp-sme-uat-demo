@@ -11,18 +11,79 @@ import {
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
-import { procurementTrend, purchaseOrders } from "../../data/demo-data";
+import { procurementTrend, purchaseOrders, receivingDocs, SUPPLIER_INVOICES } from "../../data/demo-data";
 import type { POStatus, PurchaseOrder, ReceivingDoc, ReceivingDocLine } from "../../types/scm";
 import {
   A, AppleTooltip, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard,
   Modal, SectionHeader, SegmentedControl,
 } from "../../components/ui";
+import {
+  DocumentActionBar,
+  DocumentEvidencePanel,
+  DocumentHeader,
+  DocumentLinesTable,
+  DocumentShell,
+  DocumentStatusTimeline,
+  DocumentTotals,
+  statusTone,
+  type TimelineStep,
+} from "../../components/document/DocumentShell";
 import { exportModulePdf } from "../../lib/pdf-export";
 import { NewPOModal } from "./components/NewPOModal";
 import { POStatusPill } from "./components/POStatusPill";
 import { TrackShipmentModal } from "./components/TrackShipmentModal";
 import { lineRemaining, lineStatusLabel, lineStatusStyle, poLinesOf, poTotals, toNumber } from "../../domain/purchasing/helpers";
 import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
+import { getPoLinkedDocuments } from "../../domain/procurement/document-links";
+
+function poTimeline(po: PurchaseOrder): TimelineStep[] {
+  const cancelled = po.status === "已取消" || po.status === "已驳回";
+  const statusOrder = ["草稿", "待审批", "已审批", "已发出", "部分到货", "已完成"] as const;
+  const currentIndex = Math.max(0, statusOrder.indexOf(po.status as any));
+  return [
+    { label: "草稿", status: cancelled ? "done" : currentIndex > 0 ? "done" : "current", helper: po.created },
+    { label: "待审批", status: cancelled ? "blocked" : currentIndex > 1 ? "done" : po.status === "待审批" ? "current" : "pending", helper: po.status === "已驳回" ? "已驳回" : "审批队列" },
+    { label: "已审批", status: currentIndex > 2 ? "done" : po.status === "已审批" ? "current" : "pending" },
+    { label: "已发出", status: currentIndex > 3 ? "done" : po.status === "已发出" ? "current" : "pending", helper: po.eta },
+    { label: "部分到货", status: currentIndex > 4 ? "done" : po.status === "部分到货" ? "warning" : "pending", helper: `${po.received}/${po.items}` },
+    { label: "已完成", status: po.status === "已完成" ? "done" : cancelled ? "blocked" : "pending", helper: cancelled ? po.status : po.paid ? "已付款" : "待下游发票" },
+  ];
+}
+
+function exportPoDetail(po: PurchaseOrder) {
+  const lines = poLinesOf(po);
+  const totals = poTotals(po);
+  const headerRows = [
+    ["PO编号", po.po],
+    ["供应商", po.supplier],
+    ["创建日期", po.created],
+    ["ETA", po.eta],
+    ["采购负责人", po.owner],
+    ["优先级", po.priority],
+    ["状态", po.status],
+    ["来源类型", po.source || "manual"],
+    ["来源PR", po.sourceRequest || ""],
+    ["来源RFQ", po.sourceRfq || ""],
+    ["来源SKU", po.sourceSku || ""],
+    ["金额", totals.totalAmount || po.amount],
+  ].map(([field, value]) => ({ section: "header", field, value }));
+  const lineRows = lines.map((line) => ({
+    section: "line",
+    field: line.poLineId,
+    value: `${line.sku} ${line.itemName}`,
+    订购数量: line.quantityOrdered,
+    已收货数量: line.quantityReceived,
+    合格数量: line.quantityAccepted,
+    拒收数量: line.quantityRejected,
+    单位: line.unit,
+    单价: line.unitPrice,
+    金额: toNumber(line.quantityOrdered) * toNumber(line.unitPrice),
+    仓库: line.warehouseId || "",
+    状态: line.status || "",
+  }));
+  exportRowsToCsv(`purchase-order-detail-${po.po}.csv`, [...headerRows, ...lineRows]);
+  toast.success("采购订单详情 CSV 已导出");
+}
 
 export default function PurchasingOrdersPage() {
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
@@ -31,6 +92,7 @@ export default function PurchasingOrdersPage() {
   const [selectedId, setSelectedId] = useState(purchaseOrders[0]?.po ?? "");
   const [newOpen, setNewOpen] = useState(false);
   const [trackOpen, setTrackOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -450,6 +512,11 @@ export default function PurchasingOrdersPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 mt-5">
+            <button onClick={() => setDetailOpen(true)}
+              className="flex-1 text-xs py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-1.5"
+              style={{ background: A.gray6, color: A.blue }}>
+              <Eye size={12} /> 查看详情
+            </button>
             {selectedPO.status === "待审批" && (
               <>
                 <button onClick={() => approve(selectedPO.po)}
@@ -499,6 +566,91 @@ export default function PurchasingOrdersPage() {
           setSelectedId(created.po);
           return created;
         }} />
+      <Modal open={detailOpen && Boolean(selectedPO)} onClose={() => setDetailOpen(false)} width={980}
+        title="采购订单" subtitle="PO · ERP document form">
+        {selectedPO && (
+          <DocumentShell
+            title="采购订单"
+            documentNo={selectedPO.po}
+            moduleLabel="采购"
+            status={selectedPO.status}
+            subtitle={`${selectedPO.supplier} · ETA ${selectedPO.eta}`}
+          >
+            <DocumentHeader
+              fields={[
+                { label: "PO编号", value: selectedPO.po },
+                { label: "供应商", value: selectedPO.supplier },
+                { label: "创建日期", value: selectedPO.created },
+                { label: "ETA", value: selectedPO.eta },
+                { label: "采购负责人", value: selectedPO.owner },
+                { label: "优先级", value: selectedPO.priority, tone: selectedPO.priority === "高" ? "danger" : selectedPO.priority === "中" ? "warning" : "success" },
+                { label: "状态", value: selectedPO.status, tone: statusTone(selectedPO.status) },
+                { label: "来源类型", value: selectedPO.source || "manual" },
+                { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
+                { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
+                { label: "来源 SKU", value: selectedPO.sourceSku || "—", helper: selectedPO.sourceName },
+                { label: "金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
+              ]}
+            />
+            <DocumentStatusTimeline steps={poTimeline(selectedPO)} />
+            <DocumentLinesTable
+              rows={selectedPOLines.length ? selectedPOLines : [{
+                poLineId: `${selectedPO.po}-SUMMARY`,
+                sku: selectedPO.sourceSku || "SUMMARY",
+                itemName: selectedPO.sourceName || "采购订单汇总行",
+                quantityOrdered: selectedPO.recommendedQty || selectedPO.items || 0,
+                quantityReceived: selectedPO.received || 0,
+                quantityAccepted: selectedPO.received || 0,
+                quantityRejected: 0,
+                unit: selectedPO.unit || "行",
+                unitPrice: selectedPO.unitPrice || selectedPO.amount,
+                currency: selectedPO.currency || "CNY",
+              }]}
+              columns={[
+                { key: "poLineId", label: "行号", render: (line) => <span style={{ color: A.blue }}>{String(line.poLineId)}</span> },
+                { key: "sku", label: "SKU" },
+                { key: "itemName", label: "品名" },
+                { key: "quantityOrdered", label: "订单数量", align: "right", render: (line) => Number(line.quantityOrdered || 0).toLocaleString() },
+                { key: "unit", label: "单位" },
+                { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+                { key: "quantityReceived", label: "已收货数量", align: "right", render: (line) => Number(line.quantityReceived || 0).toLocaleString() },
+                { key: "quantityRejected", label: "拒收数量", align: "right", render: (line) => Number(line.quantityRejected || 0).toLocaleString() },
+                { key: "warehouseId", label: "仓库", render: (line) => String(line.warehouseId || selectedPO.warehouseId || "MAIN") },
+                { key: "status", label: "状态", render: (line) => String(line.status || lineStatusLabel(line.status)) },
+              ]}
+            />
+            <DocumentTotals
+              totals={[
+                { label: "采购金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
+                { label: "订单数量", value: selectedPOTotals.totalOrderedQty.toLocaleString() },
+                { label: "已收货数量", value: selectedPOTotals.totalReceivedQty.toLocaleString(), tone: selectedPOTotals.totalReceivedQty ? "success" : "neutral" },
+                { label: "未收货数量", value: Math.max(0, selectedPOTotals.totalOrderedQty - selectedPOTotals.totalReceivedQty).toLocaleString(), tone: selectedPOTotals.totalOrderedQty > selectedPOTotals.totalReceivedQty ? "warning" : "success" },
+                { label: "收货进度", value: `${selectedPOTotals.totalOrderedQty ? Math.round((selectedPOTotals.totalReceivedQty / selectedPOTotals.totalOrderedQty) * 100) : 0}%` },
+              ]}
+              columns={5}
+            />
+            <DocumentEvidencePanel
+              linkedDocuments={getPoLinkedDocuments(selectedPO, SUPPLIER_INVOICES, receivingDocs)}
+              provenance={selectedPO.source || "manual"}
+              notes={selectedPO.reason || selectedPO.approvalSnapshot?.summary || "采购订单演示详情，不触发真实供应商下发。"}
+              evidence={[
+                { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
+                { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
+                { label: "审批快照", value: selectedPO.approvalSnapshot?.createdAt ? new Date(selectedPO.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—" },
+                { label: "关联 GRN", value: receivingDocs.filter((item) => item.po === selectedPO.po).length },
+                { label: "关联发票", value: SUPPLIER_INVOICES.filter((item) => item.relatedPo === selectedPO.po).length },
+                { label: "付款状态", value: selectedPO.paid ? "已付款" : "未付款", tone: selectedPO.paid ? "success" : "warning" },
+              ]}
+            />
+            <DocumentActionBar>
+              <button onClick={() => setTrackOpen(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>打开收货</button>
+              <button onClick={() => toast("供应商发票位于采购工作台", { description: "请打开采购工作台的供应商发票 tab 查看关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开供应商发票</button>
+              <button onClick={() => exportPoDetail(selectedPO)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
+              <button onClick={() => setDetailOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
+            </DocumentActionBar>
+          </DocumentShell>
+        )}
+      </Modal>
       <TrackShipmentModal open={trackOpen} onClose={() => setTrackOpen(false)} po={selectedPO} />
     </div>
   );

@@ -6,13 +6,27 @@ import {
   Undo2, XCircle,
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
-import { arrivalSchedule, purchaseOrders, qcExceptions, receivingDocs } from "../../data/demo-data";
+import { exportRowsToCsv } from "../../lib/data-export";
+import { fmt } from "../../lib/format";
+import { arrivalSchedule, purchaseOrders, qcExceptions, receivingDocs, SUPPLIER_INVOICES } from "../../data/demo-data";
 import type { PurchaseOrder, ReceivingDoc, ReceivingDocLine, RecvStatus } from "../../types/scm";
 import { lineRemaining, poLinesOf, toNumber } from "../../domain/purchasing/helpers";
 import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
 import { QCModal } from "./components/QCModal";
 import { ScanReceiveModal } from "./components/ScanReceiveModal";
-import { A, Card, Chip, DocumentHistoryPanel, KpiCard, SectionHeader, SubTabs } from "../../components/ui";
+import { A, Card, Chip, DocumentHistoryPanel, KpiCard, Modal, SectionHeader, SubTabs } from "../../components/ui";
+import {
+  DocumentActionBar,
+  DocumentEvidencePanel,
+  DocumentHeader,
+  DocumentLinesTable,
+  DocumentShell,
+  DocumentStatusTimeline,
+  DocumentTotals,
+  statusTone,
+  type TimelineStep,
+} from "../../components/document/DocumentShell";
+import { getGrnLinkedDocuments } from "../../domain/procurement/document-links";
 
 const recvStatusMeta: Record<RecvStatus, { color: string; bg: string }> = {
   "待收货": { color: A.gray1, bg: A.gray6 },
@@ -29,6 +43,46 @@ function RecvStatusPill({ status }: { status: string }) {
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
       style={{ color: m.color, background: m.bg }}>{displayStatus}</span>
   );
+}
+
+function receivingTimeline(grn: ReceivingDoc): TimelineStep[] {
+  const statusOrder = ["待收货", "已签收", "质检中", "已入库"] as const;
+  const currentIndex = Math.max(0, statusOrder.indexOf(grn.status as any));
+  return [
+    { label: "待收货", status: currentIndex > 0 || grn.status === "异常处理" ? "done" : "current", helper: grn.arrived },
+    { label: "质检中", status: grn.status === "质检中" ? "current" : currentIndex > 2 || grn.status === "异常处理" ? "done" : "pending", helper: `${grn.passed}/${grn.failed}` },
+    { label: "已收货", status: grn.status === "已入库" ? "done" : grn.status === "异常处理" ? "warning" : "pending", helper: grn.warehouse },
+    { label: "异常处理", status: grn.status === "异常处理" ? "blocked" : grn.failed > 0 ? "warning" : "pending", helper: grn.failed > 0 ? `拒收 ${grn.failed}` : "无异常" },
+    { label: "已关闭", status: grn.status === "已入库" && grn.inventoryApplied ? "done" : "pending", helper: grn.postedAt ? new Date(grn.postedAt).toLocaleString("zh-CN") : "待关闭" },
+  ];
+}
+
+function exportReceivingDetail(grn: ReceivingDoc) {
+  const lines = grnLinesOf(grn);
+  const headerRows = [
+    ["GRN编号", grn.grn],
+    ["供应商", grn.supplier],
+    ["PO", grn.po],
+    ["收货日期", grn.arrived],
+    ["仓库", grn.warehouse],
+    ["状态", grn.status],
+    ["负责人", grn.receiver],
+    ["库存移动", grn.inventoryMovementIds?.join(", ") || ""],
+  ].map(([field, value]) => ({ section: "header", field, value }));
+  const lineRows = lines.map((line) => ({
+    section: "line",
+    field: line.grnLineId || line.poLineId || line.sku,
+    value: `${line.sku} ${line.itemName || ""}`.trim(),
+    订单数量: "",
+    收货数量: line.receivedQty,
+    合格数量: line.acceptedQty,
+    拒收数量: line.rejectedQty,
+    单位: line.unit || "",
+    仓库: line.warehouseId || grn.warehouse,
+    状态: line.status || "",
+  }));
+  exportRowsToCsv(`receiving-detail-${grn.grn}.csv`, [...headerRows, ...lineRows]);
+  toast.success("收货单详情 CSV 已导出");
 }
 
 // ─── Receiving · ERP Data ─────────────────────────────────────────────────────
@@ -352,6 +406,7 @@ function ReceivingOps() {
   const [qcOpen, setQcOpen] = useState(false);
   const [activeGrn, setActiveGrn] = useState<ReceivingDoc | null>(null);
   const [selectedGrnId, setSelectedGrnId] = useState(receivingDocs[0]?.grn ?? "");
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -642,6 +697,11 @@ function ReceivingOps() {
                   ));
                 })()}
               </div>
+              <button onClick={() => setDetailOpen(true)}
+                className="mt-3 h-8 px-3 rounded-lg text-xs font-semibold"
+                style={{ background: "#f0f6ff", color: A.blue }}>
+                查看 ERP 单据
+              </button>
             </div>
             <div className="col-span-3">
               <DocumentHistoryPanel
@@ -695,6 +755,95 @@ function ReceivingOps() {
       <ScanReceiveModal open={scanOpen} onClose={() => setScanOpen(false)}
         candidates={orders.filter((p) => ["已发出", "部分到货"].includes(p.status) && poLinesOf(p).some((line) => lineRemaining(line) > 0))}
         onReceive={startReceive} />
+      <Modal open={detailOpen && Boolean(selectedGrn)} onClose={() => setDetailOpen(false)} width={980}
+        title="收货单" subtitle="GRN · ERP document form">
+        {selectedGrn && (() => {
+          const lines = grnLinesOf(selectedGrn);
+          const receivedQty = lines.reduce((sum, line) => sum + toNumber(line.receivedQty), 0);
+          const acceptedQty = lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
+          const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
+          const relatedPo = orders.find((item) => item.po === selectedGrn.po) || purchaseOrders.find((item) => item.po === selectedGrn.po);
+          const estimatedAmount = relatedPo ? Math.round((relatedPo.amount || 0) * (acceptedQty / Math.max(1, poLinesOf(relatedPo).reduce((sum, line) => sum + toNumber(line.quantityOrdered), 0)))) : 0;
+          return (
+            <DocumentShell
+              title="收货单"
+              documentNo={selectedGrn.grn}
+              moduleLabel="收货 / GRN"
+              status={selectedGrn.status}
+              subtitle={`${selectedGrn.supplier} · PO ${selectedGrn.po}`}
+            >
+              <DocumentHeader
+                fields={[
+                  { label: "GRN编号", value: selectedGrn.grn },
+                  { label: "供应商", value: selectedGrn.supplier },
+                  { label: "PO", value: selectedGrn.po, tone: "info" },
+                  { label: "收货日期", value: selectedGrn.arrived },
+                  { label: "仓库", value: selectedGrn.warehouse || "—" },
+                  { label: "状态", value: selectedGrn.status, tone: statusTone(selectedGrn.status) },
+                  { label: "质检状态", value: selectedGrn.failed > 0 ? "存在拒收" : selectedGrn.status === "质检中" ? "质检中" : "通过", tone: selectedGrn.failed > 0 ? "danger" : selectedGrn.status === "质检中" ? "warning" : "success" },
+                  { label: "负责人", value: selectedGrn.receiver || "—" },
+                  { label: "Dock", value: selectedGrn.dock || "—" },
+                  { label: "库存过账", value: selectedGrn.inventoryApplied ? "已应用" : "未应用", tone: selectedGrn.inventoryApplied ? "success" : "warning" },
+                  { label: "库存移动", value: selectedGrn.inventoryMovementIds?.join(", ") || "—" },
+                  { label: "过账时间", value: selectedGrn.postedAt ? new Date(selectedGrn.postedAt).toLocaleString("zh-CN") : "—" },
+                ]}
+                columns={4}
+              />
+              <DocumentStatusTimeline steps={receivingTimeline(selectedGrn)} />
+              <DocumentLinesTable
+                rows={lines.length ? lines : [{
+                  grnLineId: `${selectedGrn.grn}-SUMMARY`,
+                  sku: "SUMMARY",
+                  itemName: "收货汇总行",
+                  receivedQty: selectedGrn.items,
+                  acceptedQty: selectedGrn.passed,
+                  rejectedQty: selectedGrn.failed,
+                  unit: "件",
+                  status: selectedGrn.status,
+                }]}
+                columns={[
+                  { key: "sku", label: "SKU", render: (line) => <span style={{ color: A.blue }}>{String(line.sku)}</span> },
+                  { key: "itemName", label: "品名", render: (line) => String(line.itemName || "—") },
+                  { key: "orderedQty", label: "订单数量", align: "right", render: (line) => String((line as any).orderedQty ?? "—") },
+                  { key: "receivedQty", label: "收货数量", align: "right", render: (line) => Number(line.receivedQty || 0).toLocaleString() },
+                  { key: "acceptedQty", label: "合格数量", align: "right", render: (line) => Number(line.acceptedQty || 0).toLocaleString() },
+                  { key: "rejectedQty", label: "拒收数量", align: "right", render: (line) => Number(line.rejectedQty || 0).toLocaleString() },
+                  { key: "unit", label: "单位", render: (line) => String(line.unit || "件") },
+                  { key: "variance", label: "差异", render: (line) => Number(line.rejectedQty || 0) > 0 ? "拒收差异" : "无差异" },
+                  { key: "status", label: "备注", render: (line) => String(line.status || selectedGrn.status) },
+                ]}
+              />
+              <DocumentTotals
+                totals={[
+                  { label: "收货数量", value: receivedQty.toLocaleString() },
+                  { label: "合格数量", value: acceptedQty.toLocaleString(), tone: "success" },
+                  { label: "拒收数量", value: rejectedQty.toLocaleString(), tone: rejectedQty > 0 ? "danger" : "success" },
+                  { label: "收货金额", value: estimatedAmount ? fmt(estimatedAmount) : "—" },
+                ]}
+              />
+              <DocumentEvidencePanel
+                linkedDocuments={getGrnLinkedDocuments(selectedGrn, purchaseOrders, SUPPLIER_INVOICES)}
+                provenance="receivingDocs · demo-data / API fallback"
+                notes={selectedGrn.status === "异常处理" ? "异常收货需要退货/冲销流程，本页不直接修改库存。" : "收货明细用于库存可用量和三单匹配演示。"}
+                evidence={[
+                  { label: "关联 PO", value: selectedGrn.po },
+                  { label: "关联发票", value: SUPPLIER_INVOICES.filter((invoice) => invoice.relatedGrn === selectedGrn.grn || invoice.relatedPo === selectedGrn.po).length },
+                  { label: "三单匹配", value: SUPPLIER_INVOICES.some((invoice) => invoice.relatedGrn === selectedGrn.grn && invoice.varianceType !== "无差异") ? "存在差异" : "待复核", tone: SUPPLIER_INVOICES.some((invoice) => invoice.relatedGrn === selectedGrn.grn && invoice.varianceType !== "无差异") ? "danger" : "info" },
+                  { label: "仓库", value: selectedGrn.warehouse || "—" },
+                  { label: "合格率", value: `${receivedQty ? Math.round((acceptedQty / receivedQty) * 100) : 0}%`, tone: rejectedQty > 0 ? "warning" : "success" },
+                  { label: "库存应用", value: selectedGrn.inventoryApplied ? "已应用" : "未应用", tone: selectedGrn.inventoryApplied ? "success" : "warning" },
+                ]}
+              />
+              <DocumentActionBar>
+                <button onClick={() => toast("供应商发票位于采购工作台", { description: "可在供应商发票 tab 查看 GRN 关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票</button>
+                <button onClick={() => toast("三单匹配位于采购工作台", { description: "可在三单匹配 tab 查看 PO / GRN / Invoice 对比。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>打开三单匹配</button>
+                <button onClick={() => exportReceivingDetail(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
+                <button onClick={() => setDetailOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
+              </DocumentActionBar>
+            </DocumentShell>
+          );
+        })()}
+      </Modal>
       <QCModal open={qcOpen} onClose={() => setQcOpen(false)} grn={activeGrn} onComplete={completeQC} />
     </div>
   );
