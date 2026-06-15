@@ -338,7 +338,9 @@ export default function FlowChainApp() {
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(null);
   const [replenishmentSku, setReplenishmentSku] = useState<string | null>(null);
   const [aiVisible, setAiVisible] = useState(true);
-  const [aiPanelMode, setAiPanelMode] = useState<"compact" | "expanded">("compact");
+  const [aiPanelMode, setAiPanelMode] = useState<"compact" | "expanded">(() =>
+    localStorage.getItem("scm-demo-ai-panel-mode") === "expanded" ? "expanded" : "compact"
+  );
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
   const [user, setUser] = useState<DemoUser | null>(() => {
     try {
@@ -405,6 +407,12 @@ export default function FlowChainApp() {
   }
 
   const replenishmentItem = replenishmentSku ? inventoryItems.find((item) => item.sku === replenishmentSku) ?? null : null;
+
+  useEffect(() => {
+    localStorage.setItem("scm-demo-ai-panel-mode", aiPanelMode);
+  }, [aiPanelMode]);
+
+  const compactAiPanelWidth = active === "overview" ? "w-[300px]" : "w-[320px]";
 
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiVisible(true)} />,
@@ -582,10 +590,10 @@ export default function FlowChainApp() {
           </main>
 
           {aiVisible && (
-            <div className={`${aiPanelMode === "expanded" ? "w-[480px]" : "w-[360px]"} shrink-0 overflow-hidden flex flex-col transition-all duration-200`}>
+            <div className={`${aiPanelMode === "expanded" ? "w-[440px]" : compactAiPanelWidth} shrink-0 overflow-hidden flex flex-col transition-all duration-200`}>
               <div className="h-9 px-3 flex items-center justify-between bg-white" style={{ borderLeft: "0.5px solid rgba(0,0,0,0.1)", borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
                 <span className="text-[11px] font-medium" style={{ color: A.gray1 }}>
-                  AI 助手 · {aiPanelMode === "expanded" ? "expanded" : "compact"}
+                  AI 助手 · {aiPanelMode === "expanded" ? "展开模式" : "紧凑模式"}
                 </span>
                 <button
                   onClick={() => setAiPanelMode((mode) => mode === "expanded" ? "compact" : "expanded")}

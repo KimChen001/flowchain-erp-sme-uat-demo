@@ -646,9 +646,16 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
-              Standard demo report · 报表中心导出预定义字段和标准样例/API 数据；如需导出某个业务页面的当前筛选或临时操作状态，请使用模块内导出。
+              报表中心导出预定义字段和标准样例/API 数据；如需导出某个业务页面的当前筛选或临时操作状态，请使用模块内导出。
             </p>
           </div>
+          {onNavigate && (
+            <button onClick={() => onNavigate("imports")}
+              className="text-xs px-3 py-2 rounded-xl font-medium flex items-center gap-1.5 shrink-0"
+              style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={13} /> 需要导入数据？打开导入中心
+            </button>
+          )}
           <SegmentedControl
             options={FILTERS.map((item) => ({ label: item, value: item }))}
             value={filter}
@@ -658,10 +665,10 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       </Card>
 
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="标准报表" value={String(reports.length)} sub="Reports Center v1" icon={FileSpreadsheet} color={A.blue} />
+        <KpiCard label="标准报表" value={String(reports.length)} sub="报表中心 v1" icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="销售/采购/库存/计划/审计" icon={Database} color={A.green} />
         <KpiCard label="API / Fallback" value={String(apiCount)} sub="只读现有端点" icon={RefreshCw} color={A.orange} />
-        <KpiCard label="可导出" value={String(exportReadyCount)} sub="CSV foundation" icon={ShieldCheck} color={A.purple} />
+        <KpiCard label="可导出" value={String(exportReadyCount)} sub="CSV 标准导出" icon={ShieldCheck} color={A.purple} />
       </div>
 
       <Card>
@@ -728,7 +735,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
                     </button>
                   )}
                   <span className="ml-auto text-[10px]" style={{ color: canExport ? A.green : A.orange }}>
-                    {canExport ? "Export ready" : "模块内导出"}
+                    {canExport ? "可导出" : "模块内导出"}
                   </span>
                 </div>
               </div>

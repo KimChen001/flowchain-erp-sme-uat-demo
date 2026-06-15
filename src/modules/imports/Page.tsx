@@ -94,7 +94,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "supplierQuotes",
     label: "供应商报价导入",
     module: "采购",
-    description: "收集 RFQ 供应商报价，用于 UAT 演示比价与报价规范。",
+    description: "收集 RFQ 供应商报价，用于演示比价与报价规范。",
     templateFilename: "supplier-quotes-template.csv",
     requiredFields: ["RFQ编号", "供应商", "SKU", "品名", "报价单价", "MOQ", "交期天数", "币种", "有效期至"],
     optionalFields: ["付款条款", "备注"],
@@ -135,7 +135,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "openingInventory",
     label: "库存期初数量导入",
     module: "库存",
-    description: "ERP 上线迁移时批量导入期初库存、库位、批次与安全库存。",
+    description: "批量导入期初库存、库位、批次与安全库存。",
     templateFilename: "opening-inventory-template.csv",
     requiredFields: ["SKU", "品名", "仓库", "库位", "期初数量", "单位"],
     optionalFields: ["批次号", "序列号", "安全库存", "最大库存", "供应商", "备注"],
@@ -395,10 +395,10 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
       errorRows: invalidRows.length,
       appliedRows: validRows.length,
       appliedAt: new Date().toLocaleString("zh-CN"),
-      status: "已应用到 demo state",
+      status: "已暂存为演示数据",
       operator: "当前用户",
     }, ...current]);
-    toast.success("已暂存为 demo 导入记录", { description: `${validRows.length} 行有效数据已写入浏览器本地状态` });
+    toast.success("已暂存为演示导入记录", { description: `${validRows.length} 行有效数据已写入浏览器本地状态` });
   }
 
   return (
@@ -412,27 +412,27 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
               </div>
               <div>
                 <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>导入中心</h1>
-                <p className="text-xs mt-0.5" style={{ color: A.sub }}>下载标准模板、上传 CSV、预览校验结果，并将数据应用到 demo state</p>
+                <p className="text-xs mt-0.5" style={{ color: A.sub }}>下载标准模板、上传 CSV、预览校验结果，并暂存为演示数据</p>
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
-              当前导入只写入浏览器内的 demo state，不会修改后端数据库。未来版本可扩展为审批、审计、持久化和回滚。
+              当前导入只写入浏览器内的演示状态，不会修改后端数据库。未来版本可扩展为审批、审计、持久化和回滚。
             </p>
           </div>
           {onNavigate && (
             <button onClick={() => onNavigate("reports")}
               className="text-xs px-3 py-2 rounded-xl font-medium flex items-center gap-1.5"
               style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={13} /> 查看报表中心
+              <FileSpreadsheet size={13} /> 导入后查看标准报表
             </button>
           )}
         </div>
       </Card>
 
       <div className="grid grid-cols-5 gap-3">
-        <KpiCard label="支持模板" value={String(IMPORT_CONFIGS.length)} sub="CSV Import v1" icon={FileSpreadsheet} color={A.blue} />
+        <KpiCard label="支持模板" value={String(IMPORT_CONFIGS.length)} sub="CSV 导入 v1" icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="上传行数" value={String(parsedRows.length)} sub={fileName || "等待上传"} icon={Upload} color={A.purple} />
-        <KpiCard label="有效行" value={String(validRows.length)} sub="可应用到 demo state" icon={CheckCircle2} color={A.green} />
+        <KpiCard label="有效行" value={String(validRows.length)} sub="可暂存为演示数据" icon={CheckCircle2} color={A.green} />
         <KpiCard label="错误行" value={String(invalidRows.length)} sub={`${warningRows.length} 行警告`} icon={AlertCircle} color={invalidRows.length ? A.red : A.orange} />
         <KpiCard label="已应用" value={String(appliedTotal)} sub={`${batches.length} 个批次`} icon={Database} color={A.teal} />
       </div>
@@ -466,7 +466,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
 
       <div className="grid grid-cols-[0.9fr_1.1fr] gap-4">
         <Card className="p-5">
-          <SectionHeader title="Template download"
+          <SectionHeader title="模板下载"
             right={<button onClick={downloadTemplate}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg"
               style={{ background: A.gray6, color: A.blue }}>
@@ -499,7 +499,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
         </Card>
 
         <Card className="p-5">
-          <SectionHeader title="Upload CSV"
+          <SectionHeader title="上传 CSV"
             right={fileName ? <span className="text-[10px]" style={{ color: A.gray2 }}>{fileName}</span> : null} />
           <div className="rounded-xl p-4 flex items-center gap-4" style={{ background: A.gray6, border: "1px dashed rgba(0,0,0,0.14)" }}>
             <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: A.white, color: A.blue }}>
@@ -539,7 +539,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>Preview & validation</h2>
-            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>展示前 50 行解析结果；错误行不会应用到 demo state。</p>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>展示前 50 行解析结果；错误行不会写入演示状态。</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowErrorsOnly((value) => !value)}
@@ -560,7 +560,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
             <button onClick={applyValidRows} disabled={validRows.length === 0}
               className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:cursor-not-allowed"
               style={{ background: validRows.length ? A.blue : A.gray3 }}>
-              应用到 demo state
+              暂存为演示数据
             </button>
           </div>
         </div>
@@ -602,7 +602,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="p-5">
-          <SectionHeader title="Imported demo records" />
+          <SectionHeader title="已导入演示记录" />
           <div className="space-y-2">
             {IMPORT_CONFIGS.map((config) => (
               <div key={config.id} className="flex items-center justify-between rounded-lg p-2.5" style={{ background: A.gray6 }}>
@@ -658,7 +658,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
         <SectionHeader title="Import notes" right={<RefreshCw size={13} style={{ color: A.gray2 }} />} />
         <div className="grid grid-cols-3 gap-3 text-[11px] leading-5">
           <div className="rounded-xl p-3" style={{ background: A.gray6, color: A.sub }}>
-            <span className="font-semibold" style={{ color: A.label }}>本地 demo state：</span>应用后只保存在当前浏览器页面状态，刷新即丢失。
+            <span className="font-semibold" style={{ color: A.label }}>本地演示状态：</span>应用后只保存在当前浏览器页面状态，刷新即丢失。
           </div>
           <div className="rounded-xl p-3" style={{ background: A.gray6, color: A.sub }}>
             <span className="font-semibold" style={{ color: A.label }}>透明校验：</span>必填、数字范围、邮箱格式和简单重复项会在预览中展示。
