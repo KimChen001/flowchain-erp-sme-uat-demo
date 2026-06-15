@@ -1013,8 +1013,8 @@ function InventoryWarehouseMap() {
 
 // ─── Inventory · Master Wrapper ───────────────────────────────────────────────
 type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins";
-export default function InventoryPage() {
-  const [tab, setTab] = useState<InvTab>("overview");
+export default function InventoryPage({ initialView = "overview" }: { initialView?: InvTab }) {
+  const [tab, setTab] = useState<InvTab>(initialView);
   const tabs = [
     { id: "overview",  label: "库存总览",  icon: Package,         count: "8,412" },
     { id: "lots",      label: "批次/序列号", icon: Layers,          count: LOTS.length },
@@ -1024,6 +1024,9 @@ export default function InventoryPage() {
     { id: "movements", label: "事务流水",    icon: History,         count: INVENTORY_MOVEMENT_LEDGER.length },
     { id: "bins",      label: "库位地图",    icon: Grid3x3,         count: "60" },
   ] as const;
+  useEffect(() => {
+    if (initialView) setTab(initialView);
+  }, [initialView]);
 
   return (
     <div className="space-y-4">

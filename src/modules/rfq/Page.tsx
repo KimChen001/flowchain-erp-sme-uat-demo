@@ -6,6 +6,7 @@ import { exportRowsToCsv } from "../../lib/data-export";
 import { RFQS } from "../../data/demo-data";
 import type { RfqRecord } from "../../types/scm";
 import { A, Card, Chip, DocumentHistoryPanel, KpiCard } from "../../components/ui";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 
 export default function PurchasingRFQPage() {
   const [rfqs, setRfqs] = useState<RfqRecord[]>(RFQS);
@@ -85,11 +86,14 @@ export default function PurchasingRFQPage() {
               RFx 可用于战略寻源，也可由采购申请触发询价；中标结果可进入合同、目录价或采购订单。
             </p>
           </div>
-          <button onClick={exportCsv}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
-            style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={13} /> 导出 CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <ContextualImportActions entityLabel="RFx" compact />
+            <button onClick={exportCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+              style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={13} /> 导出 CSV
+            </button>
+          </div>
         </div>
         <table className="w-full text-xs">
           <thead>

@@ -675,12 +675,12 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
                 <Upload size={17} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>导入中心</h1>
-                <p className="text-xs mt-0.5" style={{ color: A.sub }}>下载标准模板、上传 CSV、预览校验结果，并生成导入批次记录</p>
+                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>数据管理</h1>
+                <p className="text-xs mt-0.5" style={{ color: A.sub }}>集中查看导入任务、模板、校验结果与失败行处理</p>
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
-              导入中心提供模板、校验、预览和批次记录；正式入账、审批和回滚由后续业务流程处理。
+              业务数据导入可在对应业务页面发起；数据管理用于集中复核导入任务记录、模板管理、数据校验结果、失败行处理和导入历史。
             </p>
           </div>
           {onNavigate && (
@@ -694,16 +694,16 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
       </Card>
 
       <div className="grid grid-cols-5 gap-3">
-        <KpiCard label="支持模板" value={String(IMPORT_CONFIGS.length)} sub="CSV 导入 v1" icon={FileSpreadsheet} color={A.blue} />
-        <KpiCard label="上传行数" value={String(parsedRows.length)} sub={fileName || "等待上传"} icon={Upload} color={A.purple} />
-        <KpiCard label="有效行" value={String(validRows.length)} sub="可应用到工作区" icon={CheckCircle2} color={A.green} />
-        <KpiCard label="错误行" value={String(invalidRows.length)} sub={`${warningRows.length} 行警告`} icon={AlertCircle} color={invalidRows.length ? A.red : A.orange} />
+        <KpiCard label="模板管理" value={String(IMPORT_CONFIGS.length)} sub="CSV 模板" icon={FileSpreadsheet} color={A.blue} />
+        <KpiCard label="导入任务" value={String(parsedRows.length)} sub={fileName || "等待校验"} icon={Upload} color={A.purple} />
+        <KpiCard label="数据校验结果" value={String(validRows.length)} sub="有效行" icon={CheckCircle2} color={A.green} />
+        <KpiCard label="失败行处理" value={String(invalidRows.length)} sub={`${warningRows.length} 行警告`} icon={AlertCircle} color={invalidRows.length ? A.red : A.orange} />
         <KpiCard label="已应用" value={String(appliedTotal)} sub={`${batches.length} 个批次`} icon={Database} color={A.teal} />
       </div>
 
       <Card className="p-4">
         <div className="flex items-center justify-between gap-4 mb-3">
-          <SectionHeader title="导入类型" />
+          <SectionHeader title="模板管理" />
           <SegmentedControl
             options={FILTERS.map((item) => ({ label: item, value: item }))}
             value={moduleFilter}
@@ -730,7 +730,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
 
       <div className="grid grid-cols-[0.9fr_1.1fr] gap-4">
         <Card className="p-5">
-          <SectionHeader title="模板下载"
+          <SectionHeader title="下载模板"
             right={<button onClick={downloadTemplate}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg"
               style={{ background: A.gray6, color: A.blue }}>
@@ -763,7 +763,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
         </Card>
 
         <Card className="p-5">
-          <SectionHeader title="上传 CSV"
+          <SectionHeader title="导入任务校验"
             right={fileName ? <span className="text-[10px]" style={{ color: A.gray2 }}>{fileName}</span> : null} />
           <div className="rounded-xl p-4 flex items-center gap-4" style={{ background: A.gray6, border: "1px dashed rgba(0,0,0,0.14)" }}>
             <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: A.white, color: A.blue }}>
@@ -802,8 +802,8 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
       <Card>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>Preview & validation</h2>
-            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>展示前 50 行解析结果；错误行不会进入导入批次。</p>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>数据校验结果</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>展示前 50 行数据校验结果；失败行不会进入导入批次。</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowErrorsOnly((value) => !value)}
@@ -866,7 +866,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="p-5">
-          <SectionHeader title="已导入记录" />
+          <SectionHeader title="模板应用统计" />
           <div className="space-y-2">
             {IMPORT_CONFIGS.map((config) => (
               <div key={config.id} className="flex items-center justify-between rounded-lg p-2.5" style={{ background: A.gray6 }}>
@@ -891,7 +891,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
         </Card>
 
         <Card className="p-5">
-          <SectionHeader title="导入批次记录"
+          <SectionHeader title="导入任务记录"
             right={<span className="text-[10px]" style={{ color: A.gray2 }}>当前会话</span>} />
           {batches.length === 0 ? (
             <div className="text-xs py-8 text-center" style={{ color: A.gray2 }}>尚未应用任何导入批次。</div>
@@ -919,7 +919,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
       </div>
 
       <Card className="p-5">
-        <SectionHeader title="Import notes" right={<RefreshCw size={13} style={{ color: A.gray2 }} />} />
+        <SectionHeader title="校验规则" right={<RefreshCw size={13} style={{ color: A.gray2 }} />} />
         <div className="grid grid-cols-3 gap-3 text-[11px] leading-5">
           <div className="rounded-xl p-3" style={{ background: A.gray6, color: A.sub }}>
             <span className="font-semibold" style={{ color: A.label }}>工作区批次：</span>应用后显示在当前导入工作区，便于复核批次、文件和行数。

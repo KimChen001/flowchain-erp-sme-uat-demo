@@ -819,7 +819,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
             <button onClick={() => onNavigate("imports")}
               className="text-xs px-3 py-2 rounded-xl font-medium flex items-center gap-1.5 shrink-0"
               style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={13} /> 需要导入数据？打开导入中心
+              <FileSpreadsheet size={13} /> 需要复核导入？打开数据管理
             </button>
           )}
           <SegmentedControl

@@ -10,6 +10,7 @@ import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import type { SupplierInvoice, SupplierInvoiceStatus } from "../../types/scm";
 import { matchStatusStyle } from "./shared";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 
 function invoiceStatusStyle(status: SupplierInvoiceStatus) {
   if (status === "存在差异" || status === "已驳回") return { color: A.red, bg: "#fff1f0" };
@@ -202,6 +203,7 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {!isProcurementMode && <ContextualImportActions entityLabel="发票" templateName="发票" compact />}
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}
               className="h-8 rounded-lg px-2 text-xs outline-none" style={{ background: A.gray6, color: A.label }}>
               {["全部", "待匹配", "存在差异", "已匹配", "待审批", "已审批", "已过账应付", "已付款"].map((item) => <option key={item}>{item}</option>)}

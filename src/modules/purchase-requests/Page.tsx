@@ -21,6 +21,7 @@ import {
   statusTone,
   type TimelineStep,
 } from "../../components/document/DocumentShell";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 
 function prTimeline(pr: PurchaseRequest): TimelineStep[] {
   const rejected = pr.status === "已驳回" || pr.status === "已取消";
@@ -428,6 +429,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
               value={filter} onChange={(v) => setFilter(v as any)}
             />
             <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{filtered.length} 条</span>
+            <ContextualImportActions entityLabel="PR" compact />
             <button onClick={exportCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity"
               style={{ background: A.gray6, color: A.blue }}>

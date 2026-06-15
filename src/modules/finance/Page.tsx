@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CreditCard, FileSpreadsheet, FileText, HandCoins, ReceiptText } from "lucide-react";
 import { A, Card, SubTabs } from "../../components/ui";
 import PayablesPanel from "../procurement/PayablesPanel";
@@ -35,8 +35,8 @@ function SettlementPreparation() {
   );
 }
 
-export default function FinanceWorkbench() {
-  const [tab, setTab] = useState<FinanceTab>("invoices");
+export default function FinanceWorkbench({ initialView = "invoices" }: { initialView?: FinanceTab }) {
+  const [tab, setTab] = useState<FinanceTab>(initialView);
   const tabs = [
     { id: "invoices", label: "供应商发票", icon: FileText },
     { id: "payables", label: "应付账款", icon: CreditCard },
@@ -44,6 +44,9 @@ export default function FinanceWorkbench() {
     { id: "reconciliation", label: "供应商对账", icon: FileSpreadsheet },
     { id: "settlement", label: "结算准备", icon: HandCoins },
   ] as const;
+  useEffect(() => {
+    if (initialView) setTab(initialView);
+  }, [initialView]);
 
   return (
     <div className="space-y-4">

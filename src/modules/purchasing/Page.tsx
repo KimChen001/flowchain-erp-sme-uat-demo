@@ -28,6 +28,7 @@ import {
   statusTone,
   type TimelineStep,
 } from "../../components/document/DocumentShell";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { exportModulePdf } from "../../lib/pdf-export";
 import { NewPOModal } from "./components/NewPOModal";
 import { POStatusPill } from "./components/POStatusPill";
@@ -280,6 +281,7 @@ export default function PurchasingOrdersPage() {
               value={filter} onChange={(v) => setFilter(v as any)}
             />
             <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{filtered.length} 条</span>
+            <ContextualImportActions entityLabel="PO" compact />
             <button onClick={exportCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity"
               style={{ background: A.gray6, color: A.blue }}>

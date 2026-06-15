@@ -6,6 +6,7 @@ import { PORTAL_SUPPLIERS } from "../../data/demo-data";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import type { SupplierPerformance } from "./shared";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 
 export default function SupplierPortalPanel() {
   const [suppliers, setSuppliers] = useState<SupplierPerformance[]>(PORTAL_SUPPLIERS);
@@ -58,8 +59,9 @@ export default function SupplierPortalPanel() {
         <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商绩效记分卡</h2>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <span className="text-[11px]" style={{ color: A.gray2 }}>PO + GRN 质检动态评分</span>
+              <ContextualImportActions entityLabel="供应商" compact />
               <button onClick={exportCsv}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
                 style={{ background: A.gray6, color: A.blue }}>

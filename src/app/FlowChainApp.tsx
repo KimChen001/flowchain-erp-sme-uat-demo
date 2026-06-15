@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Toaster, toast } from "sonner";
 import {
   AlertTriangle,
-  Bell, Search, ChevronRight,
+  Bell, Search,
   Activity, Sparkles,
   Loader2,
   ShieldCheck,
@@ -167,8 +167,13 @@ const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存管理",
   sales: "销售表现", forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购管理", finance: "财务协同", reports: "报表中心", imports: "导入中心",
+  procurement: "采购管理", finance: "财务协同", reports: "报表中心", imports: "数据管理",
 };
+
+function splitActive(active: string) {
+  const [moduleId, viewId] = active.split(":");
+  return { moduleId, viewId };
+}
 
 function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => void }) {
   const [form, setForm] = useState({
@@ -412,19 +417,23 @@ export default function FlowChainApp() {
     localStorage.setItem("scm-demo-ai-panel-mode", aiPanelMode);
   }, [aiPanelMode]);
 
-  const compactAiPanelWidth = active === "overview" ? "w-[300px]" : "w-[320px]";
+  const { moduleId: activeModule, viewId: activeView } = splitActive(active);
+  const compactAiPanelWidth = activeModule === "overview" ? "w-[300px]" : "w-[320px]";
+  const activeModuleLabel = PAGE_LABELS[activeModule] || activeModule;
+  const activeNavItem = navItems.find((item) => item.id === activeModule);
+  const activeChildLabel = activeNavItem?.children?.find((item) => item.id === active)?.label;
 
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiVisible(true)} />,
-    inventory:   <InventoryPanel />,
+    inventory:   <InventoryPanel initialView={activeView as any} />,
     sales:       <SalesPanel />,
     forecast:    <ForecastPanel />,
     purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} onOpenRfq={() => setActive("rfq")} />,
     purchasing:  <ProcurementPanel view="orders" />,
     rfq:         <ProcurementPanel view="rfq" />,
     receiving:   <ReceivingPanel />,
-    procurement: <ProcurementPanel />,
-    finance:     <FinanceWorkbench />,
+    procurement: <ProcurementPanel view={activeView as any} />,
+    finance:     <FinanceWorkbench initialView={activeView as any} />,
     reports:     <ReportsPanel onNavigate={setActive} />,
     imports:     <ImportsPanel onNavigate={setActive} />,
   };
@@ -494,17 +503,34 @@ export default function FlowChainApp() {
                 {group.itemIds.map((itemId) => {
                   const item = navItems.find((entry) => entry.id === itemId);
                   if (!item) return null;
-                  const isActive = active === item.id;
+                  const isActive = activeModule === item.id;
                   return (
-                    <button key={item.id} onClick={() => setActive(item.id)}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150"
-                      style={isActive
-                        ? { background: A.white, color: A.blue, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
-                        : { background: "transparent", color: A.gray1 }}>
-                      <item.icon size={15} strokeWidth={isActive ? 2 : 1.8} />
-                      <span className="truncate">{item.label}</span>
-                      {isActive && <ChevronRight size={12} className="ml-auto shrink-0" style={{ color: A.blue }} />}
-                    </button>
+                    <div key={item.id} className="space-y-0.5">
+                      <button onClick={() => setActive(item.id)}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150"
+                        style={isActive
+                          ? { background: A.white, color: A.blue, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
+                          : { background: "transparent", color: A.gray1 }}>
+                        <item.icon size={15} strokeWidth={isActive ? 2 : 1.8} />
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                      {isActive && item.children && (
+                        <div className="ml-5 pl-3 py-1 space-y-0.5" style={{ borderLeft: "1px solid rgba(0,0,0,0.08)" }}>
+                          {item.children.map((child) => {
+                            const childActive = active === child.id || (active === item.id && child.id === item.id);
+                            return (
+                              <button key={child.id} onClick={() => setActive(child.id)}
+                                className="w-full text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+                                style={childActive
+                                  ? { background: "#f0f6ff", color: A.blue }
+                                  : { background: "transparent", color: A.gray1 }}>
+                                {child.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -556,11 +582,17 @@ export default function FlowChainApp() {
           <div className="flex items-center gap-2 text-sm">
             <span style={{ color: A.gray2 }}>{PRODUCT_NAME}</span>
             <span style={{ color: A.gray3 }}>/</span>
-            <span className="font-medium" style={{ color: A.label }}>{PAGE_LABELS[active]}</span>
+            <span className="font-medium" style={{ color: A.label }}>{activeModuleLabel}</span>
+            {activeChildLabel && activeChildLabel !== activeModuleLabel && (
+              <>
+                <span style={{ color: A.gray3 }}>/</span>
+                <span className="font-medium" style={{ color: A.label }}>{activeChildLabel}</span>
+              </>
+            )}
             <span className="text-xs ml-2" style={{ color: A.gray2 }}>{user.company}</span>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => exportModulePdf(PAGE_LABELS[active] || active, user.company)}
+            <button onClick={() => exportModulePdf(activeChildLabel || activeModuleLabel, user.company)}
               className="h-8 px-3 rounded-xl flex items-center gap-1.5 text-xs font-medium transition-colors hover:bg-white"
               style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
               <Printer size={13} />
@@ -584,8 +616,8 @@ export default function FlowChainApp() {
         <div className="flex-1 flex overflow-hidden">
           <main className="flex-1 overflow-auto p-6">
             <div id="module-export-scope" className="max-w-6xl mx-auto">
-              <PanelErrorBoundary key={active} moduleLabel={PAGE_LABELS[active] || active}>
-                {panels[active] || panels.overview}
+              <PanelErrorBoundary key={active} moduleLabel={activeChildLabel || activeModuleLabel}>
+                {panels[activeModule] || panels[active] || panels.overview}
               </PanelErrorBoundary>
             </div>
           </main>
@@ -603,7 +635,7 @@ export default function FlowChainApp() {
                   {aiPanelMode === "expanded" ? "收起" : "展开"}
                 </button>
               </div>
-              <AiPanel moduleId={active} />
+              <AiPanel moduleId={activeModule} />
             </div>
           )}
         </div>

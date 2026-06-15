@@ -709,7 +709,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
     { label: "财务协同", id: "finance" },
     { label: "预测与 MRP", id: "forecast" },
     { label: "报表中心", id: "reports" },
-    { label: "导入中心", id: "imports" },
+    { label: "数据管理", id: "imports" },
   ];
 
   function exportEvidence(detail: EvidenceDetail) {

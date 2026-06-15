@@ -15,6 +15,7 @@ import {
 } from "../../domain/inventory/movements";
 import { exportRowsToCsv } from "../../lib/data-export";
 import type { InventoryMovement, InventoryMovementStatus, InventoryMovementType } from "../../types/scm";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 
 function statusTone(status: InventoryMovementStatus) {
   if (status === "已确认" || status === "已关闭") return { color: A.green, bg: "#f0faf4" };
@@ -83,11 +84,14 @@ export default function InventoryMovementLedger() {
               追踪采购入库、退货、销售出库、调拨、调整与盘点差异形成的库存影响。
             </p>
           </div>
-          <button onClick={exportLedger}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
-            style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={13} /> 导出 CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <ContextualImportActions entityLabel="库存事务" compact />
+            <button onClick={exportLedger}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
+              style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={13} /> 导出 CSV
+            </button>
+          </div>
         </div>
 
         <div className="px-5 py-3 grid grid-cols-1 md:grid-cols-4 gap-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
