@@ -66,7 +66,7 @@ import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../c
 
 type ReportModule = "销售" | "采购" | "库存" | "预测/MRP" | "供应商" | "审计";
 type SourceKind = "Core" | "Computed" | "API" | "API fallback" | "Module";
-type RouteId = "sales" | "procurement" | "finance" | "purchaseRequests" | "purchasing" | "rfq" | "receiving" | "inventory" | "forecast";
+type RouteId = "sales" | "procurement" | "finance" | "inventory" | "forecast" | `procurement:${string}` | `inventory:${string}` | `finance:${string}`;
 type ReportRows = Record<string, unknown>[];
 
 type ReportEntry = {
@@ -85,6 +85,7 @@ type ReportEntry = {
 
 type ReportsPanelProps = {
   onNavigate?: (moduleId: string) => void;
+  initialView?: "procurement" | "inventory" | "finance";
 };
 
 const FILTERS = ["全部", "销售", "采购", "库存", "预测/MRP", "供应商", "审计"] as const;
@@ -294,8 +295,15 @@ function buildForecastBenchmarkRows() {
   }));
 }
 
-export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
-  const [filter, setFilter] = useState<typeof FILTERS[number]>("全部");
+function reportFilterFromView(view?: ReportsPanelProps["initialView"]): typeof FILTERS[number] {
+  if (view === "procurement") return "采购";
+  if (view === "inventory") return "库存";
+  if (view === "finance") return "采购";
+  return "全部";
+}
+
+export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelProps) {
+  const [filter, setFilter] = useState<typeof FILTERS[number]>(() => reportFilterFromView(initialView));
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [savedPlans, setSavedPlans] = useState<any[]>([]);
   const [mrpPlan, setMrpPlan] = useState<MrpPlan | null>(null);
@@ -307,6 +315,9 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
     apiJson<MrpPlan>("/api/mrp-plan?periods=6").then(setMrpPlan).catch(() => setMrpPlan(null));
     apiJson<AuditEntry[]>("/api/audit-log").then(setAuditLog).catch(() => setAuditLog([]));
   }, []);
+  useEffect(() => {
+    setFilter(reportFilterFromView(initialView));
+  }, [initialView]);
 
   const reports = useMemo<ReportEntry[]>(() => [
     {
@@ -364,7 +375,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "procurement-contracts-export.csv",
-      sourceModule: "procurement",
+      sourceModule: "finance:reconciliation",
       rows: () => CONTRACTS.map((row) => ({ 合同号: row.id, 供应商: row.supplier, 范围: row.scope, 承诺量: row.commitVol, 价格条款: row.price, 开始日期: row.start, 结束日期: row.end, 已消耗百分比: Math.round(row.consumed * 100), 状态: row.status })),
     },
     {
@@ -388,7 +399,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       sourceKind: "Core",
       updated: "Computed standard report",
       filename: "invoice-match-exceptions-report.csv",
-      sourceModule: "procurement",
+      sourceModule: "procurement:portal",
       rows: () => SUPPLIER_INVOICES
         .filter((invoice) => invoice.varianceType !== "无差异" || ["人工复核", "差异待处理"].includes(invoice.matchStatus))
         .map((invoice) => ({
@@ -556,7 +567,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "procurement-purchase-orders-export.csv",
-      sourceModule: "purchasing",
+      sourceModule: "procurement:orders",
       rows: () => purchaseOrders.map((order) => {
         const totals = poTotals(order);
         const progress = totals.totalOrderedQty === 0 ? 0 : (totals.totalReceivedQty / totals.totalOrderedQty) * 100;
@@ -572,7 +583,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       sourceKind: "API",
       updated: purchaseRequests.length ? "API loaded" : "API 暂无数据",
       filename: "procurement-purchase-requests-export.csv",
-      sourceModule: "purchaseRequests",
+      sourceModule: "procurement:requests",
       rows: () => purchaseRequests.map((row) => ({ PR编号: row.pr, 来源: row.source, 来源SKU: row.sourceSku, 来源名称: row.sourceName, 供应商: row.supplier, 申请人: row.requester, 采购员: row.buyer, 数量: row.quantity, 单位: row.unit, 单价: row.unitPrice, 金额: row.amount, 需求日期: row.requiredDate, 优先级: row.priority, 状态: row.status, 申请原因: row.reason })),
     },
     {
@@ -584,7 +595,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "procurement-rfq-export.csv",
-      sourceModule: "rfq",
+      sourceModule: "procurement:rfq",
       rows: () => RFQS.map((row) => ({ RFQ编号: row.id, 标题: row.title, 品类: row.category, 邀请供应商数: row.suppliers, 已报价供应商数: row.quoted, 最优报价: row.bestPrice, 最优供应商: row.bestSupplier, 截止日期: row.due, 状态: row.status })),
     },
     {
@@ -596,7 +607,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "procurement-receiving-export.csv",
-      sourceModule: "receiving",
+      sourceModule: "procurement:receiving",
       rows: () => receivingDocs.map((row) => ({ GRN: row.grn, PO编号: row.po, 供应商: row.supplier, 到达时间: row.arrived, 泊位: row.dock, 收货员: row.receiver, 行项: row.items, 通过数: row.passed, 失败数: row.failed, 仓库: row.warehouse, 状态: row.status })),
     },
     {
@@ -812,7 +823,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
-              报表中心导出预定义字段和标准样例/API 数据；如需导出某个业务页面的当前筛选或临时操作状态，请使用模块内导出。
+              报表中心导出预定义字段和业务/API 数据；如需导出某个业务页面的当前筛选或临时操作状态，请使用模块内导出。
             </p>
           </div>
           {onNavigate && (

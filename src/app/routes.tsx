@@ -27,6 +27,7 @@ export const navItems = [
       { id: "procurement:contracts", label: "框架合同" },
       { id: "procurement:receiving", label: "收货协同" },
       { id: "procurement:invoices", label: "发票协同" },
+      { id: "procurement:match", label: "三单匹配" },
       { id: "procurement:returns", label: "采购退货 / 贷项" },
       { id: "procurement:portal", label: "供应商门户" },
     ],

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -58,6 +58,7 @@ type ImportConfig = {
 };
 type ImportsPanelProps = {
   onNavigate?: (moduleId: string) => void;
+  initialView?: "templates" | "validation" | "failed";
 };
 
 const FILTERS = ["全部", "采购", "库存", "销售", "预测", "主数据"] as const;
@@ -555,7 +556,7 @@ function createBatchId(index: number) {
   return `IMP-${ymd}-${String(index + 1).padStart(3, "0")}`;
 }
 
-export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
+export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelProps) {
   const [selectedId, setSelectedId] = useState<ImportTypeId>("supplierQuotes");
   const [moduleFilter, setModuleFilter] = useState<typeof FILTERS[number]>("全部");
   const [fileName, setFileName] = useState("");
@@ -565,6 +566,13 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
   const [applied, setApplied] = useState<Record<ImportTypeId, ImportedRow[]>>({} as Record<ImportTypeId, ImportedRow[]>);
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const sectionLabel = initialView === "templates"
+    ? "模板管理"
+    : initialView === "validation"
+      ? "数据校验结果"
+      : initialView === "failed"
+        ? "失败行处理"
+        : "导入任务记录";
 
   const visibleConfigs = moduleFilter === "全部" ? IMPORT_CONFIGS : IMPORT_CONFIGS.filter((config) => config.module === moduleFilter);
   const selected = IMPORT_CONFIGS.find((config) => config.id === selectedId) || IMPORT_CONFIGS[0];
@@ -579,6 +587,10 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
     rows.forEach((row) => counts.set(String(row.SKU || "未识别"), (counts.get(String(row.SKU || "未识别")) || 0) + 1));
     return Array.from(counts.entries()).map(([sku, count]) => ({ sku, count }));
   }, [applied]);
+
+  useEffect(() => {
+    setShowErrorsOnly(initialView === "failed");
+  }, [initialView]);
 
   function validateRows(rows: CsvRow[]) {
     setResults(rows.map((row, index) => {
@@ -676,7 +688,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
               </div>
               <div>
                 <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>数据管理</h1>
-                <p className="text-xs mt-0.5" style={{ color: A.sub }}>集中查看导入任务、模板、校验结果与失败行处理</p>
+                <p className="text-xs mt-0.5" style={{ color: A.sub }}>{sectionLabel} · 集中查看导入任务、模板、校验结果与失败行处理</p>
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
@@ -703,7 +715,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
 
       <Card className="p-4">
         <div className="flex items-center justify-between gap-4 mb-3">
-          <SectionHeader title="模板管理" />
+          <SectionHeader title={initialView === "templates" ? "模板管理" : "导入任务记录"} />
           <SegmentedControl
             options={FILTERS.map((item) => ({ label: item, value: item }))}
             value={moduleFilter}

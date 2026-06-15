@@ -371,7 +371,7 @@ export default function FlowChainApp() {
     if (plan.needsSourcing) {
       toast("请先补齐供应商与报价", { description: `${item.sku} 已低于 ROP，但缺少有效供应商或单价，建议先发起 RFQ。` });
       setPurchaseIntent({ sourceSku: item.sku, createdAt: Date.now() });
-      setActive("purchaseRequests");
+      setActive("procurement:requests");
       return;
     }
     setReplenishmentSku(sku);
@@ -390,7 +390,7 @@ export default function FlowChainApp() {
       });
       setPurchaseIntent({ selectedPr: created.pr, sourceSku: item.sku, createdAt: Date.now() });
       setReplenishmentSku(null);
-      setActive("purchaseRequests");
+      setActive("procurement:requests");
       toast.success(`${created.pr} 已生成`, { description: `${item.name} · ${quantity.toLocaleString()} ${created.unit}` });
     } catch (error) {
       const existing = await apiJson<PurchaseRequest[]>("/api/purchase-requests")
@@ -403,7 +403,7 @@ export default function FlowChainApp() {
       if (existing) {
         setPurchaseIntent({ selectedPr: existing.pr, sourceSku: item.sku, createdAt: Date.now() });
         setReplenishmentSku(null);
-        setActive("purchaseRequests");
+        setActive("procurement:requests");
         toast("已有未关闭采购申请", { description: `${existing.pr} 已自动定位。` });
         return;
       }
@@ -428,14 +428,15 @@ export default function FlowChainApp() {
     inventory:   <InventoryPanel initialView={activeView as any} />,
     sales:       <SalesPanel />,
     forecast:    <ForecastPanel />,
-    purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} onOpenRfq={() => setActive("rfq")} />,
+    // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
+    purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} onOpenRfq={() => setActive("procurement:rfq")} />,
     purchasing:  <ProcurementPanel view="orders" />,
     rfq:         <ProcurementPanel view="rfq" />,
     receiving:   <ReceivingPanel />,
     procurement: <ProcurementPanel view={activeView as any} />,
     finance:     <FinanceWorkbench initialView={activeView as any} />,
-    reports:     <ReportsPanel onNavigate={setActive} />,
-    imports:     <ImportsPanel onNavigate={setActive} />,
+    reports:     <ReportsPanel initialView={activeView as any} onNavigate={setActive} />,
+    imports:     <ImportsPanel initialView={activeView as any} onNavigate={setActive} />,
   };
 
   function handleLogin(nextUser: DemoUser, token: string) {
