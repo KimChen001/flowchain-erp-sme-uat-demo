@@ -799,7 +799,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
               linkedDocuments={[
                 ...(selected.linkedPo ? [{ label: "PO / 采购订单", value: selected.linkedPo, moduleId: "purchasing", tone: "success" as const }] : []),
                 ...purchaseOrders.filter((order) => order.sourceRequest === selected.pr).slice(0, 2).map((order) => ({ label: "PO / 采购订单", value: order.po, moduleId: "purchasing", tone: statusTone(order.status) })),
-                ...(selected.source === "forecast" || selected.source === "mrp-release" ? [{ label: "高级计划", value: selected.source, moduleId: "forecast", tone: "info" as const }] : []),
+                ...(selected.source === "forecast" || selected.source === "mrp-release" ? [{ label: "预测与 MRP", value: selected.source, moduleId: "forecast", tone: "info" as const }] : []),
                 ...(selected.source === "inventory" ? [{ label: "库存补货证据", value: selected.sourceSku || selected.source, moduleId: "inventory", tone: "warning" as const }] : []),
               ]}
               provenance={selected.approvalSnapshot?.source || selected.source}

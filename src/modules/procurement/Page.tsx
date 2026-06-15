@@ -1,23 +1,21 @@
 import { useEffect, useState } from "react";
-import { Building2, ClipboardCheck, CreditCard, FileSpreadsheet, FileText, Handshake, RotateCcw, ShieldCheck } from "lucide-react";
+import { Building2, ClipboardCheck, FileSpreadsheet, FileText, Handshake, PackageCheck, RotateCcw, ShieldCheck } from "lucide-react";
 import { SubTabs } from "../../components/ui";
-import { CONTRACTS, PORTAL_SUPPLIERS, PURCHASE_RETURNS, RFQS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
-import { isInvoicePayableReady } from "../../domain/procurement/invoice-matching";
+import { CONTRACTS, PORTAL_SUPPLIERS, PURCHASE_RETURNS, RFQS, SUPPLIER_INVOICES } from "../../data/demo-data";
 import { isReturnException } from "../../domain/procurement/returns";
 import type { PurchaseIntent } from "../../types/scm";
 import ContractsPanel from "./ContractsPanel";
-import PayablesPanel from "./PayablesPanel";
 import ProcurementWorkflowMap from "./ProcurementWorkflowMap";
 import PurchaseReturnsPanel from "./PurchaseReturnsPanel";
 import SupplierInvoiceRegister from "./SupplierInvoiceRegister";
 import SupplierPortalPanel from "./SupplierPortalPanel";
-import SupplierReconciliationPanel from "./SupplierReconciliationPanel";
 import ThreeWayMatchPanel from "./ThreeWayMatchPanel";
 import PurchasingRequests from "../purchase-requests/Page";
 import PurchasingOrders from "../purchasing/Page";
 import PurchasingRFQ from "../rfq/Page";
+import ReceivingPanel from "../receiving/Page";
 
-type PurTab = "requests" | "orders" | "rfq" | "contracts" | "invoices" | "match" | "returns" | "payment" | "reconciliation" | "portal";
+type PurTab = "requests" | "rfq" | "orders" | "contracts" | "receiving" | "invoices" | "match" | "returns" | "portal";
 
 type ProcurementPanelProps = {
   intent?: PurchaseIntent | null;
@@ -30,11 +28,10 @@ export default function ProcurementPanel({ intent = null, onOpenRfq, view }: Pro
   if (view === "orders") return <PurchasingOrders />;
   if (view === "rfq") return <PurchasingRFQ />;
   if (view === "contracts") return <ContractsPanel />;
-  if (view === "invoices") return <SupplierInvoiceRegister />;
+  if (view === "invoices") return <SupplierInvoiceRegister mode="procurement" />;
   if (view === "match") return <ThreeWayMatchPanel />;
   if (view === "returns") return <PurchaseReturnsPanel />;
-  if (view === "payment") return <PayablesPanel />;
-  if (view === "reconciliation") return <SupplierReconciliationPanel />;
+  if (view === "receiving") return <ReceivingPanel />;
   if (view === "portal") return <SupplierPortalPanel />;
 
   return <PurchasingPanel intent={intent} />;
@@ -44,14 +41,13 @@ function PurchasingPanel({ intent }: { intent: PurchaseIntent | null }) {
   const [tab, setTab] = useState<PurTab>("requests");
   const tabs = [
     { id: "requests",  label: "采购申请",   icon: ClipboardCheck },
-    { id: "orders",    label: "采购订单",   icon: FileText },
     { id: "rfq",       label: "寻源 / RFx", icon: FileSpreadsheet, count: RFQS.length },
+    { id: "orders",    label: "采购订单",   icon: FileText },
     { id: "contracts", label: "框架合同",   icon: Handshake,       count: CONTRACTS.length },
-    { id: "invoices",  label: "供应商发票", icon: FileText,        count: SUPPLIER_INVOICES.length },
+    { id: "receiving", label: "收货协同",   icon: PackageCheck },
+    { id: "invoices",  label: "发票协同",   icon: FileText,        count: SUPPLIER_INVOICES.filter((invoice) => invoice.matchStatus !== "自动匹配" || invoice.varianceType !== "无差异").length },
     { id: "match",     label: "三单匹配",   icon: ShieldCheck,     count: SUPPLIER_INVOICES.filter((invoice) => invoice.matchStatus !== "自动匹配").length },
     { id: "returns",   label: "采购退货 / 贷项", icon: RotateCcw,  count: PURCHASE_RETURNS.filter((row) => isReturnException(row)).length },
-    { id: "payment",   label: "应付账款",   icon: CreditCard,      count: SUPPLIER_INVOICES.filter(isInvoicePayableReady).length },
-    { id: "reconciliation", label: "供应商对账", icon: FileSpreadsheet, count: SUPPLIER_RECONCILIATION_STATEMENTS.length },
     { id: "portal",    label: "供应商门户", icon: Building2,       count: PORTAL_SUPPLIERS.length },
   ] as const;
 
@@ -67,11 +63,10 @@ function PurchasingPanel({ intent }: { intent: PurchaseIntent | null }) {
       {tab === "orders"    && <PurchasingOrders />}
       {tab === "rfq"       && <PurchasingRFQ />}
       {tab === "contracts" && <ContractsPanel />}
-      {tab === "invoices"  && <SupplierInvoiceRegister />}
+      {tab === "receiving" && <ReceivingPanel />}
+      {tab === "invoices"  && <SupplierInvoiceRegister mode="procurement" />}
       {tab === "match"     && <ThreeWayMatchPanel />}
       {tab === "returns"   && <PurchaseReturnsPanel />}
-      {tab === "payment"   && <PayablesPanel />}
-      {tab === "reconciliation" && <SupplierReconciliationPanel />}
       {tab === "portal"    && <SupplierPortalPanel />}
     </div>
   );

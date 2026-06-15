@@ -1,36 +1,25 @@
 import {
   BarChart2,
-  ClipboardCheck,
-  ClipboardList,
+  CircleDollarSign,
   FileSpreadsheet,
   Handshake,
   Package,
-  PackageCheck,
-  ShoppingCart,
   TrendingUp,
   Upload,
 } from "lucide-react";
 
 export const navItems = [
   { icon: BarChart2, label: "每日工作台", id: "overview" },
-  { icon: Package, label: "库存", id: "inventory" },
-  { icon: ClipboardCheck, label: "采购申请", id: "purchaseRequests" },
-  { icon: ClipboardList, label: "采购订单", id: "purchasing" },
-  { icon: FileSpreadsheet, label: "供应商报价", id: "rfq" },
-  { icon: PackageCheck, label: "收货", id: "receiving" },
-  { icon: Handshake, label: "采购工作台", id: "procurement" },
+  { icon: Handshake, label: "采购管理", id: "procurement" },
+  { icon: Package, label: "库存管理", id: "inventory" },
+  { icon: CircleDollarSign, label: "财务协同", id: "finance" },
+  { icon: TrendingUp, label: "预测与 MRP", id: "forecast" },
   { icon: FileSpreadsheet, label: "报表中心", id: "reports" },
   { icon: Upload, label: "导入中心", id: "imports" },
-  { icon: ShoppingCart, label: "销售表现", id: "sales" },
-  { icon: TrendingUp, label: "高级计划", id: "forecast" },
 ] as const;
 
 export const navGroups = [
-  { label: "首页", itemIds: ["overview"] },
-  { label: "库存", itemIds: ["inventory"] },
-  { label: "采购", itemIds: ["purchaseRequests", "purchasing", "rfq"] },
-  { label: "收货", itemIds: ["receiving"] },
-  { label: "采购管理", itemIds: ["procurement"] },
-  { label: "报表 / 绩效", itemIds: ["reports", "imports", "sales"] },
-  { label: "高级计划", itemIds: ["forecast"] },
+  { label: "运营", itemIds: ["overview"] },
+  { label: "供应链", itemIds: ["procurement", "inventory", "finance", "forecast"] },
+  { label: "数据", itemIds: ["reports", "imports"] },
 ] as const;

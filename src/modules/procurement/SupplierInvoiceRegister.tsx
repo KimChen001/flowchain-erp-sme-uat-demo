@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertOctagon, CheckCircle2, CreditCard, FileSpreadsheet, FileText, Search, Wallet } from "lucide-react";
+import { AlertOctagon, CheckCircle2, CreditCard, FileSpreadsheet, FileText, MoreHorizontal, Search, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Modal, Card, Chip, KpiCard, A } from "../../components/ui";
 import { DocumentActionBar, DocumentEvidencePanel, DocumentHeader, DocumentLinesTable, DocumentShell, DocumentStatusTimeline, DocumentTotals, statusTone, type TimelineStep } from "../../components/document/DocumentShell";
@@ -45,12 +45,18 @@ function invoiceTimeline(invoice: SupplierInvoice): TimelineStep[] {
   ];
 }
 
-export default function SupplierInvoiceRegister() {
+type SupplierInvoiceRegisterProps = {
+  mode?: "procurement" | "finance";
+};
+
+export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierInvoiceRegisterProps) {
   const [invoices, setInvoices] = useState<SupplierInvoice[]>(SUPPLIER_INVOICES);
   const [statusFilter, setStatusFilter] = useState("全部");
   const [varianceFilter, setVarianceFilter] = useState("全部");
   const [search, setSearch] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<SupplierInvoice | null>(null);
+  const [openActionId, setOpenActionId] = useState<string | null>(null);
+  const isProcurementMode = mode === "procurement";
 
   const visibleInvoices = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -76,6 +82,7 @@ export default function SupplierInvoiceRegister() {
   function updateInvoice(id: string, patch: Partial<SupplierInvoice>) {
     setInvoices((current) => current.map((invoice) => invoice.id === id ? { ...invoice, ...patch } : invoice));
     setSelectedInvoice((current) => current?.id === id ? { ...current, ...patch } : current);
+    setOpenActionId(null);
   }
 
   function runMatch(invoice: SupplierInvoice) {
@@ -176,20 +183,22 @@ export default function SupplierInvoiceRegister() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-6 gap-3">
-        <KpiCard label="发票总数" value={String(invoices.length)} sub="发票台账" icon={FileText} color={A.blue} />
+        <KpiCard label={isProcurementMode ? "协同发票" : "发票总数"} value={String(invoices.length)} sub={isProcurementMode ? "PO / GRN 协同" : "发票台账"} icon={FileText} color={A.blue} />
         <KpiCard label="待匹配" value={String(pendingMatch)} sub="需补齐 PO/GRN" icon={Search} color={A.orange} />
         <KpiCard label="差异发票" value={String(varianceInvoices.length)} sub={fmt(varianceInvoices.reduce((sum, invoice) => sum + invoice.varianceAmount, 0))} icon={AlertOctagon} color={A.red} />
-        <KpiCard label="待审批" value={String(pendingApproval)} sub="匹配后审批" icon={CheckCircle2} color={A.green} />
-        <KpiCard label="已过账应付" value={String(posted)} sub="进入应付账款" icon={Wallet} color={A.purple} />
-        <KpiCard label="应付待付" value={fmt(dueSoonAmount)} sub="审批/过账发票" icon={CreditCard} color={A.teal} />
+        <KpiCard label={isProcurementMode ? "待采购确认" : "待审批"} value={String(pendingApproval)} sub={isProcurementMode ? "匹配后确认" : "匹配后审批"} icon={CheckCircle2} color={A.green} />
+        <KpiCard label={isProcurementMode ? "已关联应付" : "已过账应付"} value={String(posted)} sub={isProcurementMode ? "财务协同跟进" : "进入应付账款"} icon={Wallet} color={A.purple} />
+        <KpiCard label={isProcurementMode ? "后续处理金额" : "应付待付"} value={fmt(dueSoonAmount)} sub={isProcurementMode ? "审批/差异跟进" : "审批/过账发票"} icon={CreditCard} color={A.teal} />
       </div>
 
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商发票台账</h2>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>{isProcurementMode ? "发票协同" : "供应商发票台账"}</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              管理供应商发票、发票行、三单匹配、审批状态与过账应付，形成 AP 处理证据链。
+              {isProcurementMode
+                ? "围绕 PO / GRN 匹配、发票差异、采购确认、关联退货贷项与下一步动作形成协同证据链。"
+                : "管理供应商发票、发票行、三单匹配、审批状态与过账应付，形成 AP 处理证据链。"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -246,12 +255,19 @@ export default function SupplierInvoiceRegister() {
                     <td className="px-4 py-3"><Chip label={invoice.status} color={statusStyle.color} bg={statusStyle.bg} /></td>
                     <td className="px-4 py-3" style={{ color: invoice.varianceType === "无差异" ? A.green : A.red }}>{invoice.varianceType}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
+                      <div className="relative flex items-center gap-1">
                         <button onClick={() => setSelectedInvoice(invoice)} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>详情</button>
-                        <button onClick={() => runMatch(invoice)} className="px-2 py-1 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>运行匹配</button>
-                        <button onClick={() => approve(invoice)} className="px-2 py-1 rounded-md font-medium" style={{ background: "#f0faf4", color: A.green }}>审批</button>
-                        <button onClick={() => postToAp(invoice)} className="px-2 py-1 rounded-md font-medium" style={{ background: "#faf3ff", color: A.purple }}>过账</button>
-                        <button onClick={() => reject(invoice)} className="px-2 py-1 rounded-md font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
+                        <button onClick={() => setOpenActionId((current) => current === invoice.id ? null : invoice.id)} className="px-2 py-1 rounded-md font-medium flex items-center gap-1" style={{ background: A.gray6, color: A.gray1 }}>
+                          更多 <MoreHorizontal size={12} />
+                        </button>
+                        {openActionId === invoice.id && (
+                          <div className="absolute right-0 top-7 z-20 w-28 rounded-lg p-1 shadow-lg" style={{ background: A.white, boxShadow: "0 10px 30px rgba(15,23,42,0.12)" }}>
+                            <button onClick={() => runMatch(invoice)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.blue }}>运行匹配</button>
+                            <button onClick={() => approve(invoice)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.green }}>审批确认</button>
+                            {!isProcurementMode && <button onClick={() => postToAp(invoice)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.purple }}>过账应付</button>}
+                            <button onClick={() => reject(invoice)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.red }}>驳回</button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -267,7 +283,7 @@ export default function SupplierInvoiceRegister() {
         onClose={() => setSelectedInvoice(null)}
         width={980}
         title="供应商发票"
-        subtitle="AP Invoice · ERP document form">
+        subtitle={isProcurementMode ? "采购协同 · 发票匹配" : "财务协同 · 供应商发票"}>
         {selectedInvoice && selectedSnapshot && (
           <DocumentShell
             title="供应商发票"
@@ -342,7 +358,7 @@ export default function SupplierInvoiceRegister() {
             <DocumentActionBar>
               <button onClick={() => runMatch(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>运行匹配</button>
               <button onClick={() => approve(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
-              <button onClick={() => postToAp(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>过账到应付</button>
+              {!isProcurementMode && <button onClick={() => postToAp(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>过账到应付</button>}
               <button onClick={() => reject(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
               <button onClick={() => exportInvoice(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
               <button onClick={() => setSelectedInvoice(null)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>

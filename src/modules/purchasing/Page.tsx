@@ -648,7 +648,7 @@ export default function PurchasingOrdersPage() {
             />
             <DocumentActionBar>
               <button onClick={() => setTrackOpen(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>打开收货</button>
-              <button onClick={() => toast("供应商发票位于采购工作台", { description: "请打开采购工作台的供应商发票 tab 查看关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开供应商发票</button>
+              <button onClick={() => toast("发票协同位于采购管理", { description: "请打开采购管理的发票协同视图查看关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票协同</button>
               <button onClick={() => exportPoDetail(selectedPO)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
               <button onClick={() => setDetailOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
             </DocumentActionBar>

@@ -502,7 +502,7 @@ export default function ForecastPanel() {
 
   async function releaseMrpAsPr() {
     if (!currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0) {
-      toast("当前没有可释放的 MRP 计划", { description: "净需求计划未产生 planned order release。" });
+      toast("当前没有可释放的 MRP 计划", { description: "净需求计划未产生计划订单释放。" });
       return;
     }
     if (lastGeneratedRequest) {
@@ -532,7 +532,7 @@ export default function ForecastPanel() {
           quantity: releaseQty,
           unit: currentMrpRow.unit,
           unitPrice,
-          reason: `MRP planned order release：${currentMrpRow.exception}，计划入库 ${releaseQty.toLocaleString()} ${currentMrpRow.unit}，释放期 ${releaseLine?.plannedReleasePeriod || "—"}。`,
+          reason: `MRP 计划订单释放：${currentMrpRow.exception}，计划入库 ${releaseQty.toLocaleString()} ${currentMrpRow.unit}，释放期 ${releaseLine?.plannedReleasePeriod || "—"}。`,
           forecastBasis: {
             source: "mrp-release",
             plannedReceipt: releaseQty,
@@ -550,7 +550,7 @@ export default function ForecastPanel() {
           approvalSnapshot: {
             source: "mrp-release",
             summary: `${currentMrpRow.sku} ${currentMrpRow.name} · ${currentMrpRow.exception} · ${releaseQty.toLocaleString()} ${currentMrpRow.unit} · ${fmt(amount)}`,
-            explanation: `MRP 根据独立需求、BOM 相关需求、库存、在途和批量规则生成 planned order release。${mrpBomSourceSummary ? `BOM 来源：${mrpBomSourceSummary}。` : ""}采购申请需由审批人确认释放期、供应商产能和预算。`,
+            explanation: `MRP 根据独立需求、BOM 相关需求、库存、在途和批量规则生成计划订单释放。${mrpBomSourceSummary ? `BOM 来源：${mrpBomSourceSummary}。` : ""}采购申请需由审批人确认释放期、供应商产能和预算。`,
             mrp: {
               generatedAt: mrpPlan?.generatedAt,
               horizon: mrpPlan?.horizon,

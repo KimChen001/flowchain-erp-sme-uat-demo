@@ -839,8 +839,8 @@ function ReceivingOps() {
                 ]}
               />
               <DocumentActionBar>
-                <button onClick={() => toast("供应商发票位于采购工作台", { description: "可在供应商发票 tab 查看 GRN 关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票</button>
-                <button onClick={() => toast("三单匹配位于采购工作台", { description: "可在三单匹配 tab 查看 PO / GRN / Invoice 对比。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>打开三单匹配</button>
+                <button onClick={() => toast("发票协同位于采购管理", { description: "可在发票协同视图查看 GRN 关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票</button>
+                <button onClick={() => toast("三单匹配位于采购管理", { description: "可在三单匹配视图查看 PO / GRN / 发票对比。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>打开三单匹配</button>
                 <button onClick={() => exportReceivingDetail(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
                 <button onClick={() => setDetailOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
               </DocumentActionBar>

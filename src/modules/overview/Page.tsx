@@ -177,7 +177,7 @@ function buildInventoryEvidence(item: ReturnType<typeof overviewReplenishmentAct
     title: "库存短缺证据",
     priority: item.plan.priority,
     object: item.sku,
-    module: moduleId === "forecast" ? "高级计划" : "库存",
+    module: moduleId === "forecast" ? "预测与 MRP" : "库存管理",
     moduleId,
     businessReason: "库存低于再订货点或覆盖天数低于采购提前期，可能影响后续生产和客户订单交付。",
     evidence: [
@@ -194,7 +194,7 @@ function buildInventoryEvidence(item: ReturnType<typeof overviewReplenishmentAct
       { label: "采购负责人", value: item.plan.buyer },
     ],
     confidence: "88% · 高",
-    suggestedAction: item.plan.needsSourcing ? "打开 RFQ 或采购申请，先补齐报价依据。" : "打开高级计划复核，必要时生成补货 PR。",
+    suggestedAction: item.plan.needsSourcing ? "打开 RFQ 或采购申请，先补齐报价依据。" : "打开预测与 MRP 复核，必要时生成补货 PR。",
   };
 }
 
@@ -333,7 +333,7 @@ function buildPurchaseReturnEvidence(item: PurchaseReturn): EvidenceDetail {
       { label: "退货状态", value: item.status },
     ],
     confidence: item.confidence ? `${item.confidence}% · 规则引擎` : "规则引擎",
-    suggestedAction: "打开采购工作台，复核退货、贷项通知和 AP/对账影响。",
+    suggestedAction: "打开采购管理复核退货和贷项协同；财务影响在财务协同复核。",
   };
 }
 
@@ -345,7 +345,7 @@ function buildReconciliationEvidence(item: SupplierReconciliationStatement): Evi
     priority: signal.priority,
     object: item.statementNo,
     module: "供应商对账",
-    moduleId: "procurement",
+    moduleId: "finance",
     businessReason: "供应商对账单按供应商和期间汇总发票、应付、付款和差异，帮助 AP 复核未结余额、逾期应付和供应商确认结果。",
     evidence: [
       { label: "对账单号", value: item.statementNo },
@@ -361,7 +361,7 @@ function buildReconciliationEvidence(item: SupplierReconciliationStatement): Evi
       { label: "结算状态", value: item.settlementStatus },
     ],
     confidence: item.confidence ? `${item.confidence}% · 规则引擎` : "规则引擎",
-    suggestedAction: item.status === "已驳回" ? "打开供应商对账，复核拒绝原因和相关发票/AP。" : "打开供应商对账，复核差异、未结余额和逾期应付。",
+    suggestedAction: item.status === "已驳回" ? "打开财务协同，复核拒绝原因和相关发票/AP。" : "打开财务协同，复核差异、未结余额和逾期应付。",
   };
 }
 
@@ -398,7 +398,7 @@ function buildForecastEvidence(inventoryRisk: ReturnType<typeof overviewReplenis
     title: "预测 / MRP 证据",
     priority: inventoryRisk?.plan.priority || "中",
     object: sku.sku,
-    module: "高级计划",
+    module: "预测与 MRP",
     moduleId: "forecast",
     businessReason: "预测准确率和 MRP 例外共同决定是否需要释放计划订单，避免过早采购或短缺。",
     evidence: [
@@ -412,7 +412,7 @@ function buildForecastEvidence(inventoryRisk: ReturnType<typeof overviewReplenis
       { label: "短缺窗口", value: inventoryRisk ? `${inventoryRisk.plan.daysCover} 天覆盖` : "未来 6 期滚动检查" },
     ],
     confidence: "83% · 中高",
-    suggestedAction: "打开高级计划，查看预测依据、MRP 行和例外明细。",
+    suggestedAction: "打开预测与 MRP，查看预测依据、MRP 行和例外明细。",
   };
 }
 
@@ -483,10 +483,10 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
     })),
     ...(topRiskSku ? [{
       priority: "高" as const,
-      title: "释放 MRP planned order",
+      title: "释放 MRP 计划订单",
       object: topRiskSku.sku,
       evidence: `覆盖 ${topRiskSku.plan.daysCover} 天 · 建议 ${topRiskSku.plan.suggestedQty.toLocaleString()} ${topRiskSku.plan.unit} · ${fmt(topRiskSku.plan.amount)}`,
-      module: "高级计划",
+      module: "预测与 MRP",
       moduleId: "forecast",
       cta: "查看计划",
       detail: buildInventoryEvidence(topRiskSku, "forecast"),
@@ -516,7 +516,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       title: "复核供应商发票差异",
       object: item.invoiceNumber,
       evidence: `${item.relatedPo || "无 PO"} / ${item.relatedGrn || "缺少 GRN"} · ${item.varianceType} · 差异 ${fmt(item.varianceAmount || 0)}`,
-      module: "供应商发票",
+      module: "发票协同",
       moduleId: "procurement",
       cta: "查看发票",
       detail: buildInvoiceEvidence(item),
@@ -542,7 +542,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
         object: item.statementNo,
         evidence: signal.evidence,
         module: "供应商对账",
-        moduleId: "procurement",
+        moduleId: "finance",
         cta: "查看对账",
         detail: buildReconciliationEvidence(item),
       };
@@ -562,7 +562,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       title: "处理库存短缺 SKU",
       object: item.sku,
       evidence: `${item.name} · 当前 ${item.qty.toLocaleString()} / 安全 ${item.min.toLocaleString()} · ROP ${item.plan.reorderPoint}`,
-      module: "库存",
+      module: "库存管理",
       moduleId: "inventory",
       cta: "补货",
       detail: buildInventoryEvidence(item),
@@ -592,8 +592,8 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       evidenceUsed: topRiskSku ? `覆盖 ${topRiskSku.plan.daysCover} 天 · ROP ${topRiskSku.plan.reorderPoint} · 建议 ${topRiskSku.plan.suggestedQty.toLocaleString()} ${topRiskSku.plan.unit}` : "库存覆盖、ROP、MRP 例外",
       confidence: "88% · 高",
       riskWarning: topRiskSku && topRiskSku.plan.daysCover <= topRiskSku.plan.leadTimeDays ? "覆盖天数低于采购提前期，存在断供风险。" : "当前建议为滚动复核，不会自动创建单据。",
-      suggestedAction: topRiskSku && !topRiskSku.plan.needsSourcing ? "生成补货 PR" : "打开高级计划",
-      module: "高级计划",
+      suggestedAction: topRiskSku && !topRiskSku.plan.needsSourcing ? "生成补货 PR" : "打开预测与 MRP",
+      module: "预测与 MRP",
       moduleId: "forecast",
       detail: inventoryDecisionDetail,
       onAction: topRiskSku && !topRiskSku.plan.needsSourcing ? () => onPrepareReplenishmentRequest(topRiskSku.sku) : undefined,
@@ -651,7 +651,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       object: invoiceRisks[0]?.invoiceNumber || "供应商发票",
       title: "发票金额 / 收货差异",
       evidence: invoiceRisks[0] ? `${invoiceRisks[0].supplier} · ${invoiceRisks[0].varianceType} · ${fmt(invoiceRisks[0].varianceAmount || 0)}` : "发票匹配状态稳定",
-      next: "复核 PO、GRN 和 Invoice",
+      next: "复核 PO、GRN 和发票",
       moduleId: "procurement",
       detail: invoiceRisks[0] ? buildInvoiceEvidence(invoiceRisks[0]) : null,
     },
@@ -660,7 +660,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       object: "SKU-00412",
       title: "预测偏差",
       evidence: "高价值电气件近期需求波动，建议检查 Tracking Signal 与服务水平",
-      next: "打开高级计划查看模型依据",
+      next: "打开预测与 MRP 查看模型依据",
       moduleId: "forecast",
       detail: buildForecastEvidence(topRiskSku),
     },
@@ -704,11 +704,10 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   ];
 
   const quickLinks = [
-    { label: "采购申请", id: "purchaseRequests" },
-    { label: "采购订单", id: "purchasing" },
-    { label: "采购工作台", id: "procurement" },
-    { label: "库存", id: "inventory" },
-    { label: "高级计划", id: "forecast" },
+    { label: "采购管理", id: "procurement" },
+    { label: "库存管理", id: "inventory" },
+    { label: "财务协同", id: "finance" },
+    { label: "预测与 MRP", id: "forecast" },
     { label: "报表中心", id: "reports" },
     { label: "导入中心", id: "imports" },
   ];

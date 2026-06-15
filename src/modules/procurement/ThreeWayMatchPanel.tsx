@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertCircle, AlertOctagon, CheckCircle2, FileSpreadsheet, Package, ShieldCheck } from "lucide-react";
+import { AlertCircle, AlertOctagon, CheckCircle2, FileSpreadsheet, MoreHorizontal, Package, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Modal, Card, Chip, KpiCard, A } from "../../components/ui";
 import { SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/demo-data";
@@ -13,6 +13,7 @@ export default function ThreeWayMatchPanel() {
     SUPPLIER_INVOICES.map((invoice) => invoiceToMatchQueueItem(invoice, purchaseOrders, receivingDocs, SUPPLIER_INVOICES))
   );
   const [selected, setSelected] = useState<InvoiceMatchQueueItem | null>(null);
+  const [openActionId, setOpenActionId] = useState<string | null>(null);
   const exportCsv = () => {
     if (queue.length === 0) {
       toast.warning("暂无可导出的数据");
@@ -36,14 +37,17 @@ export default function ThreeWayMatchPanel() {
   };
   const resolve = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, matchStatus: "已解决", status: "已匹配", varianceAmount: 0, varianceType: "无差异" } : q));
+    setOpenActionId(null);
     toast.success(`${id} 差异已解决`, { description: "状态已更新，请继续复核发票、退货贷项或应付冲减影响。" });
   };
   const rejectInvoice = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, status: "已驳回", matchStatus: "差异待处理" } : q));
+    setOpenActionId(null);
     toast.success(`${id} 已退回发票`);
   };
   const markMatched = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, status: "已匹配", matchStatus: "已解决", varianceAmount: 0, varianceType: "无差异" } : q));
+    setOpenActionId(null);
     toast.success(`${id} 已标记匹配`);
   };
 
@@ -65,9 +69,9 @@ export default function ThreeWayMatchPanel() {
       <Card>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>三单匹配 (PO · GRN · Supplier Invoice)</h2>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>三单匹配</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              三单匹配比较采购订单、收货单和供应商发票的金额、数量与状态差异；差异可通过发票更正、采购退货、供应商贷项通知、AP 调整或供应商对账处理。
+              比较采购订单、收货单与供应商发票的金额、数量与状态差异；差异可通过发票更正、采购退货、供应商贷项通知或后续财务协同处理。
             </p>
           </div>
           <button onClick={exportCsv}
@@ -101,11 +105,18 @@ export default function ThreeWayMatchPanel() {
                   <Chip label={q.matchStatus} {...matchStatusStyle(q.matchStatus)} />
                 </td>
                 <td className="px-5 py-3">
-                  <div className="flex gap-1">
-                    <button onClick={() => setSelected(q)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>查看发票</button>
-                    {q.matchStatus !== "自动匹配" && <button onClick={() => resolve(q.id)} className="px-2 py-1 text-[11px] font-medium rounded-md text-white" style={{ background: A.blue }}>解决差异</button>}
-                    <button onClick={() => markMatched(q.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0faf4", color: A.green }}>标记匹配</button>
-                    <button onClick={() => rejectInvoice(q.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#fff1f0", color: A.red }}>退回</button>
+                  <div className="relative flex gap-1">
+                    <button onClick={() => setSelected(q)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>详情</button>
+                    <button onClick={() => setOpenActionId((current) => current === q.id ? null : q.id)} className="px-2 py-1 text-[11px] font-medium rounded-md flex items-center gap-1" style={{ background: A.gray6, color: A.gray1 }}>
+                      更多 <MoreHorizontal size={12} />
+                    </button>
+                    {openActionId === q.id && (
+                      <div className="absolute right-0 top-7 z-20 w-28 rounded-lg p-1 shadow-lg" style={{ background: A.white, boxShadow: "0 10px 30px rgba(15,23,42,0.12)" }}>
+                        {q.matchStatus !== "自动匹配" && <button onClick={() => resolve(q.id)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.blue }}>解决差异</button>}
+                        <button onClick={() => markMatched(q.id)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.green }}>标记匹配</button>
+                        <button onClick={() => rejectInvoice(q.id)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.red }}>退回</button>
+                      </div>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -121,9 +132,9 @@ export default function ThreeWayMatchPanel() {
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-2">
               {[
-                ["PO Ordered", fmt(selected.poAmt), A.blue],
-                ["GRN Received", fmt(selected.grnAmt), A.green],
-                ["Invoice Billed", fmt(selected.invAmt), A.orange],
+                ["PO 订购金额", fmt(selected.poAmt), A.blue],
+                ["GRN 收货金额", fmt(selected.grnAmt), A.green],
+                ["发票金额", fmt(selected.invAmt), A.orange],
               ].map(([label, value, color]) => (
                 <div key={String(label)} className="rounded-xl p-3" style={{ background: A.gray6 }}>
                   <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
@@ -136,7 +147,7 @@ export default function ThreeWayMatchPanel() {
                 {selected.varianceType} · {selected.matchStatus}
               </div>
               <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>
-                PO = ordered，GRN = received，Invoice = billed。当前差异金额 {fmt(selected.varianceAmount)}，请在供应商发票台账中查看行项目证据；本结果用于匹配预检和异常处理。
+                当前差异金额 {fmt(selected.varianceAmount)}，请在发票协同或财务协同中查看行项目证据；本结果用于匹配预检和异常处理。
               </div>
             </div>
           </div>

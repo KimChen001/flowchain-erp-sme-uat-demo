@@ -66,7 +66,7 @@ import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../c
 
 type ReportModule = "销售" | "采购" | "库存" | "预测/MRP" | "供应商" | "审计";
 type SourceKind = "Core" | "Computed" | "API" | "API fallback" | "Module";
-type RouteId = "sales" | "procurement" | "purchaseRequests" | "purchasing" | "rfq" | "receiving" | "inventory" | "forecast";
+type RouteId = "sales" | "procurement" | "finance" | "purchaseRequests" | "purchasing" | "rfq" | "receiving" | "inventory" | "forecast";
 type ReportRows = Record<string, unknown>[];
 
 type ReportEntry = {
@@ -369,21 +369,21 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
     },
     {
       id: "supplier-invoices",
-      name: "Supplier Invoice Register Report",
+      name: "供应商发票台账报表",
       module: "采购",
       description: "供应商发票台账，包含 PO、GRN、金额、税额、匹配状态、发票状态、差异类型和 AP 过账字段。",
       source: "SUPPLIER_INVOICES · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "supplier-invoices-report.csv",
-      sourceModule: "procurement",
+      sourceModule: "finance",
       rows: () => supplierInvoiceExportRows(SUPPLIER_INVOICES),
     },
     {
       id: "invoice-match-exceptions",
-      name: "Invoice Match Exceptions Report",
+      name: "发票三单匹配异常报表",
       module: "采购",
-      description: "发票三单匹配异常，按 PO / GRN / Supplier Invoice 展示差异金额、当前状态和建议动作。",
+      description: "发票三单匹配异常，按 PO / GRN / 供应商发票展示差异金额、当前状态和建议动作。",
       source: "Supplier invoice dataset + matching helper",
       sourceKind: "Core",
       updated: "Computed standard report",
@@ -405,23 +405,23 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
     },
     {
       id: "ap-ready-invoices",
-      name: "AP Ready / Posted Invoices Report",
+      name: "AP 待处理 / 已过账发票报表",
       module: "采购",
       description: "已审批、已过账或已付款的供应商发票清单，用于过账应付、AP 台账和付款准备。",
       source: "SUPPLIER_INVOICES · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "ap-ready-invoices-report.csv",
-      sourceModule: "procurement",
+      sourceModule: "finance",
       rows: () => supplierInvoiceExportRows(SUPPLIER_INVOICES.filter((invoice) =>
         ["已审批", "已过账应付", "已付款"].includes(invoice.status) || isInvoicePayableReady(invoice)
       )),
     },
     {
       id: "match-queue",
-      name: "Three-way Match Queue Report",
+      name: "三单匹配队列报表",
       module: "采购",
-      description: "从供应商发票派生的三单匹配队列，明确比较 PO ordered、GRN received 和 Invoice billed。",
+      description: "从供应商发票派生的三单匹配队列，比较 PO 订购金额、GRN 收货金额和发票金额。",
       source: "Supplier invoice dataset + matching helper",
       sourceKind: "Core",
       updated: "2026 baseline",

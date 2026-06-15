@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertOctagon, CheckCircle2, CreditCard, FileSpreadsheet, PackageX, Search, Undo2, Wallet } from "lucide-react";
+import { AlertOctagon, CheckCircle2, CreditCard, FileSpreadsheet, MoreHorizontal, PackageX, Search, Undo2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Modal, Card, Chip, KpiCard, A } from "../../components/ui";
 import { DocumentActionBar, DocumentEvidencePanel, DocumentHeader, DocumentLinesTable, DocumentShell, DocumentStatusTimeline, DocumentTotals, type TimelineStep } from "../../components/document/DocumentShell";
@@ -67,6 +67,8 @@ export default function PurchaseReturnsPanel() {
   const [reasonFilter, setReasonFilter] = useState<(typeof RETURN_REASONS)[number]>("全部");
   const [search, setSearch] = useState("");
   const [selectedReturn, setSelectedReturn] = useState<PurchaseReturn | null>(null);
+  const [openReturnActionId, setOpenReturnActionId] = useState<string | null>(null);
+  const [openCreditActionId, setOpenCreditActionId] = useState<string | null>(null);
 
   const visibleReturns = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -85,10 +87,12 @@ export default function PurchaseReturnsPanel() {
   function updateReturn(id: string, patch: Partial<PurchaseReturn>) {
     setReturns((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
     setSelectedReturn((current) => current?.id === id ? { ...current, ...patch } : current);
+    setOpenReturnActionId(null);
   }
 
   function updateCredit(id: string, patch: Partial<SupplierCreditMemo>) {
     setCreditMemos((current) => current.map((memo) => memo.id === id ? { ...memo, ...patch } : memo));
+    setOpenCreditActionId(null);
   }
 
   function approve(returnDoc: PurchaseReturn) {
@@ -274,14 +278,21 @@ export default function PurchaseReturnsPanel() {
                     <td className="px-5 py-3 whitespace-nowrap"><Chip label={row.status} {...statusStyle} /></td>
                     <td className="px-5 py-3 whitespace-nowrap" style={{ color: memo ? A.green : A.orange }}>{memo?.creditMemoNo || "待贷项"}</td>
                     <td className="px-5 py-3">
-                      <div className="flex flex-wrap gap-1 min-w-[320px]">
-                        <button onClick={() => setSelectedReturn(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>查看详情</button>
-                        <button disabled={Boolean(blockedReturnAction(row, "approve", creditMemos))} onClick={() => approve(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
-                        <button disabled={Boolean(blockedReturnAction(row, "markReturned", creditMemos))} onClick={() => markReturned(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#f0f6ff", color: A.blue }}>标记已退货</button>
-                        <button disabled={Boolean(blockedReturnAction(row, "generateCredit", creditMemos))} onClick={() => generateCredit(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#faf3ff", color: A.purple }}>登记贷项通知</button>
-                        <button disabled={Boolean(blockedReturnAction(row, "close", creditMemos))} onClick={() => close(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: A.gray6, color: A.gray1 }}>关闭</button>
-                        <button disabled={Boolean(blockedReturnAction(row, "reject", creditMemos))} onClick={() => reject(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
-                        <button onClick={() => exportDetail(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.gray1 }}>导出明细</button>
+                      <div className="relative flex gap-1 min-w-[96px]">
+                        <button onClick={() => setSelectedReturn(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>详情</button>
+                        <button onClick={() => setOpenReturnActionId((current) => current === row.id ? null : row.id)} className="px-2 py-1 text-[11px] font-medium rounded-md flex items-center gap-1" style={{ background: A.gray6, color: A.gray1 }}>
+                          更多 <MoreHorizontal size={12} />
+                        </button>
+                        {openReturnActionId === row.id && (
+                          <div className="absolute right-0 top-7 z-30 w-32 rounded-lg p-1 shadow-lg" style={{ background: A.white, boxShadow: "0 10px 30px rgba(15,23,42,0.12)" }}>
+                            <button disabled={Boolean(blockedReturnAction(row, "approve", creditMemos))} onClick={() => approve(row)} className="w-full text-left px-2 py-1.5 rounded-md font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ color: A.green }}>标记已审批</button>
+                            <button disabled={Boolean(blockedReturnAction(row, "markReturned", creditMemos))} onClick={() => markReturned(row)} className="w-full text-left px-2 py-1.5 rounded-md font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ color: A.blue }}>标记已退货</button>
+                            <button disabled={Boolean(blockedReturnAction(row, "generateCredit", creditMemos))} onClick={() => generateCredit(row)} className="w-full text-left px-2 py-1.5 rounded-md font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ color: A.purple }}>登记贷项通知</button>
+                            <button disabled={Boolean(blockedReturnAction(row, "close", creditMemos))} onClick={() => close(row)} className="w-full text-left px-2 py-1.5 rounded-md font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ color: A.gray1 }}>关闭</button>
+                            <button disabled={Boolean(blockedReturnAction(row, "reject", creditMemos))} onClick={() => reject(row)} className="w-full text-left px-2 py-1.5 rounded-md font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ color: A.red }}>驳回</button>
+                            <button onClick={() => exportDetail(row)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.gray1 }}>导出明细</button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -329,10 +340,17 @@ export default function PurchaseReturnsPanel() {
                     <td className="px-5 py-3 whitespace-nowrap" style={{ color: memo.apOffsetStatus === "已冲减应付" ? A.green : A.orange }}>{memo.apOffsetStatus}</td>
                     <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{memo.reconciliationStatement || "—"}</td>
                     <td className="px-5 py-3">
-                      <div className="flex flex-wrap gap-1 min-w-[190px]">
-                        <button disabled={Boolean(blockedCreditAction(memo, "confirm"))} onClick={() => updateCreditStatus(memo, { status: "已确认" }, "贷项通知已确认")} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#f0faf4", color: A.green }}>标记已确认</button>
-                        <button disabled={Boolean(blockedCreditAction(memo, "offset"))} onClick={() => updateCreditStatus(memo, { status: "已冲减应付", apOffsetStatus: "已冲减应付" }, "已更新应付冲减状态")} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#faf3ff", color: A.purple }}>标记已冲减</button>
-                        <button disabled={Boolean(blockedCreditAction(memo, "reject"))} onClick={() => updateCreditStatus(memo, { status: "已驳回", apOffsetStatus: "未冲减" }, "贷项通知已驳回")} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
+                      <div className="relative flex gap-1 min-w-[56px]">
+                        <button onClick={() => setOpenCreditActionId((current) => current === memo.id ? null : memo.id)} className="px-2 py-1 text-[11px] font-medium rounded-md flex items-center gap-1" style={{ background: A.gray6, color: A.gray1 }}>
+                          更多 <MoreHorizontal size={12} />
+                        </button>
+                        {openCreditActionId === memo.id && (
+                          <div className="absolute right-0 top-7 z-30 w-32 rounded-lg p-1 shadow-lg" style={{ background: A.white, boxShadow: "0 10px 30px rgba(15,23,42,0.12)" }}>
+                            <button disabled={Boolean(blockedCreditAction(memo, "confirm"))} onClick={() => updateCreditStatus(memo, { status: "已确认" }, "贷项通知已确认")} className="w-full text-left px-2 py-1.5 rounded-md font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ color: A.green }}>标记已确认</button>
+                            <button disabled={Boolean(blockedCreditAction(memo, "offset"))} onClick={() => updateCreditStatus(memo, { status: "已冲减应付", apOffsetStatus: "已冲减应付" }, "已更新应付冲减状态")} className="w-full text-left px-2 py-1.5 rounded-md font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ color: A.purple }}>标记已冲减</button>
+                            <button disabled={Boolean(blockedCreditAction(memo, "reject"))} onClick={() => updateCreditStatus(memo, { status: "已驳回", apOffsetStatus: "未冲减" }, "贷项通知已驳回")} className="w-full text-left px-2 py-1.5 rounded-md font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ color: A.red }}>驳回</button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
