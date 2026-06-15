@@ -7,6 +7,7 @@ import { isReturnException } from "../../domain/procurement/returns";
 import type { PurchaseIntent } from "../../types/scm";
 import ContractsPanel from "./ContractsPanel";
 import PayablesPanel from "./PayablesPanel";
+import ProcurementWorkflowMap from "./ProcurementWorkflowMap";
 import PurchaseReturnsPanel from "./PurchaseReturnsPanel";
 import SupplierInvoiceRegister from "./SupplierInvoiceRegister";
 import SupplierPortalPanel from "./SupplierPortalPanel";
@@ -60,6 +61,7 @@ function PurchasingPanel({ intent }: { intent: PurchaseIntent | null }) {
 
   return (
     <div className="space-y-4">
+      <ProcurementWorkflowMap />
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as PurTab)} />
       {tab === "requests"  && <PurchasingRequests intent={intent} />}
       {tab === "orders"    && <PurchasingOrders />}

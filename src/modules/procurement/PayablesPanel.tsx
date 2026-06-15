@@ -27,11 +27,11 @@ export default function PayablesPanel() {
       账龄天数: item.aging,
       状态: item.status,
     })));
-    toast.success("CSV 已导出");
+    toast.success("导出文件已生成", { description: "应付账款 CSV" });
   };
   const pay = (id: string) => {
     setPayables(prev => prev.map(p => p.id === id ? { ...p, status: "已付款" as const } : p));
-    toast.success(`${id} 已标记付款`, { description: "仅更新演示状态，不生成银行付款指令。" });
+    toast.success(`${id} 已标记付款`, { description: "状态已更新，请继续复核付款审批和对账影响。" });
   };
 
   const totalDue = payables.filter(p => p.status !== "已付款").reduce((a, b) => a + b.amount, 0);
@@ -51,7 +51,7 @@ export default function PayablesPanel() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>应付账款</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              应付账款来自已审批或已过账的供应商发票；贷项通知用于演示应付冲减，供应商对账按供应商和期间汇总发票、退货、贷项、应付、付款和差异，付款动作仅为演示状态。
+              应付账款来自已审批或已过账的供应商发票；贷项通知用于应付冲减，供应商对账按供应商和期间汇总发票、退货、贷项、应付、付款和差异。
             </p>
           </div>
           <button onClick={exportCsv}

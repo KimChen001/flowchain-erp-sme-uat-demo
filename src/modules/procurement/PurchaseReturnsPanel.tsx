@@ -8,7 +8,7 @@ import { getPurchaseReturnLinkedDocuments } from "../../domain/procurement/docum
 import { calculateReturnFinancialImpact, creditMemoExportRows, getCreditMemoStatusTone, getReturnStatusTone, getReturnSummary, isReturnException, purchaseReturnExportRows, purchaseReturnLineExportRows } from "../../domain/procurement/returns";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
-import type { PurchaseReturn, PurchaseReturnReason, PurchaseReturnStatus, SupplierCreditMemo } from "../../types/scm";
+import type { PurchaseReturn, PurchaseReturnReason, PurchaseReturnStatus, SupplierCreditMemo, SupplierCreditMemoStatus } from "../../types/scm";
 
 const RETURN_STATUSES: ("全部" | PurchaseReturnStatus)[] = ["全部", "待审批", "已审批", "已退货", "待贷项", "已生成贷项", "已关闭", "已驳回"];
 const RETURN_REASONS: ("全部" | PurchaseReturnReason)[] = ["全部", "质检拒收", "数量差异", "价格差异", "重复发票", "其他"];
@@ -40,6 +40,24 @@ function returnTimeline(returnDoc: PurchaseReturn, memo?: SupplierCreditMemo): T
 
 function linkedCredit(returnDoc: PurchaseReturn, creditMemos: SupplierCreditMemo[]) {
   return creditMemos.find((memo) => memo.relatedReturn === returnDoc.returnNo || memo.id === returnDoc.creditMemoId || memo.creditMemoNo === returnDoc.creditMemoId);
+}
+
+function blockedReturnAction(returnDoc: PurchaseReturn, action: "approve" | "reject" | "markReturned" | "generateCredit" | "close", creditMemos: SupplierCreditMemo[]) {
+  if (returnDoc.status === "已关闭") return "已关闭的采购退货不能继续处理。";
+  if (["approve", "reject", "markReturned", "generateCredit"].includes(action) && returnDoc.status === "已驳回") return "已驳回的采购退货不能继续推进。";
+  if (action === "markReturned" && returnDoc.status === "待审批") return "采购退货需先完成审批。";
+  if (action === "markReturned" && returnDoc.status === "已驳回") return "已驳回的采购退货不能标记退货。";
+  if (action === "close" && returnDoc.status === "已驳回") return "已驳回的采购退货不能关闭异常处理。";
+  if (action === "generateCredit" && linkedCredit(returnDoc, creditMemos)) return "该采购退货已关联供应商贷项通知。";
+  return "";
+}
+
+function blockedCreditAction(memo: SupplierCreditMemo, action: "confirm" | "offset" | "reject") {
+  if (action === "reject" && memo.status === "已冲减应付") return "已冲减应付的贷项通知不能驳回。";
+  if (action === "offset" && ["已驳回", "已关闭"].includes(memo.status)) return "已驳回或已关闭的贷项通知不能冲减应付。";
+  if (action === "offset" && memo.status !== "已确认" && memo.status !== "已冲减应付") return "贷项通知需先确认后再冲减应付。";
+  if (action === "confirm" && ["已驳回", "已关闭"].includes(memo.status)) return "已驳回或已关闭的贷项通知不能确认。";
+  return "";
 }
 
 export default function PurchaseReturnsPanel() {
@@ -74,21 +92,32 @@ export default function PurchaseReturnsPanel() {
   }
 
   function approve(returnDoc: PurchaseReturn) {
+    const blocked = blockedReturnAction(returnDoc, "approve", creditMemos);
+    if (blocked) {
+      toast.warning(blocked);
+      return;
+    }
     updateReturn(returnDoc.id, { status: "已审批", approvalStatus: "已审批" });
-    toast.success(`${returnDoc.returnNo} 已标记审批`);
+    toast.success(`${returnDoc.returnNo} 已标记为已审批`);
   }
 
   function markReturned(returnDoc: PurchaseReturn) {
+    const blocked = blockedReturnAction(returnDoc, "markReturned", creditMemos);
+    if (blocked) {
+      toast.warning(blocked);
+      return;
+    }
     updateReturn(returnDoc.id, { status: returnDoc.creditMemoId ? "已生成贷项" : "待贷项", approvalStatus: "已审批" });
-    toast.success(`${returnDoc.returnNo} 已标记退货`);
+    toast.success(`${returnDoc.returnNo} 已标记为已退货`);
   }
 
   function generateCredit(returnDoc: PurchaseReturn) {
-    if (linkedCredit(returnDoc, creditMemos)) {
-      toast.warning("该退货单已关联贷项通知");
+    const blocked = blockedReturnAction(returnDoc, "generateCredit", creditMemos);
+    if (blocked) {
+      toast.warning(blocked);
       return;
     }
-    const creditMemoNo = `CM-DEMO-${returnDoc.returnNo.replace("RTV-", "")}`;
+    const creditMemoNo = `CM-${returnDoc.returnNo.replace("RTV-", "")}`;
     const memo: SupplierCreditMemo = {
       id: creditMemoNo,
       creditMemoNo,
@@ -106,22 +135,44 @@ export default function PurchaseReturnsPanel() {
       status: "待确认",
       apOffsetStatus: "未冲减",
       owner: returnDoc.owner,
-      source: "system-sample",
-      notes: "由退货面板生成的本地演示贷项，不写入后端。",
+      source: "manual-adjustment",
+      notes: "采购退货已登记供应商贷项通知，等待 AP 复核应付冲减。",
     };
     setCreditMemos((current) => [memo, ...current]);
     updateReturn(returnDoc.id, { status: "已生成贷项", creditMemoId: creditMemoNo });
-    toast.success("贷项通知样本已生成", { description: creditMemoNo });
+    toast.success("贷项通知已登记", { description: creditMemoNo });
   }
 
   function close(returnDoc: PurchaseReturn) {
+    const blocked = blockedReturnAction(returnDoc, "close", creditMemos);
+    if (blocked) {
+      toast.warning(blocked);
+      return;
+    }
     updateReturn(returnDoc.id, { status: "已关闭" });
-    toast.success(`${returnDoc.returnNo} 已关闭`);
+    toast.success("已关闭异常处理", { description: returnDoc.returnNo });
   }
 
   function reject(returnDoc: PurchaseReturn) {
+    const blocked = blockedReturnAction(returnDoc, "reject", creditMemos);
+    if (blocked) {
+      toast.warning(blocked);
+      return;
+    }
     updateReturn(returnDoc.id, { status: "已驳回", approvalStatus: "已驳回" });
     toast.success(`${returnDoc.returnNo} 已驳回`);
+  }
+
+  function updateCreditStatus(memo: SupplierCreditMemo, patch: Partial<SupplierCreditMemo>, success: string) {
+    const nextStatus = patch.status as SupplierCreditMemoStatus | undefined;
+    const action = nextStatus === "已确认" ? "confirm" : nextStatus === "已冲减应付" || patch.apOffsetStatus === "已冲减应付" ? "offset" : nextStatus === "已驳回" ? "reject" : null;
+    const blocked = action ? blockedCreditAction(memo, action) : "";
+    if (blocked) {
+      toast.warning(blocked);
+      return;
+    }
+    updateCredit(memo.id, patch);
+    toast.success(success, { description: memo.creditMemoNo });
   }
 
   function exportList() {
@@ -130,7 +181,7 @@ export default function PurchaseReturnsPanel() {
       return;
     }
     exportRowsToCsv("purchase-returns-export.csv", purchaseReturnExportRows(visibleReturns));
-    toast.success("采购退货 CSV 已导出");
+    toast.success("导出文件已生成", { description: "采购退货 CSV" });
   }
 
   function exportCreditMemos() {
@@ -139,12 +190,12 @@ export default function PurchaseReturnsPanel() {
       return;
     }
     exportRowsToCsv("supplier-credit-memos-export.csv", creditMemoExportRows(creditMemos));
-    toast.success("供应商贷项通知 CSV 已导出");
+    toast.success("导出文件已生成", { description: "供应商贷项通知 CSV" });
   }
 
   function exportDetail(returnDoc: PurchaseReturn) {
     exportRowsToCsv(`purchase-return-detail-${returnDoc.returnNo}.csv`, purchaseReturnLineExportRows(returnDoc, creditMemos));
-    toast.success("退货明细 CSV 已导出");
+    toast.success("导出文件已生成", { description: "退货明细 CSV" });
   }
 
   const selectedCredit = selectedReturn ? linkedCredit(selectedReturn, creditMemos) : undefined;
@@ -159,10 +210,10 @@ export default function PurchaseReturnsPanel() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <KpiCard label="退货单数" value={String(returns.length)} sub="RTV / 贷项样本" icon={PackageX} color={A.blue} />
+        <KpiCard label="退货单数" value={String(returns.length)} sub="RTV / 贷项通知" icon={PackageX} color={A.blue} />
         <KpiCard label="待审批" value={String(pendingApproval)} sub="需采购确认" icon={CheckCircle2} color={A.orange} />
         <KpiCard label="待贷项" value={String(pendingCredit)} sub="已退货未冲减" icon={AlertOctagon} color={A.red} />
-        <KpiCard label="已冲减应付" value={fmt(offsetCredits)} sub="贷项样本金额" icon={CreditCard} color={A.green} />
+        <KpiCard label="已冲减应付" value={fmt(offsetCredits)} sub="贷项通知金额" icon={CreditCard} color={A.green} />
         <KpiCard label="退货金额" value={fmt(totalReturnAmount)} sub="本期异常影响" icon={Undo2} color={A.purple} />
         <KpiCard label="未冲减金额" value={fmt(unoffsetAmount)} sub="需 AP/对账复核" icon={Wallet} color={unoffsetAmount ? A.red : A.green} />
       </div>
@@ -172,7 +223,7 @@ export default function PurchaseReturnsPanel() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>采购退货 / 供应商贷项</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              采购退货与贷项通知为演示状态，用于展示应付冲减与供应商对账影响，不生成真实库存或会计分录。
+              管理采购退货、供应商贷项通知、库存影响、应付冲减与供应商对账调整，形成异常处理证据链。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -225,11 +276,11 @@ export default function PurchaseReturnsPanel() {
                     <td className="px-5 py-3">
                       <div className="flex flex-wrap gap-1 min-w-[320px]">
                         <button onClick={() => setSelectedReturn(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>查看详情</button>
-                        <button onClick={() => approve(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
-                        <button onClick={() => markReturned(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>标记已退货</button>
-                        <button onClick={() => generateCredit(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#faf3ff", color: A.purple }}>生成贷项样本</button>
-                        <button onClick={() => close(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.gray1 }}>关闭</button>
-                        <button onClick={() => reject(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
+                        <button disabled={Boolean(blockedReturnAction(row, "approve", creditMemos))} onClick={() => approve(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
+                        <button disabled={Boolean(blockedReturnAction(row, "markReturned", creditMemos))} onClick={() => markReturned(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#f0f6ff", color: A.blue }}>标记已退货</button>
+                        <button disabled={Boolean(blockedReturnAction(row, "generateCredit", creditMemos))} onClick={() => generateCredit(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#faf3ff", color: A.purple }}>登记贷项通知</button>
+                        <button disabled={Boolean(blockedReturnAction(row, "close", creditMemos))} onClick={() => close(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: A.gray6, color: A.gray1 }}>关闭</button>
+                        <button disabled={Boolean(blockedReturnAction(row, "reject", creditMemos))} onClick={() => reject(row)} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
                         <button onClick={() => exportDetail(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.gray1 }}>导出明细</button>
                       </div>
                     </td>
@@ -245,7 +296,7 @@ export default function PurchaseReturnsPanel() {
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商贷项通知</h2>
-            <p className="text-[11px] mt-1" style={{ color: A.sub }}>贷项通知用于演示应付冲减，不生成真实会计分录或付款。</p>
+            <p className="text-[11px] mt-1" style={{ color: A.sub }}>贷项通知用于关联采购退货、发票差异、应付冲减和供应商对账调整。</p>
           </div>
           <button onClick={exportCreditMemos}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg"
@@ -279,9 +330,9 @@ export default function PurchaseReturnsPanel() {
                     <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{memo.reconciliationStatement || "—"}</td>
                     <td className="px-5 py-3">
                       <div className="flex flex-wrap gap-1 min-w-[190px]">
-                        <button onClick={() => updateCredit(memo.id, { status: "已确认" })} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0faf4", color: A.green }}>标记已确认</button>
-                        <button onClick={() => updateCredit(memo.id, { status: "已冲减应付", apOffsetStatus: "已冲减应付" })} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#faf3ff", color: A.purple }}>标记已冲减</button>
-                        <button onClick={() => updateCredit(memo.id, { status: "已驳回", apOffsetStatus: "未冲减" })} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
+                        <button disabled={Boolean(blockedCreditAction(memo, "confirm"))} onClick={() => updateCreditStatus(memo, { status: "已确认" }, "贷项通知已确认")} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#f0faf4", color: A.green }}>标记已确认</button>
+                        <button disabled={Boolean(blockedCreditAction(memo, "offset"))} onClick={() => updateCreditStatus(memo, { status: "已冲减应付", apOffsetStatus: "已冲减应付" }, "已更新应付冲减状态")} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#faf3ff", color: A.purple }}>标记已冲减</button>
+                        <button disabled={Boolean(blockedCreditAction(memo, "reject"))} onClick={() => updateCreditStatus(memo, { status: "已驳回", apOffsetStatus: "未冲减" }, "贷项通知已驳回")} className="px-2 py-1 text-[11px] font-medium rounded-md disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
                       </div>
                     </td>
                   </tr>
@@ -369,11 +420,11 @@ export default function PurchaseReturnsPanel() {
               ]}
             />
             <DocumentActionBar>
-              <button onClick={() => approve(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
-              <button onClick={() => markReturned(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>标记已退货</button>
-              <button onClick={() => generateCredit(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>生成贷项样本</button>
-              <button onClick={() => close(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.gray1 }}>关闭退货</button>
-              <button onClick={() => reject(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
+              <button disabled={Boolean(blockedReturnAction(selectedReturn, "approve", creditMemos))} onClick={() => approve(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
+              <button disabled={Boolean(blockedReturnAction(selectedReturn, "markReturned", creditMemos))} onClick={() => markReturned(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#f0f6ff", color: A.blue }}>标记已退货</button>
+              <button disabled={Boolean(blockedReturnAction(selectedReturn, "generateCredit", creditMemos))} onClick={() => generateCredit(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#faf3ff", color: A.purple }}>登记贷项通知</button>
+              <button disabled={Boolean(blockedReturnAction(selectedReturn, "close", creditMemos))} onClick={() => close(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: A.gray6, color: A.gray1 }}>关闭异常</button>
+              <button disabled={Boolean(blockedReturnAction(selectedReturn, "reject", creditMemos))} onClick={() => reject(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-45 disabled:cursor-not-allowed" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
               <button onClick={() => exportDetail(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出明细 CSV</button>
               <button onClick={() => setSelectedReturn(null)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
             </DocumentActionBar>

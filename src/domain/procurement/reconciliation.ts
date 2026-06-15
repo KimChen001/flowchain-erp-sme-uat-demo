@@ -39,7 +39,7 @@ export function getReconciliationSummary(statement: SupplierReconciliationStatem
   if (statement.totalVarianceAmount > 0) return `存在 ${statement.exceptionCount} 项差异，差异金额 ${statement.totalVarianceAmount.toLocaleString()}。`;
   if (statement.overdueAmount > 0) return `存在逾期应付 ${statement.overdueAmount.toLocaleString()}，建议 AP 复核付款计划。`;
   if (statement.openBalance > 0) return `仍有未结余额 ${statement.openBalance.toLocaleString()}，等待结算或供应商确认。`;
-  return "发票、应付和付款状态已完成样本对账。";
+  return "发票、应付和付款状态已完成对账。";
 }
 
 export function reconciliationExportRows(statements: SupplierReconciliationStatement[]) {

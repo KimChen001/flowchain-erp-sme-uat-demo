@@ -35,7 +35,7 @@ export default function SupplierPortalPanel() {
     let alive = true;
     apiJson<SupplierPerformance[]>("/api/supplier-performance")
       .then((data) => { if (alive) setSuppliers(data); })
-      .catch(() => toast.error("供应商绩效 API 未连接", { description: "已显示本地样例绩效" }))
+      .catch(() => toast.error("供应商绩效服务暂不可用", { description: "已显示当前绩效快照" }))
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);

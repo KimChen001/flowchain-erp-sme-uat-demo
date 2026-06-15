@@ -154,7 +154,7 @@ function NewPRModal({ open, onClose, onCreate }: {
         description: `${item.name} · ${quantity.toLocaleString()} 件 · ${fmt(amount)}`,
       });
     } catch (error) {
-      toast.error("采购申请提交失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("采购申请提交失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     } finally {
       setSubmitting(false);
     }
@@ -248,7 +248,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
           return data.some((item) => item.pr === current) ? current : data[0]?.pr ?? "";
         });
       })
-      .catch(() => toast.error("采购申请 API 未连接", { description: "请确认 API 服务正在运行" }))
+      .catch(() => toast.error("采购申请服务暂不可用", { description: "请检查服务连接状态" }))
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [intent?.createdAt]);
@@ -315,16 +315,16 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
       await updateRequestStatus(pr, "已批准");
       toast.success(`${pr} 已批准`, { description: "已完成审批，可转为采购订单继续执行" });
     } catch (error) {
-      toast.error("采购申请审批失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("采购申请审批失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     }
   }
 
   async function rejectRequest(pr: string) {
     try {
       await updateRequestStatus(pr, "已驳回");
-      toast.error(`${pr} 已驳回`, { description: "状态已写入后端" });
+      toast.error(`${pr} 已驳回`, { description: "状态已更新" });
     } catch (error) {
-      toast.error("采购申请驳回失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("采购申请驳回失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     }
   }
 
@@ -387,7 +387,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
       toast.success(`${rfq.id} 已发起`, { description: `${selected.pr} · 已邀请 ${invitedSuppliers.length} 家供应商` });
       onOpenRfq?.();
     } catch (error) {
-      toast.error("RFQ 发起失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("RFQ 发起失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     } finally {
       setCreatingRfq(false);
     }
@@ -521,7 +521,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
               }}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: supplierRecommendationResult?.needsRfq ? A.orange : A.green }}>
-                    <ShieldCheck size={12} /> 后端供应商推荐
+                    <ShieldCheck size={12} /> 供应商推荐
                   </div>
                   {supplierRecommendationResult?.primary ? (
                     <span className="text-xs font-semibold tabular-nums" style={{ color: supplierRecommendationResult.primary.score >= 84 ? A.green : A.orange }}>
@@ -579,7 +579,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
                   </>
                 ) : (
                   <div className="text-[10px] leading-4" style={{ color: A.sub }}>
-                    当前 SKU 缺少后端报价候选，建议先维护供应商报价或发起 RFQ。
+                    当前 SKU 缺少报价候选，建议先维护供应商报价或发起 RFQ。
                     <div>
                       <button onClick={createRfqFromSelected} disabled={creatingRfq}
                         className="mt-2 h-7 px-2.5 rounded-md text-[11px] font-semibold text-white inline-flex items-center gap-1.5 disabled:opacity-60"

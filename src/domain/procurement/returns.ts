@@ -34,10 +34,10 @@ export function isReturnException(returnDoc: PurchaseReturn, creditMemos: Suppli
 export function getReturnSummary(returnDoc: PurchaseReturn, creditMemos: SupplierCreditMemo[] = []) {
   const impact = calculateReturnFinancialImpact(returnDoc, creditMemos);
   if (returnDoc.status === "已驳回") return "供应商或审批已驳回，需补充证据或重新协商处理。";
-  if (returnDoc.status === "待审批") return "退货/贷项处理待审批，暂不影响真实库存或会计分录。";
+  if (returnDoc.status === "待审批") return "退货/贷项处理待审批，库存影响与财务影响等待审批确认。";
   if (returnDoc.status === "待贷项" || linkedCreditMemos(returnDoc, creditMemos).length === 0) return "已登记退货影响，需跟进供应商贷项通知。";
   if (impact > 0) return `仍有 ${impact.toLocaleString("zh-CN")} 未冲减金额，需 AP 或对账复核。`;
-  return "退货与贷项样本已闭环，可进入 AP 或供应商对账复核。";
+  return "退货与贷项处理已闭环，可进入 AP 或供应商对账复核。";
 }
 
 export function purchaseReturnExportRows(returns: PurchaseReturn[]) {
@@ -161,7 +161,7 @@ export function returnExceptionRows(returns: PurchaseReturn[], creditMemos: Supp
       异常类型: memo.status,
       金额影响: memo.totalCredit,
       状态: memo.apOffsetStatus,
-      建议动作: memo.status === "已驳回" ? "供应商贷项被驳回，需采购/AP复核原因。" : "贷项待确认，确认后可演示应付冲减。",
+      建议动作: memo.status === "已驳回" ? "供应商贷项被驳回，需采购/AP复核原因。" : "贷项待确认，确认后可更新应付冲减状态。",
     }));
   return [...returnRows, ...memoRows];
 }

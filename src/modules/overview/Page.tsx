@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -301,7 +301,7 @@ function buildPurchaseReturnEvidence(item: PurchaseReturn): EvidenceDetail {
       { label: "贷项状态", value: linkedCredit?.status || "未收到" },
       { label: "退货状态", value: item.status },
     ],
-    confidence: item.confidence ? `${item.confidence}% · 样本规则` : "样本规则",
+    confidence: item.confidence ? `${item.confidence}% · 规则引擎` : "规则引擎",
     suggestedAction: "打开采购工作台，复核退货、贷项通知和 AP/对账影响。",
   };
 }
@@ -329,7 +329,7 @@ function buildReconciliationEvidence(item: SupplierReconciliationStatement): Evi
       { label: "状态", value: item.status },
       { label: "结算状态", value: item.settlementStatus },
     ],
-    confidence: item.confidence ? `${item.confidence}% · 样本规则` : "样本规则",
+    confidence: item.confidence ? `${item.confidence}% · 规则引擎` : "规则引擎",
     suggestedAction: item.status === "已驳回" ? "打开供应商对账，复核拒绝原因和相关发票/AP。" : "打开供应商对账，复核差异、未结余额和逾期应付。",
   };
 }
@@ -351,8 +351,8 @@ function buildSupplierEvidence(item: SupplierPerformance): EvidenceDetail {
       { label: "准时率", value: `${Number(item.onTime || 0).toFixed(1)}%` },
       { label: "质量率", value: `${Number(item.quality || 0).toFixed(1)}%` },
       { label: "响应分", value: Number(item.resp || 0).toFixed(0) },
-      { label: "拒收率样本", value: `${rejectRate}%` },
-      { label: "异常次数样本", value: exceptions },
+      { label: "拒收率", value: `${rejectRate}%` },
+      { label: "异常次数", value: exceptions },
       { label: "YTD 采购额", value: fmt(Number(item.spend || 0)) },
     ],
     confidence: "81% · 中高",
@@ -375,7 +375,7 @@ function buildForecastEvidence(inventoryRisk: ReturnType<typeof overviewReplenis
       { label: "品名", value: sku.name },
       { label: "期初库存", value: `${sku.onHand.toLocaleString()} ${sku.unit}` },
       { label: "计划入库", value: `${sku.open.toLocaleString()} ${sku.unit}` },
-      { label: "预测准确率样本", value: "92.1%" },
+      { label: "预测准确率", value: "92.1%" },
       { label: "MRP 例外", value: inventoryRisk ? `${inventoryRisk.plan.priority}优先级 · ${inventoryRisk.plan.action}` : "中优先级 · 继续监控" },
       { label: "建议释放量", value: inventoryRisk ? `${inventoryRisk.plan.suggestedQty.toLocaleString()} ${inventoryRisk.plan.unit}` : "按计划复核" },
       { label: "短缺窗口", value: inventoryRisk ? `${inventoryRisk.plan.daysCover} 天覆盖` : "未来 6 期滚动检查" },
@@ -651,7 +651,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
 
   const pulse = [
     { label: "OTIF", value: "96.2%", note: "本月交付", color: A.green },
-    { label: "Inventory Turnover", value: "8.4x", note: "样本加权", color: A.blue },
+    { label: "Inventory Turnover", value: "8.4x", note: "加权指标", color: A.blue },
     { label: "Forecast Accuracy", value: "92.1%", note: "MAPE 7.9%", color: A.purple },
     { label: "Purchase Cycle", value: "6.4d", note: "PR → PO", color: A.orange },
     { label: "Supplier Score", value: "88", note: "综合评分", color: A.teal },
@@ -681,13 +681,13 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
           <div>
             <div className="flex items-center gap-2 mb-2">
               <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>今日运营驾驶舱</h1>
-              <Chip label="演示环境" color={A.blue} bg="#f0f6ff" />
-              <Chip label="样本数据" color={A.gray1} bg={A.gray6} />
+              <Chip label="运营工作台" color={A.blue} bg="#f0f6ff" />
+              <Chip label="证据链" color={A.gray1} bg={A.gray6} />
               <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ color: A.green, background: "#f0faf4" }}>
                 今日更新
               </span>
             </div>
-            <p className="text-sm" style={{ color: A.sub }}>从重点动作、运营风险、决策建议和证据包开始演示。</p>
+            <p className="text-sm" style={{ color: A.sub }}>从重点动作、运营风险、决策建议和证据包开始处理。</p>
           </div>
           <div className="flex items-center gap-2">
             {quickLinks.map((link) => (
@@ -841,7 +841,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
               ))}
             </div>
             <div className="text-[10px] leading-4 mt-2" style={{ color: A.gray2 }}>
-              确定性演示逻辑，不会自动创建 PR/RFQ/PO 或修改库存。
+              建议卡用于行动复核，单据创建和库存调整需由对应业务流程确认。
             </div>
           </Card>
         </div>

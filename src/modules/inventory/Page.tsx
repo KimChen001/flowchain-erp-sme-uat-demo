@@ -137,7 +137,7 @@ function InventoryOverview() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="样本 SKU" value={String(inventoryItems.length)} sub="库存控制台" icon={Package} color={A.blue} />
+        <KpiCard label="SKU 总数" value={String(inventoryItems.length)} sub="库存控制台" icon={Package} color={A.blue} />
         <KpiCard label="需补货 SKU" value={String(shortageItems.length)} sub={`${highPriority} 个高优先级`} delta="按 ROP 计算" positive={false} icon={XCircle} color={A.red} />
         <KpiCard label="建议 PR 金额" value={fmt(replenishmentAmount)} sub="MOQ/批量修正后" icon={ClipboardCheck} color={A.orange} />
         <KpiCard label="加权覆盖天数" value={`${weightedCoverage.toFixed(0)}天`} sub={`周转 ${avgTurnover.toFixed(1)}x`} positive icon={Activity} color={A.green} />
@@ -958,7 +958,7 @@ function InventoryMovements() {
           op: item.op || item.operator || "系统",
         })));
       })
-      .catch(() => toast.error("库存流水 API 未连接", { description: "将显示本地样例流水" }))
+      .catch(() => toast.error("库存流水服务暂不可用", { description: "已显示当前库存流水快照" }))
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);

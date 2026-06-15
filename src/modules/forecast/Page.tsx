@@ -396,7 +396,7 @@ export default function ForecastPanel() {
       });
       setSavedPlans((prev) => [plan, ...prev].slice(0, 8));
       setCommitted(true);
-      toast.success("预测方案已保存到后端", { description: `${plan.id} · ${sku.sku}` });
+      toast.success("预测方案已保存", { description: `${plan.id} · ${sku.sku}` });
     } catch {
       toast.error("保存失败，请检查 API 服务");
     } finally {
@@ -450,7 +450,7 @@ export default function ForecastPanel() {
             source: currentMrpRow ? "mrp-assisted-forecast" : "forecast",
             summary: `${sku.sku} ${sku.name} · 建议 ${executableRecommendedQty.toLocaleString()} ${sku.unit} · ${fmt(executableRecommendedAmount)}`,
             explanation: currentMrpRow
-              ? `预测补货数量已按后端 MRP 净需求校准：MRP 例外 ${currentMrpRow.exception}，计划入库 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，优先级 ${executablePriority}。${mrpBomSourceSummary ? `BOM 来源：${mrpBomSourceSummary}。` : ""}`
+              ? `预测补货数量已按 MRP 净需求校准：MRP 例外 ${currentMrpRow.exception}，计划入库 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，优先级 ${executablePriority}。${mrpBomSourceSummary ? `BOM 来源：${mrpBomSourceSummary}。` : ""}`
               : `预测供需对账识别峰值净缺口 ${peakGap.toLocaleString()} ${sku.unit}，服务水平 ${serviceLevel}% 下建议采购 ${executableRecommendedQty.toLocaleString()} ${sku.unit}。`,
             forecast: {
               method,
@@ -761,7 +761,7 @@ export default function ForecastPanel() {
           <SectionHeader title="历史需求输入"
             right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
               style={{ background: useCustomHistory ? "#f0faf4" : A.gray6, color: useCustomHistory ? A.green : A.gray1 }}>
-              {useCustomHistory ? "使用用户输入" : "使用系统样本"}
+              {useCustomHistory ? "使用用户输入" : "使用系统基线"}
             </span>} />
           <textarea
             value={historyText}
@@ -778,7 +778,7 @@ export default function ForecastPanel() {
               <button onClick={() => { setHistoryText(formatDemandSeries(baseSku.history)); setUseCustomHistory(false); }}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium"
                 style={{ background: A.gray6, color: A.label }}>
-                恢复样本
+                恢复基线
               </button>
               <button onClick={() => {
                   if (parsedHistory.length < 6) {
@@ -801,7 +801,7 @@ export default function ForecastPanel() {
           <SectionHeader title="客观数据诊断" />
           <div className="grid grid-cols-2 gap-2">
             {[
-              ["样本数", `${diag.n}`],
+              ["历史点数", `${diag.n}`],
               ["均值", `${diag.mean.toFixed(0)} ${sku.unit}`],
               ["中位数", `${diag.median.toFixed(0)} ${sku.unit}`],
               ["范围", `${diag.min.toFixed(0)}-${diag.max.toFixed(0)}`],
@@ -1334,7 +1334,7 @@ export default function ForecastPanel() {
       <Card>
         <div className="px-5 py-4 flex items-start justify-between gap-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>后端 MRP 净需求计划</h2>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>MRP 净需求计划</h2>
             <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>
               {currentMrpRow
                 ? `${currentMrpRow.sku} · 在手 ${currentMrpRow.onHand.toLocaleString()} ${currentMrpRow.unit} · 已分配 ${currentMrpRow.allocated.toLocaleString()} · MOQ ${currentMrpRow.moq} · 提前期 ${currentMrpRow.leadTimePeriods} 期`
@@ -1417,7 +1417,7 @@ export default function ForecastPanel() {
             </tbody>
           </table>
         ) : (
-          <div className="py-10 text-center text-xs" style={{ color: A.gray2 }}>MRP 接口暂不可用，预测页仍可使用本地供需对账。</div>
+          <div className="py-10 text-center text-xs" style={{ color: A.gray2 }}>MRP 计划暂不可用，预测页仍可使用供需对账。</div>
         )}
       </Card>
 
@@ -1524,11 +1524,11 @@ export default function ForecastPanel() {
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
               <FileSpreadsheet size={11} /> 导出 CSV
             </button>
-            <span className="text-[10px]" style={{ color: A.gray2 }}>{savedPlans.length} 条后端记录</span>
+            <span className="text-[10px]" style={{ color: A.gray2 }}>{savedPlans.length} 条计划记录</span>
           </div>} />
         {savedPlans.length === 0 ? (
           <div className="text-xs py-6 text-center" style={{ color: A.gray2 }}>
-            还没有保存方案。运行预测后点击“保存共识预测方案”，结果会写入后端数据。
+            还没有保存方案。运行预测后点击“保存共识预测方案”，结果会进入计划记录。
           </div>
         ) : (
           <div className="grid grid-cols-4 gap-2">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertCircle, Camera, Calendar, Check, CheckCircle2, Clock, DollarSign, Eye, FileCheck2, FileSpreadsheet,
@@ -132,17 +132,17 @@ export default function PurchasingOrdersPage() {
   async function approve(poId: string) {
     try {
       await updatePOStatus(poId, "已审批");
-      toast.success(`${poId} 已审批`, { description: "已写入后端，刷新后仍会保留" });
+      toast.success(`${poId} 已审批`, { description: "审批状态已更新" });
     } catch (error) {
-      toast.error("采购订单审批失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("采购订单审批失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     }
   }
   async function reject(poId: string) {
     try {
       await updatePOStatus(poId, "已驳回");
-      toast.error(`${poId} 已驳回`, { description: "状态已保存到 API 数据源" });
+      toast.error(`${poId} 已驳回`, { description: "状态已更新" });
     } catch (error) {
-      toast.error("采购订单驳回失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("采购订单驳回失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     }
   }
   async function cancel(poId: string) {
@@ -151,15 +151,15 @@ export default function PurchasingOrdersPage() {
       await updatePOStatus(poId, "已取消");
       toast(`${poId} 已取消`);
     } catch (error) {
-      toast.error("采购订单取消失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("采购订单取消失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     }
   }
   async function send(poId: string) {
     try {
       await updatePOStatus(poId, "已发出");
-      toast.success(`${poId} 已下发至供应商`, { description: "后端已记录状态变更" });
+      toast.success(`${poId} 已下发至供应商`, { description: "状态变更已记录" });
     } catch (error) {
-      toast.error("采购订单下发失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("采购订单下发失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     }
   }
   function downloadPDF(poId: string) {
@@ -636,7 +636,7 @@ export default function PurchasingOrdersPage() {
             <DocumentEvidencePanel
               linkedDocuments={getPoLinkedDocuments(selectedPO, SUPPLIER_INVOICES, receivingDocs)}
               provenance={selectedPO.source || "manual"}
-              notes={selectedPO.reason || selectedPO.approvalSnapshot?.summary || "采购订单演示详情，不触发真实供应商下发。"}
+              notes={selectedPO.reason || selectedPO.approvalSnapshot?.summary || "采购订单详情用于审批、收货和供应商协同复核。"}
               evidence={[
                 { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
                 { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },

@@ -32,11 +32,11 @@ export default function ThreeWayMatchPanel() {
       匹配状态: item.matchStatus,
       发票状态: item.status,
     })));
-    toast.success("CSV 已导出");
+    toast.success("导出文件已生成", { description: "三单匹配 CSV" });
   };
   const resolve = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, matchStatus: "已解决", status: "已匹配", varianceAmount: 0, varianceType: "无差异" } : q));
-    toast.success(`${id} 差异已解决`, { description: "仅更新演示匹配状态，不生成会计凭证。" });
+    toast.success(`${id} 差异已解决`, { description: "状态已更新，请继续复核发票、退货贷项或应付冲减影响。" });
   };
   const rejectInvoice = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, status: "已驳回", matchStatus: "差异待处理" } : q));
@@ -67,7 +67,7 @@ export default function ThreeWayMatchPanel() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>三单匹配 (PO · GRN · Supplier Invoice)</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              三单匹配为演示规则，用于比较采购订单、收货单和供应商发票的金额、数量与状态差异；差异可通过发票更正、采购退货、供应商贷项、AP 调整或供应商对账处理。
+              三单匹配比较采购订单、收货单和供应商发票的金额、数量与状态差异；差异可通过发票更正、采购退货、供应商贷项通知、AP 调整或供应商对账处理。
             </p>
           </div>
           <button onClick={exportCsv}
@@ -136,7 +136,7 @@ export default function ThreeWayMatchPanel() {
                 {selected.varianceType} · {selected.matchStatus}
               </div>
               <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>
-                PO = ordered，GRN = received，Invoice = billed。当前差异金额 {fmt(selected.varianceAmount)}，请在供应商发票台账中查看行项目证据；本结果仅为演示匹配预检。
+                PO = ordered，GRN = received，Invoice = billed。当前差异金额 {fmt(selected.varianceAmount)}，请在供应商发票台账中查看行项目证据；本结果用于匹配预检和异常处理。
               </div>
             </div>
           </div>

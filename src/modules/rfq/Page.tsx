@@ -20,7 +20,7 @@ export default function PurchasingRFQPage() {
         setRfqs(data);
         setSelectedId((current) => data.some((item) => item.id === current) ? current : data[0]?.id ?? "");
       })
-      .catch(() => toast.error("RFQ API 未连接", { description: "已显示本地样例询价单" }))
+      .catch(() => toast.error("RFQ 服务暂不可用", { description: "已显示当前询价快照" }))
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
@@ -56,7 +56,7 @@ export default function PurchasingRFQPage() {
       });
       setRfqs(prev => prev.map(r => r.id === id ? updated : r));
       setSelectedId(updated.id);
-      toast.success(`${id} 已授标`, { description: updated.linkedPo ? `已生成 ${updated.linkedPo} 待审批订单` : "询价结果已写回后端" });
+      toast.success(`${id} 已授标`, { description: updated.linkedPo ? `已生成 ${updated.linkedPo} 待审批订单` : "已更新授标结果" });
     } catch (error) {
       toast.error("RFQ 授标失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
     }

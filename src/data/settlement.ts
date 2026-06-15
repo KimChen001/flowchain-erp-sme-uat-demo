@@ -1,4 +1,4 @@
-import type { SupplierCreditMemo, SupplierInvoice, SupplierReconciliationStatement } from "../types/scm";
+﻿import type { SupplierCreditMemo, SupplierInvoice, SupplierReconciliationStatement } from "../types/scm";
 
 export const PAYABLES: {
   id: string; supplier: string; invoice: string; amount: number; due: string;
@@ -200,7 +200,7 @@ export const SUPPLIER_INVOICES: SupplierInvoice[] = [
     postedToAp: true,
     paid: true,
     confidence: 96,
-    notes: "三单匹配通过，已完成演示付款状态。",
+    notes: "三单匹配通过，付款状态已完成。",
     lines: [
       { lineId: "SI-2026-0423-L1", sku: "SKU-00142", name: "精密轴承 6204-ZZ", poLine: "PO-2026-1281-L001", grnLine: "GRN-202605-0423-L001", quantity: 7, unit: "批", unitPrice: 274285.71, taxRate: 0.13, taxAmount: 249600, lineSubtotal: 1920000, lineTotal: 2169600, orderedQty: 7, receivedQty: 7, matchedQty: 7, varianceType: "无差异", varianceAmount: 0 },
     ],
@@ -301,7 +301,7 @@ export const SUPPLIER_RECONCILIATION_STATEMENTS: SupplierReconciliationStatement
     lines: [
       { lineId: "SRS-2026-0501-L1", bizType: "SupplierInvoice", bizId: "INV-FO-260418", supplier: "佛山标准件", documentDate: "2026-05-27", dueDate: "2026-06-26", description: "供应商发票已匹配", debitAmount: 429400, payableAmount: 429400, paidAmount: 0, varianceAmount: 0, status: "已过账应付", matchStatus: "自动匹配", relatedPo: "PO-2026-1284", relatedGrn: "GRN-202605-0418", relatedInvoice: "INV-FO-260418" },
       { lineId: "SRS-2026-0501-L2", bizType: "AP", bizId: "AP-2026-0418", supplier: "佛山标准件", documentDate: "2026-05-28", dueDate: "2026-06-26", description: "已进入应付账款", payableAmount: 429400, paidAmount: 0, varianceAmount: 0, status: "待付款", relatedPo: "PO-2026-1284", relatedGrn: "GRN-202605-0418", relatedInvoice: "INV-FO-260418" },
-      { lineId: "SRS-2026-0501-L3", bizType: "Payment", bizId: "PAY-DEMO-FO-0529", supplier: "佛山标准件", documentDate: "2026-05-29", description: "样本付款核销", creditAmount: 120000, payableAmount: 0, paidAmount: 120000, varianceAmount: 0, status: "部分付款", relatedInvoice: "INV-FO-260418", notes: "演示状态，不生成真实付款。" },
+      { lineId: "SRS-2026-0501-L3", bizType: "Payment", bizId: "PAY-FO-2026-0529", supplier: "佛山标准件", documentDate: "2026-05-29", description: "付款核销", creditAmount: 120000, payableAmount: 0, paidAmount: 120000, varianceAmount: 0, status: "部分付款", relatedInvoice: "INV-FO-260418", notes: "付款状态已登记。" },
     ],
   },
   {
@@ -331,7 +331,7 @@ export const SUPPLIER_RECONCILIATION_STATEMENTS: SupplierReconciliationStatement
     notes: "包含运费差异与待审批 PO 的缺少收货发票，需采购与 AP 联合复核。",
     lines: [
       { lineId: "SRS-2026-0502-L1", bizType: "SupplierInvoice", bizId: "INV-SZ-260422", supplier: "深圳新元电气", documentDate: "2026-05-27", dueDate: "2026-06-26", description: "发票额外运费需确认合同条款", debitAmount: 1455000, payableAmount: 1455000, paidAmount: 0, varianceAmount: 8600, status: "存在差异", matchStatus: "人工复核", relatedPo: "PO-2026-1283", relatedGrn: "GRN-202605-0422", relatedInvoice: "INV-SZ-260422" },
-      { lineId: "SRS-2026-0502-L2", bizType: "Adjustment", bizId: "ADJ-DEMO-SZ-0528", supplier: "深圳新元电气", documentDate: "2026-05-28", description: "运费暂估调整，待合同确认", creditAmount: 8600, payableAmount: 0, paidAmount: 0, varianceAmount: 8600, status: "待确认", relatedPo: "PO-2026-1283", relatedGrn: "GRN-202605-0422", relatedInvoice: "INV-SZ-260422" },
+      { lineId: "SRS-2026-0502-L2", bizType: "CreditMemo", bizId: "CM-SZ-2026-0528", supplier: "深圳新元电气", documentDate: "2026-05-28", description: "供应商贷项通知冲减合同外运费差异", creditAmount: 8600, payableAmount: 0, paidAmount: 0, varianceAmount: 8600, status: "待确认", relatedPo: "PO-2026-1283", relatedGrn: "GRN-202605-0422", relatedInvoice: "INV-SZ-260422" },
       { lineId: "SRS-2026-0502-L3", bizType: "SupplierInvoice", bizId: "INV-SZ-260425", supplier: "深圳新元电气", documentDate: "2026-05-31", dueDate: "2026-06-30", description: "PO 待审批且暂无 GRN，发票暂挂", debitAmount: 2079200, payableAmount: 0, paidAmount: 0, varianceAmount: 2079200, status: "待匹配", matchStatus: "未匹配", relatedPo: "PO-2026-1287", relatedInvoice: "INV-SZ-260425", notes: "缺少收货，不进入本期应付。" },
     ],
   },
@@ -357,12 +357,12 @@ export const SUPPLIER_RECONCILIATION_STATEMENTS: SupplierReconciliationStatement
     status: "存在差异",
     settlementStatus: "已结算",
     createdDate: "2026-06-01",
-    source: "system-sample",
+    source: "system-generated",
     confidence: 80,
     notes: "一张发票已付款，另一张发票因 GRN 待收货暂不进入应付。",
     lines: [
       { lineId: "SRS-2026-0503-L1", bizType: "SupplierInvoice", bizId: "INV-HD-260423", supplier: "华东精工机械", documentDate: "2026-05-26", dueDate: "2026-05-26", description: "已完成三单匹配并付款", debitAmount: 2169600, payableAmount: 2169600, paidAmount: 0, varianceAmount: 0, status: "已付款", matchStatus: "自动匹配", relatedPo: "PO-2026-1281", relatedGrn: "GRN-202605-0423", relatedInvoice: "INV-HD-260423" },
-      { lineId: "SRS-2026-0503-L2", bizType: "Payment", bizId: "PAY-DEMO-HD-0526", supplier: "华东精工机械", documentDate: "2026-05-26", description: "到票即付样本付款", creditAmount: 2169600, payableAmount: 0, paidAmount: 2169600, varianceAmount: 0, status: "已付款", relatedInvoice: "INV-HD-260423" },
+      { lineId: "SRS-2026-0503-L2", bizType: "Payment", bizId: "PAY-HD-2026-0526", supplier: "华东精工机械", documentDate: "2026-05-26", description: "到票即付付款", creditAmount: 2169600, payableAmount: 0, paidAmount: 2169600, varianceAmount: 0, status: "已付款", relatedInvoice: "INV-HD-260423" },
       { lineId: "SRS-2026-0503-L3", bizType: "SupplierInvoice", bizId: "INV-HD-260421", supplier: "华东精工机械", documentDate: "2026-05-29", dueDate: "2026-06-29", description: "GRN 尚未签收，暂不结算", debitAmount: 2983200, payableAmount: 0, paidAmount: 0, varianceAmount: 2983200, status: "待匹配", matchStatus: "人工复核", relatedPo: "PO-2026-1286", relatedGrn: "GRN-202605-0421", relatedInvoice: "INV-HD-260421" },
     ],
   },
@@ -394,7 +394,7 @@ export const SUPPLIER_RECONCILIATION_STATEMENTS: SupplierReconciliationStatement
     notes: "价格差异未确认，不进入本期结算。",
     lines: [
       { lineId: "SRS-2026-0504-L1", bizType: "SupplierInvoice", bizId: "INV-JS-260420", supplier: "江苏铝合金集团", documentDate: "2026-05-29", dueDate: "2026-07-13", description: "发票单价高于 PO 价格", debitAmount: 1143560, payableAmount: 0, paidAmount: 0, varianceAmount: 32000, status: "已驳回", matchStatus: "差异待处理", relatedPo: "PO-2026-1285", relatedGrn: "GRN-202605-0420", relatedInvoice: "INV-JS-260420" },
-      { lineId: "SRS-2026-0504-L2", bizType: "Adjustment", bizId: "ADJ-DEMO-JS-0531", supplier: "江苏铝合金集团", documentDate: "2026-05-31", description: "价格差异暂扣", creditAmount: 32000, payableAmount: 0, paidAmount: 0, varianceAmount: 32000, status: "待确认", relatedPo: "PO-2026-1285", relatedGrn: "GRN-202605-0420", relatedInvoice: "INV-JS-260420" },
+      { lineId: "SRS-2026-0504-L2", bizType: "CreditMemo", bizId: "CM-JS-2026-0531", supplier: "江苏铝合金集团", documentDate: "2026-05-31", description: "供应商贷项通知冲减价格差异", creditAmount: 32000, payableAmount: 0, paidAmount: 0, varianceAmount: 32000, status: "待确认", relatedPo: "PO-2026-1285", relatedGrn: "GRN-202605-0420", relatedInvoice: "INV-JS-260420" },
     ],
   },
   {
@@ -424,8 +424,8 @@ export const SUPPLIER_RECONCILIATION_STATEMENTS: SupplierReconciliationStatement
     notes: "GRN 存在拒收数量，发票应付金额按合格数量暂估。",
     lines: [
       { lineId: "SRS-2026-0505-L1", bizType: "SupplierInvoice", bizId: "INV-GZ-260419", supplier: "广州化工耗材", documentDate: "2026-05-28", dueDate: "2026-06-27", description: "拒收数量导致发票数量差异", debitAmount: 390000, payableAmount: 348000, paidAmount: 0, varianceAmount: 42000, status: "存在差异", matchStatus: "差异待处理", relatedPo: "PO-2026-1282", relatedGrn: "GRN-202605-0419", relatedInvoice: "INV-GZ-260419" },
-      { lineId: "SRS-2026-0505-L2", bizType: "Adjustment", bizId: "ADJ-DEMO-GZ-0529", supplier: "广州化工耗材", documentDate: "2026-05-29", description: "拒收数量暂扣", creditAmount: 42000, payableAmount: 0, paidAmount: 0, varianceAmount: 42000, status: "待确认", relatedPo: "PO-2026-1282", relatedGrn: "GRN-202605-0419", relatedInvoice: "INV-GZ-260419" },
-      { lineId: "SRS-2026-0505-L3", bizType: "AP", bizId: "AP-26-1846", supplier: "广州化工耗材", documentDate: "2026-05-20", dueDate: "2026-05-20", description: "历史 AP 逾期样本", payableAmount: 124800, paidAmount: 0, varianceAmount: 0, status: "逾期", relatedInvoice: "INV-526392", notes: "用于演示供应商期间对账中的逾期余额。" },
+      { lineId: "SRS-2026-0505-L2", bizType: "PurchaseReturn", bizId: "RTV-2026-0501", supplier: "广州化工耗材", documentDate: "2026-05-29", description: "采购退货登记拒收数量暂扣", creditAmount: 42000, payableAmount: 0, paidAmount: 0, varianceAmount: 42000, status: "待贷项", relatedPo: "PO-2026-1282", relatedGrn: "GRN-202605-0419", relatedInvoice: "INV-GZ-260419" },
+      { lineId: "SRS-2026-0505-L3", bizType: "AP", bizId: "AP-26-1846", supplier: "广州化工耗材", documentDate: "2026-05-20", dueDate: "2026-05-20", description: "历史 AP 逾期余额", payableAmount: 124800, paidAmount: 0, varianceAmount: 0, status: "逾期", relatedInvoice: "INV-526392", notes: "用于供应商期间对账中的逾期余额复核。" },
     ],
   },
 ];
@@ -450,7 +450,7 @@ export const SUPPLIER_CREDIT_MEMOS: SupplierCreditMemo[] = [
     reconciliationStatement: "REC-2026-05-SZ-001",
     owner: "赵敏",
     source: "supplier-issued",
-    notes: "冲减合同外运费差异，等待 AP 样本状态更新。",
+    notes: "冲减合同外运费差异，等待 AP 状态更新。",
   },
   {
     id: "CM-JS-2026-0531",
@@ -471,7 +471,7 @@ export const SUPPLIER_CREDIT_MEMOS: SupplierCreditMemo[] = [
     reconciliationStatement: "REC-2026-05-JS-001",
     owner: "赵敏",
     source: "supplier-issued",
-    notes: "价格差异贷项已冲减演示 AP 余额。",
+    notes: "价格差异贷项已冲减 AP 余额。",
   },
   {
     id: "CM-FO-2026-0530",
@@ -491,8 +491,8 @@ export const SUPPLIER_CREDIT_MEMOS: SupplierCreditMemo[] = [
     apOffsetStatus: "已冲减应付",
     reconciliationStatement: "REC-2026-05-FO-001",
     owner: "赵敏",
-    source: "system-sample",
-    notes: "重复发票风险关闭，贷项为演示冲销状态。",
+    source: "system-generated",
+    notes: "重复发票风险关闭，贷项已登记为冲销状态。",
   },
   {
     id: "CM-HD-2026-0601",
@@ -513,7 +513,7 @@ export const SUPPLIER_CREDIT_MEMOS: SupplierCreditMemo[] = [
     reconciliationStatement: "REC-2026-05-HD-001",
     owner: "赵敏",
     source: "manual-adjustment",
-    notes: "GRN 尚未完成签收，贷项仅为待确认演示样本。",
+    notes: "GRN 尚未完成签收，贷项处于待确认状态。",
   },
   {
     id: "CM-GZ-2026-0531",

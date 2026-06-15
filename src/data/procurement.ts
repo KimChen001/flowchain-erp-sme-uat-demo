@@ -1,4 +1,4 @@
-import type { ApprovalSnapshot, POStatus, PurchaseReturn, RecvStatus } from "../types/scm";
+﻿import type { ApprovalSnapshot, POStatus, PurchaseReturn, RecvStatus } from "../types/scm";
 
 export const procurementData = [
   { category: "原材料",   amount: 12840000, pct: 38, yoy: 11.2 },
@@ -131,7 +131,7 @@ export const PURCHASE_RETURNS: PurchaseReturn[] = [
     rejectedImpactQty: 2,
     source: "receiving-qc",
     confidence: 82,
-    notes: "GRN 拒收数量已隔离，等待供应商补发或开具贷项通知；不生成真实库存冲回。",
+    notes: "GRN 拒收数量已隔离，等待供应商补发或开具贷项通知。",
     lines: [
       { lineId: "RTV-2026-0501-L1", sku: "SKU-00744", name: "聚氨酯密封胶", unit: "桶", orderedQty: 9, receivedQty: 7, acceptedQty: 5, rejectedQty: 2, returnQty: 2, unitPrice: 18584.07, taxRate: 0.13, returnAmount: 37168.14, taxAmount: 4831.86, totalAmount: 42000, reason: "质检拒收", relatedPoLine: "PO-2026-1282-L001", relatedGrnLine: "GRN-202605-0419-L001", relatedInvoiceLine: "SI-2026-0419-L1", notes: "外观破损，退回供应商确认。" },
     ],
@@ -162,7 +162,7 @@ export const PURCHASE_RETURNS: PurchaseReturn[] = [
     rejectedImpactQty: 0,
     source: "invoice-variance",
     confidence: 88,
-    notes: "货物已验收入库，仅针对发票额外运费生成供应商贷项样本。",
+    notes: "货物已验收入库，针对发票额外运费登记供应商贷项通知。",
     lines: [
       { lineId: "RTV-2026-0502-L1", sku: "FREIGHT", name: "合同外运费差异", unit: "项", orderedQty: 1, receivedQty: 1, acceptedQty: 1, rejectedQty: 0, returnQty: 0, unitPrice: 7610.62, taxRate: 0.13, returnAmount: 7610.62, taxAmount: 989.38, totalAmount: 8600, reason: "合同条款差异", relatedPoLine: "PO-2026-1283-L001", relatedGrnLine: "GRN-202605-0422-L001", relatedInvoiceLine: "SI-2026-0422-L1", notes: "冲减发票额外运费，不退实物。" },
     ],
@@ -225,7 +225,7 @@ export const PURCHASE_RETURNS: PurchaseReturn[] = [
     confidence: 68,
     notes: "发票已到但 GRN 未完成签收，先登记异常处理单；待收货确认后决定退货或释放匹配。",
     lines: [
-      { lineId: "RTV-2026-0504-L1", sku: "SKU-00815", name: "液压油缸 50mm", unit: "件", orderedQty: 12, receivedQty: 0, acceptedQty: 0, rejectedQty: 0, returnQty: 12, unitPrice: 220000, taxRate: 0.13, returnAmount: 2640000, taxAmount: 343200, totalAmount: 2983200, reason: "数量差异", relatedPoLine: "PO-2026-1286-L001", relatedGrnLine: "GRN-202605-0421-L001", relatedInvoiceLine: "SI-2026-0421-L1", notes: "未签收前不生成真实退货出库。" },
+      { lineId: "RTV-2026-0504-L1", sku: "SKU-00815", name: "液压油缸 50mm", unit: "件", orderedQty: 12, receivedQty: 0, acceptedQty: 0, rejectedQty: 0, returnQty: 12, unitPrice: 220000, taxRate: 0.13, returnAmount: 2640000, taxAmount: 343200, totalAmount: 2983200, reason: "数量差异", relatedPoLine: "PO-2026-1286-L001", relatedGrnLine: "GRN-202605-0421-L001", relatedInvoiceLine: "SI-2026-0421-L1", notes: "未签收前保持异常处理状态，待收货确认后更新库存影响。" },
     ],
   },
   {
@@ -254,7 +254,7 @@ export const PURCHASE_RETURNS: PurchaseReturn[] = [
     rejectedImpactQty: 0,
     source: "invoice-variance",
     confidence: 91,
-    notes: "重复发票已拦截，贷项/冲销样本用于展示 AP 风险关闭。",
+    notes: "重复发票已拦截，贷项/冲销用于关闭 AP 风险。",
     lines: [
       { lineId: "RTV-2026-0505-L1", sku: "SKU-00558", name: "不锈钢螺栓 M8×30 重复发票", unit: "件", orderedQty: 120000, receivedQty: 120000, acceptedQty: 120000, rejectedQty: 0, returnQty: 0, unitPrice: 3.1667, taxRate: 0.13, returnAmount: 380000, taxAmount: 49400, totalAmount: 429400, reason: "重复发票", relatedPoLine: "PO-2026-1284-L001", relatedGrnLine: "GRN-202605-0418-L001", relatedInvoiceLine: "SI-2026-0424-L1", notes: "不退实物，冲销重复发票金额。" },
     ],

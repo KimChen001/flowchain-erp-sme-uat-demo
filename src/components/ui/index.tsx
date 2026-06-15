@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, ChevronDown, History, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiJson } from "../../lib/api-client";
@@ -108,7 +108,7 @@ export function DocumentHistoryPanel({
       </div>
       {entries.length === 0 ? (
         <div className="text-[10px] leading-4" style={{ color: A.sub }}>
-          暂无历史记录。旧演示数据可能还没有审计历史，后续操作会自动记录。
+          暂无历史记录。当前单据暂无操作记录，后续状态变更会自动记录。
         </div>
       ) : (
         <div className="space-y-2">

@@ -191,7 +191,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => 
       onLogin(result.user, result.token);
       toast.success("登录成功，用户档案已保存");
     } catch {
-      toast.error("登录失败，请检查本地 API 是否运行");
+      toast.error("登录失败，请检查服务连接状态");
     } finally {
       setLoading(false);
     }
@@ -222,7 +222,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => 
               把采购、入库、预测和 AI insight 放进同一个工作台。
             </h1>
             <p className="text-base leading-7 max-w-xl" style={{ color: A.sub }}>
-              这是一个可交互的供应链 ERP demo。用户登录后，系统会保存用户档案，后续可以继续扩展为公司级租户、权限、审批流和真实数据库。
+              这是一个可交互的供应链 ERP 工作台。用户登录后，系统会保存用户档案，并支持继续扩展公司级租户、权限、审批流和业务数据服务。
             </p>
           </div>
 
@@ -248,7 +248,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => 
             </div>
             <div>
               <div className="text-base font-semibold" style={{ color: A.label }}>进入工作台</div>
-              <div className="text-xs" style={{ color: A.gray1 }}>输入用户信息，后端会保存 demo 档案</div>
+              <div className="text-xs" style={{ color: A.gray1 }}>输入用户信息，进入 FlowChain 工作台</div>
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertCircle, AlertOctagon, AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck,
@@ -826,8 +826,8 @@ function ReceivingOps() {
               />
               <DocumentEvidencePanel
                 linkedDocuments={getGrnLinkedDocuments(selectedGrn, purchaseOrders, SUPPLIER_INVOICES)}
-                provenance="receivingDocs · demo-data / API fallback"
-                notes={selectedGrn.status === "异常处理" ? "异常收货需要退货/冲销流程，本页不直接修改库存，并会影响供应商发票匹配。" : "收货明细用于库存可用量和三单匹配演示。"}
+                provenance="GRN dataset · API fallback"
+                notes={selectedGrn.status === "异常处理" ? "异常收货需要进入采购退货、贷项通知或应付冲减流程，并会影响供应商发票匹配。" : "收货明细用于库存可用量、三单匹配和异常处理证据链。"}
                 evidence={[
                   { label: "关联 PO", value: selectedGrn.po },
                   { label: "关联发票", value: SUPPLIER_INVOICES.filter((invoice) => invoice.relatedGrn === selectedGrn.grn || invoice.relatedPo === selectedGrn.po).length },

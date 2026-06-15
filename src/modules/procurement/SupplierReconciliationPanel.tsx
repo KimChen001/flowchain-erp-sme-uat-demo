@@ -101,7 +101,7 @@ export default function SupplierReconciliationPanel() {
       return;
     }
     exportRowsToCsv("supplier-reconciliation-export.csv", reconciliationExportRows(visibleStatements));
-    toast.success("供应商对账单 CSV 已导出");
+    toast.success("导出文件已生成", { description: "供应商对账单 CSV" });
   }
 
   function exportDetail(statement: SupplierReconciliationStatement) {
@@ -110,18 +110,18 @@ export default function SupplierReconciliationPanel() {
       return;
     }
     exportRowsToCsv(`supplier-reconciliation-detail-${statement.statementNo}.csv`, reconciliationLineExportRows(statement));
-    toast.success("对账明细 CSV 已导出");
+    toast.success("导出文件已生成", { description: "对账明细 CSV" });
   }
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <KpiCard label="对账单数" value={String(statements.length)} sub="样本期间" icon={FileSpreadsheet} color={A.blue} />
+        <KpiCard label="对账单数" value={String(statements.length)} sub="对账期间" icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="待确认" value={String(pending)} sub="供应商确认" icon={Clock} color={A.orange} />
         <KpiCard label="差异对账" value={String(exceptions)} sub="含逾期/驳回" icon={AlertOctagon} color={A.red} />
         <KpiCard label="未结算余额" value={fmt(openBalance)} sub="应付 - 已付" icon={Wallet} color={A.purple} />
         <KpiCard label="逾期应付" value={fmt(overdue)} sub="需 AP 复核" icon={AlertTriangle} color={A.orange} />
-        <KpiCard label="本期已付" value={fmt(paid)} sub="演示付款状态" icon={CreditCard} color={A.green} />
+        <KpiCard label="本期已付" value={fmt(paid)} sub="付款状态" icon={CreditCard} color={A.green} />
       </div>
 
       <Card>
@@ -129,7 +129,7 @@ export default function SupplierReconciliationPanel() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商对账单</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              按供应商和对账期间汇总 PO、GRN、供应商发票、退货、贷项、三单匹配、AP 与付款状态，仅用于演示环境样本数据。
+              按供应商和对账期间汇总 PO、GRN、供应商发票、退货、贷项、三单匹配、AP 与付款状态，用于差异复核和结算跟进。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

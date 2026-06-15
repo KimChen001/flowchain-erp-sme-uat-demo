@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+﻿import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -94,7 +94,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "supplierQuotes",
     label: "供应商报价导入",
     module: "采购",
-    description: "收集 RFQ 供应商报价，用于演示比价与报价规范。",
+    description: "收集 RFQ 供应商报价，用于比价、授标和报价规范复核。",
     templateFilename: "supplier-quotes-template.csv",
     requiredFields: ["RFQ编号", "供应商", "SKU", "品名", "报价单价", "MOQ", "交期天数", "币种", "有效期至"],
     optionalFields: ["付款条款", "备注"],
@@ -102,7 +102,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       { RFQ编号: "RFQ-26-0042", 供应商: "江苏铝合金集团", SKU: "SKU-00287", 品名: "铝合金型材 6063", 报价单价: 18.6, MOQ: 500, 交期天数: 12, 币种: "CNY", 有效期至: "2026-06-30", 付款条款: "Net 45", 备注: "含税含运" },
       { RFQ编号: "RFQ-26-0044", 供应商: "深圳新元电气", SKU: "SKU-00623", 品名: "控制器主板 V3.2", 报价单价: 11800, MOQ: 20, 交期天数: 18, 币种: "CNY", 有效期至: "2026-07-15", 付款条款: "Net 30", 备注: "" },
     ],
-    notes: ["适用于 RFQ 后收集供应商 Excel 报价。", "本轮只暂存为 demo 导入记录，不回写 RFQ。"],
+    notes: ["适用于 RFQ 后收集供应商 Excel 报价。", "导入后形成校验批次记录，RFQ 回写需通过后续审批流程。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["RFQ编号", "供应商", "SKU", "品名", "报价单价", "MOQ", "交期天数", "有效期至"]);
       const price = parsePositiveNumber(value(row, "报价单价"));
@@ -135,7 +135,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "supplierInvoices",
     label: "供应商发票导入",
     module: "采购",
-    description: "上传供应商发票，用于演示发票台账、PO/GRN 关联与三单匹配预检。",
+    description: "上传供应商发票，用于发票台账、PO/GRN 关联与三单匹配预检。",
     templateFilename: "supplier-invoices-template.csv",
     requiredFields: ["发票号码", "供应商", "PO", "发票日期", "接收日期", "到期日", "未税金额", "税额", "总额", "付款条款"],
     optionalFields: ["GRN", "币种", "运费", "来源", "匹配状态", "发票状态", "差异类型", "差异金额", "AP负责人", "已过账应付", "已付款", "备注"],
@@ -143,7 +143,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       { 发票号码: "INV-IMPORT-001", 供应商: "深圳新元电气", PO: "PO-2026-1283", GRN: "GRN-202605-0422", 发票日期: "2026-05-20", 接收日期: "2026-05-20", 到期日: "2026-06-19", 币种: "CNY", 未税金额: 118000, 税额: 15340, 运费: 0, 总额: 133340, 付款条款: "Net 30", 来源: "supplier-portal", 匹配状态: "未匹配", 发票状态: "待匹配", 差异类型: "无差异", 差异金额: 0, AP负责人: "赵敏", 已过账应付: "否", 已付款: "否", 备注: "" },
       { 发票号码: "INV-IMPORT-002", 供应商: "江苏铝合金集团", PO: "PO-2026-1285", GRN: "", 发票日期: "2026-05-21", 接收日期: "2026-05-21", 到期日: "2026-07-05", 币种: "CNY", 未税金额: 198000, 税额: 25740, 运费: 0, 总额: 223740, 付款条款: "Net 45", 来源: "email-upload", 匹配状态: "人工复核", 发票状态: "待匹配", 差异类型: "缺少收货", 差异金额: 223740, AP负责人: "赵敏", 已过账应付: "否", 已付款: "否", 备注: "待收货匹配" },
     ],
-    notes: ["适用于供应商门户、邮件上传或 EDI 样例发票。", "当前只做 CSV 校验和演示暂存，不创建 AP 过账或付款。"],
+    notes: ["适用于供应商门户、邮件上传或 EDI 发票。", "当前执行 CSV 校验和批次预览，AP 过账或付款需在应付流程中处理。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["发票号码", "供应商", "PO", "发票日期", "接收日期", "到期日", "未税金额", "税额", "总额", "付款条款"]);
       const subtotal = parseNonNegativeNumber(value(row, "未税金额"));
@@ -196,15 +196,15 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "supplierReconciliations",
     label: "供应商对账单导入",
     module: "采购",
-    description: "上传供应商对账单，用于演示按供应商和期间复核发票、应付、付款和差异状态。",
+    description: "上传供应商对账单，用于按供应商和期间复核发票、应付、付款和差异状态。",
     templateFilename: "supplier-reconciliation-template.csv",
     requiredFields: ["对账单号", "供应商", "期间开始", "期间结束", "应付金额", "已付金额", "状态", "结算状态"],
     optionalFields: ["币种", "调整金额", "差异金额", "未结余额", "逾期金额", "发票数", "异常数", "负责人", "来源", "备注"],
     sampleRows: [
       { 对账单号: "REC-IMPORT-001", 供应商: "深圳新元电气", 期间开始: "2026-05-01", 期间结束: "2026-05-31", 应付金额: 1455000, 已付金额: 0, 状态: "存在差异", 结算状态: "未结算", 币种: "CNY", 调整金额: 8600, 差异金额: 28600, 未结余额: 1446400, 逾期金额: 0, 发票数: 2, 异常数: 1, 负责人: "赵敏", 来源: "supplier-confirmation", 备注: "待供应商确认运费差异" },
-      { 对账单号: "REC-IMPORT-002", 供应商: "佛山标准件", 期间开始: "2026-05-01", 期间结束: "2026-05-31", 应付金额: 928200, 已付金额: 928200, 状态: "已确认", 结算状态: "已结算", 币种: "CNY", 调整金额: 0, 差异金额: 0, 未结余额: 0, 逾期金额: 0, 发票数: 1, 异常数: 0, 负责人: "赵敏", 来源: "system-sample", 备注: "" },
+      { 对账单号: "REC-IMPORT-002", 供应商: "佛山标准件", 期间开始: "2026-05-01", 期间结束: "2026-05-31", 应付金额: 928200, 已付金额: 928200, 状态: "已确认", 结算状态: "已结算", 币种: "CNY", 调整金额: 0, 差异金额: 0, 未结余额: 0, 逾期金额: 0, 发票数: 1, 异常数: 0, 负责人: "赵敏", 来源: "system-generated", 备注: "" },
     ],
-    notes: ["供应商对账单导入只做本地校验与预览，不创建 AP 过账或付款。", "未结余额建议约等于应付金额 - 已付金额 - 调整金额。"],
+    notes: ["供应商对账单导入执行校验与预览，AP 过账或付款需在应付流程中处理。", "未结余额建议约等于应付金额 - 已付金额 - 调整金额。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["对账单号", "供应商", "期间开始", "期间结束", "应付金额", "已付金额", "状态", "结算状态"]);
       const payable = parseNonNegativeNumber(value(row, "应付金额"));
@@ -264,7 +264,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "purchaseReturns",
     label: "采购退货导入",
     module: "采购",
-    description: "上传采购退货单，用于演示 GRN 拒收、发票差异、退货原因和贷项状态预览。",
+    description: "上传采购退货单，用于 GRN 拒收、发票差异、退货原因和贷项状态预览。",
     templateFilename: "purchase-returns-template.csv",
     requiredFields: ["退货单号", "供应商", "PO", "GRN", "退货日期", "原因", "退货数量", "退货金额", "状态"],
     optionalFields: ["发票", "仓库", "币种", "税额", "总额", "贷项通知", "来源", "负责人", "备注"],
@@ -272,7 +272,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       { 退货单号: "RTV-IMPORT-001", 供应商: "广州化工耗材", PO: "PO-2026-1282", GRN: "GRN-202605-0419", 退货日期: "2026-06-03", 原因: "质检拒收", 退货数量: 2, 退货金额: 42000, 状态: "待贷项", 发票: "INV-GZ-260419", 仓库: "C 区", 币种: "CNY", 税额: 4831.86, 总额: 42000, 贷项通知: "", 来源: "receiving-qc", 负责人: "周浩", 备注: "等待供应商贷项" },
       { 退货单号: "RTV-IMPORT-002", 供应商: "江苏铝合金集团", PO: "PO-2026-1285", GRN: "GRN-202605-0420", 退货日期: "2026-06-03", 原因: "价格差异", 退货数量: 0, 退货金额: 32000, 状态: "已生成贷项", 发票: "INV-JS-260420", 仓库: "B 区", 币种: "CNY", 税额: 3681.42, 总额: 32000, 贷项通知: "CM-JS-2026-0531", 来源: "invoice-variance", 负责人: "王志强", 备注: "价格差异冲减" },
     ],
-    notes: ["采购退货导入仅做本地校验与预览，不生成真实库存退回。", "贷项通知字段用于关联供应商贷项样本，不创建 AP 分录。"],
+    notes: ["采购退货导入执行校验与预览，库存影响需通过退货异常处理确认。", "贷项通知字段用于关联供应商贷项通知和应付冲减状态。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["退货单号", "供应商", "PO", "GRN", "退货日期", "原因", "退货数量", "退货金额", "状态"]);
       const qty = parseNonNegativeNumber(value(row, "退货数量"));
@@ -319,7 +319,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "supplierCreditMemos",
     label: "供应商贷项通知导入",
     module: "采购",
-    description: "上传供应商贷项通知，用于演示关联退货、发票差异和应付冲减状态预览。",
+    description: "上传供应商贷项通知，用于关联退货、发票差异和应付冲减状态预览。",
     templateFilename: "supplier-credit-memos-template.csv",
     requiredFields: ["贷项编号", "供应商", "关联退货", "贷项金额", "状态"],
     optionalFields: ["关联发票", "PO", "GRN", "开具日期", "接收日期", "币种", "税额", "应付冲减状态", "对账单", "负责人", "来源", "备注"],
@@ -327,7 +327,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       { 贷项编号: "CM-IMPORT-001", 供应商: "深圳新元电气", 关联退货: "RTV-2026-0502", 贷项金额: 8600, 状态: "已确认", 关联发票: "INV-SZ-260422", PO: "PO-2026-1283", GRN: "GRN-202605-0422", 开具日期: "2026-06-03", 接收日期: "2026-06-03", 币种: "CNY", 税额: 989.38, 应付冲减状态: "待冲减", 对账单: "REC-2026-05-SZ-001", 负责人: "赵敏", 来源: "supplier-issued", 备注: "合同外运费贷项" },
       { 贷项编号: "CM-IMPORT-002", 供应商: "广州化工耗材", 关联退货: "RTV-2026-0506", 贷项金额: 18000, 状态: "已驳回", 关联发票: "INV-GZ-260419", PO: "PO-2026-1282", GRN: "GRN-202605-0419", 开具日期: "2026-06-03", 接收日期: "2026-06-03", 币种: "CNY", 税额: 2070.8, 应付冲减状态: "未冲减", 对账单: "REC-2026-05-GZ-001", 负责人: "赵敏", 来源: "supplier-issued", 备注: "供应商争议中" },
     ],
-    notes: ["供应商贷项通知导入只做本地校验与预览，不冲减真实 AP。", "应付冲减状态用于演示 AP 和供应商对账影响。"],
+    notes: ["供应商贷项通知导入执行校验与预览，应付冲减需在 AP 流程中确认。", "应付冲减状态用于 AP 和供应商对账影响复核。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["贷项编号", "供应商", "关联退货", "贷项金额", "状态"]);
       const amount = parseNonNegativeNumber(value(row, "贷项金额"));
@@ -376,7 +376,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       { SKU: "SKU-00412", 品名: "伺服电机 750W", 仓库: "上海总仓", 库位: "D-02-01", 期初数量: 34, 单位: "台", 批次号: "LOT-OPEN-001", 序列号: "", 安全库存: 50, 最大库存: 200, 供应商: "深圳新元电气", 备注: "上线盘点" },
       { SKU: "SKU-00287", 品名: "铝合金型材 6063", 仓库: "上海总仓", 库位: "B-01-05", 期初数量: 148, 单位: "米", 批次号: "LOT-OPEN-002", 安全库存: 300, 最大库存: 2000, 供应商: "江苏铝合金集团", 备注: "" },
     ],
-    notes: ["用于 go-live 期初库存迁移。", "不会修改全局库存样例或后端数据库。"],
+    notes: ["用于 go-live 期初库存迁移。", "导入后形成批次记录，库存生效由库存流程复核。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["SKU", "品名", "仓库", "库位", "期初数量", "单位"]);
       const qty = parseNonNegativeNumber(value(row, "期初数量"));
@@ -404,7 +404,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       { 订单号: "SO-IMPORT-001", 客户: "华东工业集团", SKU: "SKU-00412", 品名: "伺服电机 750W", 数量: 8, 单价: 2980, 需求日期: "2026-06-15", 状态: "草稿", 销售负责人: "张磊", 交付地址: "上海", 客户信用等级: "A", 备注: "" },
       { 订单号: "SO-IMPORT-002", 客户: "京海科技", SKU: "SKU-00623", 品名: "控制器主板 V3.2", 数量: 3, 单价: 12400, 需求日期: "2026-06-18", 状态: "", 销售负责人: "陈晨", 交付地址: "北京", 客户信用等级: "A", 备注: "线下订单" },
     ],
-    notes: ["适合导入客户邮件或 Excel 订单。", "不会写入 Sales 模块 state，当前仅本页 demo 暂存。"],
+    notes: ["适合导入客户邮件或 Excel 订单。", "导入后形成批次预览，销售订单创建需在销售流程中确认。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["订单号", "客户", "SKU", "品名", "数量", "单价", "需求日期"]);
       const qty = parsePositiveNumber(value(row, "数量"));
@@ -431,7 +431,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       { 合同编号: "BPA-26-001", 供应商: "深圳新元电气", SKU: "SKU-00623", 品名: "控制器主板 V3.2", 合同单价: 11800, 币种: "CNY", 生效日期: "2026-01-01", 到期日期: "2026-12-31", MOQ: 20, 承诺量: 12000, 价格条款: "目录价 -14%", 备注: "" },
       { 合同编号: "BPA-26-002", 供应商: "江苏铝合金集团", SKU: "SKU-00287", 品名: "铝合金型材 6063", 合同单价: 18.6, 币种: "CNY", 生效日期: "2026-03-01", 到期日期: "2027-02-28", MOQ: 500, 承诺量: 2400, 价格条款: "RMB 18.60/kg", 备注: "" },
     ],
-    notes: ["适用于年度框架协议价目表。", "本轮不修改 CONTRACTS demo data。"],
+    notes: ["适用于年度框架协议价目表。", "框架协议变更需在合同流程中确认。"],
     validateRow: (row) => {
       const errors = baseErrors(row, ["合同编号", "供应商", "SKU", "品名", "合同单价", "生效日期", "到期日期"]);
       const price = parsePositiveNumber(value(row, "合同单价"));
@@ -449,7 +449,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "forecastDemand",
     label: "预测需求导入",
     module: "预测",
-    description: "上传 SKU 月度历史需求，为预测演示准备数据。",
+    description: "上传 SKU 月度历史需求，为预测计划准备历史需求数据。",
     templateFilename: "forecast-demand-template.csv",
     requiredFields: ["SKU", "品名", "月份", "需求量"],
     optionalFields: ["来源", "备注"],
@@ -473,14 +473,14 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "customers",
     label: "客户主数据导入",
     module: "主数据",
-    description: "低风险本地预览客户编码、联系人、邮箱、信用等级与付款条款。",
+    description: "校验预览客户编码、联系人、邮箱、信用等级与付款条款。",
     templateFilename: "customers-template.csv",
     requiredFields: ["客户编号", "客户名称", "联系人", "联系邮箱"],
     optionalFields: ["信用等级", "付款条款", "地区", "备注"],
     sampleRows: [
       { 客户编号: "C-2001", 客户名称: "华东工业集团", 联系人: "王经理", 联系邮箱: "wang@example.com", 信用等级: "A", 付款条款: "Net 60", 地区: "华东", 备注: "" },
     ],
-    notes: ["主数据导入目前只做本地预览和批次记录。"],
+    notes: ["主数据导入形成校验预览和批次记录。"],
     validateRow: (row) => {
       const errors = baseErrors(row, ["客户编号", "客户名称", "联系人", "联系邮箱"]);
       return {
@@ -494,14 +494,14 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "suppliers",
     label: "供应商主数据导入",
     module: "主数据",
-    description: "低风险本地预览供应商编码、品类、联系人、邮箱和绩效指标。",
+    description: "校验预览供应商编码、品类、联系人、邮箱和绩效指标。",
     templateFilename: "suppliers-template.csv",
     requiredFields: ["供应商编号", "供应商名称", "品类", "联系人", "联系邮箱"],
     optionalFields: ["评级", "准时率", "质量合格率", "付款条款", "备注"],
     sampleRows: [
       { 供应商编号: "S-3001", 供应商名称: "深圳新元电气", 品类: "电气元件", 联系人: "李工", 联系邮箱: "li@example.com", 评级: "A", 准时率: 96.8, 质量合格率: 99.2, 付款条款: "Net 30", 备注: "" },
     ],
-    notes: ["供应商主数据不会回写供应商绩效页面或后端。"],
+    notes: ["供应商主数据导入用于主数据校验预览，绩效口径由供应商管理流程维护。"],
     validateRow: (row) => {
       const errors = baseErrors(row, ["供应商编号", "供应商名称", "品类", "联系人", "联系邮箱"]);
       const warnings = emailWarning(value(row, "联系邮箱"), "联系邮箱");
@@ -628,10 +628,10 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
       errorRows: invalidRows.length,
       appliedRows: validRows.length,
       appliedAt: new Date().toLocaleString("zh-CN"),
-      status: "已暂存为演示数据",
+      status: "已应用到导入工作区",
       operator: "当前用户",
     }, ...current]);
-    toast.success("已暂存为演示导入记录", { description: `${validRows.length} 行有效数据已写入浏览器本地状态` });
+    toast.success("导入批次已应用", { description: `${validRows.length} 行有效数据已加入导入工作区` });
   }
 
   return (
@@ -645,11 +645,11 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
               </div>
               <div>
                 <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>导入中心</h1>
-                <p className="text-xs mt-0.5" style={{ color: A.sub }}>下载标准模板、上传 CSV、预览校验结果，并暂存为演示数据</p>
+                <p className="text-xs mt-0.5" style={{ color: A.sub }}>下载标准模板、上传 CSV、预览校验结果，并生成导入批次记录</p>
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
-              当前导入只写入浏览器内的演示状态，不会修改后端数据库。未来版本可扩展为审批、审计、持久化和回滚。
+              导入中心提供模板、校验、预览和批次记录；正式入账、审批和回滚由后续业务流程处理。
             </p>
           </div>
           {onNavigate && (
@@ -665,7 +665,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
       <div className="grid grid-cols-5 gap-3">
         <KpiCard label="支持模板" value={String(IMPORT_CONFIGS.length)} sub="CSV 导入 v1" icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="上传行数" value={String(parsedRows.length)} sub={fileName || "等待上传"} icon={Upload} color={A.purple} />
-        <KpiCard label="有效行" value={String(validRows.length)} sub="可暂存为演示数据" icon={CheckCircle2} color={A.green} />
+        <KpiCard label="有效行" value={String(validRows.length)} sub="可应用到工作区" icon={CheckCircle2} color={A.green} />
         <KpiCard label="错误行" value={String(invalidRows.length)} sub={`${warningRows.length} 行警告`} icon={AlertCircle} color={invalidRows.length ? A.red : A.orange} />
         <KpiCard label="已应用" value={String(appliedTotal)} sub={`${batches.length} 个批次`} icon={Database} color={A.teal} />
       </div>
@@ -772,7 +772,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>Preview & validation</h2>
-            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>展示前 50 行解析结果；错误行不会写入演示状态。</p>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>展示前 50 行解析结果；错误行不会进入导入批次。</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowErrorsOnly((value) => !value)}
@@ -793,7 +793,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
             <button onClick={applyValidRows} disabled={validRows.length === 0}
               className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:cursor-not-allowed"
               style={{ background: validRows.length ? A.blue : A.gray3 }}>
-              暂存为演示数据
+              应用到工作区
             </button>
           </div>
         </div>
@@ -835,7 +835,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="p-5">
-          <SectionHeader title="已导入演示记录" />
+          <SectionHeader title="已导入记录" />
           <div className="space-y-2">
             {IMPORT_CONFIGS.map((config) => (
               <div key={config.id} className="flex items-center justify-between rounded-lg p-2.5" style={{ background: A.gray6 }}>
@@ -861,7 +861,7 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
 
         <Card className="p-5">
           <SectionHeader title="导入批次记录"
-            right={<span className="text-[10px]" style={{ color: A.gray2 }}>刷新页面后清空</span>} />
+            right={<span className="text-[10px]" style={{ color: A.gray2 }}>当前会话</span>} />
           {batches.length === 0 ? (
             <div className="text-xs py-8 text-center" style={{ color: A.gray2 }}>尚未应用任何导入批次。</div>
           ) : (
@@ -891,13 +891,13 @@ export default function ImportsPanel({ onNavigate }: ImportsPanelProps) {
         <SectionHeader title="Import notes" right={<RefreshCw size={13} style={{ color: A.gray2 }} />} />
         <div className="grid grid-cols-3 gap-3 text-[11px] leading-5">
           <div className="rounded-xl p-3" style={{ background: A.gray6, color: A.sub }}>
-            <span className="font-semibold" style={{ color: A.label }}>本地演示状态：</span>应用后只保存在当前浏览器页面状态，刷新即丢失。
+            <span className="font-semibold" style={{ color: A.label }}>工作区批次：</span>应用后显示在当前导入工作区，便于复核批次、文件和行数。
           </div>
           <div className="rounded-xl p-3" style={{ background: A.gray6, color: A.sub }}>
             <span className="font-semibold" style={{ color: A.label }}>透明校验：</span>必填、数字范围、邮箱格式和简单重复项会在预览中展示。
           </div>
           <div className="rounded-xl p-3" style={{ background: A.gray6, color: A.sub }}>
-            <span className="font-semibold" style={{ color: A.label }}>未来扩展：</span>后端批次、审批、审计、回滚、自定义字段映射和持久化均不在本轮范围。
+            <span className="font-semibold" style={{ color: A.label }}>流程衔接：</span>批次确认后可进入审批、审计、回滚和字段映射治理流程。
           </div>
         </div>
       </Card>

@@ -23,7 +23,7 @@ function invoiceSourceLabel(source: SupplierInvoice["source"]) {
     "supplier-portal": "供应商门户",
     "email-upload": "邮件上传",
     "manual-entry": "手工录入",
-    "edi-sample": "EDI 样本",
+    "edi-sample": "EDI",
   } satisfies Record<SupplierInvoice["source"], string>)[source];
 }
 
@@ -41,7 +41,7 @@ function invoiceTimeline(invoice: SupplierInvoice): TimelineStep[] {
     { label: hasVariance ? "存在差异" : "已匹配", status: blocked ? "blocked" : hasVariance ? "warning" : isMatched ? "done" : "pending", helper: invoice.varianceType },
     { label: "已审批", status: isApproved ? "done" : blocked || hasVariance ? "pending" : "current", helper: invoice.approvalStatus || "等待 AP 审批" },
     { label: "已过账应付", status: isPosted ? "done" : "pending", helper: invoice.postedToAp ? "已进入应付" : "未过账" },
-    { label: "已付款", status: isPaid ? "done" : "pending", helper: invoice.paid ? "付款完成" : "演示待付" },
+    { label: "已付款", status: isPaid ? "done" : "pending", helper: invoice.paid ? "付款完成" : "待付款" },
   ];
 }
 
@@ -96,7 +96,7 @@ export default function SupplierInvoiceRegister() {
       return;
     }
     updateInvoice(invoice.id, { status: "已审批", approvalStatus: "已审批" });
-    toast.success(`${invoice.invoiceNumber} 已标记审批`);
+    toast.success(`${invoice.invoiceNumber} 已标记为已审批`);
   }
 
   function postToAp(invoice: SupplierInvoice) {
@@ -105,7 +105,7 @@ export default function SupplierInvoiceRegister() {
       return;
     }
     updateInvoice(invoice.id, { status: "已过账应付", postedToAp: true });
-    toast.success(`${invoice.invoiceNumber} 已过账应付`, { description: "仅更新演示状态，不生成会计凭证。" });
+    toast.success(`${invoice.invoiceNumber} 已过账应付`, { description: "状态已更新，请继续复核应付影响。" });
   }
 
   function reject(invoice: SupplierInvoice) {
@@ -119,7 +119,7 @@ export default function SupplierInvoiceRegister() {
       return;
     }
     exportRowsToCsv("supplier-invoices-export.csv", supplierInvoiceExportRows(invoices));
-    toast.success("供应商发票 CSV 已导出");
+    toast.success("导出文件已生成", { description: "供应商发票 CSV" });
   }
 
   function exportInvoice(invoice: SupplierInvoice) {
@@ -166,7 +166,7 @@ export default function SupplierInvoiceRegister() {
       差异金额: line.varianceAmount ?? invoice.varianceAmount,
     }));
     exportRowsToCsv(`supplier-invoice-detail-${invoice.invoiceNumber}.csv`, [...headerRows, ...lineRows]);
-    toast.success("供应商发票详情 CSV 已导出");
+    toast.success("导出文件已生成", { description: "供应商发票详情 CSV" });
   }
 
   const selectedSnapshot = selectedInvoice
@@ -189,7 +189,7 @@ export default function SupplierInvoiceRegister() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商发票台账</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              管理供应商发票、发票行、三单匹配、审批和过账应付的演示状态，不写入真实财务系统。
+              管理供应商发票、发票行、三单匹配、审批状态与过账应付，形成 AP 处理证据链。
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -329,7 +329,7 @@ export default function SupplierInvoiceRegister() {
               linkedDocuments={getInvoiceLinkedDocuments(selectedInvoice, purchaseOrders, receivingDocs)}
               confidence={`${selectedInvoice.confidence || 0}%`}
               provenance={invoiceSourceLabel(selectedInvoice.source)}
-              notes={selectedInvoice.notes || `${getInvoiceVarianceSummary(selectedInvoice)} 三单匹配为演示规则，用于比较 PO、GRN 与供应商发票的金额、数量与状态差异。`}
+              notes={selectedInvoice.notes || `${getInvoiceVarianceSummary(selectedInvoice)} 三单匹配用于比较 PO、GRN 与供应商发票的金额、数量与状态差异。`}
               evidence={[
                 { label: "PO 金额", value: fmt(selectedSnapshot.poAmount) },
                 { label: "GRN 金额", value: fmt(selectedSnapshot.grnAmount) },
