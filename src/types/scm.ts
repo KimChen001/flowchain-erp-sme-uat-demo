@@ -3,6 +3,9 @@ export type Priority = "高" | "中" | "低";
 export type POStatus = "草稿" | "待审批" | "已审批" | "已发出" | "部分到货" | "已完成" | "已驳回" | "已取消";
 export type PurchaseRequestStatus = "草稿" | "待审批" | "已批准" | "已驳回" | "已转PO" | "已取消";
 export type RecvStatus = "待收货" | "已签收" | "质检中" | "已入库" | "异常处理";
+export type SupplierInvoiceStatus = "草稿" | "已接收" | "待匹配" | "已匹配" | "存在差异" | "待审批" | "已审批" | "已过账应付" | "已付款" | "已驳回";
+export type SupplierInvoiceMatchStatus = "未匹配" | "自动匹配" | "人工复核" | "差异待处理" | "已解决";
+export type InvoiceVarianceType = "无差异" | "价格差异" | "数量差异" | "税额差异" | "运费差异" | "供应商不一致" | "缺少收货" | "缺少PO" | "重复发票";
 
 export type ApprovalSnapshot = {
   source?: string;
@@ -239,6 +242,59 @@ export type ReceivingDoc = {
   statusUpdatedAt?: string;
   lastAuditId?: string;
   auditTrailIds?: string[];
+};
+
+export type SupplierInvoiceLine = {
+  lineId: string;
+  sku: string;
+  name: string;
+  description?: string;
+  poLine?: string;
+  grnLine?: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  taxRate: number;
+  taxAmount: number;
+  lineSubtotal: number;
+  lineTotal: number;
+  matchedQty?: number;
+  receivedQty?: number;
+  orderedQty?: number;
+  varianceType?: InvoiceVarianceType;
+  varianceAmount?: number;
+};
+
+export type SupplierInvoice = {
+  id: string;
+  invoiceNumber: string;
+  supplier: string;
+  supplierCode?: string;
+  relatedPo: string;
+  relatedGrn?: string;
+  invoiceDate: string;
+  receivedDate: string;
+  dueDate: string;
+  currency: string;
+  subtotal: number;
+  tax: number;
+  freight?: number;
+  total: number;
+  paymentTerms: string;
+  owner: string;
+  apOwner: string;
+  source: "supplier-portal" | "email-upload" | "manual-entry" | "edi-sample";
+  status: SupplierInvoiceStatus;
+  matchStatus: SupplierInvoiceMatchStatus;
+  varianceType: InvoiceVarianceType;
+  varianceAmount: number;
+  approvalStatus?: string;
+  postedToAp: boolean;
+  paid: boolean;
+  duplicateRisk?: boolean;
+  confidence?: number;
+  notes?: string;
+  lines: SupplierInvoiceLine[];
 };
 
 export type AiConfidenceDimension = {

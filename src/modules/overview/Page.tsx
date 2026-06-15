@@ -14,9 +14,9 @@ import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, Card, Chip, KpiCard, Modal, SectionHeader } from "../../components/ui";
-import { FORECAST_SKUS, inventoryItems, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS } from "../../data/demo-data";
+import { FORECAST_SKUS, inventoryItems, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, SUPPLIER_INVOICES } from "../../data/demo-data";
 import { inventoryPlan } from "../../domain/inventory/planning";
-import type { PurchaseOrder, PurchaseRequest, ReceivingDoc, RfqRecord } from "../../types/scm";
+import type { PurchaseOrder, PurchaseRequest, ReceivingDoc, RfqRecord, SupplierInvoice } from "../../types/scm";
 
 type SupplierPerformance = typeof PORTAL_SUPPLIERS[number] & {
   category?: string;
@@ -245,6 +245,35 @@ function buildReceivingEvidence(item: ReceivingDoc): EvidenceDetail {
   };
 }
 
+function buildInvoiceEvidence(item: SupplierInvoice): EvidenceDetail {
+  const priority = item.varianceType === "重复发票" || item.varianceType === "缺少收货" ? "高" : item.varianceType === "无差异" ? "低" : "中";
+  return {
+    id: `invoice-${item.id}`,
+    title: "供应商发票匹配证据",
+    priority,
+    object: item.invoiceNumber,
+    module: "供应商发票",
+    moduleId: "procurement",
+    businessReason: "供应商发票需要与采购订单和收货单一致后，才能进入审批、过账应付和付款准备状态。",
+    evidence: [
+      { label: "发票号码", value: item.invoiceNumber },
+      { label: "供应商", value: item.supplier },
+      { label: "PO", value: item.relatedPo || "缺少 PO" },
+      { label: "GRN", value: item.relatedGrn || "缺少收货" },
+      { label: "发票金额", value: fmt(item.total) },
+      { label: "税额", value: fmt(item.tax) },
+      { label: "运费", value: fmt(item.freight || 0) },
+      { label: "差异类型", value: item.varianceType },
+      { label: "差异金额", value: fmt(item.varianceAmount || 0) },
+      { label: "匹配状态", value: item.matchStatus },
+      { label: "发票状态", value: item.status },
+      { label: "来源", value: item.source },
+    ],
+    confidence: `${item.confidence || 76}% · ${item.matchStatus === "自动匹配" ? "高" : "需复核"}`,
+    suggestedAction: item.varianceType === "无差异" ? "打开供应商发票，确认是否审批或过账应付。" : "打开供应商发票，复核 PO、GRN 和发票差异。",
+  };
+}
+
 function buildSupplierEvidence(item: SupplierPerformance): EvidenceDetail {
   const rejectRate = Number(item.rejectRate || (100 - Number(item.quality || 0)) * 0.35).toFixed(1);
   const exceptions = Number(item.exceptions || (item.flag === "整改" ? 3 : 1));
@@ -321,6 +350,9 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   const receivingRisks = dashboardReceiving.filter((item) => item.status === "待收货" || item.status === "质检中" || item.status === "异常处理");
   const openRfqs = dashboardRfqs.filter((item) => item.status === "进行中" || item.status === "比价中");
   const supplierRisks = dashboardSuppliers.filter((item) => item.flag === "整改" || Number(item.rejectRate || 0) > 5 || Number(item.exceptions || 0) > 0);
+  const invoiceRisks = SUPPLIER_INVOICES.filter((item) =>
+    item.varianceType !== "无差异" || ["待匹配", "存在差异"].includes(item.status) || ["人工复核", "差异待处理"].includes(item.matchStatus)
+  ).sort((a, b) => Number(b.varianceAmount || 0) - Number(a.varianceAmount || 0));
   const mrpExceptions = inventoryRiskItems.filter((item) => item.plan.suggestedQty > 0).length;
   const openPrValue = pendingRequests.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const openPoValue = dashboardOrders
@@ -369,6 +401,16 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       cta: "处理 GRN",
       detail: buildReceivingEvidence(item),
     })),
+    ...invoiceRisks.slice(0, 1).map((item) => ({
+      priority: item.varianceType === "重复发票" || item.varianceType === "缺少收货" ? "高" as const : "中" as const,
+      title: "复核供应商发票差异",
+      object: item.invoiceNumber,
+      evidence: `${item.relatedPo || "无 PO"} / ${item.relatedGrn || "缺少 GRN"} · ${item.varianceType} · 差异 ${fmt(item.varianceAmount || 0)}`,
+      module: "供应商发票",
+      moduleId: "procurement",
+      cta: "查看发票",
+      detail: buildInvoiceEvidence(item),
+    })),
     ...openRfqs.slice(0, 1).map((item) => ({
       priority: "中" as const,
       title: "复核 RFQ 报价差异",
@@ -405,6 +447,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   const inventoryDecisionDetail = topRiskSku ? buildInventoryEvidence(topRiskSku, "forecast") : buildForecastEvidence(undefined);
   const supplierDecisionDetail = buildSupplierEvidence(supplierRisks[0] || dashboardSuppliers[0] || PORTAL_SUPPLIERS[0]!);
   const rfqDecisionDetail = buildRfqEvidence(openRfqs[0] || dashboardRfqs[0] || RFQS[0]!);
+  const invoiceDecisionDetail = invoiceRisks[0] ? buildInvoiceEvidence(invoiceRisks[0]) : null;
   const decisionCards: DecisionCard[] = [
     {
       id: "inventory-replenishment",
@@ -435,7 +478,10 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       id: "rfq-price",
       recommendation: `复核 ${rfqDecisionDetail.object} 报价差异`,
       businessImpact: "帮助锁定补货成本和供应商选择依据",
-      evidenceUsed: rfqDecisionDetail.evidence.slice(4, 8).map((item) => `${item.label} ${item.value}`).join(" · "),
+      evidenceUsed: [
+        rfqDecisionDetail.evidence.slice(4, 8).map((item) => `${item.label} ${item.value}`).join(" · "),
+        invoiceDecisionDetail ? `发票差异 ${invoiceDecisionDetail.object} · ${invoiceDecisionDetail.evidence.find((item) => item.label === "差异类型")?.value}` : "",
+      ].filter(Boolean).join(" · "),
       confidence: "78% · 中",
       riskWarning: "RFQ 仍需人工确认价格、交期和条款后再授标。",
       suggestedAction: "打开 RFQ",
@@ -463,6 +509,15 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       next: "复核供应商绩效和备选供应商",
       moduleId: "procurement",
       detail: supplierRisks[0] ? buildSupplierEvidence(supplierRisks[0]) : null,
+    },
+    {
+      level: invoiceRisks.length ? (invoiceRisks[0].varianceType === "重复发票" || invoiceRisks[0].varianceType === "缺少收货" ? "高" : "中") : "低",
+      object: invoiceRisks[0]?.invoiceNumber || "供应商发票",
+      title: "发票金额 / 收货差异",
+      evidence: invoiceRisks[0] ? `${invoiceRisks[0].supplier} · ${invoiceRisks[0].varianceType} · ${fmt(invoiceRisks[0].varianceAmount || 0)}` : "发票匹配状态稳定",
+      next: "复核 PO、GRN 和 Invoice",
+      moduleId: "procurement",
+      detail: invoiceRisks[0] ? buildInvoiceEvidence(invoiceRisks[0]) : null,
     },
     {
       level: "中",
@@ -498,7 +553,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
     { label: "高风险事项", value: String(actionRows.filter((item) => item.priority === "高").length), sub: "需今日处理", icon: AlertTriangle, color: A.red },
     { label: "待审批 PR", value: String(pendingRequests.length), sub: fmt(openPrValue), icon: FileCheck2, color: A.orange },
     { label: "待收货 GRN", value: String(receivingRisks.length), sub: "签收/质检/异常", icon: PackageCheck, color: A.teal },
-    { label: "MRP 例外", value: String(mrpExceptions), sub: "来自库存计划", icon: TrendingUp, color: A.purple },
+    { label: "发票差异", value: String(invoiceRisks.length), sub: invoiceRisks[0]?.invoiceNumber || "稳定", icon: FileSpreadsheet, color: A.purple },
     { label: "库存风险 SKU", value: String(inventoryRiskItems.length), sub: topRiskSku?.sku || "稳定", icon: Package, color: A.green },
   ];
 
@@ -515,6 +570,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   const quickLinks = [
     { label: "采购申请", id: "purchaseRequests" },
     { label: "采购订单", id: "purchasing" },
+    { label: "采购工作台", id: "procurement" },
     { label: "库存", id: "inventory" },
     { label: "高级计划", id: "forecast" },
     { label: "报表中心", id: "reports" },

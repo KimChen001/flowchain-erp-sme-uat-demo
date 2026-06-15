@@ -30,7 +30,6 @@ import InventoryPanel from "../modules/inventory/Page";
 import ForecastPanel from "../modules/forecast/Page";
 import OverviewPanel from "../modules/overview/Page";
 import SalesPanel from "../modules/sales/Page";
-import SuppliersPanel from "../modules/suppliers/Page";
 import ProcurementPanel from "../modules/procurement/Page";
 import AiPanel from "../modules/ai-assistant/Panel";
 import ReportsPanel from "../modules/reports/Page";
@@ -167,7 +166,7 @@ const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存",
   sales: "销售表现", forecast: "高级计划",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "供应商与绩效", reports: "报表中心", imports: "导入中心",
+  procurement: "采购工作台", reports: "报表中心", imports: "导入中心",
 };
 
 function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => void }) {
@@ -423,7 +422,7 @@ export default function FlowChainApp() {
     purchasing:  <ProcurementPanel view="orders" />,
     rfq:         <ProcurementPanel view="rfq" />,
     receiving:   <ReceivingPanel />,
-    procurement: <SuppliersPanel />,
+    procurement: <ProcurementPanel />,
     reports:     <ReportsPanel onNavigate={setActive} />,
     imports:     <ImportsPanel onNavigate={setActive} />,
   };

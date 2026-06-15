@@ -23,7 +23,7 @@ const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存",
   sales: "销售表现", forecast: "高级计划",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "供应商与绩效",
+  procurement: "采购工作台",
 };
 
 const insightMeta = {

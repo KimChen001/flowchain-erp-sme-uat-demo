@@ -20,12 +20,12 @@ import {
   COUNT_PLANS,
   FORECAST_SKUS,
   LOTS,
-  MATCH_QUEUE,
   MOVEMENTS,
   PAYABLES,
   PORTAL_SUPPLIERS,
   RFQS,
   SERIALS,
+  SUPPLIER_INVOICES,
   TRANSFERS,
   VARIANCES,
   forecastData,
@@ -40,6 +40,12 @@ import { METHOD_LABEL, runForecast, type Method } from "../../domain/forecast";
 import { forecastProcurementProfileForSku } from "../../domain/forecast/purchase-request";
 import { type MrpPlan } from "../../domain/mrp";
 import { poTotals } from "../../domain/purchasing/helpers";
+import {
+  getInvoiceVarianceSummary,
+  invoiceToMatchQueueItem,
+  isInvoicePayableReady,
+  supplierInvoiceExportRows,
+} from "../../domain/procurement/invoice-matching";
 import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
@@ -346,16 +352,81 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       rows: () => CONTRACTS.map((row) => ({ 合同号: row.id, 供应商: row.supplier, 范围: row.scope, 承诺量: row.commitVol, 价格条款: row.price, 开始日期: row.start, 结束日期: row.end, 已消耗百分比: Math.round(row.consumed * 100), 状态: row.status })),
     },
     {
+      id: "supplier-invoices",
+      name: "Supplier Invoice Register Report",
+      module: "采购",
+      description: "供应商发票台账，包含 PO、GRN、金额、税额、匹配状态、发票状态和差异类型。",
+      source: "SUPPLIER_INVOICES · demo-data.ts",
+      sourceKind: "Demo",
+      updated: "Demo sample · 2026",
+      filename: "supplier-invoices-report.csv",
+      sourceModule: "procurement",
+      rows: () => supplierInvoiceExportRows(SUPPLIER_INVOICES),
+    },
+    {
+      id: "invoice-match-exceptions",
+      name: "Invoice Match Exceptions Report",
+      module: "采购",
+      description: "发票三单匹配异常、差异金额、当前状态和建议动作。",
+      source: "SUPPLIER_INVOICES + invoice matching helper",
+      sourceKind: "Demo",
+      updated: "Computed standard sample",
+      filename: "invoice-match-exceptions-report.csv",
+      sourceModule: "procurement",
+      rows: () => SUPPLIER_INVOICES
+        .filter((invoice) => invoice.varianceType !== "无差异" || ["人工复核", "差异待处理"].includes(invoice.matchStatus))
+        .map((invoice) => ({
+          发票: invoice.invoiceNumber,
+          供应商: invoice.supplier,
+          PO: invoice.relatedPo || "",
+          GRN: invoice.relatedGrn || "",
+          差异类型: invoice.varianceType,
+          差异金额: invoice.varianceAmount,
+          匹配状态: invoice.matchStatus,
+          发票状态: invoice.status,
+          建议动作: getInvoiceVarianceSummary(invoice),
+        })),
+    },
+    {
+      id: "ap-ready-invoices",
+      name: "AP Ready / Posted Invoices Report",
+      module: "采购",
+      description: "已审批、已过账或已付款的应付发票清单，用于演示 AP downstream 视图。",
+      source: "SUPPLIER_INVOICES · demo-data.ts",
+      sourceKind: "Demo",
+      updated: "Demo sample · 2026",
+      filename: "ap-ready-invoices-report.csv",
+      sourceModule: "procurement",
+      rows: () => supplierInvoiceExportRows(SUPPLIER_INVOICES.filter((invoice) =>
+        ["已审批", "已过账应付", "已付款"].includes(invoice.status) || isInvoicePayableReady(invoice)
+      )),
+    },
+    {
       id: "match-queue",
       name: "Three-way Match Queue Report",
       module: "采购",
-      description: "三单匹配队列、金额差异与匹配状态标准报表。",
-      source: "MATCH_QUEUE · demo-data.ts",
+      description: "从供应商发票派生的三单匹配队列，明确比较 PO、GRN 和 Invoice。",
+      source: "SUPPLIER_INVOICES + invoice matching helper",
       sourceKind: "Demo",
       updated: "Demo sample · 2026",
       filename: "procurement-match-queue-export.csv",
       sourceModule: "procurement",
-      rows: () => MATCH_QUEUE.map((row) => ({ 匹配号: row.id, 采购订单: row.po, 收货单: row.grn, 发票: row.invoice, 供应商: row.supplier, PO金额: row.poAmt, GRN金额: row.grnAmt, 发票金额: row.invAmt, 差异: row.variance, 状态: row.status })),
+      rows: () => SUPPLIER_INVOICES
+        .map((invoice) => invoiceToMatchQueueItem(invoice, purchaseOrders, receivingDocs, SUPPLIER_INVOICES))
+        .map((row) => ({
+          匹配号: row.id,
+          采购订单: row.po,
+          收货单: row.grn,
+          发票: row.invoiceNumber,
+          供应商: row.supplier,
+          PO金额: row.poAmt,
+          GRN金额: row.grnAmt,
+          发票金额: row.invAmt,
+          差异类型: row.varianceType,
+          差异金额: row.varianceAmount,
+          匹配状态: row.matchStatus,
+          发票状态: row.status,
+        })),
     },
     {
       id: "payables",
