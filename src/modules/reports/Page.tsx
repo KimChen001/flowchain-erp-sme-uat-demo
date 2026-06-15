@@ -64,7 +64,7 @@ import {
 import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ReportModule = "销售" | "采购" | "库存" | "预测/MRP" | "供应商" | "审计";
+type ReportModule = "销售" | "采购" | "库存" | "财务" | "预测/MRP" | "供应商" | "审计";
 type SourceKind = "Core" | "Computed" | "API" | "API fallback" | "Module";
 type RouteId = "sales" | "procurement" | "finance" | "inventory" | "forecast" | `procurement:${string}` | `inventory:${string}` | `finance:${string}`;
 type ReportRows = Record<string, unknown>[];
@@ -88,7 +88,7 @@ type ReportsPanelProps = {
   initialView?: "procurement" | "inventory" | "finance";
 };
 
-const FILTERS = ["全部", "销售", "采购", "库存", "预测/MRP", "供应商", "审计"] as const;
+const FILTERS = ["全部", "销售", "采购", "库存", "财务", "预测/MRP", "供应商", "审计"] as const;
 const DEFAULT_METHOD: Method = "hw";
 const DEFAULT_HORIZON = 6;
 
@@ -121,6 +121,7 @@ function moduleColor(module: ReportModule) {
     销售: A.blue,
     采购: A.purple,
     库存: A.green,
+    财务: A.teal,
     "预测/MRP": A.orange,
     供应商: A.teal,
     审计: A.gray1,
@@ -298,7 +299,7 @@ function buildForecastBenchmarkRows() {
 function reportFilterFromView(view?: ReportsPanelProps["initialView"]): typeof FILTERS[number] {
   if (view === "procurement") return "采购";
   if (view === "inventory") return "库存";
-  if (view === "finance") return "采购";
+  if (view === "finance") return "财务";
   return "全部";
 }
 
@@ -381,13 +382,13 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
     {
       id: "supplier-invoices",
       name: "供应商发票台账报表",
-      module: "采购",
+      module: "财务",
       description: "供应商发票台账，包含 PO、GRN、金额、税额、匹配状态、发票状态、差异类型和 AP 过账字段。",
       source: "SUPPLIER_INVOICES · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "supplier-invoices-report.csv",
-      sourceModule: "finance",
+      sourceModule: "finance:invoices",
       rows: () => supplierInvoiceExportRows(SUPPLIER_INVOICES),
     },
     {
@@ -399,7 +400,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "Computed standard report",
       filename: "invoice-match-exceptions-report.csv",
-      sourceModule: "procurement:portal",
+      sourceModule: "procurement:invoices",
       rows: () => SUPPLIER_INVOICES
         .filter((invoice) => invoice.varianceType !== "无差异" || ["人工复核", "差异待处理"].includes(invoice.matchStatus))
         .map((invoice) => ({
@@ -417,13 +418,13 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
     {
       id: "ap-ready-invoices",
       name: "AP 待处理 / 已过账发票报表",
-      module: "采购",
+      module: "财务",
       description: "已审批、已过账或已付款的供应商发票清单，用于过账应付、AP 台账和付款准备。",
       source: "SUPPLIER_INVOICES · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "ap-ready-invoices-report.csv",
-      sourceModule: "finance",
+      sourceModule: "finance:payables",
       rows: () => supplierInvoiceExportRows(SUPPLIER_INVOICES.filter((invoice) =>
         ["已审批", "已过账应付", "已付款"].includes(invoice.status) || isInvoicePayableReady(invoice)
       )),
@@ -437,7 +438,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "procurement-match-queue-export.csv",
-      sourceModule: "procurement",
+      sourceModule: "procurement:match",
       rows: () => SUPPLIER_INVOICES
         .map((invoice) => invoiceToMatchQueueItem(invoice, purchaseOrders, receivingDocs, SUPPLIER_INVOICES))
         .map((row) => ({
@@ -458,13 +459,13 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
     {
       id: "payables",
       name: "Payables Report",
-      module: "采购",
+      module: "财务",
       description: "应付账款来自已审批/已过账供应商发票，并合并AP 余额、账期、到期日、账龄和付款状态。",
       source: "SUPPLIER_INVOICES + PAYABLES · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "procurement-payables-export.csv",
-      sourceModule: "procurement",
+      sourceModule: "finance:payables",
       rows: () => {
         const invoicePayables = SUPPLIER_INVOICES.filter(isInvoicePayableReady).map(invoiceToPayable);
         const merged = [
@@ -483,67 +484,67 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "purchase-returns-report.csv",
-      sourceModule: "procurement",
+      sourceModule: "procurement:returns",
       rows: () => purchaseReturnExportRows(PURCHASE_RETURNS),
     },
     {
       id: "supplier-credit-memos",
       name: "Supplier Credit Memo Report",
-      module: "采购",
+      module: "财务",
       description: "供应商贷项通知台账，包含关联退货、关联发票、贷项金额、状态、应付冲减状态和对账单。",
       source: "SUPPLIER_CREDIT_MEMOS · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "supplier-credit-memos-report.csv",
-      sourceModule: "procurement",
+      sourceModule: "finance:credits",
       rows: () => creditMemoExportRows(SUPPLIER_CREDIT_MEMOS),
     },
     {
       id: "purchase-return-credit-exceptions",
       name: "Return / Credit Exceptions Report",
-      module: "采购",
+      module: "财务",
       description: "退货和贷项异常，包含待审批、待贷项、已驳回、贷项待确认或仍有未冲减金额的业务单据。",
       source: "Purchase return + credit memo dataset",
       sourceKind: "Core",
       updated: "Computed standard report",
       filename: "purchase-return-credit-exceptions-report.csv",
-      sourceModule: "procurement",
+      sourceModule: "finance:credits",
       rows: () => returnExceptionRows(PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS),
     },
     {
       id: "supplier-reconciliation-statements",
       name: "Supplier Reconciliation Statement Report",
-      module: "采购",
+      module: "财务",
       description: "供应商对账单台账，包含供应商、对账期间、应付金额、已付金额、调整金额、差异金额、未结余额、逾期金额、状态与结算状态。",
       source: "SUPPLIER_RECONCILIATION_STATEMENTS · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "supplier-reconciliation-report.csv",
-      sourceModule: "procurement",
+      sourceModule: "finance:reconciliation",
       rows: () => reconciliationExportRows(SUPPLIER_RECONCILIATION_STATEMENTS),
     },
     {
       id: "supplier-reconciliation-lines",
       name: "Supplier Reconciliation Lines Report",
-      module: "采购",
+      module: "财务",
       description: "供应商对账明细，按业务单据展示发票、应付、付款、调整和差异来源。",
       source: "SUPPLIER_RECONCILIATION_STATEMENTS.lines · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "supplier-reconciliation-lines-report.csv",
-      sourceModule: "procurement",
+      sourceModule: "finance:reconciliation",
       rows: () => SUPPLIER_RECONCILIATION_STATEMENTS.flatMap(reconciliationLineExportRows),
     },
     {
       id: "supplier-reconciliation-exceptions",
       name: "Reconciliation Exceptions Report",
-      module: "采购",
+      module: "财务",
       description: "供应商对账异常，包含存在差异、已驳回、逾期应付或未结余额需复核的对账单。",
       source: "Supplier reconciliation dataset + rules",
       sourceKind: "Core",
       updated: "Computed standard report",
       filename: "supplier-reconciliation-exceptions-report.csv",
-      sourceModule: "procurement",
+      sourceModule: "finance:reconciliation",
       rows: () => reconciliationExceptionRows(SUPPLIER_RECONCILIATION_STATEMENTS),
     },
     {
@@ -631,7 +632,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "inventory-lots-export.csv",
-      sourceModule: "inventory",
+      sourceModule: "inventory:lots",
       rows: () => LOTS.map((row) => ({ 批次号: row.lot, SKU: row.sku, 品名: row.name, 数量: row.qty, 供应商: row.supplier, 入库日: row.received, 效期: row.expiry, 库位: row.warehouse, COA: row.coa ? "有" : "无", 状态: row.status })),
     },
     {
@@ -643,7 +644,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "inventory-serials-export.csv",
-      sourceModule: "inventory",
+      sourceModule: "inventory:lots",
       rows: () => SERIALS.map((row) => ({ 序列号: row.sn, SKU: row.sku, 所属批次: row.lot, 状态: row.status, 当前库位: row.warehouse, 入库日: row.received })),
     },
     {
@@ -655,7 +656,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "inventory-transfers-export.csv",
-      sourceModule: "inventory",
+      sourceModule: "inventory:transfer",
       rows: () => TRANSFERS.map((row) => ({ 调拨号: row.id, 源仓库: row.from, 目标仓库: row.to, SKU: row.sku, 品名: row.name, 数量: row.qty, 申请人: row.requester, 承运商: row.carrier, 创建日期: row.created, ETA: row.eta, 状态: row.status })),
     },
     {
@@ -667,7 +668,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "inventory-cycle-count-plans-export.csv",
-      sourceModule: "inventory",
+      sourceModule: "inventory:count",
       rows: () => COUNT_PLANS.map((row) => ({ 计划号: row.id, 库区: row.zone, 排期: row.scheduled, 盘点员: row.counter, 方法: row.method, 计划范围: row.scope, 已盘点: row.counted, 进度百分比: Number(((row.counted / row.scope) * 100).toFixed(1)), 差异: row.variance, 状态: row.status })),
     },
     {
@@ -679,7 +680,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "inventory-count-variances-export.csv",
-      sourceModule: "inventory",
+      sourceModule: "inventory:count",
       rows: () => VARIANCES.map((row) => ({ 批次号: row.lot, SKU: row.sku, 品名: row.name, 账面数: row.book, 实盘数: row.actual, 差异: row.diff, 差异原因: row.reason, 差异金额: row.value })),
     },
     {
@@ -691,7 +692,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "inventory-movement-ledger-report.csv",
-      sourceModule: "inventory",
+      sourceModule: "inventory:movements",
       rows: () => inventoryMovementExportRows(INVENTORY_MOVEMENT_LEDGER),
     },
     {
@@ -703,7 +704,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Computed",
       updated: "Computed standard report",
       filename: "inventory-abc-xyz-export.csv",
-      sourceModule: "inventory",
+      sourceModule: "inventory:abcxyz",
       rows: buildAbcXyzRows,
     },
     {
@@ -804,6 +805,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
   ], [auditLog, mrpPlan, purchaseRequests, savedPlans]);
 
   const visibleReports = filter === "全部" ? reports : reports.filter((report) => report.module === filter);
+  const filterLabel = filter === "全部" ? "跨模块报表 / 全部" : `${filter}报表`;
   const exportReadyCount = reports.filter((report) => report.rows && !report.comingLaterReason).length;
   const apiCount = reports.filter((report) => report.sourceKind === "API" || report.sourceKind === "API fallback").length;
   const modulesCovered = new Set(reports.map((report) => report.module)).size;
@@ -819,7 +821,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
               </div>
               <div>
                 <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>报表中心</h1>
-                <p className="text-xs mt-0.5" style={{ color: A.sub }}>统一查看标准经营报表、数据来源与 CSV 导出入口</p>
+                <p className="text-xs mt-0.5" style={{ color: A.sub }}>统一查看标准经营报表、数据来源与 CSV 导出入口 · {filterLabel}</p>
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
@@ -843,7 +845,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
 
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="标准报表" value={String(reports.length)} sub="报表中心 v1" icon={FileSpreadsheet} color={A.blue} />
-        <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="销售/采购/库存/计划/审计" icon={Database} color={A.green} />
+        <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="销售/采购/库存/财务/计划/审计" icon={Database} color={A.green} />
         <KpiCard label="API / Fallback" value={String(apiCount)} sub="只读现有端点" icon={RefreshCw} color={A.orange} />
         <KpiCard label="可导出" value={String(exportReadyCount)} sub="CSV 标准导出" icon={ShieldCheck} color={A.purple} />
       </div>
@@ -852,7 +854,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>标准报表目录</h2>
-            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>{visibleReports.length} 个报表 · 当前筛选 {filter}</p>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>{visibleReports.length} 个报表 · {filterLabel}</p>
           </div>
           <div className="flex items-center gap-3 text-[10px]" style={{ color: A.gray2 }}>
             <span className="flex items-center gap-1"><ShoppingCart size={11} /> 销售</span>

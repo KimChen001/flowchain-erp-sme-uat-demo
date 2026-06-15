@@ -286,7 +286,7 @@ function buildInvoiceEvidence(item: SupplierInvoice): EvidenceDetail {
     priority,
     object: item.invoiceNumber,
     module: "供应商发票",
-    moduleId: "procurement",
+    moduleId: "procurement:invoices",
     businessReason: "供应商发票需要与采购订单和收货单一致后，才能进入审批、过账应付和付款准备状态。",
     evidence: [
       { label: "发票号码", value: item.invoiceNumber },
@@ -303,7 +303,7 @@ function buildInvoiceEvidence(item: SupplierInvoice): EvidenceDetail {
       { label: "来源", value: item.source },
     ],
     confidence: `${item.confidence || 76}% · ${item.matchStatus === "自动匹配" ? "高" : "需复核"}`,
-    suggestedAction: item.varianceType === "无差异" ? "打开供应商发票，确认是否审批或过账应付。" : "打开供应商发票，复核 PO、GRN 和发票差异。",
+    suggestedAction: item.varianceType === "无差异" ? "打开发票协同，确认是否审批或过账应付。" : "打开发票协同，复核 PO、GRN 和发票差异。",
   };
 }
 
@@ -316,7 +316,7 @@ function buildPurchaseReturnEvidence(item: PurchaseReturn): EvidenceDetail {
     priority: item.status === "已驳回" || item.status === "待贷项" ? "高" : "中",
     object: item.returnNo,
     module: "采购退货 / 贷项",
-    moduleId: "procurement",
+    moduleId: "procurement:returns",
     businessReason: "采购退货和供应商贷项用于处理拒收、数量/价格差异、重复发票和应付冲减，避免异常发票直接进入付款。",
     evidence: [
       { label: "退货单号", value: item.returnNo },
@@ -333,7 +333,7 @@ function buildPurchaseReturnEvidence(item: PurchaseReturn): EvidenceDetail {
       { label: "退货状态", value: item.status },
     ],
     confidence: item.confidence ? `${item.confidence}% · 规则引擎` : "规则引擎",
-    suggestedAction: "打开采购管理复核退货和贷项协同；财务影响在财务协同复核。",
+    suggestedAction: "打开采购退货协同，复核退货、贷项和发票差异。",
   };
 }
 
@@ -345,7 +345,7 @@ function buildReconciliationEvidence(item: SupplierReconciliationStatement): Evi
     priority: signal.priority,
     object: item.statementNo,
     module: "供应商对账",
-    moduleId: "finance",
+    moduleId: "finance:reconciliation",
     businessReason: "供应商对账单按供应商和期间汇总发票、应付、付款和差异，帮助 AP 复核未结余额、逾期应付和供应商确认结果。",
     evidence: [
       { label: "对账单号", value: item.statementNo },
@@ -361,7 +361,7 @@ function buildReconciliationEvidence(item: SupplierReconciliationStatement): Evi
       { label: "结算状态", value: item.settlementStatus },
     ],
     confidence: item.confidence ? `${item.confidence}% · 规则引擎` : "规则引擎",
-    suggestedAction: item.status === "已驳回" ? "打开财务协同，复核拒绝原因和相关发票/AP。" : "打开财务协同，复核差异、未结余额和逾期应付。",
+    suggestedAction: item.status === "已驳回" ? "打开供应商对账，复核拒绝原因、相关发票和 AP 状态。" : "打开供应商对账，复核未结余额、逾期金额和差异处理。",
   };
 }
 
@@ -374,7 +374,7 @@ function buildSupplierEvidence(item: SupplierPerformance): EvidenceDetail {
     priority: item.flag === "整改" || exceptions > 2 ? "中" : "低",
     object: item.name,
     module: "供应商与绩效",
-    moduleId: "procurement",
+    moduleId: "procurement:portal",
     businessReason: "供应商准时率、质量率和异常次数会影响交付承诺、收货质量和替代供应商策略。",
     evidence: [
       { label: "供应商", value: item.name },
@@ -542,7 +542,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
         object: item.statementNo,
         evidence: signal.evidence,
         module: "供应商对账",
-        moduleId: "finance",
+        moduleId: "finance:reconciliation",
         cta: "查看对账",
         detail: buildReconciliationEvidence(item),
       };
@@ -643,7 +643,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       title: "供应商延迟 / 质量",
       evidence: supplierRisks[0] ? `${supplierRisks[0].flag} · 响应 ${Number(supplierRisks[0].resp || 0).toFixed(0)} · 质量 ${Number(supplierRisks[0].quality || 0).toFixed(1)}%` : "关键供应商绩效稳定",
       next: "复核供应商绩效和备选供应商",
-      moduleId: "procurement:invoices",
+      moduleId: "procurement:portal",
       detail: supplierRisks[0] ? buildSupplierEvidence(supplierRisks[0]) : null,
     },
     {
@@ -652,7 +652,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       title: "发票金额 / 收货差异",
       evidence: invoiceRisks[0] ? `${invoiceRisks[0].supplier} · ${invoiceRisks[0].varianceType} · ${fmt(invoiceRisks[0].varianceAmount || 0)}` : "发票匹配状态稳定",
       next: "复核 PO、GRN 和发票",
-      moduleId: "procurement",
+      moduleId: "procurement:invoices",
       detail: invoiceRisks[0] ? buildInvoiceEvidence(invoiceRisks[0]) : null,
     },
     {
@@ -679,7 +679,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       title: "近效期 / 冻结库存",
       evidence: "密封圈 NBR-70 近效期，步进电机驱动板存在冻结批次",
       next: "按 FEFO 或 QA 复检处理",
-      moduleId: "inventory",
+      moduleId: "inventory:lots",
       detail: null,
     },
   ] as const;
