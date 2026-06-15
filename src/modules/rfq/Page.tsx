@@ -79,7 +79,12 @@ export default function PurchasingRFQPage() {
 
       <Card>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>询价单</h2>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>寻源 / RFx</h2>
+            <p className="text-[11px] mt-1" style={{ color: A.sub }}>
+              RFx 可用于战略寻源，也可由采购申请触发询价；中标结果可进入合同、目录价或采购订单。
+            </p>
+          </div>
           <button onClick={exportCsv}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
             style={{ background: A.gray6, color: A.blue }}>
@@ -139,7 +144,7 @@ export default function PurchasingRFQPage() {
         <Card className="p-5">
           <div className="grid grid-cols-5 gap-4">
             <div className="col-span-2">
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>供应商报价请求详情</div>
+              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>RFx / 供应商报价请求详情</div>
               <div className="flex items-center gap-2 mb-3">
                 <div className="text-base font-semibold tracking-tight" style={{ color: A.label }}>{selectedRfq.id}</div>
                 <Chip label={selectedRfq.status} {...rfqStatusStyle(selectedRfq.status)} />
