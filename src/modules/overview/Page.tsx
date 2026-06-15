@@ -14,10 +14,11 @@ import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, Card, Chip, KpiCard, Modal, SectionHeader } from "../../components/ui";
-import { FORECAST_SKUS, inventoryItems, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
+import { FORECAST_SKUS, inventoryItems, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
 import { inventoryPlan } from "../../domain/inventory/planning";
 import { isStatementException, statementToCockpitSignal } from "../../domain/procurement/reconciliation";
-import type { PurchaseOrder, PurchaseRequest, ReceivingDoc, RfqRecord, SupplierInvoice, SupplierReconciliationStatement } from "../../types/scm";
+import { calculateReturnFinancialImpact, isReturnException, returnToCockpitSignal } from "../../domain/procurement/returns";
+import type { PurchaseOrder, PurchaseRequest, PurchaseReturn, ReceivingDoc, RfqRecord, SupplierInvoice, SupplierReconciliationStatement } from "../../types/scm";
 
 type SupplierPerformance = typeof PORTAL_SUPPLIERS[number] & {
   category?: string;
@@ -275,6 +276,36 @@ function buildInvoiceEvidence(item: SupplierInvoice): EvidenceDetail {
   };
 }
 
+function buildPurchaseReturnEvidence(item: PurchaseReturn): EvidenceDetail {
+  const impact = calculateReturnFinancialImpact(item, SUPPLIER_CREDIT_MEMOS);
+  const linkedCredit = SUPPLIER_CREDIT_MEMOS.find((memo) => memo.relatedReturn === item.returnNo || memo.id === item.creditMemoId || memo.creditMemoNo === item.creditMemoId);
+  return {
+    id: `purchase-return-${item.id}`,
+    title: "采购退货 / 贷项证据",
+    priority: item.status === "已驳回" || item.status === "待贷项" ? "高" : "中",
+    object: item.returnNo,
+    module: "采购退货 / 贷项",
+    moduleId: "procurement",
+    businessReason: "采购退货和供应商贷项用于处理拒收、数量/价格差异、重复发票和应付冲减，避免异常发票直接进入付款。",
+    evidence: [
+      { label: "退货单号", value: item.returnNo },
+      { label: "供应商", value: item.supplier },
+      { label: "PO", value: item.relatedPo },
+      { label: "GRN", value: item.relatedGrn },
+      { label: "发票", value: item.relatedInvoice || "—" },
+      { label: "退货原因", value: item.reason },
+      { label: "退货数量", value: item.returnQty },
+      { label: "退货金额", value: fmt(item.total) },
+      { label: "未冲减金额", value: fmt(impact) },
+      { label: "贷项通知", value: linkedCredit?.creditMemoNo || "待贷项" },
+      { label: "贷项状态", value: linkedCredit?.status || "未收到" },
+      { label: "退货状态", value: item.status },
+    ],
+    confidence: item.confidence ? `${item.confidence}% · 样本规则` : "样本规则",
+    suggestedAction: "打开采购工作台，复核退货、贷项通知和 AP/对账影响。",
+  };
+}
+
 function buildReconciliationEvidence(item: SupplierReconciliationStatement): EvidenceDetail {
   const signal = statementToCockpitSignal(item);
   return {
@@ -382,6 +413,9 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   const invoiceRisks = SUPPLIER_INVOICES.filter((item) =>
     item.varianceType !== "无差异" || ["待匹配", "存在差异"].includes(item.status) || ["人工复核", "差异待处理"].includes(item.matchStatus)
   ).sort((a, b) => Number(b.varianceAmount || 0) - Number(a.varianceAmount || 0));
+  const returnRisks = PURCHASE_RETURNS
+    .filter((item) => isReturnException(item, SUPPLIER_CREDIT_MEMOS))
+    .sort((a, b) => calculateReturnFinancialImpact(b, SUPPLIER_CREDIT_MEMOS) - calculateReturnFinancialImpact(a, SUPPLIER_CREDIT_MEMOS));
   const reconciliationRisks = SUPPLIER_RECONCILIATION_STATEMENTS
     .filter(isStatementException)
     .sort((a, b) => (b.totalVarianceAmount + b.overdueAmount + b.openBalance * 0.1) - (a.totalVarianceAmount + a.overdueAmount + a.openBalance * 0.1));
@@ -443,6 +477,19 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       cta: "查看发票",
       detail: buildInvoiceEvidence(item),
     })),
+    ...returnRisks.slice(0, 1).map((item) => {
+      const signal = returnToCockpitSignal(item, SUPPLIER_CREDIT_MEMOS);
+      return {
+        priority: item.status === "已驳回" || item.status === "待贷项" ? "高" as const : "中" as const,
+        title: signal.title,
+        object: item.returnNo,
+        evidence: `${signal.supplier} · ${item.reason} · 未冲减 ${fmt(signal.amount)}`,
+        module: "采购退货 / 贷项",
+        moduleId: "procurement",
+        cta: "查看退货",
+        detail: buildPurchaseReturnEvidence(item),
+      };
+    }),
     ...reconciliationRisks.slice(0, 1).map((item) => {
       const signal = statementToCockpitSignal(item);
       return {

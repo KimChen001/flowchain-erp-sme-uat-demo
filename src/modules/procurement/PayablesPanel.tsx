@@ -51,7 +51,7 @@ export default function PayablesPanel() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>应付账款</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              应付账款来自已审批或已过账的供应商发票；供应商对账按供应商和期间汇总发票、应付、付款和差异，付款动作仅为演示状态。
+              应付账款来自已审批或已过账的供应商发票；贷项通知用于演示应付冲减，供应商对账按供应商和期间汇总发票、退货、贷项、应付、付款和差异，付款动作仅为演示状态。
             </p>
           </div>
           <button onClick={exportCsv}

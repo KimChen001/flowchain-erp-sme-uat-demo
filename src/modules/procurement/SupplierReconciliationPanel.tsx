@@ -129,7 +129,7 @@ export default function SupplierReconciliationPanel() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商对账单</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              按供应商和对账期间汇总 PO、GRN、供应商发票、三单匹配、AP 与付款状态，仅用于演示环境样本数据。
+              按供应商和对账期间汇总 PO、GRN、供应商发票、退货、贷项、三单匹配、AP 与付款状态，仅用于演示环境样本数据。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

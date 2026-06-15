@@ -9,6 +9,9 @@ export type InvoiceVarianceType = "无差异" | "价格差异" | "数量差异" 
 export type SupplierReconciliationStatus = "草稿" | "待确认" | "存在差异" | "已确认" | "已驳回" | "已关闭";
 export type SupplierSettlementStatus = "未结算" | "部分结算" | "已结算";
 export type SupplierReconciliationLineType = "PO" | "GRN" | "SupplierInvoice" | "AP" | "Payment" | "Adjustment" | "CreditMemo";
+export type PurchaseReturnStatus = "草稿" | "待审批" | "已审批" | "已退货" | "待贷项" | "已生成贷项" | "已关闭" | "已驳回";
+export type PurchaseReturnReason = "质检拒收" | "数量差异" | "价格差异" | "错发物料" | "运输损坏" | "重复发票" | "合同条款差异" | "其他";
+export type SupplierCreditMemoStatus = "草稿" | "待确认" | "已确认" | "已冲减应付" | "已关闭" | "已驳回";
 
 export type ApprovalSnapshot = {
   source?: string;
@@ -349,6 +352,80 @@ export type SupplierReconciliationStatement = {
   confidence?: number;
   notes?: string;
   lines: SupplierReconciliationLine[];
+};
+
+export type PurchaseReturnLine = {
+  lineId: string;
+  sku: string;
+  name: string;
+  unit: string;
+  orderedQty: number;
+  receivedQty: number;
+  acceptedQty: number;
+  rejectedQty: number;
+  returnQty: number;
+  unitPrice: number;
+  taxRate: number;
+  returnAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  reason: PurchaseReturnReason;
+  relatedPoLine?: string;
+  relatedGrnLine?: string;
+  relatedInvoiceLine?: string;
+  notes?: string;
+};
+
+export type PurchaseReturn = {
+  id: string;
+  returnNo: string;
+  supplier: string;
+  supplierCode?: string;
+  relatedPo: string;
+  relatedGrn: string;
+  relatedInvoice?: string;
+  relatedMatchId?: string;
+  returnDate: string;
+  createdDate: string;
+  owner: string;
+  warehouse: string;
+  currency: string;
+  reason: PurchaseReturnReason;
+  status: PurchaseReturnStatus;
+  approvalStatus?: string;
+  creditMemoId?: string;
+  subtotal: number;
+  tax: number;
+  total: number;
+  returnQty: number;
+  acceptedImpactQty?: number;
+  rejectedImpactQty?: number;
+  source: "receiving-qc" | "invoice-variance" | "manual-review" | "supplier-confirmation";
+  confidence?: number;
+  notes?: string;
+  lines: PurchaseReturnLine[];
+};
+
+export type SupplierCreditMemo = {
+  id: string;
+  creditMemoNo: string;
+  supplier: string;
+  relatedReturn: string;
+  relatedInvoice?: string;
+  relatedPo?: string;
+  relatedGrn?: string;
+  issueDate: string;
+  receivedDate: string;
+  currency: string;
+  subtotal: number;
+  tax: number;
+  totalCredit: number;
+  status: SupplierCreditMemoStatus;
+  apOffsetStatus: string;
+  reconciliationStatement?: string;
+  owner: string;
+  source: "supplier-issued" | "manual-adjustment" | "system-sample";
+  notes?: string;
 };
 
 export type AiConfidenceDimension = {

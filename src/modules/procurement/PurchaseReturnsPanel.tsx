@@ -1,0 +1,385 @@
+import { useMemo, useState } from "react";
+import { AlertOctagon, CheckCircle2, CreditCard, FileSpreadsheet, PackageX, Search, Undo2, Wallet } from "lucide-react";
+import { toast } from "sonner";
+import { Modal, Card, Chip, KpiCard, A } from "../../components/ui";
+import { DocumentActionBar, DocumentEvidencePanel, DocumentHeader, DocumentLinesTable, DocumentShell, DocumentStatusTimeline, DocumentTotals, type TimelineStep } from "../../components/document/DocumentShell";
+import { PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS, purchaseOrders, receivingDocs } from "../../data/demo-data";
+import { getPurchaseReturnLinkedDocuments } from "../../domain/procurement/document-links";
+import { calculateReturnFinancialImpact, creditMemoExportRows, getCreditMemoStatusTone, getReturnStatusTone, getReturnSummary, isReturnException, purchaseReturnExportRows, purchaseReturnLineExportRows } from "../../domain/procurement/returns";
+import { exportRowsToCsv } from "../../lib/data-export";
+import { fmt } from "../../lib/format";
+import type { PurchaseReturn, PurchaseReturnReason, PurchaseReturnStatus, SupplierCreditMemo } from "../../types/scm";
+
+const RETURN_STATUSES: ("全部" | PurchaseReturnStatus)[] = ["全部", "待审批", "已审批", "已退货", "待贷项", "已生成贷项", "已关闭", "已驳回"];
+const RETURN_REASONS: ("全部" | PurchaseReturnReason)[] = ["全部", "质检拒收", "数量差异", "价格差异", "重复发票", "其他"];
+
+function toneStyle(tone: string) {
+  if (tone === "success") return { color: A.green, bg: "#f0faf4" };
+  if (tone === "warning") return { color: A.orange, bg: "#fff8f0" };
+  if (tone === "danger") return { color: A.red, bg: "#fff1f0" };
+  if (tone === "purple") return { color: A.purple, bg: "#faf3ff" };
+  return { color: A.gray1, bg: A.gray6 };
+}
+
+function returnTimeline(returnDoc: PurchaseReturn, memo?: SupplierCreditMemo): TimelineStep[] {
+  const rejected = returnDoc.status === "已驳回";
+  const approved = ["已审批", "已退货", "待贷项", "已生成贷项", "已关闭"].includes(returnDoc.status);
+  const returned = ["已退货", "待贷项", "已生成贷项", "已关闭"].includes(returnDoc.status);
+  const creditGenerated = Boolean(returnDoc.creditMemoId || memo || ["已生成贷项", "已关闭"].includes(returnDoc.status));
+  const offsetDone = memo?.status === "已冲减应付" || memo?.apOffsetStatus === "已冲减应付";
+  return [
+    { label: "草稿", status: returnDoc.status === "草稿" ? "current" : "done", helper: returnDoc.createdDate },
+    { label: "待审批", status: rejected ? "blocked" : approved ? "done" : returnDoc.status === "待审批" ? "current" : "pending", helper: returnDoc.approvalStatus || returnDoc.owner },
+    { label: "已审批", status: rejected ? "blocked" : approved ? "done" : "pending", helper: approved ? "审批完成" : "等待审批" },
+    { label: "已退货", status: rejected ? "blocked" : returned ? "done" : approved ? "current" : "pending", helper: returnDoc.returnQty > 0 ? `数量 ${returnDoc.returnQty}` : "无实物退货" },
+    { label: "待贷项", status: rejected ? "blocked" : creditGenerated ? "done" : returned || returnDoc.status === "待贷项" ? "warning" : "pending", helper: creditGenerated ? "已关联贷项" : "等待供应商贷项" },
+    { label: "已生成贷项", status: rejected ? "blocked" : creditGenerated ? "done" : "pending", helper: memo?.creditMemoNo || returnDoc.creditMemoId || "未生成" },
+    { label: "已关闭", status: returnDoc.status === "已关闭" || offsetDone ? "done" : rejected ? "blocked" : "pending", helper: offsetDone ? "已冲减应付" : "可关闭" },
+  ];
+}
+
+function linkedCredit(returnDoc: PurchaseReturn, creditMemos: SupplierCreditMemo[]) {
+  return creditMemos.find((memo) => memo.relatedReturn === returnDoc.returnNo || memo.id === returnDoc.creditMemoId || memo.creditMemoNo === returnDoc.creditMemoId);
+}
+
+export default function PurchaseReturnsPanel() {
+  const [returns, setReturns] = useState<PurchaseReturn[]>(PURCHASE_RETURNS);
+  const [creditMemos, setCreditMemos] = useState<SupplierCreditMemo[]>(SUPPLIER_CREDIT_MEMOS);
+  const [statusFilter, setStatusFilter] = useState<(typeof RETURN_STATUSES)[number]>("全部");
+  const [reasonFilter, setReasonFilter] = useState<(typeof RETURN_REASONS)[number]>("全部");
+  const [search, setSearch] = useState("");
+  const [selectedReturn, setSelectedReturn] = useState<PurchaseReturn | null>(null);
+
+  const visibleReturns = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return returns
+      .filter((row) => statusFilter === "全部" || row.status === statusFilter)
+      .filter((row) => reasonFilter === "全部" || row.reason === reasonFilter)
+      .filter((row) => !q || [row.returnNo, row.supplier, row.relatedPo, row.relatedGrn, row.relatedInvoice || "", row.creditMemoId || ""].some((value) => value.toLowerCase().includes(q)));
+  }, [reasonFilter, returns, search, statusFilter]);
+
+  const pendingApproval = returns.filter((row) => row.status === "待审批").length;
+  const pendingCredit = returns.filter((row) => ["已退货", "待贷项"].includes(row.status) && !linkedCredit(row, creditMemos)).length;
+  const offsetCredits = creditMemos.filter((memo) => memo.status === "已冲减应付" || memo.apOffsetStatus === "已冲减应付").reduce((sum, memo) => sum + memo.totalCredit, 0);
+  const totalReturnAmount = returns.reduce((sum, row) => sum + row.total, 0);
+  const unoffsetAmount = returns.reduce((sum, row) => sum + calculateReturnFinancialImpact(row, creditMemos), 0);
+
+  function updateReturn(id: string, patch: Partial<PurchaseReturn>) {
+    setReturns((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+    setSelectedReturn((current) => current?.id === id ? { ...current, ...patch } : current);
+  }
+
+  function updateCredit(id: string, patch: Partial<SupplierCreditMemo>) {
+    setCreditMemos((current) => current.map((memo) => memo.id === id ? { ...memo, ...patch } : memo));
+  }
+
+  function approve(returnDoc: PurchaseReturn) {
+    updateReturn(returnDoc.id, { status: "已审批", approvalStatus: "已审批" });
+    toast.success(`${returnDoc.returnNo} 已标记审批`);
+  }
+
+  function markReturned(returnDoc: PurchaseReturn) {
+    updateReturn(returnDoc.id, { status: returnDoc.creditMemoId ? "已生成贷项" : "待贷项", approvalStatus: "已审批" });
+    toast.success(`${returnDoc.returnNo} 已标记退货`);
+  }
+
+  function generateCredit(returnDoc: PurchaseReturn) {
+    if (linkedCredit(returnDoc, creditMemos)) {
+      toast.warning("该退货单已关联贷项通知");
+      return;
+    }
+    const creditMemoNo = `CM-DEMO-${returnDoc.returnNo.replace("RTV-", "")}`;
+    const memo: SupplierCreditMemo = {
+      id: creditMemoNo,
+      creditMemoNo,
+      supplier: returnDoc.supplier,
+      relatedReturn: returnDoc.returnNo,
+      relatedInvoice: returnDoc.relatedInvoice,
+      relatedPo: returnDoc.relatedPo,
+      relatedGrn: returnDoc.relatedGrn,
+      issueDate: "2026-06-03",
+      receivedDate: "2026-06-03",
+      currency: returnDoc.currency,
+      subtotal: returnDoc.subtotal,
+      tax: returnDoc.tax,
+      totalCredit: returnDoc.total,
+      status: "待确认",
+      apOffsetStatus: "未冲减",
+      owner: returnDoc.owner,
+      source: "system-sample",
+      notes: "由退货面板生成的本地演示贷项，不写入后端。",
+    };
+    setCreditMemos((current) => [memo, ...current]);
+    updateReturn(returnDoc.id, { status: "已生成贷项", creditMemoId: creditMemoNo });
+    toast.success("贷项通知样本已生成", { description: creditMemoNo });
+  }
+
+  function close(returnDoc: PurchaseReturn) {
+    updateReturn(returnDoc.id, { status: "已关闭" });
+    toast.success(`${returnDoc.returnNo} 已关闭`);
+  }
+
+  function reject(returnDoc: PurchaseReturn) {
+    updateReturn(returnDoc.id, { status: "已驳回", approvalStatus: "已驳回" });
+    toast.success(`${returnDoc.returnNo} 已驳回`);
+  }
+
+  function exportList() {
+    if (visibleReturns.length === 0) {
+      toast.warning("暂无可导出的采购退货");
+      return;
+    }
+    exportRowsToCsv("purchase-returns-export.csv", purchaseReturnExportRows(visibleReturns));
+    toast.success("采购退货 CSV 已导出");
+  }
+
+  function exportCreditMemos() {
+    if (creditMemos.length === 0) {
+      toast.warning("暂无可导出的贷项通知");
+      return;
+    }
+    exportRowsToCsv("supplier-credit-memos-export.csv", creditMemoExportRows(creditMemos));
+    toast.success("供应商贷项通知 CSV 已导出");
+  }
+
+  function exportDetail(returnDoc: PurchaseReturn) {
+    exportRowsToCsv(`purchase-return-detail-${returnDoc.returnNo}.csv`, purchaseReturnLineExportRows(returnDoc, creditMemos));
+    toast.success("退货明细 CSV 已导出");
+  }
+
+  const selectedCredit = selectedReturn ? linkedCredit(selectedReturn, creditMemos) : undefined;
+  const selectedImpact = selectedReturn ? calculateReturnFinancialImpact(selectedReturn, creditMemos) : 0;
+  const selectedConfirmedCredit = selectedReturn
+    ? creditMemos
+      .filter((memo) => memo.relatedReturn === selectedReturn.returnNo || memo.id === selectedReturn.creditMemoId || memo.creditMemoNo === selectedReturn.creditMemoId)
+      .filter((memo) => ["已确认", "已冲减应付", "已关闭"].includes(memo.status))
+      .reduce((sum, memo) => sum + memo.totalCredit, 0)
+    : 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+        <KpiCard label="退货单数" value={String(returns.length)} sub="RTV / 贷项样本" icon={PackageX} color={A.blue} />
+        <KpiCard label="待审批" value={String(pendingApproval)} sub="需采购确认" icon={CheckCircle2} color={A.orange} />
+        <KpiCard label="待贷项" value={String(pendingCredit)} sub="已退货未冲减" icon={AlertOctagon} color={A.red} />
+        <KpiCard label="已冲减应付" value={fmt(offsetCredits)} sub="贷项样本金额" icon={CreditCard} color={A.green} />
+        <KpiCard label="退货金额" value={fmt(totalReturnAmount)} sub="本期异常影响" icon={Undo2} color={A.purple} />
+        <KpiCard label="未冲减金额" value={fmt(unoffsetAmount)} sub="需 AP/对账复核" icon={Wallet} color={unoffsetAmount ? A.red : A.green} />
+      </div>
+
+      <Card>
+        <div className="px-5 py-4 flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>采购退货 / 供应商贷项</h2>
+            <p className="text-[11px] mt-1" style={{ color: A.sub }}>
+              采购退货与贷项通知为演示状态，用于展示应付冲减与供应商对账影响，不生成真实库存或会计分录。
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}
+              className="h-8 rounded-lg px-2 text-xs outline-none" style={{ background: A.gray6, color: A.label }}>
+              {RETURN_STATUSES.map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <select value={reasonFilter} onChange={(event) => setReasonFilter(event.target.value as typeof reasonFilter)}
+              className="h-8 rounded-lg px-2 text-xs outline-none" style={{ background: A.gray6, color: A.label }}>
+              {RETURN_REASONS.map((item) => <option key={item}>{item}</option>)}
+            </select>
+            <div className="h-8 px-2 rounded-lg flex items-center gap-1.5" style={{ background: A.gray6 }}>
+              <Search size={13} style={{ color: A.gray1 }} />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="退货/供应商/PO/GRN/发票"
+                className="w-48 bg-transparent text-xs outline-none" style={{ color: A.label }} />
+            </div>
+            <button onClick={exportList}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg"
+              style={{ background: A.gray6, color: A.blue }}>
+              <FileSpreadsheet size={13} /> 导出 CSV
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-xs">
+            <thead>
+              <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                {["退货单号", "供应商", "PO", "GRN", "发票", "原因", "退货日期", "退货数量", "退货金额", "状态", "贷项通知", "操作"].map((header) => (
+                  <th key={header} className="text-left px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {visibleReturns.map((row, index) => {
+                const statusStyle = toneStyle(getReturnStatusTone(row.status));
+                const memo = linkedCredit(row, creditMemos);
+                return (
+                  <tr key={row.id} style={{ borderBottom: index < visibleReturns.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                    <td className="px-5 py-3 font-semibold whitespace-nowrap" style={{ color: A.blue }}>{row.returnNo}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.label }}>{row.supplier}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{row.relatedPo}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{row.relatedGrn}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{row.relatedInvoice || "—"}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: row.reason === "重复发票" ? A.red : A.label }}>{row.reason}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{row.returnDate}</td>
+                    <td className="px-5 py-3 tabular-nums" style={{ color: A.label }}>{row.returnQty}</td>
+                    <td className="px-5 py-3 font-semibold whitespace-nowrap" style={{ color: A.label }}>{fmt(row.total)}</td>
+                    <td className="px-5 py-3 whitespace-nowrap"><Chip label={row.status} {...statusStyle} /></td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: memo ? A.green : A.orange }}>{memo?.creditMemoNo || "待贷项"}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex flex-wrap gap-1 min-w-[320px]">
+                        <button onClick={() => setSelectedReturn(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>查看详情</button>
+                        <button onClick={() => approve(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
+                        <button onClick={() => markReturned(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>标记已退货</button>
+                        <button onClick={() => generateCredit(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#faf3ff", color: A.purple }}>生成贷项样本</button>
+                        <button onClick={() => close(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.gray1 }}>关闭</button>
+                        <button onClick={() => reject(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
+                        <button onClick={() => exportDetail(row)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.gray1 }}>导出明细</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商贷项通知</h2>
+            <p className="text-[11px] mt-1" style={{ color: A.sub }}>贷项通知用于演示应付冲减，不生成真实会计分录或付款。</p>
+          </div>
+          <button onClick={exportCreditMemos}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg"
+            style={{ background: A.gray6, color: A.blue }}>
+            <FileSpreadsheet size={13} /> 导出 CSV
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-xs">
+            <thead>
+              <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                {["贷项编号", "供应商", "关联退货", "关联发票", "开具日期", "接收日期", "贷项金额", "状态", "应付冲减", "对账单", "操作"].map((header) => (
+                  <th key={header} className="text-left px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {creditMemos.map((memo, index) => {
+                const style = toneStyle(getCreditMemoStatusTone(memo.status));
+                return (
+                  <tr key={memo.id} style={{ borderBottom: index < creditMemos.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                    <td className="px-5 py-3 font-semibold whitespace-nowrap" style={{ color: A.blue }}>{memo.creditMemoNo}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.label }}>{memo.supplier}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{memo.relatedReturn}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{memo.relatedInvoice || "—"}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{memo.issueDate}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{memo.receivedDate}</td>
+                    <td className="px-5 py-3 font-semibold whitespace-nowrap" style={{ color: A.label }}>{fmt(memo.totalCredit)}</td>
+                    <td className="px-5 py-3 whitespace-nowrap"><Chip label={memo.status} {...style} /></td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: memo.apOffsetStatus === "已冲减应付" ? A.green : A.orange }}>{memo.apOffsetStatus}</td>
+                    <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{memo.reconciliationStatement || "—"}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex flex-wrap gap-1 min-w-[190px]">
+                        <button onClick={() => updateCredit(memo.id, { status: "已确认" })} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0faf4", color: A.green }}>标记已确认</button>
+                        <button onClick={() => updateCredit(memo.id, { status: "已冲减应付", apOffsetStatus: "已冲减应付" })} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#faf3ff", color: A.purple }}>标记已冲减</button>
+                        <button onClick={() => updateCredit(memo.id, { status: "已驳回", apOffsetStatus: "未冲减" })} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Modal open={Boolean(selectedReturn)} onClose={() => setSelectedReturn(null)} width={1180}
+        title={selectedReturn?.returnNo || "采购退货 / 供应商贷项"}
+        subtitle={selectedReturn ? `${selectedReturn.supplier} · ${selectedReturn.relatedPo} / ${selectedReturn.relatedGrn}` : undefined}>
+        {selectedReturn && (
+          <DocumentShell
+            title="采购退货 / 供应商贷项"
+            documentNo={selectedReturn.returnNo}
+            moduleLabel="采购 / 异常处理"
+            status={selectedReturn.status}
+            statusTone={getReturnStatusTone(selectedReturn.status)}
+            subtitle={`${selectedReturn.supplier} · ${selectedReturn.relatedPo} / ${selectedReturn.relatedGrn}${selectedReturn.relatedInvoice ? ` / ${selectedReturn.relatedInvoice}` : ""}`}
+          >
+            <DocumentHeader
+              fields={[
+                { label: "退货ID", value: selectedReturn.id },
+                { label: "退货单号", value: selectedReturn.returnNo },
+                { label: "供应商", value: selectedReturn.supplier, helper: selectedReturn.supplierCode || "—" },
+                { label: "PO", value: selectedReturn.relatedPo },
+                { label: "GRN", value: selectedReturn.relatedGrn },
+                { label: "供应商发票", value: selectedReturn.relatedInvoice || "—" },
+                { label: "三单匹配结果", value: selectedReturn.relatedMatchId || "—" },
+                { label: "仓库", value: selectedReturn.warehouse },
+                { label: "退货日期", value: selectedReturn.returnDate },
+                { label: "创建日期", value: selectedReturn.createdDate },
+                { label: "原因", value: selectedReturn.reason, tone: isReturnException(selectedReturn, creditMemos) ? "warning" : "neutral" },
+                { label: "状态", value: selectedReturn.status, tone: getReturnStatusTone(selectedReturn.status) },
+                { label: "来源", value: selectedReturn.source },
+                { label: "负责人", value: selectedReturn.owner },
+                { label: "贷项通知", value: selectedCredit?.creditMemoNo || selectedReturn.creditMemoId || "待贷项", tone: selectedCredit ? getCreditMemoStatusTone(selectedCredit.status) : "warning" },
+              ]}
+            />
+            <DocumentStatusTimeline steps={returnTimeline(selectedReturn, selectedCredit)} />
+            <DocumentLinesTable
+              rows={selectedReturn.lines}
+              columns={[
+                { key: "sku", label: "SKU" },
+                { key: "name", label: "品名" },
+                { key: "orderedQty", label: "订购数量", align: "right" },
+                { key: "receivedQty", label: "收货数量", align: "right" },
+                { key: "acceptedQty", label: "合格数量", align: "right" },
+                { key: "rejectedQty", label: "拒收数量", align: "right" },
+                { key: "returnQty", label: "退货数量", align: "right" },
+                { key: "unit", label: "单位" },
+                { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+                { key: "taxRate", label: "税率", align: "right", render: (line) => `${Math.round(Number(line.taxRate || 0) * 100)}%` },
+                { key: "taxAmount", label: "税额", align: "right", render: (line) => fmt(Number(line.taxAmount || 0)) },
+                { key: "totalAmount", label: "退货金额", align: "right", render: (line) => fmt(Number(line.totalAmount || 0)) },
+                { key: "reason", label: "原因" },
+                { key: "notes", label: "备注", render: (line) => line.notes || "—" },
+              ]}
+            />
+            <DocumentTotals
+              columns={5}
+              totals={[
+                { label: "退货数量", value: selectedReturn.returnQty, tone: selectedReturn.returnQty ? "warning" : "neutral" },
+                { label: "未税金额", value: fmt(selectedReturn.subtotal) },
+                { label: "税额", value: fmt(selectedReturn.tax) },
+                { label: "退货总额", value: fmt(selectedReturn.total), tone: "purple" },
+                { label: "已确认贷项", value: fmt(selectedConfirmedCredit), tone: selectedConfirmedCredit ? "success" : "neutral" },
+                { label: "未冲减金额", value: fmt(selectedImpact), tone: selectedImpact ? "danger" : "success" },
+              ]}
+            />
+            <DocumentEvidencePanel
+              linkedDocuments={getPurchaseReturnLinkedDocuments(selectedReturn, purchaseOrders, receivingDocs, SUPPLIER_INVOICES, creditMemos, SUPPLIER_RECONCILIATION_STATEMENTS)}
+              confidence={selectedReturn.confidence ? `${selectedReturn.confidence}%` : "—"}
+              provenance={selectedReturn.source}
+              notes={selectedReturn.notes || getReturnSummary(selectedReturn, creditMemos)}
+              evidence={[
+                { label: "退货原因", value: selectedReturn.reason, tone: isReturnException(selectedReturn, creditMemos) ? "warning" : "neutral" },
+                { label: "拒收数量", value: selectedReturn.rejectedImpactQty ?? selectedReturn.lines.reduce((sum, line) => sum + line.rejectedQty, 0), tone: selectedReturn.rejectedImpactQty ? "warning" : "neutral" },
+                { label: "财务影响", value: fmt(selectedImpact), tone: selectedImpact ? "danger" : "success" },
+                { label: "贷项状态", value: selectedCredit?.status || "待供应商贷项", tone: selectedCredit ? getCreditMemoStatusTone(selectedCredit.status) : "warning" },
+                { label: "应付冲减", value: selectedCredit?.apOffsetStatus || "未冲减", tone: selectedCredit?.apOffsetStatus === "已冲减应付" ? "success" : "warning" },
+                { label: "建议动作", value: getReturnSummary(selectedReturn, creditMemos), tone: isReturnException(selectedReturn, creditMemos) ? "warning" : "success" },
+              ]}
+            />
+            <DocumentActionBar>
+              <button onClick={() => approve(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
+              <button onClick={() => markReturned(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>标记已退货</button>
+              <button onClick={() => generateCredit(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>生成贷项样本</button>
+              <button onClick={() => close(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.gray1 }}>关闭退货</button>
+              <button onClick={() => reject(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
+              <button onClick={() => exportDetail(selectedReturn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出明细 CSV</button>
+              <button onClick={() => setSelectedReturn(null)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
+            </DocumentActionBar>
+          </DocumentShell>
+        )}
+      </Modal>
+    </div>
+  );
+}

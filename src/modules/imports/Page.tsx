@@ -22,7 +22,7 @@ import {
 } from "../../lib/csv-import";
 import { A, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "openingInventory" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers";
+type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "openingInventory" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers";
 type ImportedRow = Record<string, unknown>;
 type ValidationResult = {
   rowNumber: number;
@@ -253,6 +253,110 @@ const IMPORT_CONFIGS: ImportConfig[] = [
           结算状态: value(row, "结算状态"),
           负责人: value(row, "负责人"),
           来源: value(row, "来源") || "manual-review",
+          备注: value(row, "备注"),
+        },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "purchaseReturns",
+    label: "采购退货导入",
+    module: "采购",
+    description: "上传采购退货单，用于演示 GRN 拒收、发票差异、退货原因和贷项状态预览。",
+    templateFilename: "purchase-returns-template.csv",
+    requiredFields: ["退货单号", "供应商", "PO", "GRN", "退货日期", "原因", "退货数量", "退货金额", "状态"],
+    optionalFields: ["发票", "仓库", "币种", "税额", "总额", "贷项通知", "来源", "负责人", "备注"],
+    sampleRows: [
+      { 退货单号: "RTV-IMPORT-001", 供应商: "广州化工耗材", PO: "PO-2026-1282", GRN: "GRN-202605-0419", 退货日期: "2026-06-03", 原因: "质检拒收", 退货数量: 2, 退货金额: 42000, 状态: "待贷项", 发票: "INV-GZ-260419", 仓库: "C 区", 币种: "CNY", 税额: 4831.86, 总额: 42000, 贷项通知: "", 来源: "receiving-qc", 负责人: "周浩", 备注: "等待供应商贷项" },
+      { 退货单号: "RTV-IMPORT-002", 供应商: "江苏铝合金集团", PO: "PO-2026-1285", GRN: "GRN-202605-0420", 退货日期: "2026-06-03", 原因: "价格差异", 退货数量: 0, 退货金额: 32000, 状态: "已生成贷项", 发票: "INV-JS-260420", 仓库: "B 区", 币种: "CNY", 税额: 3681.42, 总额: 32000, 贷项通知: "CM-JS-2026-0531", 来源: "invoice-variance", 负责人: "王志强", 备注: "价格差异冲减" },
+    ],
+    notes: ["采购退货导入仅做本地校验与预览，不生成真实库存退回。", "贷项通知字段用于关联供应商贷项样本，不创建 AP 分录。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["退货单号", "供应商", "PO", "GRN", "退货日期", "原因", "退货数量", "退货金额", "状态"]);
+      const qty = parseNonNegativeNumber(value(row, "退货数量"));
+      const amount = parseNonNegativeNumber(value(row, "退货金额"));
+      const tax = value(row, "税额") ? parseNonNegativeNumber(value(row, "税额")) : 0;
+      const total = value(row, "总额") ? parseNonNegativeNumber(value(row, "总额")) : amount;
+      const supportedStatuses = ["草稿", "待审批", "已审批", "已退货", "待贷项", "已生成贷项", "已关闭", "已驳回"];
+      const supportedReasons = ["质检拒收", "数量差异", "价格差异", "错发物料", "运输损坏", "重复发票", "合同条款差异", "其他"];
+      if (qty == null) errors.push("退货数量必须为非负数");
+      if (amount == null) errors.push("退货金额必须为非负数");
+      if (tax == null) errors.push("税额必须为非负数");
+      if (total == null) errors.push("总额必须为非负数");
+      if (!parseDateLike(value(row, "退货日期"))) errors.push("退货日期格式不正确");
+      if (!supportedStatuses.includes(value(row, "状态"))) errors.push("状态必须为支持的采购退货状态");
+      if (!supportedReasons.includes(value(row, "原因"))) errors.push("原因应为支持的采购退货原因");
+      const warnings = duplicateWarnings(rows, row, (item) => value(item, "退货单号"), "存在重复退货单号");
+      return {
+        normalized: {
+          退货单号: value(row, "退货单号"),
+          供应商: value(row, "供应商"),
+          PO: value(row, "PO"),
+          GRN: value(row, "GRN"),
+          发票: value(row, "发票"),
+          退货日期: parseDateLike(value(row, "退货日期")) || value(row, "退货日期"),
+          原因: value(row, "原因"),
+          退货数量: qty ?? value(row, "退货数量"),
+          退货金额: amount ?? value(row, "退货金额"),
+          仓库: value(row, "仓库"),
+          币种: value(row, "币种") || "CNY",
+          税额: tax ?? value(row, "税额"),
+          总额: total ?? value(row, "总额"),
+          贷项通知: value(row, "贷项通知"),
+          状态: value(row, "状态"),
+          来源: value(row, "来源") || "manual-review",
+          负责人: value(row, "负责人"),
+          备注: value(row, "备注"),
+        },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "supplierCreditMemos",
+    label: "供应商贷项通知导入",
+    module: "采购",
+    description: "上传供应商贷项通知，用于演示关联退货、发票差异和应付冲减状态预览。",
+    templateFilename: "supplier-credit-memos-template.csv",
+    requiredFields: ["贷项编号", "供应商", "关联退货", "贷项金额", "状态"],
+    optionalFields: ["关联发票", "PO", "GRN", "开具日期", "接收日期", "币种", "税额", "应付冲减状态", "对账单", "负责人", "来源", "备注"],
+    sampleRows: [
+      { 贷项编号: "CM-IMPORT-001", 供应商: "深圳新元电气", 关联退货: "RTV-2026-0502", 贷项金额: 8600, 状态: "已确认", 关联发票: "INV-SZ-260422", PO: "PO-2026-1283", GRN: "GRN-202605-0422", 开具日期: "2026-06-03", 接收日期: "2026-06-03", 币种: "CNY", 税额: 989.38, 应付冲减状态: "待冲减", 对账单: "REC-2026-05-SZ-001", 负责人: "赵敏", 来源: "supplier-issued", 备注: "合同外运费贷项" },
+      { 贷项编号: "CM-IMPORT-002", 供应商: "广州化工耗材", 关联退货: "RTV-2026-0506", 贷项金额: 18000, 状态: "已驳回", 关联发票: "INV-GZ-260419", PO: "PO-2026-1282", GRN: "GRN-202605-0419", 开具日期: "2026-06-03", 接收日期: "2026-06-03", 币种: "CNY", 税额: 2070.8, 应付冲减状态: "未冲减", 对账单: "REC-2026-05-GZ-001", 负责人: "赵敏", 来源: "supplier-issued", 备注: "供应商争议中" },
+    ],
+    notes: ["供应商贷项通知导入只做本地校验与预览，不冲减真实 AP。", "应付冲减状态用于演示 AP 和供应商对账影响。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["贷项编号", "供应商", "关联退货", "贷项金额", "状态"]);
+      const amount = parseNonNegativeNumber(value(row, "贷项金额"));
+      const tax = value(row, "税额") ? parseNonNegativeNumber(value(row, "税额")) : 0;
+      const supportedStatuses = ["草稿", "待确认", "已确认", "已冲减应付", "已关闭", "已驳回"];
+      if (amount == null) errors.push("贷项金额必须为非负数");
+      if (tax == null) errors.push("税额必须为非负数");
+      if (value(row, "开具日期") && !parseDateLike(value(row, "开具日期"))) errors.push("开具日期格式不正确");
+      if (value(row, "接收日期") && !parseDateLike(value(row, "接收日期"))) errors.push("接收日期格式不正确");
+      if (!supportedStatuses.includes(value(row, "状态"))) errors.push("状态必须为支持的供应商贷项通知状态");
+      const warnings = duplicateWarnings(rows, row, (item) => value(item, "贷项编号"), "存在重复贷项编号");
+      return {
+        normalized: {
+          贷项编号: value(row, "贷项编号"),
+          供应商: value(row, "供应商"),
+          关联退货: value(row, "关联退货"),
+          关联发票: value(row, "关联发票"),
+          PO: value(row, "PO"),
+          GRN: value(row, "GRN"),
+          开具日期: parseDateLike(value(row, "开具日期")) || value(row, "开具日期"),
+          接收日期: parseDateLike(value(row, "接收日期")) || value(row, "接收日期"),
+          币种: value(row, "币种") || "CNY",
+          税额: tax ?? value(row, "税额"),
+          贷项金额: amount ?? value(row, "贷项金额"),
+          状态: value(row, "状态"),
+          应付冲减状态: value(row, "应付冲减状态") || "未冲减",
+          对账单: value(row, "对账单"),
+          负责人: value(row, "负责人"),
+          来源: value(row, "来源") || "supplier-issued",
           备注: value(row, "备注"),
         },
         errors,

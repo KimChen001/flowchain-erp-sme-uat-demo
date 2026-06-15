@@ -67,7 +67,7 @@ export default function ThreeWayMatchPanel() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>三单匹配 (PO · GRN · Supplier Invoice)</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              三单匹配为演示规则，用于比较采购订单、收货单和供应商发票的金额、数量与状态差异。
+              三单匹配为演示规则，用于比较采购订单、收货单和供应商发票的金额、数量与状态差异；差异可通过发票更正、采购退货、供应商贷项、AP 调整或供应商对账处理。
             </p>
           </div>
           <button onClick={exportCsv}

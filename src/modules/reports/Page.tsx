@@ -23,7 +23,9 @@ import {
   MOVEMENTS,
   PAYABLES,
   PORTAL_SUPPLIERS,
+  PURCHASE_RETURNS,
   RFQS,
+  SUPPLIER_CREDIT_MEMOS,
   SERIALS,
   SUPPLIER_INVOICES,
   SUPPLIER_RECONCILIATION_STATEMENTS,
@@ -53,6 +55,11 @@ import {
   reconciliationExportRows,
   reconciliationLineExportRows,
 } from "../../domain/procurement/reconciliation";
+import {
+  creditMemoExportRows,
+  purchaseReturnExportRows,
+  returnExceptionRows,
+} from "../../domain/procurement/returns";
 import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
@@ -453,6 +460,42 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
         ];
         return merged.map((row) => ({ 应付编号: row.id, 供应商: row.supplier, 发票: row.invoice, 金额: row.amount, 付款条款: row.terms, 到期日: row.due, 账龄天数: row.aging, 状态: row.status }));
       },
+    },
+    {
+      id: "purchase-returns",
+      name: "Purchase Return Register Report",
+      module: "采购",
+      description: "采购退货台账，包含供应商、PO、GRN、发票、退货原因、退货数量、退货金额、状态和贷项通知。",
+      source: "PURCHASE_RETURNS · demo-data.ts",
+      sourceKind: "Demo",
+      updated: "Demo sample · 2026",
+      filename: "purchase-returns-report.csv",
+      sourceModule: "procurement",
+      rows: () => purchaseReturnExportRows(PURCHASE_RETURNS),
+    },
+    {
+      id: "supplier-credit-memos",
+      name: "Supplier Credit Memo Report",
+      module: "采购",
+      description: "供应商贷项通知台账，包含关联退货、关联发票、贷项金额、状态、应付冲减状态和对账单。",
+      source: "SUPPLIER_CREDIT_MEMOS · demo-data.ts",
+      sourceKind: "Demo",
+      updated: "Demo sample · 2026",
+      filename: "supplier-credit-memos-report.csv",
+      sourceModule: "procurement",
+      rows: () => creditMemoExportRows(SUPPLIER_CREDIT_MEMOS),
+    },
+    {
+      id: "purchase-return-credit-exceptions",
+      name: "Return / Credit Exceptions Report",
+      module: "采购",
+      description: "退货和贷项异常，包含待审批、待贷项、已驳回、贷项待确认或仍有未冲减金额的样本单据。",
+      source: "PURCHASE_RETURNS + SUPPLIER_CREDIT_MEMOS + returns helper",
+      sourceKind: "Demo",
+      updated: "Computed standard sample",
+      filename: "purchase-return-credit-exceptions-report.csv",
+      sourceModule: "procurement",
+      rows: () => returnExceptionRows(PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS),
     },
     {
       id: "supplier-reconciliation-statements",
