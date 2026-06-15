@@ -1,4 +1,4 @@
-﻿import type { SupplierCreditMemo, SupplierInvoice, SupplierReconciliationStatement } from "../types/scm";
+import type { SupplierCreditMemo, SupplierInvoice, SupplierReconciliationStatement } from "../types/scm";
 
 export const PAYABLES: {
   id: string; supplier: string; invoice: string; amount: number; due: string;

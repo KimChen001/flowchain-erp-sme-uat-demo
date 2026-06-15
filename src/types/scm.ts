@@ -12,6 +12,39 @@ export type SupplierReconciliationLineType = "PO" | "GRN" | "SupplierInvoice" | 
 export type PurchaseReturnStatus = "草稿" | "待审批" | "已审批" | "已退货" | "待贷项" | "已生成贷项" | "已关闭" | "已驳回";
 export type PurchaseReturnReason = "质检拒收" | "数量差异" | "价格差异" | "错发物料" | "运输损坏" | "重复发票" | "合同条款差异" | "其他";
 export type SupplierCreditMemoStatus = "草稿" | "待确认" | "已确认" | "已冲减应付" | "已关闭" | "已驳回";
+export type InventoryMovementType = "PurchaseReceipt" | "PurchaseReturn" | "SalesDelivery" | "SalesReturn" | "StockAdjustment" | "StockTransfer" | "CycleCountVariance";
+export type InventoryMovementStatus = "已登记" | "待复核" | "已确认" | "异常处理" | "已关闭" | "已取消";
+
+export type InventoryMovementEvidence = {
+  label: string;
+  value: string;
+};
+
+export type InventoryMovement = {
+  movementId: string;
+  movementType: InventoryMovementType;
+  movementLabel: string;
+  date: string;
+  sku: string;
+  itemName: string;
+  warehouse: string;
+  location: string;
+  sourceDocument: string;
+  relatedPo?: string;
+  relatedGrn?: string;
+  relatedReturn?: string;
+  relatedSalesOrder?: string;
+  quantityIn: number;
+  quantityOut: number;
+  adjustmentQty: number;
+  unit: string;
+  status: InventoryMovementStatus;
+  owner: string;
+  reason: string;
+  inventoryImpact: string;
+  evidence: InventoryMovementEvidence[];
+  timeline: InventoryMovementEvidence[];
+};
 
 export type ApprovalSnapshot = {
   source?: string;

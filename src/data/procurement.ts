@@ -1,4 +1,4 @@
-﻿import type { ApprovalSnapshot, POStatus, PurchaseReturn, RecvStatus } from "../types/scm";
+import type { ApprovalSnapshot, POStatus, PurchaseReturn, RecvStatus } from "../types/scm";
 
 export const procurementData = [
   { category: "原材料",   amount: 12840000, pct: 38, yoy: 11.2 },

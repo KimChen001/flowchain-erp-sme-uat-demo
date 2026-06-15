@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   BarChart2,
@@ -19,8 +19,8 @@ import {
   CONTRACTS,
   COUNT_PLANS,
   FORECAST_SKUS,
+  INVENTORY_MOVEMENT_LEDGER,
   LOTS,
-  MOVEMENTS,
   PAYABLES,
   PORTAL_SUPPLIERS,
   PURCHASE_RETURNS,
@@ -39,6 +39,7 @@ import {
   topProducts,
 } from "../../data/demo-data";
 import { inventoryPlan } from "../../domain/inventory/planning";
+import { inventoryMovementExportRows } from "../../domain/inventory/movements";
 import { METHOD_LABEL, runForecast, type Method } from "../../domain/forecast";
 import { forecastProcurementProfileForSku } from "../../domain/forecast/purchase-request";
 import { type MrpPlan } from "../../domain/mrp";
@@ -671,16 +672,16 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       rows: () => VARIANCES.map((row) => ({ 批次号: row.lot, SKU: row.sku, 品名: row.name, 账面数: row.book, 实盘数: row.actual, 差异: row.diff, 差异原因: row.reason, 差异金额: row.value })),
     },
     {
-      id: "inventory-movements",
-      name: "Inventory Movements Report",
+      id: "inventory-movement-ledger",
+      name: "Inventory Movement Ledger Report",
       module: "库存",
-      description: "库存事务流水、类型、SKU、数量、来源单据、库位和操作人。",
-      source: "MOVEMENTS · operational dataset",
+      description: "库存事务流水、来源单据、入库数量、出库数量、调整数量、期末影响与关联证据。",
+      source: "INVENTORY_MOVEMENT_LEDGER · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
-      filename: "inventory-movements-export.csv",
+      filename: "inventory-movement-ledger-report.csv",
       sourceModule: "inventory",
-      rows: () => MOVEMENTS.map((row) => ({ 时间: row.ts, 类型: row.type, SKU: row.sku, 数量: row.qty, 来源单据: row.ref, 源库位: row.from, 目标库位: row.to, 操作人: row.op, 事由: row.reason })),
+      rows: () => inventoryMovementExportRows(INVENTORY_MOVEMENT_LEDGER),
     },
     {
       id: "abc-xyz",

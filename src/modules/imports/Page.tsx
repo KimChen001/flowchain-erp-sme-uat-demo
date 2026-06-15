@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -22,7 +22,7 @@ import {
 } from "../../lib/csv-import";
 import { A, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "openingInventory" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers";
+type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "openingInventory" | "inventoryMovements" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers";
 type ImportedRow = Record<string, unknown>;
 type ValidationResult = {
   rowNumber: number;
@@ -387,6 +387,37 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       const warnings = duplicateWarnings(rows, row, (item) => `${value(item, "SKU")}::${value(item, "仓库")}::${value(item, "库位")}`, "存在重复SKU+仓库+库位");
       return {
         normalized: { SKU: value(row, "SKU"), 品名: value(row, "品名"), 仓库: value(row, "仓库"), 库位: value(row, "库位"), 期初数量: qty ?? value(row, "期初数量"), 单位: value(row, "单位"), 批次号: value(row, "批次号"), 序列号: value(row, "序列号"), 安全库存: safety, 最大库存: max, 供应商: value(row, "供应商"), 备注: value(row, "备注") },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "inventoryMovements",
+    label: "库存事务流水导入",
+    module: "库存",
+    description: "上传库存移动、来源单据、数量影响和复核状态，用于库存事务流水预览。",
+    templateFilename: "inventory-movement-ledger-template.csv",
+    requiredFields: ["单据号", "类型", "日期", "SKU", "品名", "仓库", "库位", "来源单据", "单位", "状态"],
+    optionalFields: ["关联PO", "关联GRN", "关联退货", "关联销售订单", "入库", "出库", "调整", "负责人", "原因", "库存影响", "关联证据"],
+    sampleRows: [
+      { 单据号: "IM-IMPORT-001", 类型: "采购入库", 日期: "2026-06-01", SKU: "SKU-00558", 品名: "不锈钢螺栓 M8×30", 仓库: "上海总仓", 库位: "A-07-22", 来源单据: "GRN-202606-0101", 关联PO: "PO-2026-1301", 关联GRN: "GRN-202606-0101", 入库: 5000, 出库: 0, 调整: 0, 单位: "件", 状态: "已确认", 负责人: "刘建华", 原因: "采购入库", 库存影响: "可用库存增加 5,000 件", 关联证据: "GRN/PO" },
+      { 单据号: "IM-IMPORT-002", 类型: "盘点差异", 日期: "2026-06-01", SKU: "SKU-00412", 品名: "伺服电机 750W", 仓库: "上海总仓", 库位: "D-02-01", 来源单据: "CC-2026-W22-D1", 入库: 0, 出库: 0, 调整: -1, 单位: "台", 状态: "待复核", 负责人: "刘建华", 原因: "账实差异", 库存影响: "账面库存减少 1 台", 关联证据: "盘点计划" },
+    ],
+    notes: ["导入用于库存事务流水预览和批次复核。", "库存生效、审批关闭和异常处理由库存业务流程确认。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["单据号", "类型", "日期", "SKU", "品名", "仓库", "库位", "来源单据", "单位", "状态"]);
+      const quantityIn = value(row, "入库") ? parseNonNegativeNumber(value(row, "入库")) : 0;
+      const quantityOut = value(row, "出库") ? parseNonNegativeNumber(value(row, "出库")) : 0;
+      const adjustmentRaw = value(row, "调整");
+      const adjustment = adjustmentRaw ? Number(adjustmentRaw) : 0;
+      if (quantityIn == null) errors.push("入库必须为非负数");
+      if (quantityOut == null) errors.push("出库必须为非负数");
+      if (adjustmentRaw && Number.isNaN(adjustment)) errors.push("调整必须为数字");
+      if ((Number(quantityIn || 0) + Number(quantityOut || 0) + Math.abs(Number(adjustment || 0))) === 0) errors.push("入库、出库或调整至少填写一项");
+      const warnings = duplicateWarnings(rows, row, (item) => value(item, "单据号"), "存在重复库存移动单据号");
+      return {
+        normalized: { 单据号: value(row, "单据号"), 类型: value(row, "类型"), 日期: value(row, "日期"), SKU: value(row, "SKU"), 品名: value(row, "品名"), 仓库: value(row, "仓库"), 库位: value(row, "库位"), 来源单据: value(row, "来源单据"), 关联PO: value(row, "关联PO"), 关联GRN: value(row, "关联GRN"), 关联退货: value(row, "关联退货"), 关联销售订单: value(row, "关联销售订单"), 入库: quantityIn ?? value(row, "入库"), 出库: quantityOut ?? value(row, "出库"), 调整: adjustment, 单位: value(row, "单位"), 状态: value(row, "状态"), 负责人: value(row, "负责人"), 原因: value(row, "原因"), 库存影响: value(row, "库存影响"), 关联证据: value(row, "关联证据") },
         errors,
         warnings,
       };

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -14,11 +14,12 @@ import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, Card, Chip, KpiCard, Modal, SectionHeader } from "../../components/ui";
-import { FORECAST_SKUS, inventoryItems, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
+import { FORECAST_SKUS, INVENTORY_MOVEMENT_LEDGER, inventoryItems, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
 import { inventoryPlan } from "../../domain/inventory/planning";
+import { isInventoryMovementException, netInventoryImpact } from "../../domain/inventory/movements";
 import { isStatementException, statementToCockpitSignal } from "../../domain/procurement/reconciliation";
 import { calculateReturnFinancialImpact, isReturnException, returnToCockpitSignal } from "../../domain/procurement/returns";
-import type { PurchaseOrder, PurchaseRequest, PurchaseReturn, ReceivingDoc, RfqRecord, SupplierInvoice, SupplierReconciliationStatement } from "../../types/scm";
+import type { InventoryMovement, PurchaseOrder, PurchaseRequest, PurchaseReturn, ReceivingDoc, RfqRecord, SupplierInvoice, SupplierReconciliationStatement } from "../../types/scm";
 
 type SupplierPerformance = typeof PORTAL_SUPPLIERS[number] & {
   category?: string;
@@ -194,6 +195,36 @@ function buildInventoryEvidence(item: ReturnType<typeof overviewReplenishmentAct
     ],
     confidence: "88% · 高",
     suggestedAction: item.plan.needsSourcing ? "打开 RFQ 或采购申请，先补齐报价依据。" : "打开高级计划复核，必要时生成补货 PR。",
+  };
+}
+
+function buildInventoryMovementEvidence(item: InventoryMovement): EvidenceDetail {
+  const net = netInventoryImpact(item);
+  return {
+    id: `inventory-movement-${item.movementId}`,
+    title: "库存移动异常证据",
+    priority: item.status === "异常处理" || item.movementType === "CycleCountVariance" ? "高" : "中",
+    object: item.movementId,
+    module: "库存事务流水",
+    moduleId: "inventory",
+    businessReason: "库存事务流水用于追踪采购入库、采购退货、销售出库、调拨、调整和盘点差异形成的库存影响，需要及时关闭待复核异常。",
+    evidence: [
+      { label: "移动单号", value: item.movementId },
+      { label: "类型", value: item.movementLabel },
+      { label: "SKU", value: item.sku },
+      { label: "品名", value: item.itemName },
+      { label: "仓库/库位", value: `${item.warehouse} / ${item.location}` },
+      { label: "来源单据", value: item.sourceDocument },
+      { label: "关联 PO", value: item.relatedPo || "—" },
+      { label: "关联 GRN", value: item.relatedGrn || "—" },
+      { label: "入库数量", value: `${item.quantityIn.toLocaleString()} ${item.unit}` },
+      { label: "出库数量", value: `${item.quantityOut.toLocaleString()} ${item.unit}` },
+      { label: "调整数量", value: `${item.adjustmentQty.toLocaleString()} ${item.unit}` },
+      { label: "期末影响", value: `${net > 0 ? "+" : ""}${net.toLocaleString()} ${item.unit}` },
+      { label: "状态", value: item.status },
+    ],
+    confidence: "86% · 规则引擎",
+    suggestedAction: "打开库存事务流水，复核来源单据、数量影响和关联证据后关闭异常。",
   };
 }
 
@@ -419,6 +450,9 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   const reconciliationRisks = SUPPLIER_RECONCILIATION_STATEMENTS
     .filter(isStatementException)
     .sort((a, b) => (b.totalVarianceAmount + b.overdueAmount + b.openBalance * 0.1) - (a.totalVarianceAmount + a.overdueAmount + a.openBalance * 0.1));
+  const inventoryMovementRisks = INVENTORY_MOVEMENT_LEDGER
+    .filter(isInventoryMovementException)
+    .sort((a, b) => Math.abs(netInventoryImpact(b)) - Math.abs(netInventoryImpact(a)));
   const mrpExceptions = inventoryRiskItems.filter((item) => item.plan.suggestedQty > 0).length;
   const openPrValue = pendingRequests.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const openPoValue = dashboardOrders
@@ -466,6 +500,16 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       moduleId: "receiving",
       cta: "处理 GRN",
       detail: buildReceivingEvidence(item),
+    })),
+    ...inventoryMovementRisks.slice(0, 1).map((item) => ({
+      priority: item.status === "异常处理" || item.movementType === "CycleCountVariance" ? "高" as const : "中" as const,
+      title: item.movementType === "CycleCountVariance" ? "盘点差异待关闭" : "待复核库存移动",
+      object: item.movementId,
+      evidence: `${item.movementLabel} · ${item.sourceDocument} · 期末影响 ${netInventoryImpact(item).toLocaleString()} ${item.unit}`,
+      module: "库存事务流水",
+      moduleId: "inventory",
+      cta: "查看流水",
+      detail: buildInventoryMovementEvidence(item),
     })),
     ...invoiceRisks.slice(0, 1).map((item) => ({
       priority: item.varianceType === "重复发票" || item.varianceType === "缺少收货" ? "高" as const : "中" as const,

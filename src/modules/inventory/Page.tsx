@@ -9,16 +9,16 @@ import {
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
-import { toNumber } from "../../domain/purchasing/helpers";
 import { inventoryPlan } from "../../domain/inventory/planning";
 import { inventoryPurchaseRequestPayload } from "../../domain/inventory/purchase-request";
 import type { PurchaseRequest } from "../../types/scm";
 import {
-  COUNT_PLANS, inventoryItems, LOTS, MOVEMENTS, SERIALS, SKU_CATALOG, supplierData, TRANSFERS, VARIANCES,
+  COUNT_PLANS, INVENTORY_MOVEMENT_LEDGER, inventoryItems, LOTS, SERIALS, SKU_CATALOG, supplierData, TRANSFERS, VARIANCES,
 } from "../../data/demo-data";
 import {
   A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, Modal, SectionHeader, SegmentedControl, SubTabs,
 } from "../../components/ui";
+import InventoryMovementLedger from "./InventoryMovementLedger";
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
@@ -920,153 +920,6 @@ function InventoryABCXYZ() {
   );
 }
 
-// ─── Inventory · Stock Movement History ────────────────────────────────────
-type InventoryMovement = typeof MOVEMENTS[number] & Record<string, any> & {
-  id?: string;
-  movementId?: string;
-  sourceType?: string;
-  sourceId?: string;
-  grnId?: string;
-  poId?: string;
-  poLineId?: string;
-  warehouseId?: string;
-  quantity?: number;
-  timestamp?: string;
-  po?: string;
-  operator?: string;
-  status?: string;
-};
-
-function InventoryMovements() {
-  const [typeFilter, setTypeFilter] = useState<"全部" | "入库" | "出库" | "调拨" | "调整" | "退货" | "冻结">("全部");
-  const [apiMovements, setApiMovements] = useState<InventoryMovement[]>([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    apiJson<InventoryMovement[]>("/api/inventory-movements")
-      .then((data) => {
-        if (!alive) return;
-        setApiMovements(data.map((item) => ({
-          ...item,
-          id: item.id || item.movementId,
-          ts: item.ts || item.timestamp || "",
-          type: item.type || (toNumber(item.quantity, toNumber(item.qty)) >= 0 ? "入库" : "出库"),
-          qty: toNumber(item.qty, toNumber(item.quantity)),
-          ref: item.ref || item.sourceId || item.grnId || item.movementId || "—",
-          from: item.from || (item.sourceType === "GRN" ? "供应商" : "—"),
-          to: item.to || item.warehouseId || "MAIN",
-          op: item.op || item.operator || "系统",
-        })));
-      })
-      .catch(() => toast.error("库存流水服务暂不可用", { description: "已显示当前库存流水快照" }))
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
-  const sourceList: InventoryMovement[] = [...apiMovements, ...(MOVEMENTS as InventoryMovement[])];
-  const list = typeFilter === "全部" ? sourceList : sourceList.filter((m) => m.type === typeFilter);
-  const inboundQty = list.filter((m) => m.type === "入库").reduce((sum, item) => sum + Math.max(0, toNumber(item.qty, toNumber(item.quantity))), 0);
-  const outboundQty = list.filter((m) => m.type === "出库").reduce((sum, item) => sum + Math.abs(Math.min(0, toNumber(item.qty, toNumber(item.quantity)))), 0);
-  const apiCount = apiMovements.length;
-
-  const typeColor = (t: string) => ({
-    入库: A.green, 出库: A.blue, 调拨: A.purple, 调整: A.orange, 退货: A.teal, 冻结: A.red,
-  } as Record<string, string>)[t];
-  const formatMovementTime = (value: string) => {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  };
-
-  function exportMovementsCsv() {
-    exportCsv("inventory-movements-export.csv", list.map((movement) => ({
-      "事务号": movement.movementId || movement.id || "legacy",
-      "时间": formatMovementTime(movement.timestamp || movement.ts),
-      "类型": movement.type,
-      "SKU": movement.sku,
-      "数量": toNumber(movement.qty, toNumber(movement.quantity)),
-      "仓库": movement.warehouseId || movement.to || "—",
-      "来源单据": movement.sourceId || movement.grnId || movement.ref,
-      "PO": movement.poId || movement.po || "",
-      "PO Line": movement.poLineId || "",
-      "操作人": movement.op,
-      "状态": movement.status || "",
-      "事由": movement.reason || "",
-    })));
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-4 gap-3">
-        {[
-          { l: "今日入库",  v: String(inboundQty || 748), d: apiCount ? `${apiCount} 条 API 流水` : "+12% vs 昨", c: A.green  },
-          { l: "今日出库",  v: String(outboundQty || 424), d: loading ? "加载中" : "+8% vs 昨",  c: A.blue   },
-          { l: "今日调拨",  v: String(list.filter((m) => m.type === "调拨").length), d: "调拨笔数", c: A.purple },
-          { l: "异常调整",  v: String(list.filter((m) => m.type === "调整" || m.type === "冻结").length), d: "调整/冻结", c: A.orange },
-        ].map((m) => (
-          <Card key={m.l} className="p-5">
-            <div className="text-xs" style={{ color: A.sub }}>{m.l}</div>
-            <div className="text-2xl font-semibold tracking-tight mt-1" style={{ color: m.c }}>{m.v}</div>
-            <div className="text-[11px] mt-1" style={{ color: A.gray2 }}>{m.d}</div>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <div className="flex items-center px-5 py-3.5 gap-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>库存事务流水 (Stock Ledger)</h2>
-          <SegmentedControl
-            options={["全部", "入库", "出库", "调拨", "调整", "退货", "冻结"].map((s) => ({ label: s, value: s }))}
-            value={typeFilter} onChange={(v) => setTypeFilter(v as any)} />
-          <button onClick={exportMovementsCsv}
-            className="ml-auto text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.label }}>
-            <FileSpreadsheet size={11} className="inline mr-1" /> 导出 CSV
-          </button>
-        </div>
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["时间", "Movement", "类型", "SKU", "数量", "来源凭证", "PO / Line", "库位", "操作员", "事由"].map((h) => (
-                <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((m, i) => (
-              <tr key={i} className="hover:bg-blue-50/40 transition-colors"
-                style={{ borderBottom: i < list.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className="px-4 py-3 tabular-nums" style={{ color: A.sub }}>{formatMovementTime(m.timestamp || m.ts)}</td>
-                <td className="px-4 py-3 tabular-nums" style={{ color: A.blue }}>
-                  <div className="max-w-28 truncate">{m.movementId || m.id || "legacy"}</div>
-                  <div className="text-[9px]" style={{ color: A.gray2 }}>{m.sourceType || m.type}</div>
-                </td>
-                <td className="px-4 py-3"><Chip label={m.type} color={typeColor(m.type)} bg={`${typeColor(m.type)}18`} /></td>
-                <td className="px-4 py-3" style={{ color: A.blue }}>{m.sku}</td>
-                <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: toNumber(m.qty, toNumber(m.quantity)) > 0 ? A.green : toNumber(m.qty, toNumber(m.quantity)) < 0 ? A.red : A.gray2 }}>
-                  {toNumber(m.qty, toNumber(m.quantity)) > 0 ? "+" : ""}{toNumber(m.qty, toNumber(m.quantity)) || "—"}
-                </td>
-                <td className="px-4 py-3" style={{ color: A.label }}>
-                  <div className="font-medium">{m.sourceId || m.grnId || m.ref}</div>
-                  <div className="text-[9px]" style={{ color: A.gray2 }}>
-                    <span>{m.from}</span>{" "}<ArrowRight size={9} className="inline" style={{ color: A.gray3 }} />{" "}<span>{m.to}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 tabular-nums" style={{ color: A.indigo }}>
-                  <div>{m.poId || m.po || "—"}</div>
-                  <div className="text-[9px] max-w-28 truncate" style={{ color: A.gray2 }}>{m.poLineId || "—"}</div>
-                </td>
-                <td className="px-4 py-3" style={{ color: A.label }}>{m.warehouseId || m.to || "—"}</td>
-                <td className="px-4 py-3" style={{ color: A.label }}>{m.op}</td>
-                <td className="px-4 py-3" style={{ color: A.sub }}>{m.reason}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-}
-
 // ─── Inventory · Warehouse Map (bin heatmap) ──────────────────────────────
 function InventoryWarehouseMap() {
   // Synthetic 6×8 bin grid with fill %
@@ -1168,7 +1021,7 @@ export default function InventoryPage() {
     { id: "transfer",  label: "库间调拨",    icon: ArrowLeftRight,  count: TRANSFERS.length },
     { id: "count",     label: "循环盘点",    icon: ClipboardCheck,  count: COUNT_PLANS.length },
     { id: "abcxyz",    label: "ABC/XYZ 分类", icon: Boxes,           count: "10" },
-    { id: "movements", label: "事务流水",    icon: History,         count: MOVEMENTS.length },
+    { id: "movements", label: "事务流水",    icon: History,         count: INVENTORY_MOVEMENT_LEDGER.length },
     { id: "bins",      label: "库位地图",    icon: Grid3x3,         count: "60" },
   ] as const;
 
@@ -1180,7 +1033,7 @@ export default function InventoryPage() {
       {tab === "transfer"  && <InventoryTransfers />}
       {tab === "count"     && <InventoryCycleCount />}
       {tab === "abcxyz"    && <InventoryABCXYZ />}
-      {tab === "movements" && <InventoryMovements />}
+      {tab === "movements" && <InventoryMovementLedger />}
       {tab === "bins"      && <InventoryWarehouseMap />}
     </div>
   );
