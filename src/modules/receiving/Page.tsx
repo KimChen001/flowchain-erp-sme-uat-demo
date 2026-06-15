@@ -48,11 +48,12 @@ function RecvStatusPill({ status }: { status: string }) {
 function receivingTimeline(grn: ReceivingDoc): TimelineStep[] {
   const statusOrder = ["待收货", "已签收", "质检中", "已入库"] as const;
   const currentIndex = Math.max(0, statusOrder.indexOf(grn.status as any));
+  const hasRejected = Number(grn.failed || 0) > 0;
   return [
     { label: "待收货", status: currentIndex > 0 || grn.status === "异常处理" ? "done" : "current", helper: grn.arrived },
-    { label: "质检中", status: grn.status === "质检中" ? "current" : currentIndex > 2 || grn.status === "异常处理" ? "done" : "pending", helper: `${grn.passed}/${grn.failed}` },
-    { label: "已收货", status: grn.status === "已入库" ? "done" : grn.status === "异常处理" ? "warning" : "pending", helper: grn.warehouse },
-    { label: "异常处理", status: grn.status === "异常处理" ? "blocked" : grn.failed > 0 ? "warning" : "pending", helper: grn.failed > 0 ? `拒收 ${grn.failed}` : "无异常" },
+    { label: "质检中", status: grn.status === "质检中" ? "current" : currentIndex > 2 || grn.status === "异常处理" ? "done" : "pending", helper: `合格 ${grn.passed} / 拒收 ${grn.failed}` },
+    { label: "已签收 / 已入库", status: grn.status === "已入库" ? "done" : grn.status === "异常处理" ? "warning" : currentIndex > 0 ? "current" : "pending", helper: grn.inventoryApplied ? "已应用库存" : grn.warehouse },
+    { label: "异常处理", status: grn.status === "异常处理" ? "blocked" : hasRejected ? "warning" : "pending", helper: hasRejected ? `拒收 ${grn.failed}` : "无异常" },
     { label: "已关闭", status: grn.status === "已入库" && grn.inventoryApplied ? "done" : "pending", helper: grn.postedAt ? new Date(grn.postedAt).toLocaleString("zh-CN") : "待关闭" },
   ];
 }
@@ -67,6 +68,8 @@ function exportReceivingDetail(grn: ReceivingDoc) {
     ["仓库", grn.warehouse],
     ["状态", grn.status],
     ["负责人", grn.receiver],
+    ["关联发票", SUPPLIER_INVOICES.filter((invoice) => invoice.relatedGrn === grn.grn || invoice.relatedPo === grn.po).map((invoice) => invoice.invoiceNumber).join(", ")],
+    ["拒收数量", grn.failed],
     ["库存移动", grn.inventoryMovementIds?.join(", ") || ""],
   ].map(([field, value]) => ({ section: "header", field, value }));
   const lineRows = lines.map((line) => ({
@@ -824,11 +827,12 @@ function ReceivingOps() {
               <DocumentEvidencePanel
                 linkedDocuments={getGrnLinkedDocuments(selectedGrn, purchaseOrders, SUPPLIER_INVOICES)}
                 provenance="receivingDocs · demo-data / API fallback"
-                notes={selectedGrn.status === "异常处理" ? "异常收货需要退货/冲销流程，本页不直接修改库存。" : "收货明细用于库存可用量和三单匹配演示。"}
+                notes={selectedGrn.status === "异常处理" ? "异常收货需要退货/冲销流程，本页不直接修改库存，并会影响供应商发票匹配。" : "收货明细用于库存可用量和三单匹配演示。"}
                 evidence={[
                   { label: "关联 PO", value: selectedGrn.po },
                   { label: "关联发票", value: SUPPLIER_INVOICES.filter((invoice) => invoice.relatedGrn === selectedGrn.grn || invoice.relatedPo === selectedGrn.po).length },
                   { label: "三单匹配", value: SUPPLIER_INVOICES.some((invoice) => invoice.relatedGrn === selectedGrn.grn && invoice.varianceType !== "无差异") ? "存在差异" : "待复核", tone: SUPPLIER_INVOICES.some((invoice) => invoice.relatedGrn === selectedGrn.grn && invoice.varianceType !== "无差异") ? "danger" : "info" },
+                  { label: "发票影响", value: rejectedQty > 0 ? "拒收数量需 AP 复核" : "无拒收影响", tone: rejectedQty > 0 ? "warning" : "success" },
                   { label: "仓库", value: selectedGrn.warehouse || "—" },
                   { label: "合格率", value: `${receivedQty ? Math.round((acceptedQty / receivedQty) * 100) : 0}%`, tone: rejectedQty > 0 ? "warning" : "success" },
                   { label: "库存应用", value: selectedGrn.inventoryApplied ? "已应用" : "未应用", tone: selectedGrn.inventoryApplied ? "success" : "warning" },

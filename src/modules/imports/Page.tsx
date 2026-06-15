@@ -135,17 +135,17 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     id: "supplierInvoices",
     label: "供应商发票导入",
     module: "采购",
-    description: "上传 PO 支持的供应商发票，用于演示发票台账与三单匹配预检。",
+    description: "上传供应商发票，用于演示发票台账、PO/GRN 关联与三单匹配预检。",
     templateFilename: "supplier-invoices-template.csv",
-    requiredFields: ["发票号码", "供应商", "PO", "发票日期", "到期日", "未税金额", "税额", "总额", "付款条款"],
-    optionalFields: ["GRN", "币种", "运费", "来源", "备注"],
+    requiredFields: ["发票号码", "供应商", "PO", "发票日期", "接收日期", "到期日", "未税金额", "税额", "总额", "付款条款"],
+    optionalFields: ["GRN", "币种", "运费", "来源", "匹配状态", "发票状态", "差异类型", "差异金额", "AP负责人", "已过账应付", "已付款", "备注"],
     sampleRows: [
-      { 发票号码: "INV-IMPORT-001", 供应商: "深圳新元电气", PO: "PO-2026-1283", 发票日期: "2026-05-20", 到期日: "2026-06-19", 未税金额: 118000, 税额: 15340, 总额: 133340, 付款条款: "Net 30", GRN: "GRN-202605-0422", 币种: "CNY", 运费: 0, 来源: "supplier-portal", 备注: "" },
-      { 发票号码: "INV-IMPORT-002", 供应商: "江苏铝合金集团", PO: "PO-2026-1285", 发票日期: "2026-05-21", 到期日: "2026-07-05", 未税金额: 198000, 税额: 25740, 总额: 223740, 付款条款: "Net 45", GRN: "", 币种: "CNY", 运费: 0, 来源: "email-upload", 备注: "待收货匹配" },
+      { 发票号码: "INV-IMPORT-001", 供应商: "深圳新元电气", PO: "PO-2026-1283", GRN: "GRN-202605-0422", 发票日期: "2026-05-20", 接收日期: "2026-05-20", 到期日: "2026-06-19", 币种: "CNY", 未税金额: 118000, 税额: 15340, 运费: 0, 总额: 133340, 付款条款: "Net 30", 来源: "supplier-portal", 匹配状态: "未匹配", 发票状态: "待匹配", 差异类型: "无差异", 差异金额: 0, AP负责人: "赵敏", 已过账应付: "否", 已付款: "否", 备注: "" },
+      { 发票号码: "INV-IMPORT-002", 供应商: "江苏铝合金集团", PO: "PO-2026-1285", GRN: "", 发票日期: "2026-05-21", 接收日期: "2026-05-21", 到期日: "2026-07-05", 币种: "CNY", 未税金额: 198000, 税额: 25740, 运费: 0, 总额: 223740, 付款条款: "Net 45", 来源: "email-upload", 匹配状态: "人工复核", 发票状态: "待匹配", 差异类型: "缺少收货", 差异金额: 223740, AP负责人: "赵敏", 已过账应付: "否", 已付款: "否", 备注: "待收货匹配" },
     ],
     notes: ["适用于供应商门户、邮件上传或 EDI 样例发票。", "当前只做 CSV 校验和演示暂存，不创建 AP 过账或付款。"],
     validateRow: (row, rows) => {
-      const errors = baseErrors(row, ["发票号码", "供应商", "PO", "发票日期", "到期日", "未税金额", "税额", "总额", "付款条款"]);
+      const errors = baseErrors(row, ["发票号码", "供应商", "PO", "发票日期", "接收日期", "到期日", "未税金额", "税额", "总额", "付款条款"]);
       const subtotal = parseNonNegativeNumber(value(row, "未税金额"));
       const tax = parseNonNegativeNumber(value(row, "税额"));
       const freight = value(row, "运费") ? parseNonNegativeNumber(value(row, "运费")) : 0;
@@ -155,6 +155,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       if (freight == null) errors.push("运费必须为非负数");
       if (total == null) errors.push("总额必须为非负数");
       if (!parseDateLike(value(row, "发票日期"))) errors.push("发票日期格式不正确");
+      if (!parseDateLike(value(row, "接收日期"))) errors.push("接收日期格式不正确");
       if (!parseDateLike(value(row, "到期日"))) errors.push("到期日格式不正确");
       const warnings = duplicateWarnings(rows, row, (item) => `${value(item, "供应商")}::${value(item, "发票号码")}`, "存在重复供应商+发票号码");
       if (typeof subtotal === "number" && typeof tax === "number" && typeof freight === "number" && typeof total === "number") {
@@ -168,14 +169,22 @@ const IMPORT_CONFIGS: ImportConfig[] = [
           PO: value(row, "PO"),
           GRN: value(row, "GRN"),
           发票日期: parseDateLike(value(row, "发票日期")) || value(row, "发票日期"),
+          接收日期: parseDateLike(value(row, "接收日期")) || value(row, "接收日期"),
           到期日: parseDateLike(value(row, "到期日")) || value(row, "到期日"),
+          币种: value(row, "币种") || "CNY",
           未税金额: subtotal ?? value(row, "未税金额"),
           税额: tax ?? value(row, "税额"),
           运费: freight ?? value(row, "运费"),
           总额: total ?? value(row, "总额"),
           付款条款: value(row, "付款条款"),
-          币种: value(row, "币种") || "CNY",
           来源: value(row, "来源") || "manual-entry",
+          匹配状态: value(row, "匹配状态") || "未匹配",
+          发票状态: value(row, "发票状态") || "待匹配",
+          差异类型: value(row, "差异类型") || "无差异",
+          差异金额: parseOptionalNonNegative(row, "差异金额", errors),
+          AP负责人: value(row, "AP负责人"),
+          已过账应付: value(row, "已过账应付") || "否",
+          已付款: value(row, "已付款") || "否",
           备注: value(row, "备注"),
         },
         errors,

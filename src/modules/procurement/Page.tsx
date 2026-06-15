@@ -218,15 +218,16 @@ function invoiceSourceLabel(source: SupplierInvoice["source"]) {
 }
 
 function invoiceTimeline(invoice: SupplierInvoice): TimelineStep[] {
-  const blocked = invoice.status === "已驳回" || invoice.varianceType === "重复发票";
+  const blocked = invoice.status === "已驳回" || invoice.duplicateRisk || invoice.varianceType === "重复发票";
   const hasVariance = invoice.status === "存在差异" || invoice.matchStatus === "差异待处理" || invoice.varianceType !== "无差异";
   const isPaid = invoice.status === "已付款" || invoice.paid;
   const isPosted = invoice.status === "已过账应付" || invoice.postedToAp || isPaid;
   const isApproved = invoice.status === "已审批" || isPosted;
   const isMatched = invoice.status === "已匹配" || invoice.matchStatus === "自动匹配" || invoice.matchStatus === "已解决" || isApproved;
+  const wasReceived = invoice.status !== "草稿";
   return [
-    { label: "已接收", status: "done", helper: invoice.receivedDate },
-    { label: "待匹配", status: isMatched || hasVariance ? "done" : "current", helper: invoice.matchStatus },
+    { label: "已接收", status: wasReceived ? "done" : "pending", helper: invoice.receivedDate },
+    { label: "待匹配", status: blocked ? "blocked" : isMatched || hasVariance ? "done" : "current", helper: invoice.matchStatus },
     { label: hasVariance ? "存在差异" : "已匹配", status: blocked ? "blocked" : hasVariance ? "warning" : isMatched ? "done" : "pending", helper: invoice.varianceType },
     { label: "已审批", status: isApproved ? "done" : blocked || hasVariance ? "pending" : "current", helper: invoice.approvalStatus || "等待 AP 审批" },
     { label: "已过账应付", status: isPosted ? "done" : "pending", helper: invoice.postedToAp ? "已进入应付" : "未过账" },
@@ -328,11 +329,15 @@ function SupplierInvoiceRegister() {
       ["发票状态", invoice.status],
       ["审批状态", invoice.approvalStatus || ""],
       ["重复风险", invoice.duplicateRisk ? "是" : "否"],
+      ["差异类型", invoice.varianceType],
       ["未税金额", invoice.subtotal],
       ["税额", invoice.tax],
       ["运费", invoice.freight || 0],
       ["发票总额", invoice.total],
       ["差异金额", invoice.varianceAmount],
+      ["已过账应付", invoice.postedToAp ? "是" : "否"],
+      ["已付款", invoice.paid ? "是" : "否"],
+      ["备注", invoice.notes || ""],
     ].map(([field, value]) => ({ section: "header", field, value }));
     const lineRows = invoice.lines.map((line) => ({
       section: "line",
@@ -374,7 +379,7 @@ function SupplierInvoiceRegister() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商发票台账</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              PO 支持发票、发票行、三单匹配、审批和过账应付的演示状态，不写入真实财务系统。
+              管理供应商发票、发票行、三单匹配、审批和过账应付的演示状态，不写入真实财务系统。
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -514,7 +519,7 @@ function SupplierInvoiceRegister() {
               linkedDocuments={getInvoiceLinkedDocuments(selectedInvoice, purchaseOrders, receivingDocs)}
               confidence={`${selectedInvoice.confidence || 0}%`}
               provenance={invoiceSourceLabel(selectedInvoice.source)}
-              notes={selectedInvoice.notes || getInvoiceVarianceSummary(selectedInvoice)}
+              notes={selectedInvoice.notes || `${getInvoiceVarianceSummary(selectedInvoice)} 三单匹配为演示规则，用于比较 PO、GRN 与供应商发票的金额、数量与状态差异。`}
               evidence={[
                 { label: "PO 金额", value: fmt(selectedSnapshot.poAmount) },
                 { label: "GRN 金额", value: fmt(selectedSnapshot.grnAmount) },
@@ -598,7 +603,7 @@ function PurchasingMatch() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>三单匹配 (PO · GRN · Supplier Invoice)</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              三单匹配用于比较采购订单、收货单和供应商发票，识别价格、数量、税额和收货差异。
+              三单匹配为演示规则，用于比较采购订单、收货单和供应商发票的金额、数量与状态差异。
             </p>
           </div>
           <button onClick={exportCsv}
@@ -667,7 +672,7 @@ function PurchasingMatch() {
                 {selected.varianceType} · {selected.matchStatus}
               </div>
               <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>
-                PO = ordered，GRN = received，Invoice = billed。当前差异金额 {fmt(selected.varianceAmount)}，请在供应商发票台账中查看行项目证据。
+                PO = ordered，GRN = received，Invoice = billed。当前差异金额 {fmt(selected.varianceAmount)}，请在供应商发票台账中查看行项目证据；本结果仅为演示匹配预检。
               </div>
             </div>
           </div>
@@ -711,7 +716,7 @@ function PurchasingPayment() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="应付总额"   value={`¥${(totalDue / 1e4).toFixed(0)}万`}    sub="未付清"                            icon={Wallet}      color={A.blue} />
+        <KpiCard label="应付总额"   value={`¥${(totalDue / 1e4).toFixed(0)}万`}    sub="来自已审批/过账发票"                icon={Wallet}      color={A.blue} />
         <KpiCard label="逾期金额"   value={`¥${(overdue / 1e4).toFixed(1)}万`}     sub={`${payables.filter(p => p.status === "逾期").length} 笔逾期`} icon={AlertOctagon} color={A.red} />
         <KpiCard label="7 天到期"   value="¥146万"                                  sub="3 笔"                              icon={Clock}       color={A.orange} />
         <KpiCard label="DPO"        value="48.2 天"                                 sub="应付账款周转天数" delta="+2.1d"    icon={CreditCard}  color={A.purple} />
@@ -734,7 +739,7 @@ function PurchasingPayment() {
         <table className="w-full text-xs">
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["AP 编号", "供应商", "发票", "金额", "条款", "到期日", "账龄", "状态", "操作"].map(h => (
+              {["AP 编号", "供应商", "发票", "金额", "付款条款", "到期日", "账龄", "状态", "操作"].map(h => (
                 <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>

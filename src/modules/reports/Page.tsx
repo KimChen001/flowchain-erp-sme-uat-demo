@@ -43,6 +43,7 @@ import { poTotals } from "../../domain/purchasing/helpers";
 import {
   getInvoiceVarianceSummary,
   invoiceToMatchQueueItem,
+  invoiceToPayable,
   isInvoicePayableReady,
   supplierInvoiceExportRows,
 } from "../../domain/procurement/invoice-matching";
@@ -391,7 +392,7 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       id: "ap-ready-invoices",
       name: "AP Ready / Posted Invoices Report",
       module: "采购",
-      description: "已审批、已过账或已付款的应付发票清单，用于演示 AP posting、payables 和 payment readiness。",
+      description: "已审批、已过账或已付款的供应商发票清单，用于演示过账应付、AP 台账和付款准备。",
       source: "SUPPLIER_INVOICES · demo-data.ts",
       sourceKind: "Demo",
       updated: "Demo sample · 2026",
@@ -432,13 +433,20 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
       id: "payables",
       name: "Payables Report",
       module: "采购",
-      description: "应付账款、账期、到期日、账龄和付款状态。",
-      source: "PAYABLES · demo-data.ts",
+      description: "应付账款来自已审批/已过账供应商发票，并合并样本 AP 余额、账期、到期日、账龄和付款状态。",
+      source: "SUPPLIER_INVOICES + PAYABLES · demo-data.ts",
       sourceKind: "Demo",
       updated: "Demo sample · 2026",
       filename: "procurement-payables-export.csv",
       sourceModule: "procurement",
-      rows: () => PAYABLES.map((row) => ({ 应付编号: row.id, 供应商: row.supplier, 发票: row.invoice, 金额: row.amount, 条款: row.terms, 到期日: row.due, 账龄天数: row.aging, 状态: row.status })),
+      rows: () => {
+        const invoicePayables = SUPPLIER_INVOICES.filter(isInvoicePayableReady).map(invoiceToPayable);
+        const merged = [
+          ...invoicePayables,
+          ...PAYABLES.filter((row) => !invoicePayables.some((invoiceItem) => invoiceItem.invoice === row.invoice)),
+        ];
+        return merged.map((row) => ({ 应付编号: row.id, 供应商: row.supplier, 发票: row.invoice, 金额: row.amount, 付款条款: row.terms, 到期日: row.due, 账龄天数: row.aging, 状态: row.status }));
+      },
     },
     {
       id: "supplier-performance",

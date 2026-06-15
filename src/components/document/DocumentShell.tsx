@@ -79,7 +79,7 @@ export function DocumentShell({
   const style = documentToneStyle(tone || statusTone(status));
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             {moduleLabel && <Chip label={String(moduleLabel)} color={A.blue} bg="#f0f6ff" />}
@@ -92,7 +92,7 @@ export function DocumentShell({
             {subtitle}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
           {actions}
           {onClose && (
             <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors" style={{ color: A.gray1 }}>
@@ -107,9 +107,14 @@ export function DocumentShell({
 }
 
 export function DocumentHeader({ fields, columns = 4 }: { fields: DocumentField[]; columns?: 2 | 3 | 4 }) {
+  const gridClass = columns === 2
+    ? "grid-cols-1 sm:grid-cols-2"
+    : columns === 3
+      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
   return (
     <Card className="p-4">
-      <div className={`grid gap-3 ${columns === 2 ? "grid-cols-2" : columns === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
+      <div className={`grid gap-3 ${gridClass}`}>
         {fields.map((field) => {
           const style = documentToneStyle(field.tone);
           return (
@@ -139,7 +144,7 @@ export function DocumentLinesTable<T extends Record<string, unknown>>({
   return (
     <Card>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="min-w-full text-xs">
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {columns.map((column) => (
@@ -171,9 +176,14 @@ export function DocumentLinesTable<T extends Record<string, unknown>>({
 }
 
 export function DocumentTotals({ totals, columns = 4 }: { totals: DocumentTotal[]; columns?: 3 | 4 | 5 }) {
+  const gridClass = columns === 3
+    ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+    : columns === 5
+      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
   return (
     <Card className="p-4">
-      <div className={`grid gap-2 ${columns === 3 ? "grid-cols-3" : columns === 5 ? "grid-cols-5" : "grid-cols-4"}`}>
+      <div className={`grid gap-2 ${gridClass}`}>
         {totals.map((total) => {
           const style = documentToneStyle(total.tone);
           return (
@@ -198,11 +208,11 @@ export function DocumentStatusTimeline({ steps }: { steps: TimelineStep[] }) {
   };
   return (
     <Card className="p-4">
-      <div className="flex items-start overflow-x-auto pb-1">
+      <div className="flex items-start overflow-x-auto pb-1 max-w-full">
         {steps.map((step, index) => {
           const color = colorFor(step.status);
           return (
-            <div key={`${step.label}-${index}`} className="flex items-start min-w-[116px]">
+            <div key={`${step.label}-${index}`} className="flex items-start min-w-[104px] sm:min-w-[116px]">
               <div className="flex flex-col items-center">
                 <div className="w-4 h-4 rounded-full" style={{ background: color, boxShadow: `0 0 0 3px ${color}18` }} />
                 {index < steps.length - 1 && <div className="h-px w-20 mt-2" style={{ background: color }} />}
@@ -236,7 +246,7 @@ export function DocumentEvidencePanel({
 }) {
   return (
     <Card className="p-4">
-      <div className="grid grid-cols-[0.9fr_1.1fr] gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-4">
         <div>
           <div className="text-xs font-semibold mb-2" style={{ color: A.label }}>关联单据</div>
           <div className="space-y-1.5">
@@ -258,7 +268,7 @@ export function DocumentEvidencePanel({
         </div>
         <div>
           <div className="text-xs font-semibold mb-2" style={{ color: A.label }}>证据 / 来源</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {evidence.map((row) => {
               const style = documentToneStyle(row.tone);
               return (

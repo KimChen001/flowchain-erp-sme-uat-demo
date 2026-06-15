@@ -25,11 +25,12 @@ import {
 function prTimeline(pr: PurchaseRequest): TimelineStep[] {
   const rejected = pr.status === "已驳回" || pr.status === "已取消";
   const approved = pr.status === "已批准" || pr.status === "已转PO";
+  const linkedPo = pr.linkedPo || purchaseOrders.find((order) => order.sourceRequest === pr.pr)?.po;
   return [
     { label: "草稿", status: pr.status === "草稿" ? "current" : "done", helper: pr.created },
     { label: "待审批", status: rejected ? "blocked" : approved ? "done" : pr.status === "待审批" ? "current" : "pending" },
-    { label: "已审批", status: approved ? "done" : rejected ? "blocked" : "pending" },
-    { label: "已转 PO/RFQ", status: pr.status === "已转PO" ? "done" : approved ? "current" : "pending", helper: pr.linkedPo || "等待转单" },
+    { label: "已批准", status: approved ? "done" : rejected ? "blocked" : "pending" },
+    { label: "已转 PO / RFQ", status: pr.status === "已转PO" ? "done" : approved ? "current" : "pending", helper: linkedPo || "等待转单" },
     { label: rejected ? pr.status : "已关闭", status: rejected ? "blocked" : pr.status === "已转PO" ? "done" : "pending" },
   ];
 }
@@ -45,6 +46,8 @@ function exportPurchaseRequestDetail(pr: PurchaseRequest) {
     ["供应商", pr.supplier],
     ["来源", pr.source],
     ["来源SKU", pr.sourceSku],
+    ["后续PO", pr.linkedPo || purchaseOrders.find((order) => order.sourceRequest === pr.pr)?.po || ""],
+    ["来源说明", pr.approvalSnapshot?.summary || pr.reason || ""],
     ["金额", pr.amount],
     ["原因", pr.reason],
   ].map(([field, value]) => ({ section: "header", field, value }));
@@ -310,7 +313,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
   async function approveRequest(pr: string) {
     try {
       await updateRequestStatus(pr, "已批准");
-      toast.success(`${pr} 已批准`, { description: "可转为采购订单继续执行" });
+      toast.success(`${pr} 已批准`, { description: "已完成审批，可转为采购订单继续执行" });
     } catch (error) {
       toast.error("采购申请审批失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
     }
@@ -797,6 +800,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
                 ...(selected.linkedPo ? [{ label: "PO / 采购订单", value: selected.linkedPo, moduleId: "purchasing", tone: "success" as const }] : []),
                 ...purchaseOrders.filter((order) => order.sourceRequest === selected.pr).slice(0, 2).map((order) => ({ label: "PO / 采购订单", value: order.po, moduleId: "purchasing", tone: statusTone(order.status) })),
                 ...(selected.source === "forecast" || selected.source === "mrp-release" ? [{ label: "高级计划", value: selected.source, moduleId: "forecast", tone: "info" as const }] : []),
+                ...(selected.source === "inventory" ? [{ label: "库存补货证据", value: selected.sourceSku || selected.source, moduleId: "inventory", tone: "warning" as const }] : []),
               ]}
               provenance={selected.approvalSnapshot?.source || selected.source}
               notes={selected.reason || selected.approvalSnapshot?.summary}
@@ -805,7 +809,7 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
                 { label: "审批快照", value: selected.approvalSnapshot?.createdAt ? new Date(selected.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—" },
                 { label: "推荐供应商", value: supplierRecommendationResult?.primary?.supplier || selected.supplier || "—" },
                 { label: "推荐评分", value: supplierRecommendationResult?.primary?.score || "—" },
-                { label: "RFQ建议", value: supplierRecommendationResult?.needsRfq ? "建议 RFQ" : "可直接采购", tone: supplierRecommendationResult?.needsRfq ? "warning" : "success" },
+                { label: "RFQ / 计划证据", value: supplierRecommendationResult?.needsRfq ? "建议 RFQ" : selected.forecastBasis ? "已有计划证据" : "可直接采购", tone: supplierRecommendationResult?.needsRfq ? "warning" : "success" },
                 { label: "状态", value: selected.status, tone: statusTone(selected.status) },
               ]}
             />

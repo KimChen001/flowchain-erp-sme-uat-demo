@@ -40,13 +40,14 @@ function poTimeline(po: PurchaseOrder): TimelineStep[] {
   const cancelled = po.status === "已取消" || po.status === "已驳回";
   const statusOrder = ["草稿", "待审批", "已审批", "已发出", "部分到货", "已完成"] as const;
   const currentIndex = Math.max(0, statusOrder.indexOf(po.status as any));
+  const receivedTotal = poTotals(po).totalReceivedQty || Number(po.received || 0);
   return [
     { label: "草稿", status: cancelled ? "done" : currentIndex > 0 ? "done" : "current", helper: po.created },
     { label: "待审批", status: cancelled ? "blocked" : currentIndex > 1 ? "done" : po.status === "待审批" ? "current" : "pending", helper: po.status === "已驳回" ? "已驳回" : "审批队列" },
     { label: "已审批", status: currentIndex > 2 ? "done" : po.status === "已审批" ? "current" : "pending" },
     { label: "已发出", status: currentIndex > 3 ? "done" : po.status === "已发出" ? "current" : "pending", helper: po.eta },
-    { label: "部分到货", status: currentIndex > 4 ? "done" : po.status === "部分到货" ? "warning" : "pending", helper: `${po.received}/${po.items}` },
-    { label: "已完成", status: po.status === "已完成" ? "done" : cancelled ? "blocked" : "pending", helper: cancelled ? po.status : po.paid ? "已付款" : "待下游发票" },
+    { label: "部分到货", status: cancelled ? "pending" : currentIndex > 4 ? "done" : po.status === "部分到货" ? "warning" : receivedTotal > 0 ? "warning" : "pending", helper: `${receivedTotal.toLocaleString()} 已收` },
+    { label: "已完成", status: po.status === "已完成" ? "done" : cancelled ? "blocked" : "pending", helper: cancelled ? po.status : po.paid ? "下游已付款" : "待下游发票/AP" },
   ];
 }
 
@@ -61,10 +62,13 @@ function exportPoDetail(po: PurchaseOrder) {
     ["采购负责人", po.owner],
     ["优先级", po.priority],
     ["状态", po.status],
+    ["付款状态", po.paid ? "已付款" : "未付款"],
     ["来源类型", po.source || "manual"],
     ["来源PR", po.sourceRequest || ""],
     ["来源RFQ", po.sourceRfq || ""],
     ["来源SKU", po.sourceSku || ""],
+    ["关联GRN", receivingDocs.filter((item) => item.po === po.po).map((item) => item.grn).join(", ")],
+    ["关联发票", SUPPLIER_INVOICES.filter((item) => item.relatedPo === po.po).map((item) => item.invoiceNumber).join(", ")],
     ["金额", totals.totalAmount || po.amount],
   ].map(([field, value]) => ({ section: "header", field, value }));
   const lineRows = lines.map((line) => ({
@@ -128,7 +132,7 @@ export default function PurchasingOrdersPage() {
   async function approve(poId: string) {
     try {
       await updatePOStatus(poId, "已审批");
-      toast.success(`${poId} 已批准`, { description: "已写入后端，刷新后仍会保留" });
+      toast.success(`${poId} 已审批`, { description: "已写入后端，刷新后仍会保留" });
     } catch (error) {
       toast.error("采购订单审批失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
     }
@@ -522,7 +526,7 @@ export default function PurchasingOrdersPage() {
                 <button onClick={() => approve(selectedPO.po)}
                   className="flex-1 text-xs py-2 rounded-lg font-medium text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
                   style={{ background: A.green }}>
-                  <Check size={12} /> 批准订单
+                  <Check size={12} /> 审批订单
                 </button>
                 <button onClick={() => reject(selectedPO.po)}
                   className="flex-1 text-xs py-2 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>驳回</button>
