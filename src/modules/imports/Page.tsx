@@ -22,7 +22,7 @@ import {
 } from "../../lib/csv-import";
 import { A, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "openingInventory" | "inventoryMovements" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers";
+type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "openingInventory" | "inventoryMovements" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
 type ValidationResult = {
   rowNumber: number;
@@ -543,6 +543,107 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       if (typeof quality === "number" && quality > 100) errors.push("质量合格率必须在 0-100 之间");
       return {
         normalized: { 供应商编号: value(row, "供应商编号"), 供应商名称: value(row, "供应商名称"), 品类: value(row, "品类"), 联系人: value(row, "联系人"), 联系邮箱: value(row, "联系邮箱"), 评级: value(row, "评级"), 准时率: ontime, 质量合格率: quality, 付款条款: value(row, "付款条款"), 备注: value(row, "备注") },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "itemMaster",
+    label: "物料主数据导入",
+    module: "主数据",
+    description: "校验预览 SKU、物料分类、默认仓库库位、补货参数、管理标识和默认税码。",
+    templateFilename: "item-master-template.csv",
+    requiredFields: ["SKU", "物料名称", "物料分类", "单位", "默认仓库", "默认库位", "默认供应商", "默认税码"],
+    optionalFields: ["规格型号", "安全库存", "最大库存", "ROP", "采购提前期", "批次管理", "序列号管理", "质检要求", "状态"],
+    sampleRows: [
+      { SKU: "SKU-01188", 物料名称: "工业传感器 M12", 物料分类: "电气元件", 规格型号: "M12 / PNP", 单位: "件", 默认仓库: "上海总仓", 默认库位: "D-04-01", 安全库存: 50, 最大库存: 300, ROP: 80, 采购提前期: 14, 批次管理: "是", 序列号管理: "是", 质检要求: "是", 默认供应商: "深圳新元电气", 默认税码: "VAT13-IN", 状态: "启用" },
+    ],
+    notes: ["物料主数据是采购、库存、MRP 和发票税拆分的基础。", "默认税码缺失会影响供应商发票税额拆分复核。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["SKU", "物料名称", "物料分类", "单位", "默认仓库", "默认库位", "默认供应商", "默认税码"]);
+      const safety = parseOptionalNonNegative(row, "安全库存", errors);
+      const max = parseOptionalNonNegative(row, "最大库存", errors);
+      const rop = parseOptionalNonNegative(row, "ROP", errors);
+      const leadTime = value(row, "采购提前期") ? parseInteger(value(row, "采购提前期")) : "";
+      if (value(row, "采购提前期") && (leadTime === "" || Number(leadTime) < 0)) errors.push("采购提前期必须为非负整数");
+      const warnings = duplicateWarnings(rows, row, (item) => value(item, "SKU"), "存在重复 SKU");
+      return {
+        normalized: { SKU: value(row, "SKU"), 物料名称: value(row, "物料名称"), 物料分类: value(row, "物料分类"), 规格型号: value(row, "规格型号"), 单位: value(row, "单位"), 默认仓库: value(row, "默认仓库"), 默认库位: value(row, "默认库位"), 安全库存: safety, 最大库存: max, ROP: rop, 采购提前期: leadTime, 批次管理: value(row, "批次管理") || "否", 序列号管理: value(row, "序列号管理") || "否", 质检要求: value(row, "质检要求") || "否", 默认供应商: value(row, "默认供应商"), 默认税码: value(row, "默认税码"), 状态: value(row, "状态") || "启用" },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "warehouseBins",
+    label: "仓库库位导入",
+    module: "主数据",
+    description: "校验预览仓库、库区、库位、容量、利用率、温控要求和 QA 状态。",
+    templateFilename: "warehouse-bins-template.csv",
+    requiredFields: ["仓库编码", "仓库名称", "库区", "库位", "容量", "负责人"],
+    optionalFields: ["利用率", "温控要求", "QA状态", "可用"],
+    sampleRows: [
+      { 仓库编码: "WH-SH-01", 仓库名称: "上海总仓", 库区: "D 区电气", 库位: "D-04-01", 容量: 300, 利用率: 0.32, 温控要求: "防静电", QA状态: "可用", 可用: "是", 负责人: "陈思远" },
+    ],
+    notes: ["仓库库位主数据用于收货、库存事务流水、盘点和库位地图。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["仓库编码", "仓库名称", "库区", "库位", "容量", "负责人"]);
+      const capacity = parsePositiveNumber(value(row, "容量"));
+      const utilization = value(row, "利用率") ? parseNonNegativeNumber(value(row, "利用率")) : "";
+      if (capacity == null) errors.push("容量必须大于 0");
+      if (typeof utilization === "number" && utilization > 1) errors.push("利用率建议使用 0-1 小数");
+      const warnings = duplicateWarnings(rows, row, (item) => `${value(item, "仓库编码")}::${value(item, "库位")}`, "存在重复仓库+库位");
+      return {
+        normalized: { 仓库编码: value(row, "仓库编码"), 仓库名称: value(row, "仓库名称"), 库区: value(row, "库区"), 库位: value(row, "库位"), 容量: capacity ?? value(row, "容量"), 利用率: utilization, 温控要求: value(row, "温控要求"), QA状态: value(row, "QA状态") || "可用", 可用: value(row, "可用") || "是", 负责人: value(row, "负责人") },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "taxCodes",
+    label: "税码导入",
+    module: "主数据",
+    description: "校验预览税码、税码名称、税率、税种、区域、默认标识和状态。",
+    templateFilename: "tax-codes-template.csv",
+    requiredFields: ["税码", "税码名称", "税率", "税种", "区域"],
+    optionalFields: ["默认", "状态", "描述"],
+    sampleRows: [
+      { 税码: "VAT13-IN", 税码名称: "进项税 13%", 税率: 0.13, 税种: "进项税", 区域: "中国大陆", 默认: "是", 状态: "启用", 描述: "标准采购物料进项税率" },
+    ],
+    notes: ["税码用于供应商发票、贷项通知和税额拆分可视化。", "模板用于税码主数据校验和发票税额拆分复核。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["税码", "税码名称", "税率", "税种", "区域"]);
+      const rate = parseNonNegativeNumber(value(row, "税率"));
+      if (rate == null || rate > 1) errors.push("税率必须为 0-1 小数");
+      const warnings = duplicateWarnings(rows, row, (item) => value(item, "税码"), "存在重复税码");
+      return {
+        normalized: { 税码: value(row, "税码"), 税码名称: value(row, "税码名称"), 税率: rate ?? value(row, "税率"), 税种: value(row, "税种"), 区域: value(row, "区域"), 默认: value(row, "默认") || "否", 状态: value(row, "状态") || "启用", 描述: value(row, "描述") },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "paymentTerms",
+    label: "付款条款导入",
+    module: "主数据",
+    description: "校验预览付款条款编码、净账期天数、折扣规则和到期规则。",
+    templateFilename: "payment-terms-template.csv",
+    requiredFields: ["条款编码", "条款名称", "净账期天数", "到期规则"],
+    optionalFields: ["折扣规则", "状态", "描述"],
+    sampleRows: [
+      { 条款编码: "NET30", 条款名称: "Net 30", 净账期天数: 30, 折扣规则: "无现金折扣", 到期规则: "发票日期后 30 天到期", 状态: "启用", 描述: "标准供应商付款条款" },
+    ],
+    notes: ["付款条款用于供应商主数据、发票到期日和 AP 可视化。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["条款编码", "条款名称", "净账期天数", "到期规则"]);
+      const netDays = parseInteger(value(row, "净账期天数"));
+      if (netDays == null || netDays < 0) errors.push("净账期天数必须为非负整数");
+      const warnings = duplicateWarnings(rows, row, (item) => value(item, "条款编码"), "存在重复条款编码");
+      return {
+        normalized: { 条款编码: value(row, "条款编码"), 条款名称: value(row, "条款名称"), 净账期天数: netDays ?? value(row, "净账期天数"), 折扣规则: value(row, "折扣规则"), 到期规则: value(row, "到期规则"), 状态: value(row, "状态") || "启用", 描述: value(row, "描述") },
         errors,
         warnings,
       };

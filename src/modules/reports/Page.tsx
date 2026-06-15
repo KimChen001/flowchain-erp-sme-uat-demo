@@ -39,6 +39,7 @@ import {
   salesData,
   topProducts,
 } from "../../data/demo-data";
+import { ITEM_MASTER, PAYMENT_TERMS, SUPPLIER_MASTER, TAX_CODES, WAREHOUSE_BINS } from "../../data/master-data";
 import { inventoryPlan } from "../../domain/inventory/planning";
 import { inventoryMovementExportRows } from "../../domain/inventory/movements";
 import { METHOD_LABEL, runForecast, type Method } from "../../domain/forecast";
@@ -62,12 +63,13 @@ import {
   purchaseReturnExportRows,
   returnExceptionRows,
 } from "../../domain/procurement/returns";
+import { calculateInvoiceTaxSummary } from "../../domain/finance/tax";
 import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ReportModule = "销售" | "采购" | "库存" | "财务" | "预测/MRP" | "供应商" | "审计";
+type ReportModule = "销售" | "采购" | "库存" | "主数据" | "财务" | "预测/MRP" | "供应商" | "审计";
 type SourceKind = "Core" | "Computed" | "API" | "API fallback" | "Module";
-type RouteId = "sales" | "procurement" | "finance" | "inventory" | "forecast" | `procurement:${string}` | `inventory:${string}` | `finance:${string}`;
+type RouteId = "sales" | "procurement" | "finance" | "inventory" | "forecast" | "master-data" | `procurement:${string}` | `inventory:${string}` | `finance:${string}` | `master-data:${string}`;
 type ReportRows = Record<string, unknown>[];
 
 type ReportEntry = {
@@ -89,7 +91,7 @@ type ReportsPanelProps = {
   initialView?: "procurement" | "inventory" | "finance";
 };
 
-const FILTERS = ["全部", "销售", "采购", "库存", "财务", "预测/MRP", "供应商", "审计"] as const;
+const FILTERS = ["全部", "销售", "采购", "库存", "主数据", "财务", "预测/MRP", "供应商", "审计"] as const;
 const DEFAULT_METHOD: Method = "hw";
 const DEFAULT_HORIZON = 6;
 
@@ -122,6 +124,7 @@ function moduleColor(module: ReportModule) {
     销售: A.blue,
     采购: A.purple,
     库存: A.green,
+    主数据: A.gray1,
     财务: A.teal,
     "预测/MRP": A.orange,
     供应商: A.teal,
@@ -393,6 +396,40 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       rows: () => supplierInvoiceExportRows(SUPPLIER_INVOICES),
     },
     {
+      id: "invoice-tax-split",
+      name: "Invoice Tax Split Report",
+      module: "财务",
+      description: "供应商发票税码、税率、未税金额、税额、价税合计和运费拆分。",
+      source: "SUPPLIER_INVOICES + tax split helper",
+      sourceKind: "Computed",
+      updated: "Computed standard report",
+      filename: "invoice-tax-split-report.csv",
+      sourceModule: "finance:invoices",
+      rows: () => SUPPLIER_INVOICES.flatMap((invoice) => {
+        const summary = calculateInvoiceTaxSummary(invoice);
+        return invoice.lines.map((line, index) => {
+          const tax = summary.lineSummaries[index];
+          return {
+            发票号码: invoice.invoiceNumber,
+            供应商: invoice.supplier,
+            PO: invoice.relatedPo,
+            GRN: invoice.relatedGrn || "",
+            行号: line.lineId,
+            SKU: line.sku,
+            品名: line.name,
+            税码: tax.taxCode,
+            税率: tax.taxRate,
+            未税金额: tax.netAmount,
+            税额: tax.taxAmount,
+            价税合计: tax.grossAmount,
+            运费: invoice.freight || 0,
+            币种: invoice.currency,
+            差异类型: invoice.varianceType,
+          };
+        });
+      }),
+    },
+    {
       id: "invoice-match-exceptions",
       name: "发票三单匹配异常报表",
       module: "采购",
@@ -559,6 +596,66 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       filename: "supplier-performance-export.csv",
       sourceModule: "procurement:portal",
       rows: () => PORTAL_SUPPLIERS.map((row) => ({ 供应商: row.name, 评分: row.rating, 准时率: row.onTime, 质量率: row.quality, 响应分: row.resp, YTD_PO: row.po, YTD采购额: row.spend, 标签: row.flag })),
+    },
+    {
+      id: "item-master",
+      name: "Master Data Item Report",
+      module: "主数据",
+      description: "物料主数据、默认供应商、默认仓库库位、补货参数、管理标识和默认税码。",
+      source: "ITEM_MASTER · master data",
+      sourceKind: "Core",
+      updated: "2026 baseline",
+      filename: "master-data-items-report.csv",
+      sourceModule: "master-data:items",
+      rows: () => ITEM_MASTER.map((item) => ({ SKU: item.sku, 物料名称: item.name, 物料分类: item.category, 规格型号: item.specification, 单位: item.unit, 默认仓库: item.defaultWarehouse, 默认库位: item.defaultBin, 安全库存: item.safetyStock, 最大库存: item.maxStock, ROP: item.reorderPoint, 采购提前期: item.leadTimeDays, 批次管理: item.batchManaged ? "是" : "否", 序列号管理: item.serialManaged ? "是" : "否", 质检要求: item.qaRequired ? "是" : "否", 默认供应商: item.defaultSupplier, 默认税码: item.defaultTaxCode, 状态: item.status })),
+    },
+    {
+      id: "supplier-master",
+      name: "Supplier Master Report",
+      module: "主数据",
+      description: "供应商主数据、付款条款、税号、默认税码、绩效指标和认证状态。",
+      source: "SUPPLIER_MASTER · master data",
+      sourceKind: "Core",
+      updated: "2026 baseline",
+      filename: "master-data-suppliers-report.csv",
+      sourceModule: "master-data:suppliers",
+      rows: () => SUPPLIER_MASTER.map((item) => ({ 供应商编码: item.code, 供应商名称: item.name, 品类: item.category, 联系人: item.contact, 邮箱: item.email, 电话: item.phone, 付款条款: item.paymentTerms, 币种: item.currency, 税号: item.taxId, 默认税码: item.defaultTaxCode, 评级: item.rating, 准时率: item.onTimeRate, 质量合格率: item.qualityRate, 风险状态: item.riskStatus, 认证状态: item.certificationStatus, 状态: item.status })),
+    },
+    {
+      id: "warehouse-bin-master",
+      name: "Warehouse / Bin Master Report",
+      module: "主数据",
+      description: "仓库、库区、库位、容量、利用率、温控要求、QA 状态和负责人。",
+      source: "WAREHOUSE_BINS · master data",
+      sourceKind: "Core",
+      updated: "2026 baseline",
+      filename: "master-data-warehouse-bins-report.csv",
+      sourceModule: "master-data:warehouses",
+      rows: () => WAREHOUSE_BINS.map((item) => ({ 仓库编码: item.warehouseCode, 仓库名称: item.warehouseName, 库区: item.zone, 库位: item.bin, 容量: item.capacity, 利用率: item.utilization, 温控要求: item.temperatureRequirement, QA状态: item.qaStatus, 可用: item.available ? "是" : "否", 负责人: item.owner })),
+    },
+    {
+      id: "tax-code-master",
+      name: "Tax Code Report",
+      module: "主数据",
+      description: "税码、税码名称、税率、税种、区域、默认标识和状态。",
+      source: "TAX_CODES · master data",
+      sourceKind: "Core",
+      updated: "2026 baseline",
+      filename: "master-data-tax-codes-report.csv",
+      sourceModule: "master-data:tax-codes",
+      rows: () => TAX_CODES.map((item) => ({ 税码: item.code, 税码名称: item.name, 税率: item.rate, 税种: item.type, 区域: item.region, 默认: item.isDefault ? "是" : "否", 状态: item.status, 描述: item.description })),
+    },
+    {
+      id: "payment-terms-master",
+      name: "Payment Terms Report",
+      module: "主数据",
+      description: "付款条款、净账期天数、折扣规则、到期规则和状态。",
+      source: "PAYMENT_TERMS · master data",
+      sourceKind: "Core",
+      updated: "2026 baseline",
+      filename: "master-data-payment-terms-report.csv",
+      sourceModule: "master-data:payment-terms",
+      rows: () => PAYMENT_TERMS.map((item) => ({ 条款编码: item.code, 条款名称: item.name, 净账期天数: item.netDays, 折扣规则: item.discountRule, 到期规则: item.dueDateRule, 状态: item.status, 描述: item.description })),
     },
     {
       id: "purchase-orders",
@@ -846,7 +943,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
 
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="标准报表" value={String(reports.length)} sub="报表中心 v1" icon={FileSpreadsheet} color={A.blue} />
-        <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="销售/采购/库存/财务/计划/审计" icon={Database} color={A.green} />
+        <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="销售/采购/库存/主数据/财务/计划/审计" icon={Database} color={A.green} />
         <KpiCard label="API / Fallback" value={String(apiCount)} sub="只读现有端点" icon={RefreshCw} color={A.orange} />
         <KpiCard label="可导出" value={String(exportReadyCount)} sub="CSV 标准导出" icon={ShieldCheck} color={A.purple} />
       </div>

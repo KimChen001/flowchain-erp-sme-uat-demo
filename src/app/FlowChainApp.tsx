@@ -32,6 +32,7 @@ import OverviewPanel from "../modules/overview/Page";
 import SalesPanel from "../modules/sales/Page";
 import ProcurementPanel from "../modules/procurement/Page";
 import FinanceWorkbench from "../modules/finance/Page";
+import MasterDataPage from "../modules/master-data/Page";
 import AiPanel from "../modules/ai-assistant/Panel";
 import ReportsPanel from "../modules/reports/Page";
 import ImportsPanel from "../modules/imports/Page";
@@ -167,7 +168,7 @@ const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存管理",
   sales: "销售表现", forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购管理", finance: "财务协同", reports: "报表中心", imports: "数据管理",
+  procurement: "采购管理", finance: "财务协同", "master-data": "主数据", reports: "报表中心", imports: "数据管理",
 };
 
 function splitActive(active: string) {
@@ -434,6 +435,7 @@ export default function FlowChainApp() {
     rfq:         <ProcurementPanel view="rfq" />,
     receiving:   <ReceivingPanel />,
     procurement: <ProcurementPanel view={activeView as any} />,
+    "master-data": <MasterDataPage initialView={activeView as any} />,
     finance:     <FinanceWorkbench initialView={activeView as any} />,
     reports:     <ReportsPanel initialView={activeView as any} onNavigate={setActive} />,
     imports:     <ImportsPanel initialView={activeView as any} onNavigate={setActive} />,

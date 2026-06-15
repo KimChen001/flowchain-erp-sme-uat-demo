@@ -8,6 +8,7 @@ import SupplierReconciliationPanel from "../procurement/SupplierReconciliationPa
 import { PAYABLES, PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
 import { creditMemoExportRows } from "../../domain/procurement/returns";
 import { invoiceToPayable, isInvoicePayableReady } from "../../domain/procurement/invoice-matching";
+import { creditMemoTaxSummary, formatTaxRate } from "../../domain/finance/tax";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 
@@ -106,7 +107,17 @@ function CreditMemoOffsetPanel() {
       toast.warning("暂无可导出的数据");
       return;
     }
-    exportRowsToCsv("finance-credit-memo-offset-export.csv", creditMemoExportRows(SUPPLIER_CREDIT_MEMOS));
+    exportRowsToCsv("finance-credit-memo-offset-export.csv", SUPPLIER_CREDIT_MEMOS.map((memo) => {
+      const tax = creditMemoTaxSummary(memo);
+      return {
+        ...creditMemoExportRows([memo])[0],
+        贷项未税金额: tax.netAmount,
+        贷项税码: tax.taxCode,
+        贷项税率: formatTaxRate(tax.taxRate),
+        贷项税额: tax.taxAmount,
+        贷项价税合计: tax.grossAmount,
+      };
+    }));
     toast.success("CSV 已导出", { description: "贷项冲减视图" });
   }
 
@@ -129,7 +140,7 @@ function CreditMemoOffsetPanel() {
         <table className="w-full text-xs">
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["贷项通知", "供应商", "关联发票", "关联采购退货", "贷项金额", "AP 冲减状态", "对账影响", "负责人", "下一步"].map((header) => (
+              {["贷项通知", "供应商", "关联发票", "关联采购退货", "贷项未税金额", "贷项税额", "贷项价税合计", "AP 冲减状态", "对账影响", "负责人", "下一步"].map((header) => (
                 <th key={header} className="text-left px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
               ))}
             </tr>
@@ -137,13 +148,16 @@ function CreditMemoOffsetPanel() {
           <tbody>
             {rows.map(({ memo, relatedReturn, statement, offsetDone, nextStep }, index) => {
               const statusStyle = offsetDone ? { color: A.green, bg: "#f0faf4" } : memo.status === "已驳回" ? { color: A.red, bg: "#fff1f0" } : { color: A.orange, bg: "#fff8f0" };
+              const tax = creditMemoTaxSummary(memo);
               return (
                 <tr key={memo.id} style={{ borderBottom: index < rows.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                   <td className="px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.blue }}>{memo.creditMemoNo}</td>
                   <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.label }}>{memo.supplier}</td>
                   <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{memo.relatedInvoice || "待关联"}</td>
                   <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{relatedReturn?.returnNo || memo.relatedReturn || "待关联"}</td>
-                  <td className="px-5 py-3 font-semibold whitespace-nowrap" style={{ color: A.label }}>{fmt(memo.totalCredit)}</td>
+                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{fmt(tax.netAmount)}</td>
+                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{fmt(tax.taxAmount)}</td>
+                  <td className="px-5 py-3 font-semibold whitespace-nowrap" style={{ color: A.label }}>{fmt(tax.grossAmount)}</td>
                   <td className="px-5 py-3 whitespace-nowrap"><Chip label={memo.apOffsetStatus} color={statusStyle.color} bg={statusStyle.bg} /></td>
                   <td className="px-5 py-3 whitespace-nowrap" style={{ color: statement?.totalVarianceAmount ? A.orange : A.gray1 }}>
                     {statement ? `${statement.statementNo} · ${statement.status}` : "待进入对账"}

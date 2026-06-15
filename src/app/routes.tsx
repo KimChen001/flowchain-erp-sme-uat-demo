@@ -3,6 +3,7 @@ import {
   CircleDollarSign,
   FileSpreadsheet,
   Handshake,
+  Database,
   Package,
   TrendingUp,
   Upload,
@@ -42,6 +43,17 @@ export const navItems = [
       { id: "inventory:count", label: "循环盘点" },
       { id: "inventory:abcxyz", label: "ABC/XYZ 分类" },
       { id: "inventory:bins", label: "库位地图" },
+    ],
+  },
+  {
+    icon: Database, label: "主数据", id: "master-data",
+    children: [
+      { id: "master-data", label: "物料主数据" },
+      { id: "master-data:items", label: "物料主数据" },
+      { id: "master-data:suppliers", label: "供应商主数据" },
+      { id: "master-data:warehouses", label: "仓库 / 库位" },
+      { id: "master-data:tax-codes", label: "税码" },
+      { id: "master-data:payment-terms", label: "付款条款" },
     ],
   },
   {
@@ -85,6 +97,6 @@ export const navItems = [
 
 export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
-  { label: "供应链", itemIds: ["procurement", "inventory", "finance", "forecast"] },
+  { label: "供应链", itemIds: ["procurement", "inventory", "master-data", "finance", "forecast"] },
   { label: "数据", itemIds: ["reports", "imports"] },
 ] as const;

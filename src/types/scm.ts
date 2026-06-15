@@ -174,6 +174,79 @@ export type PurchaseIntent = {
   createdAt: number;
 };
 
+export type ItemMaster = {
+  sku: string;
+  name: string;
+  category: string;
+  specification: string;
+  unit: string;
+  defaultWarehouse: string;
+  defaultBin: string;
+  safetyStock: number;
+  maxStock: number;
+  reorderPoint: number;
+  leadTimeDays: number;
+  batchManaged: boolean;
+  serialManaged: boolean;
+  qaRequired: boolean;
+  defaultSupplier: string;
+  defaultTaxCode: string;
+  status: "启用" | "待完善" | "停用";
+};
+
+export type SupplierMaster = {
+  code: string;
+  name: string;
+  category: string;
+  contact: string;
+  email: string;
+  phone: string;
+  paymentTerms: string;
+  currency: string;
+  taxId: string;
+  defaultTaxCode: string;
+  rating: number;
+  onTimeRate: number;
+  qualityRate: number;
+  riskStatus: "低" | "中" | "高";
+  certificationStatus: "已认证" | "待复核" | "整改中";
+  status: "启用" | "待完善" | "停用";
+};
+
+export type WarehouseBin = {
+  warehouseCode: string;
+  warehouseName: string;
+  zone: string;
+  bin: string;
+  capacity: number;
+  utilization: number;
+  temperatureRequirement: string;
+  qaStatus: "可用" | "待复核" | "冻结";
+  available: boolean;
+  owner: string;
+};
+
+export type TaxCode = {
+  code: string;
+  name: string;
+  rate: number;
+  type: "进项税" | "免税" | "零税率";
+  region: string;
+  isDefault: boolean;
+  status: "启用" | "待复核" | "停用";
+  description: string;
+};
+
+export type PaymentTerm = {
+  code: string;
+  name: string;
+  netDays: number;
+  discountRule: string;
+  dueDateRule: string;
+  status: "启用" | "待复核" | "停用";
+  description: string;
+};
+
 export type RfqRecord = {
   id: string;
   title: string;

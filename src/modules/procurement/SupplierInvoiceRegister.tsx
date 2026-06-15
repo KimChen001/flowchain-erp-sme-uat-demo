@@ -6,6 +6,7 @@ import { DocumentActionBar, DocumentEvidencePanel, DocumentHeader, DocumentLines
 import { SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/demo-data";
 import { getInvoiceLinkedDocuments } from "../../domain/procurement/document-links";
 import { calculateInvoiceMatch, getInvoiceVarianceSummary, isInvoicePayableReady, supplierInvoiceExportRows } from "../../domain/procurement/invoice-matching";
+import { calculateInvoiceTaxSummary, calculateLineTax, getTaxVarianceSummary } from "../../domain/finance/tax";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import type { SupplierInvoice, SupplierInvoiceStatus } from "../../types/scm";
@@ -131,6 +132,7 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
   }
 
   function exportInvoice(invoice: SupplierInvoice) {
+    const taxSummary = calculateInvoiceTaxSummary(invoice);
     const headerRows = [
       ["发票ID", invoice.id],
       ["发票号码", invoice.invoiceNumber],
@@ -148,8 +150,11 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
       ["审批状态", invoice.approvalStatus || ""],
       ["重复风险", invoice.duplicateRisk ? "是" : "否"],
       ["差异类型", invoice.varianceType],
+      ["税码", taxSummary.taxCodes.join(" / ")],
+      ["税率", taxSummary.taxRates.join(" / ")],
       ["未税金额", invoice.subtotal],
       ["税额", invoice.tax],
+      ["价税合计", invoice.subtotal + invoice.tax],
       ["运费", invoice.freight || 0],
       ["发票总额", invoice.total],
       ["差异金额", invoice.varianceAmount],
@@ -161,12 +166,14 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
       section: "line",
       field: line.lineId,
       value: `${line.sku} ${line.name}`,
+      税码: calculateLineTax(line).taxCode,
       发票数量: line.quantity,
       单位: line.unit,
       单价: line.unitPrice,
       税率: line.taxRate,
+      未税金额: line.lineSubtotal,
       税额: line.taxAmount,
-      行金额: line.lineTotal,
+      价税合计: line.lineTotal,
       订购数量: line.orderedQty ?? "",
       收货数量: line.receivedQty ?? "",
       匹配数量: line.matchedQty ?? "",
@@ -197,9 +204,9 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>{isProcurementMode ? "发票协同" : "供应商发票台账"}</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              {isProcurementMode
-                ? "围绕 PO / GRN 匹配、发票差异、采购确认、关联退货贷项与下一步动作形成协同证据链。"
-                : "管理供应商发票、发票行、三单匹配、审批状态与过账应付，形成 AP 处理证据链。"}
+                {isProcurementMode
+                ? "围绕 PO / GRN 匹配、发票差异、税额拆分、采购确认、关联退货贷项与下一步动作形成协同证据链。"
+                : "管理供应商发票、发票行、税额拆分、三单匹配、审批状态与过账应付，形成 AP 处理证据链。"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -233,7 +240,7 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
           <table className="w-full text-xs">
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {["发票编号", "供应商", "PO", "GRN", "发票日期", "到期日", "金额", "税额", "付款条款", "匹配状态", "发票状态", "差异类型", "操作"].map((header) => (
+                {["发票编号", "供应商", "PO", "GRN", "发票日期", "到期日", "未税金额", "税额", "价税合计", "付款条款", "匹配状态", "发票状态", "差异类型", "操作"].map((header) => (
                   <th key={header} className="text-left px-4 py-3 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
                 ))}
               </tr>
@@ -250,8 +257,9 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
                     <td className="px-4 py-3" style={{ color: invoice.relatedGrn ? A.sub : A.orange }}>{invoice.relatedGrn || "缺少"}</td>
                     <td className="px-4 py-3" style={{ color: A.sub }}>{invoice.invoiceDate}</td>
                     <td className="px-4 py-3" style={{ color: A.sub }}>{invoice.dueDate}</td>
-                    <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(invoice.total)}</td>
+                    <td className="px-4 py-3" style={{ color: A.sub }}>{fmt(invoice.subtotal)}</td>
                     <td className="px-4 py-3" style={{ color: A.sub }}>{fmt(invoice.tax)}</td>
+                    <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(invoice.total)}</td>
                     <td className="px-4 py-3" style={{ color: A.sub }}>{invoice.paymentTerms}</td>
                     <td className="px-4 py-3"><Chip label={invoice.matchStatus} color={matchStyle.color} bg={matchStyle.bg} /></td>
                     <td className="px-4 py-3"><Chip label={invoice.status} color={statusStyle.color} bg={statusStyle.bg} /></td>
@@ -287,6 +295,9 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
         title="供应商发票"
         subtitle={isProcurementMode ? "采购协同 · 发票匹配" : "财务协同 · 供应商发票"}>
         {selectedInvoice && selectedSnapshot && (
+          (() => {
+            const taxSummary = calculateInvoiceTaxSummary(selectedInvoice);
+            return (
           <DocumentShell
             title="供应商发票"
             documentNo={selectedInvoice.invoiceNumber}
@@ -312,6 +323,8 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
                 { label: "审批状态", value: selectedInvoice.approvalStatus || "—" },
                 { label: "重复风险", value: selectedInvoice.duplicateRisk ? "是" : "否", tone: selectedInvoice.duplicateRisk ? "danger" : "success" },
                 { label: "差异类型", value: selectedSnapshot.varianceType, tone: selectedSnapshot.varianceType === "无差异" ? "success" : "danger" },
+                { label: "税码", value: taxSummary.taxCodes.join(" / ") || "待维护" },
+                { label: "税率", value: taxSummary.taxRates.join(" / ") || "待维护" },
               ]}
             />
             <DocumentStatusTimeline steps={invoiceTimeline(selectedInvoice)} />
@@ -323,9 +336,11 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
                 { key: "quantity", label: "发票数量", align: "right", render: (line) => Number(line.quantity).toLocaleString() },
                 { key: "unit", label: "单位" },
                 { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+                { key: "taxCode", label: "税码", render: (line) => calculateLineTax(line).taxCode },
                 { key: "taxRate", label: "税率", align: "right", render: (line) => `${Math.round(Number(line.taxRate || 0) * 100)}%` },
+                { key: "lineSubtotal", label: "未税金额", align: "right", render: (line) => fmt(Number(line.lineSubtotal || 0)) },
                 { key: "taxAmount", label: "税额", align: "right", render: (line) => fmt(Number(line.taxAmount || 0)) },
-                { key: "lineTotal", label: "行金额", align: "right", render: (line) => fmt(Number(line.lineTotal || 0)) },
+                { key: "lineTotal", label: "价税合计", align: "right", render: (line) => fmt(Number(line.lineTotal || 0)) },
                 { key: "orderedQty", label: "订购数量", align: "right", render: (line) => line.orderedQty ?? "—" },
                 { key: "receivedQty", label: "收货数量", align: "right", render: (line) => line.receivedQty ?? "—" },
                 { key: "matchedQty", label: "匹配数量", align: "right", render: (line) => line.matchedQty ?? "—" },
@@ -337,6 +352,7 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
               totals={[
                 { label: "未税金额", value: fmt(selectedInvoice.subtotal) },
                 { label: "税额", value: fmt(selectedInvoice.tax) },
+                { label: "价税合计", value: fmt(selectedInvoice.subtotal + selectedInvoice.tax), tone: "info" },
                 { label: "运费", value: fmt(selectedInvoice.freight || 0) },
                 { label: "发票总额", value: fmt(selectedInvoice.total), tone: "info" },
                 { label: "差异金额", value: fmt(selectedSnapshot.varianceAmount), tone: selectedSnapshot.varianceAmount ? "danger" : "success" },
@@ -352,6 +368,8 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
                 { label: "PO 金额", value: fmt(selectedSnapshot.poAmount) },
                 { label: "GRN 金额", value: fmt(selectedSnapshot.grnAmount) },
                 { label: "发票金额", value: fmt(selectedSnapshot.invoiceAmount) },
+                { label: "税码 / 税率", value: `${taxSummary.taxCodes.join(" / ")} · ${taxSummary.taxRates.join(" / ")}` },
+                { label: "税额拆分", value: getTaxVarianceSummary(selectedInvoice), tone: selectedInvoice.varianceType === "税额差异" ? "warning" : "success" },
                 { label: "匹配状态", value: selectedSnapshot.matchStatus, tone: statusTone(selectedSnapshot.matchStatus) },
                 { label: "差异类型", value: selectedSnapshot.varianceType, tone: selectedSnapshot.varianceType === "无差异" ? "success" : "danger" },
                 { label: "重复风险", value: selectedInvoice.duplicateRisk ? "是" : "否", tone: selectedInvoice.duplicateRisk ? "danger" : "success" },
@@ -366,6 +384,8 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
               <button onClick={() => setSelectedInvoice(null)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
             </DocumentActionBar>
           </DocumentShell>
+            );
+          })()
         )}
       </Modal>
     </div>

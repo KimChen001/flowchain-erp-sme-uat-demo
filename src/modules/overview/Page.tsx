@@ -19,6 +19,7 @@ import { inventoryPlan } from "../../domain/inventory/planning";
 import { isInventoryMovementException, netInventoryImpact } from "../../domain/inventory/movements";
 import { isStatementException, statementToCockpitSignal } from "../../domain/procurement/reconciliation";
 import { calculateReturnFinancialImpact, isReturnException, returnToCockpitSignal } from "../../domain/procurement/returns";
+import { masterDataQualitySignals } from "../../domain/master-data/helpers";
 import type { InventoryMovement, PurchaseOrder, PurchaseRequest, PurchaseReturn, ReceivingDoc, RfqRecord, SupplierInvoice, SupplierReconciliationStatement } from "../../types/scm";
 
 type SupplierPerformance = typeof PORTAL_SUPPLIERS[number] & {
@@ -416,6 +417,26 @@ function buildForecastEvidence(inventoryRisk: ReturnType<typeof overviewReplenis
   };
 }
 
+function buildMasterDataEvidence(): EvidenceDetail {
+  const signal = masterDataQualitySignals();
+  return {
+    id: "master-data-quality",
+    title: "主数据质量证据",
+    priority: signal.totalIssues > 0 ? "中" : "低",
+    object: "主数据控制",
+    module: "主数据",
+    moduleId: "master-data",
+    businessReason: "默认税码、默认供应商和库位主数据会影响采购申请、发票匹配、税额拆分、收货和库存事务处理。",
+    evidence: [
+      { label: "缺少默认税码", value: signal.missingTaxCode },
+      { label: "缺少默认供应商", value: signal.missingSupplier },
+      { label: "库位需复核", value: signal.inactiveBins },
+    ],
+    confidence: "规则检查",
+    suggestedAction: "打开主数据，复核物料、供应商、税码和库位维护状态。",
+  };
+}
+
 export default function OverviewPanel({ onNavigate, onPrepareReplenishmentRequest, onOpenAi }: OverviewPanelProps) {
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceDetail | null>(null);
   const [dashboardOrders, setDashboardOrders] = useState<PurchaseOrder[]>(purchaseOrders);
@@ -584,6 +605,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   const supplierDecisionDetail = buildSupplierEvidence(supplierRisks[0] || dashboardSuppliers[0] || PORTAL_SUPPLIERS[0]!);
   const rfqDecisionDetail = buildRfqEvidence(openRfqs[0] || dashboardRfqs[0] || RFQS[0]!);
   const invoiceDecisionDetail = invoiceRisks[0] ? buildInvoiceEvidence(invoiceRisks[0]) : null;
+  const masterDataSignal = masterDataQualitySignals();
   const decisionCards: DecisionCard[] = [
     {
       id: "inventory-replenishment",
@@ -675,12 +697,12 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
     },
     {
       level: "低",
-      object: "LOT-260506-B12",
-      title: "近效期 / 冻结库存",
-      evidence: "密封圈 NBR-70 近效期，步进电机驱动板存在冻结批次",
-      next: "按 FEFO 或 QA 复检处理",
-      moduleId: "inventory:lots",
-      detail: null,
+      object: "主数据控制",
+      title: "主数据质量",
+      evidence: `缺少默认税码 ${masterDataSignal.missingTaxCode} · 缺少默认供应商 ${masterDataSignal.missingSupplier} · 库位需复核 ${masterDataSignal.inactiveBins}`,
+      next: "复核税码、供应商和库位维护状态",
+      moduleId: "master-data",
+      detail: buildMasterDataEvidence(),
     },
   ] as const;
 
