@@ -338,6 +338,7 @@ export default function FlowChainApp() {
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(null);
   const [replenishmentSku, setReplenishmentSku] = useState<string | null>(null);
   const [aiVisible, setAiVisible] = useState(true);
+  const [aiPanelMode, setAiPanelMode] = useState<"compact" | "expanded">("compact");
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
   const [user, setUser] = useState<DemoUser | null>(() => {
     try {
@@ -581,7 +582,18 @@ export default function FlowChainApp() {
           </main>
 
           {aiVisible && (
-            <div className="w-[480px] shrink-0 overflow-hidden flex flex-col">
+            <div className={`${aiPanelMode === "expanded" ? "w-[480px]" : "w-[360px]"} shrink-0 overflow-hidden flex flex-col transition-all duration-200`}>
+              <div className="h-9 px-3 flex items-center justify-between bg-white" style={{ borderLeft: "0.5px solid rgba(0,0,0,0.1)", borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
+                <span className="text-[11px] font-medium" style={{ color: A.gray1 }}>
+                  AI 助手 · {aiPanelMode === "expanded" ? "expanded" : "compact"}
+                </span>
+                <button
+                  onClick={() => setAiPanelMode((mode) => mode === "expanded" ? "compact" : "expanded")}
+                  className="text-[11px] px-2 py-1 rounded-md font-medium"
+                  style={{ background: "#f0f6ff", color: A.blue }}>
+                  {aiPanelMode === "expanded" ? "收起" : "展开"}
+                </button>
+              </div>
               <AiPanel moduleId={active} />
             </div>
           )}
