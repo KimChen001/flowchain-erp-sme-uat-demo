@@ -26,6 +26,7 @@ import {
   RFQS,
   SERIALS,
   SUPPLIER_INVOICES,
+  SUPPLIER_RECONCILIATION_STATEMENTS,
   TRANSFERS,
   VARIANCES,
   forecastData,
@@ -47,6 +48,11 @@ import {
   isInvoicePayableReady,
   supplierInvoiceExportRows,
 } from "../../domain/procurement/invoice-matching";
+import {
+  reconciliationExceptionRows,
+  reconciliationExportRows,
+  reconciliationLineExportRows,
+} from "../../domain/procurement/reconciliation";
 import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
@@ -447,6 +453,42 @@ export default function ReportsPanel({ onNavigate }: ReportsPanelProps) {
         ];
         return merged.map((row) => ({ 应付编号: row.id, 供应商: row.supplier, 发票: row.invoice, 金额: row.amount, 付款条款: row.terms, 到期日: row.due, 账龄天数: row.aging, 状态: row.status }));
       },
+    },
+    {
+      id: "supplier-reconciliation-statements",
+      name: "Supplier Reconciliation Statement Report",
+      module: "采购",
+      description: "供应商对账单台账，包含供应商、对账期间、应付金额、已付金额、调整金额、差异金额、未结余额、逾期金额、状态与结算状态。",
+      source: "SUPPLIER_RECONCILIATION_STATEMENTS · demo-data.ts",
+      sourceKind: "Demo",
+      updated: "Demo sample · 2026",
+      filename: "supplier-reconciliation-report.csv",
+      sourceModule: "procurement",
+      rows: () => reconciliationExportRows(SUPPLIER_RECONCILIATION_STATEMENTS),
+    },
+    {
+      id: "supplier-reconciliation-lines",
+      name: "Supplier Reconciliation Lines Report",
+      module: "采购",
+      description: "供应商对账明细，按业务单据展示发票、应付、付款、调整和差异来源。",
+      source: "SUPPLIER_RECONCILIATION_STATEMENTS.lines · demo-data.ts",
+      sourceKind: "Demo",
+      updated: "Demo sample · 2026",
+      filename: "supplier-reconciliation-lines-report.csv",
+      sourceModule: "procurement",
+      rows: () => SUPPLIER_RECONCILIATION_STATEMENTS.flatMap(reconciliationLineExportRows),
+    },
+    {
+      id: "supplier-reconciliation-exceptions",
+      name: "Reconciliation Exceptions Report",
+      module: "采购",
+      description: "供应商对账异常，包含存在差异、已驳回、逾期应付或未结余额需复核的样本对账单。",
+      source: "SUPPLIER_RECONCILIATION_STATEMENTS + reconciliation helper",
+      sourceKind: "Demo",
+      updated: "Computed standard sample",
+      filename: "supplier-reconciliation-exceptions-report.csv",
+      sourceModule: "procurement",
+      rows: () => reconciliationExceptionRows(SUPPLIER_RECONCILIATION_STATEMENTS),
     },
     {
       id: "supplier-performance",

@@ -22,7 +22,7 @@ import {
 } from "../../lib/csv-import";
 import { A, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "openingInventory" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers";
+type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "openingInventory" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers";
 type ImportedRow = Record<string, unknown>;
 type ValidationResult = {
   rowNumber: number;
@@ -185,6 +185,74 @@ const IMPORT_CONFIGS: ImportConfig[] = [
           AP负责人: value(row, "AP负责人"),
           已过账应付: value(row, "已过账应付") || "否",
           已付款: value(row, "已付款") || "否",
+          备注: value(row, "备注"),
+        },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "supplierReconciliations",
+    label: "供应商对账单导入",
+    module: "采购",
+    description: "上传供应商对账单，用于演示按供应商和期间复核发票、应付、付款和差异状态。",
+    templateFilename: "supplier-reconciliation-template.csv",
+    requiredFields: ["对账单号", "供应商", "期间开始", "期间结束", "应付金额", "已付金额", "状态", "结算状态"],
+    optionalFields: ["币种", "调整金额", "差异金额", "未结余额", "逾期金额", "发票数", "异常数", "负责人", "来源", "备注"],
+    sampleRows: [
+      { 对账单号: "REC-IMPORT-001", 供应商: "深圳新元电气", 期间开始: "2026-05-01", 期间结束: "2026-05-31", 应付金额: 1455000, 已付金额: 0, 状态: "存在差异", 结算状态: "未结算", 币种: "CNY", 调整金额: 8600, 差异金额: 28600, 未结余额: 1446400, 逾期金额: 0, 发票数: 2, 异常数: 1, 负责人: "赵敏", 来源: "supplier-confirmation", 备注: "待供应商确认运费差异" },
+      { 对账单号: "REC-IMPORT-002", 供应商: "佛山标准件", 期间开始: "2026-05-01", 期间结束: "2026-05-31", 应付金额: 928200, 已付金额: 928200, 状态: "已确认", 结算状态: "已结算", 币种: "CNY", 调整金额: 0, 差异金额: 0, 未结余额: 0, 逾期金额: 0, 发票数: 1, 异常数: 0, 负责人: "赵敏", 来源: "system-sample", 备注: "" },
+    ],
+    notes: ["供应商对账单导入只做本地校验与预览，不创建 AP 过账或付款。", "未结余额建议约等于应付金额 - 已付金额 - 调整金额。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["对账单号", "供应商", "期间开始", "期间结束", "应付金额", "已付金额", "状态", "结算状态"]);
+      const payable = parseNonNegativeNumber(value(row, "应付金额"));
+      const paid = parseNonNegativeNumber(value(row, "已付金额"));
+      const adjustment = value(row, "调整金额") ? parseNonNegativeNumber(value(row, "调整金额")) : 0;
+      const variance = value(row, "差异金额") ? parseNonNegativeNumber(value(row, "差异金额")) : 0;
+      const openBalance = value(row, "未结余额") ? parseNonNegativeNumber(value(row, "未结余额")) : undefined;
+      const overdue = value(row, "逾期金额") ? parseNonNegativeNumber(value(row, "逾期金额")) : 0;
+      const invoiceCount = value(row, "发票数") ? parseInteger(value(row, "发票数")) : "";
+      const exceptionCount = value(row, "异常数") ? parseInteger(value(row, "异常数")) : "";
+      const supportedStatuses = ["草稿", "待确认", "存在差异", "已确认", "已驳回", "已关闭"];
+      const supportedSettlementStatuses = ["未结算", "部分结算", "已结算"];
+      if (payable == null) errors.push("应付金额必须为非负数");
+      if (paid == null) errors.push("已付金额必须为非负数");
+      if (adjustment == null) errors.push("调整金额必须为非负数");
+      if (variance == null) errors.push("差异金额必须为非负数");
+      if (openBalance == null && value(row, "未结余额")) errors.push("未结余额必须为非负数");
+      if (overdue == null) errors.push("逾期金额必须为非负数");
+      if (typeof invoiceCount === "number" && invoiceCount < 0) errors.push("发票数必须为非负整数");
+      if (typeof exceptionCount === "number" && exceptionCount < 0) errors.push("异常数必须为非负整数");
+      if (!parseDateLike(value(row, "期间开始"))) errors.push("期间开始格式不正确");
+      if (!parseDateLike(value(row, "期间结束"))) errors.push("期间结束格式不正确");
+      if (!supportedStatuses.includes(value(row, "状态"))) errors.push("状态必须为支持的供应商对账状态");
+      if (!supportedSettlementStatuses.includes(value(row, "结算状态"))) errors.push("结算状态必须为 未结算 / 部分结算 / 已结算");
+      const warnings = duplicateWarnings(rows, row, (item) => value(item, "对账单号"), "存在重复对账单号");
+      if (typeof payable === "number" && typeof paid === "number" && typeof adjustment === "number" && typeof openBalance === "number") {
+        const expectedOpen = Math.max(0, payable - paid - adjustment);
+        if (Math.abs(expectedOpen - openBalance) > Math.max(1, payable * 0.01)) warnings.push("未结余额与应付金额-已付金额-调整金额存在差异");
+      }
+      return {
+        normalized: {
+          对账单号: value(row, "对账单号"),
+          供应商: value(row, "供应商"),
+          期间开始: parseDateLike(value(row, "期间开始")) || value(row, "期间开始"),
+          期间结束: parseDateLike(value(row, "期间结束")) || value(row, "期间结束"),
+          币种: value(row, "币种") || "CNY",
+          应付金额: payable ?? value(row, "应付金额"),
+          已付金额: paid ?? value(row, "已付金额"),
+          调整金额: adjustment ?? value(row, "调整金额"),
+          差异金额: variance ?? value(row, "差异金额"),
+          未结余额: openBalance ?? value(row, "未结余额"),
+          逾期金额: overdue ?? value(row, "逾期金额"),
+          发票数: invoiceCount,
+          异常数: exceptionCount,
+          状态: value(row, "状态"),
+          结算状态: value(row, "结算状态"),
+          负责人: value(row, "负责人"),
+          来源: value(row, "来源") || "manual-review",
           备注: value(row, "备注"),
         },
         errors,

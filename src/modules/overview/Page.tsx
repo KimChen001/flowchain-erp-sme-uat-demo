@@ -14,9 +14,10 @@ import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, Card, Chip, KpiCard, Modal, SectionHeader } from "../../components/ui";
-import { FORECAST_SKUS, inventoryItems, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, SUPPLIER_INVOICES } from "../../data/demo-data";
+import { FORECAST_SKUS, inventoryItems, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
 import { inventoryPlan } from "../../domain/inventory/planning";
-import type { PurchaseOrder, PurchaseRequest, ReceivingDoc, RfqRecord, SupplierInvoice } from "../../types/scm";
+import { isStatementException, statementToCockpitSignal } from "../../domain/procurement/reconciliation";
+import type { PurchaseOrder, PurchaseRequest, ReceivingDoc, RfqRecord, SupplierInvoice, SupplierReconciliationStatement } from "../../types/scm";
 
 type SupplierPerformance = typeof PORTAL_SUPPLIERS[number] & {
   category?: string;
@@ -274,6 +275,34 @@ function buildInvoiceEvidence(item: SupplierInvoice): EvidenceDetail {
   };
 }
 
+function buildReconciliationEvidence(item: SupplierReconciliationStatement): EvidenceDetail {
+  const signal = statementToCockpitSignal(item);
+  return {
+    id: `reconciliation-${item.id}`,
+    title: "供应商对账证据",
+    priority: signal.priority,
+    object: item.statementNo,
+    module: "供应商对账",
+    moduleId: "procurement",
+    businessReason: "供应商对账单按供应商和期间汇总发票、应付、付款和差异，帮助 AP 复核未结余额、逾期应付和供应商确认结果。",
+    evidence: [
+      { label: "对账单号", value: item.statementNo },
+      { label: "供应商", value: item.supplier },
+      { label: "对账期间", value: `${item.periodStart} ~ ${item.periodEnd}` },
+      { label: "应付金额", value: fmt(item.totalPayableAmount) },
+      { label: "已付金额", value: fmt(item.totalPaidAmount) },
+      { label: "调整金额", value: fmt(item.totalAdjustmentAmount) },
+      { label: "差异金额", value: fmt(item.totalVarianceAmount) },
+      { label: "未结余额", value: fmt(item.openBalance) },
+      { label: "逾期金额", value: fmt(item.overdueAmount) },
+      { label: "状态", value: item.status },
+      { label: "结算状态", value: item.settlementStatus },
+    ],
+    confidence: item.confidence ? `${item.confidence}% · 样本规则` : "样本规则",
+    suggestedAction: item.status === "已驳回" ? "打开供应商对账，复核拒绝原因和相关发票/AP。" : "打开供应商对账，复核差异、未结余额和逾期应付。",
+  };
+}
+
 function buildSupplierEvidence(item: SupplierPerformance): EvidenceDetail {
   const rejectRate = Number(item.rejectRate || (100 - Number(item.quality || 0)) * 0.35).toFixed(1);
   const exceptions = Number(item.exceptions || (item.flag === "整改" ? 3 : 1));
@@ -353,6 +382,9 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   const invoiceRisks = SUPPLIER_INVOICES.filter((item) =>
     item.varianceType !== "无差异" || ["待匹配", "存在差异"].includes(item.status) || ["人工复核", "差异待处理"].includes(item.matchStatus)
   ).sort((a, b) => Number(b.varianceAmount || 0) - Number(a.varianceAmount || 0));
+  const reconciliationRisks = SUPPLIER_RECONCILIATION_STATEMENTS
+    .filter(isStatementException)
+    .sort((a, b) => (b.totalVarianceAmount + b.overdueAmount + b.openBalance * 0.1) - (a.totalVarianceAmount + a.overdueAmount + a.openBalance * 0.1));
   const mrpExceptions = inventoryRiskItems.filter((item) => item.plan.suggestedQty > 0).length;
   const openPrValue = pendingRequests.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const openPoValue = dashboardOrders
@@ -411,6 +443,19 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       cta: "查看发票",
       detail: buildInvoiceEvidence(item),
     })),
+    ...reconciliationRisks.slice(0, 1).map((item) => {
+      const signal = statementToCockpitSignal(item);
+      return {
+        priority: signal.priority,
+        title: signal.title,
+        object: item.statementNo,
+        evidence: signal.evidence,
+        module: "供应商对账",
+        moduleId: "procurement",
+        cta: "查看对账",
+        detail: buildReconciliationEvidence(item),
+      };
+    }),
     ...openRfqs.slice(0, 1).map((item) => ({
       priority: "中" as const,
       title: "复核 RFQ 报价差异",

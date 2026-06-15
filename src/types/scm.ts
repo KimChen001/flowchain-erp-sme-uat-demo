@@ -6,6 +6,9 @@ export type RecvStatus = "待收货" | "已签收" | "质检中" | "已入库" |
 export type SupplierInvoiceStatus = "草稿" | "已接收" | "待匹配" | "已匹配" | "存在差异" | "待审批" | "已审批" | "已过账应付" | "已付款" | "已驳回";
 export type SupplierInvoiceMatchStatus = "未匹配" | "自动匹配" | "人工复核" | "差异待处理" | "已解决";
 export type InvoiceVarianceType = "无差异" | "价格差异" | "数量差异" | "税额差异" | "运费差异" | "供应商不一致" | "缺少收货" | "缺少PO" | "重复发票";
+export type SupplierReconciliationStatus = "草稿" | "待确认" | "存在差异" | "已确认" | "已驳回" | "已关闭";
+export type SupplierSettlementStatus = "未结算" | "部分结算" | "已结算";
+export type SupplierReconciliationLineType = "PO" | "GRN" | "SupplierInvoice" | "AP" | "Payment" | "Adjustment" | "CreditMemo";
 
 export type ApprovalSnapshot = {
   source?: string;
@@ -295,6 +298,57 @@ export type SupplierInvoice = {
   confidence?: number;
   notes?: string;
   lines: SupplierInvoiceLine[];
+};
+
+export type SupplierReconciliationLine = {
+  lineId: string;
+  bizType: SupplierReconciliationLineType;
+  bizId: string;
+  supplier: string;
+  documentDate: string;
+  dueDate?: string;
+  description: string;
+  debitAmount?: number;
+  creditAmount?: number;
+  payableAmount: number;
+  paidAmount: number;
+  varianceAmount: number;
+  status: string;
+  matchStatus?: string;
+  relatedPo?: string;
+  relatedGrn?: string;
+  relatedInvoice?: string;
+  notes?: string;
+};
+
+export type SupplierReconciliationStatement = {
+  id: string;
+  statementNo: string;
+  supplier: string;
+  supplierCode?: string;
+  periodStart: string;
+  periodEnd: string;
+  owner: string;
+  currency: string;
+  totalInvoiceAmount: number;
+  totalPayableAmount: number;
+  totalPaidAmount: number;
+  totalAdjustmentAmount: number;
+  totalVarianceAmount: number;
+  openBalance: number;
+  dueAmount: number;
+  overdueAmount: number;
+  invoiceCount: number;
+  exceptionCount: number;
+  status: SupplierReconciliationStatus;
+  settlementStatus: SupplierSettlementStatus;
+  createdDate: string;
+  confirmedDate?: string;
+  rejectReason?: string;
+  source: "system-sample" | "manual-review" | "supplier-confirmation";
+  confidence?: number;
+  notes?: string;
+  lines: SupplierReconciliationLine[];
 };
 
 export type AiConfidenceDimension = {
