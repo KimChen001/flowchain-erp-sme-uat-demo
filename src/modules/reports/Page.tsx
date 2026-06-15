@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ShieldCheck,
   ShoppingCart,
+  CreditCard,
   TrendingUp,
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
@@ -376,7 +377,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "Core",
       updated: "2026 baseline",
       filename: "procurement-contracts-export.csv",
-      sourceModule: "finance:reconciliation",
+      sourceModule: "procurement:contracts",
       rows: () => CONTRACTS.map((row) => ({ 合同号: row.id, 供应商: row.supplier, 范围: row.scope, 承诺量: row.commitVol, 价格条款: row.price, 开始日期: row.start, 结束日期: row.end, 已消耗百分比: Math.round(row.consumed * 100), 状态: row.status })),
     },
     {
@@ -556,7 +557,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "API fallback",
       updated: "API fallback baseline",
       filename: "supplier-performance-export.csv",
-      sourceModule: "procurement",
+      sourceModule: "procurement:portal",
       rows: () => PORTAL_SUPPLIERS.map((row) => ({ 供应商: row.name, 评分: row.rating, 准时率: row.onTime, 质量率: row.quality, 响应分: row.resp, YTD_PO: row.po, YTD采购额: row.spend, 标签: row.flag })),
     },
     {
@@ -860,6 +861,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
             <span className="flex items-center gap-1"><ShoppingCart size={11} /> 销售</span>
             <span className="flex items-center gap-1"><ClipboardList size={11} /> 采购</span>
             <span className="flex items-center gap-1"><Package size={11} /> 库存</span>
+            <span className="flex items-center gap-1"><CreditCard size={11} /> 财务</span>
             <span className="flex items-center gap-1"><TrendingUp size={11} /> 计划</span>
             <span className="flex items-center gap-1"><BarChart2 size={11} /> 审计</span>
           </div>
