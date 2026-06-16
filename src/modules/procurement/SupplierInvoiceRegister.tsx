@@ -301,7 +301,7 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
           <DocumentShell
             title="供应商发票"
             documentNo={selectedInvoice.invoiceNumber}
-            moduleLabel="采购 / 应付"
+            moduleLabel={isProcurementMode ? "采购 / 发票协同" : "财务 / 发票与应付"}
             status={selectedInvoice.status}
             subtitle={`${selectedInvoice.supplier} · PO ${selectedInvoice.relatedPo || "—"} · GRN ${selectedInvoice.relatedGrn || "缺少"}`}
           >

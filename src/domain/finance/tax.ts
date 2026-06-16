@@ -1,3 +1,4 @@
+import { SUPPLIER_INVOICES } from "../../data/settlement";
 import { ITEM_MASTER, TAX_CODES } from "../../data/master-data";
 import type { SupplierCreditMemo, SupplierInvoice, SupplierInvoiceLine } from "../../types/scm";
 
@@ -55,8 +56,26 @@ export function getTaxVarianceSummary(invoice: SupplierInvoice) {
   return `税额与税码/税率拆分存在 ${delta.toLocaleString("zh-CN")} 差异，需采购与 AP 复核。`;
 }
 
-export function creditMemoTaxSummary(memo: SupplierCreditMemo) {
-  const rate = 0.13;
+function dominantInvoiceTaxRate(invoice?: SupplierInvoice) {
+  if (!invoice) return undefined;
+  const totalsByRate = new Map<number, number>();
+  invoice.lines.forEach((line) => {
+    const rate = Number(line.taxRate ?? taxCodeForSku(line.sku).rate);
+    const amount = Number(line.lineSubtotal || 0);
+    totalsByRate.set(rate, (totalsByRate.get(rate) || 0) + amount);
+  });
+  return Array.from(totalsByRate.entries())
+    .sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]?.[0];
+}
+
+export function creditMemoTaxSummary(memo: SupplierCreditMemo, invoices: SupplierInvoice[] = SUPPLIER_INVOICES) {
+  const linkedInvoice = memo.relatedInvoice
+    ? invoices.find((invoice) => invoice.invoiceNumber === memo.relatedInvoice || invoice.id === memo.relatedInvoice)
+    : undefined;
+  const rate = dominantInvoiceTaxRate(linkedInvoice)
+    ?? (linkedInvoice?.lines[0] ? taxCodeForSku(linkedInvoice.lines[0].sku).rate : undefined)
+    ?? TAX_CODES.find((entry) => entry.isDefault)?.rate
+    ?? 0.13;
   const grossAmount = Number(memo.totalCredit || 0);
   const netAmount = Number((grossAmount / (1 + rate)).toFixed(2));
   const taxAmount = Number((grossAmount - netAmount).toFixed(2));

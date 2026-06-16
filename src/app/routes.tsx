@@ -48,7 +48,7 @@ export const navItems = [
   {
     icon: Database, label: "主数据", id: "master-data",
     children: [
-      { id: "master-data", label: "物料主数据" },
+      { id: "master-data", label: "主数据总览" },
       { id: "master-data:items", label: "物料主数据" },
       { id: "master-data:suppliers", label: "供应商主数据" },
       { id: "master-data:warehouses", label: "仓库 / 库位" },
