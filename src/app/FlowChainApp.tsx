@@ -27,11 +27,13 @@ import { inventoryPlan } from "../domain/inventory/planning";
 import { inventoryPurchaseRequestPayload } from "../domain/inventory/purchase-request";
 import ReceivingPanel from "../modules/receiving/Page";
 import InventoryPanel from "../modules/inventory/Page";
+import InventoryExceptionDocuments from "../modules/inventory/InventoryExceptionDocuments";
 import ForecastPanel from "../modules/forecast/Page";
 import OverviewPanel from "../modules/overview/Page";
 import SalesPanel from "../modules/sales/Page";
 import ProcurementPanel from "../modules/procurement/Page";
 import FinanceWorkbench from "../modules/finance/Page";
+import SrmPage from "../modules/srm/Page";
 import MasterDataPage from "../modules/master-data/Page";
 import AiPanel from "../modules/ai-assistant/Panel";
 import ReportsPanel from "../modules/reports/Page";
@@ -168,7 +170,7 @@ const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存管理",
   sales: "销售表现", forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购管理", finance: "财务协同", "master-data": "主数据", reports: "报表中心", imports: "数据管理",
+  procurement: "采购管理", finance: "财务协同", "master-data": "主数据", srm: "供应商管理", reports: "报表中心", imports: "数据管理",
 };
 
 function splitActive(active: string) {
@@ -427,6 +429,7 @@ export default function FlowChainApp() {
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiVisible(true)} />,
     inventory:   <InventoryPanel initialView={activeView as any} />,
+    "inventory:exceptions": <InventoryExceptionDocuments />,
     sales:       <SalesPanel />,
     forecast:    <ForecastPanel />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
@@ -435,6 +438,7 @@ export default function FlowChainApp() {
     rfq:         <ProcurementPanel view="rfq" />,
     receiving:   <ReceivingPanel />,
     procurement: <ProcurementPanel view={activeView as any} />,
+    srm: <SrmPage initialView={activeView as any} />,
     "master-data": <MasterDataPage initialView={activeView as any} />,
     finance:     <FinanceWorkbench initialView={activeView as any} />,
     reports:     <ReportsPanel initialView={activeView as any} onNavigate={setActive} />,

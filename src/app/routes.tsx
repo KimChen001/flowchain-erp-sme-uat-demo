@@ -5,6 +5,7 @@ import {
   Handshake,
   Database,
   Package,
+  Users,
   TrendingUp,
   Upload,
 } from "lucide-react";
@@ -38,11 +39,25 @@ export const navItems = [
     children: [
       { id: "inventory", label: "库存工作台" },
       { id: "inventory:movements", label: "库存事务流水" },
+      { id: "inventory:exceptions", label: "库存异常单据" },
       { id: "inventory:lots", label: "批次 / 序列号" },
       { id: "inventory:transfer", label: "库间调拨" },
       { id: "inventory:count", label: "循环盘点" },
       { id: "inventory:abcxyz", label: "ABC/XYZ 分类" },
       { id: "inventory:bins", label: "库位地图" },
+    ],
+  },
+  {
+    icon: Users, label: "供应商管理", id: "srm",
+    children: [
+      { id: "srm", label: "SRM 总览" },
+      { id: "srm:master", label: "供应商主数据" },
+      { id: "srm:performance", label: "供应商绩效" },
+      { id: "srm:risk", label: "供应商风险" },
+      { id: "srm:certification", label: "认证与准入" },
+      { id: "srm:sourcing", label: "RFx 参与" },
+      { id: "srm:contracts", label: "合同与目录" },
+      { id: "srm:portal", label: "供应商门户" },
     ],
   },
   {
@@ -97,6 +112,6 @@ export const navItems = [
 
 export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
-  { label: "供应链", itemIds: ["procurement", "inventory", "master-data", "finance", "forecast"] },
+  { label: "供应链", itemIds: ["procurement", "inventory", "srm", "master-data", "finance", "forecast"] },
   { label: "数据", itemIds: ["reports", "imports"] },
 ] as const;

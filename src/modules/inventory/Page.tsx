@@ -19,6 +19,7 @@ import {
   A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, Modal, SectionHeader, SegmentedControl, SubTabs,
 } from "../../components/ui";
 import InventoryMovementLedger from "./InventoryMovementLedger";
+import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
@@ -1012,7 +1013,7 @@ function InventoryWarehouseMap() {
 }
 
 // ─── Inventory · Master Wrapper ───────────────────────────────────────────────
-type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins";
+type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins" | "exceptions";
 export default function InventoryPage({ initialView = "overview" }: { initialView?: InvTab }) {
   const [tab, setTab] = useState<InvTab>(initialView);
   const tabs = [
@@ -1022,6 +1023,7 @@ export default function InventoryPage({ initialView = "overview" }: { initialVie
     { id: "count",     label: "循环盘点",    icon: ClipboardCheck,  count: COUNT_PLANS.length },
     { id: "abcxyz",    label: "ABC/XYZ 分类", icon: Boxes,           count: "10" },
     { id: "movements", label: "事务流水",    icon: History,         count: INVENTORY_MOVEMENT_LEDGER.length },
+    { id: "exceptions", label: "库存异常单据", icon: AlertTriangle,   count: "12" },
     { id: "bins",      label: "库位地图",    icon: Grid3x3,         count: "60" },
   ] as const;
   useEffect(() => {
@@ -1037,6 +1039,7 @@ export default function InventoryPage({ initialView = "overview" }: { initialVie
       {tab === "count"     && <InventoryCycleCount />}
       {tab === "abcxyz"    && <InventoryABCXYZ />}
       {tab === "movements" && <InventoryMovementLedger />}
+      {tab === "exceptions" && <InventoryExceptionDocuments />}
       {tab === "bins"      && <InventoryWarehouseMap />}
     </div>
   );

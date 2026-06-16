@@ -22,7 +22,7 @@ import {
 } from "../../lib/csv-import";
 import { A, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "openingInventory" | "inventoryMovements" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
+type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
 type ValidationResult = {
   rowNumber: number;
@@ -419,6 +419,44 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       const warnings = duplicateWarnings(rows, row, (item) => value(item, "单据号"), "存在重复库存移动单据号");
       return {
         normalized: { 单据号: value(row, "单据号"), 类型: value(row, "类型"), 日期: value(row, "日期"), SKU: value(row, "SKU"), 品名: value(row, "品名"), 仓库: value(row, "仓库"), 库位: value(row, "库位"), 来源单据: value(row, "来源单据"), 关联PO: value(row, "关联PO"), 关联GRN: value(row, "关联GRN"), 关联退货: value(row, "关联退货"), 关联销售订单: value(row, "关联销售订单"), 入库: quantityIn ?? value(row, "入库"), 出库: quantityOut ?? value(row, "出库"), 调整: adjustment, 单位: value(row, "单位"), 状态: value(row, "状态"), 负责人: value(row, "负责人"), 原因: value(row, "原因"), 库存影响: value(row, "库存影响"), 关联证据: value(row, "关联证据") },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "inventoryExceptions",
+    label: "库存异常单据导入",
+    module: "库存",
+    description: "批量导入库存调整、调拨差异、盘点差异关闭和冻结/释放异常单据。",
+    templateFilename: "inventory-exception-documents-template.csv",
+    requiredFields: ["单据编号", "类型", "SKU", "品名", "仓库", "库位", "数量影响", "状态"],
+    optionalFields: ["负责人", "关联流水", "关联单据", "原因", "下一步"],
+    sampleRows: [
+      { 单据编号: "IEX-IMPORT-001", 类型: "库存调整", SKU: "SKU-00412", 品名: "伺服电机 750W", 仓库: "上海总仓", 库位: "D-02-01", 数量影响: -1, 状态: "待复核", 负责人: "刘建华", 关联流水: "IM-20260527-0007", 关联单据: "ADJ-2026-0527-001", 原因: "盘点差异", 下一步: "复核差异原因" },
+    ],
+    notes: ["库存异常单据导入用于校验异常处理证据，不会直接调整库存数量。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["单据编号", "类型", "SKU", "品名", "仓库", "库位", "数量影响", "状态"]);
+      const qty = Number(value(row, "数量影响"));
+      if (Number.isNaN(qty)) errors.push("数量影响必须为数字");
+      const warnings = duplicateWarnings(rows, row, (item) => value(item, "单据编号"), "存在重复异常单据编号");
+      return {
+        normalized: {
+          单据编号: value(row, "单据编号"),
+          类型: value(row, "类型"),
+          SKU: value(row, "SKU"),
+          品名: value(row, "品名"),
+          仓库: value(row, "仓库"),
+          库位: value(row, "库位"),
+          数量影响: Number.isNaN(qty) ? value(row, "数量影响") : qty,
+          状态: value(row, "状态"),
+          负责人: value(row, "负责人"),
+          关联流水: value(row, "关联流水"),
+          关联单据: value(row, "关联单据"),
+          原因: value(row, "原因"),
+          下一步: value(row, "下一步"),
+        },
         errors,
         warnings,
       };

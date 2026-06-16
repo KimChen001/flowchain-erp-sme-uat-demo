@@ -64,12 +64,14 @@ import {
   returnExceptionRows,
 } from "../../domain/procurement/returns";
 import { calculateInvoiceTaxSummary } from "../../domain/finance/tax";
+import { inventoryExceptionExportRows } from "../../domain/inventory/exceptions";
+import { srmReportRows, supplierCertificationReportRows, supplierRiskReportRows } from "../../domain/srm/helpers";
 import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
 type ReportModule = "销售" | "采购" | "库存" | "主数据" | "财务" | "预测/MRP" | "供应商" | "审计";
 type SourceKind = "Core" | "Computed" | "API" | "API fallback" | "Module";
-type RouteId = "sales" | "procurement" | "finance" | "inventory" | "forecast" | "master-data" | `procurement:${string}` | `inventory:${string}` | `finance:${string}` | `master-data:${string}`;
+type RouteId = "sales" | "procurement" | "finance" | "inventory" | "forecast" | "master-data" | "srm" | `procurement:${string}` | `inventory:${string}` | `finance:${string}` | `master-data:${string}` | `srm:${string}`;
 type ReportRows = Record<string, unknown>[];
 
 type ReportEntry = {
@@ -598,6 +600,42 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       rows: () => PORTAL_SUPPLIERS.map((row) => ({ 供应商: row.name, 评分: row.rating, 准时率: row.onTime, 质量率: row.quality, 响应分: row.resp, YTD_PO: row.po, YTD采购额: row.spend, 标签: row.flag })),
     },
     {
+      id: "supplier-srm-performance",
+      name: "Supplier SRM Performance Report",
+      module: "供应商",
+      description: "供应商主数据、绩效、风险、认证、合同覆盖、RFx 参与、发票差异和对账异常。",
+      source: "SUPPLIER_MASTER + SRM helpers",
+      sourceKind: "Computed",
+      updated: "Computed standard report",
+      filename: "supplier-srm-performance-report.csv",
+      sourceModule: "srm:performance",
+      rows: () => srmReportRows(),
+    },
+    {
+      id: "supplier-risk",
+      name: "Supplier Risk Report",
+      module: "供应商",
+      description: "供应商风险、收货异常、发票差异和对账异常视图。",
+      source: "SRM helpers",
+      sourceKind: "Computed",
+      updated: "Computed standard report",
+      filename: "supplier-risk-report.csv",
+      sourceModule: "srm:risk",
+      rows: () => supplierRiskReportRows(),
+    },
+    {
+      id: "supplier-certification",
+      name: "Supplier Certification Report",
+      module: "供应商",
+      description: "供应商认证状态、付款条款、默认税码和主数据复核状态。",
+      source: "SRM helpers",
+      sourceKind: "Computed",
+      updated: "Computed standard report",
+      filename: "supplier-certification-report.csv",
+      sourceModule: "srm:certification",
+      rows: () => supplierCertificationReportRows(),
+    },
+    {
       id: "item-master",
       name: "Master Data Item Report",
       module: "主数据",
@@ -792,6 +830,18 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       filename: "inventory-movement-ledger-report.csv",
       sourceModule: "inventory:movements",
       rows: () => inventoryMovementExportRows(INVENTORY_MOVEMENT_LEDGER),
+    },
+    {
+      id: "inventory-exceptions",
+      name: "Inventory Exception Documents Report",
+      module: "库存",
+      description: "库存异常单据、数量影响、负责人、关联流水和下一步动作。",
+      source: "Inventory exception helpers",
+      sourceKind: "Computed",
+      updated: "Computed standard report",
+      filename: "inventory-exception-documents-report.csv",
+      sourceModule: "inventory:exceptions",
+      rows: () => inventoryExceptionExportRows(),
     },
     {
       id: "abc-xyz",

@@ -375,7 +375,7 @@ function buildSupplierEvidence(item: SupplierPerformance): EvidenceDetail {
     priority: item.flag === "整改" || exceptions > 2 ? "中" : "低",
     object: item.name,
     module: "供应商与绩效",
-    moduleId: "procurement:portal",
+    moduleId: "srm:risk",
     businessReason: "供应商准时率、质量率和异常次数会影响交付承诺、收货质量和替代供应商策略。",
     evidence: [
       { label: "供应商", value: item.name },
@@ -528,8 +528,8 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       object: item.movementId,
       evidence: `${item.movementLabel} · ${item.sourceDocument} · 期末影响 ${netInventoryImpact(item).toLocaleString()} ${item.unit}`,
       module: "库存事务流水",
-      moduleId: "inventory:movements",
-      cta: "查看流水",
+      moduleId: "inventory:exceptions",
+      cta: "查看异常单据",
       detail: buildInventoryMovementEvidence(item),
     })),
     ...invoiceRisks.slice(0, 1).map((item) => ({
@@ -595,7 +595,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       object: item.name,
       evidence: `${item.flag || "需复核"} · 准时率 ${Number(item.onTime || 0).toFixed(1)}% · 质量 ${Number(item.quality || 0).toFixed(1)}%`,
       module: "供应商与绩效",
-      moduleId: "procurement:portal",
+      moduleId: "srm:risk",
       cta: "查看供应商",
       detail: buildSupplierEvidence(item),
     })),
@@ -629,7 +629,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       riskWarning: "供应商风险建议仅用于复核，不会自动切换供应商。",
       suggestedAction: "打开供应商与绩效",
       module: "供应商与绩效",
-      moduleId: "procurement:portal",
+      moduleId: "srm:risk",
       detail: supplierDecisionDetail,
     },
     {
@@ -665,7 +665,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       title: "供应商延迟 / 质量",
       evidence: supplierRisks[0] ? `${supplierRisks[0].flag} · 响应 ${Number(supplierRisks[0].resp || 0).toFixed(0)} · 质量 ${Number(supplierRisks[0].quality || 0).toFixed(1)}%` : "关键供应商绩效稳定",
       next: "复核供应商绩效和备选供应商",
-      moduleId: "procurement:portal",
+      moduleId: "srm:risk",
       detail: supplierRisks[0] ? buildSupplierEvidence(supplierRisks[0]) : null,
     },
     {
