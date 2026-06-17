@@ -346,7 +346,7 @@ export default function AiPanel({ moduleId }: { moduleId: string }) {
                 <RefreshCw size={10} /> {marketStatus}
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-1.5">
               {marketPrices.slice(0, 3).map((item) => {
                 const up = item.direction === "up";
                 const down = item.direction === "down";
@@ -392,7 +392,7 @@ export default function AiPanel({ moduleId }: { moduleId: string }) {
               ))}
             </div>
 
-            <div className="max-h-72 overflow-auto space-y-2 pr-1 mb-2">
+            <div className="max-h-64 overflow-auto space-y-2 pr-1 mb-2">
               {messages.map((msg, i) => (
                 <div key={`${msg.role}-${i}`} className="flex" style={{ justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                   <div className="rounded-xl px-3 py-2.5 text-xs leading-relaxed max-w-[94%]"
@@ -456,7 +456,7 @@ export default function AiPanel({ moduleId }: { moduleId: string }) {
                   }
                 }}
                 placeholder="追问数据原因、风险或动作..."
-                rows={3}
+                rows={2}
                 className="flex-1 rounded-lg px-2.5 py-2 text-xs outline-none resize-none"
                 style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)", fontFamily: "inherit" }} />
               <button onClick={() => askAi(input)}

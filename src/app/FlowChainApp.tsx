@@ -2,17 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Toaster, toast } from "sonner";
 import {
   AlertTriangle,
-  Bell, Search,
+  Bell, LogOut, Search, Settings, User,
   Activity, Sparkles,
   Loader2,
   ShieldCheck,
-  Lock, LogOut, Printer,
+  Lock,
 } from "lucide-react";
 import { navGroups, navItems } from "./routes";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
 import { apiJson } from "../lib/api-client";
 import { fmt } from "../lib/format";
-import { exportModulePdf } from "../lib/pdf-export";
 import { A, Card, Field, inputStyle, Modal } from "../components/ui";
 import type {
   DemoUser,
@@ -344,10 +343,12 @@ export default function FlowChainApp() {
   const [active, setActive] = useState("overview");
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(null);
   const [replenishmentSku, setReplenishmentSku] = useState<string | null>(null);
-  const [aiVisible, setAiVisible] = useState(true);
+  const [aiVisible, setAiVisible] = useState(false);
   const [aiPanelMode, setAiPanelMode] = useState<"compact" | "expanded">(() =>
     localStorage.getItem("scm-demo-ai-panel-mode") === "expanded" ? "expanded" : "compact"
   );
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [unreadCount] = useState(3);
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
   const [user, setUser] = useState<DemoUser | null>(() => {
     try {
@@ -471,39 +472,28 @@ export default function FlowChainApp() {
         onSubmit={submitReplenishmentRequest}
       />
 
-      {/* Sidebar — frosted glass, macOS-style */}
-      <aside className="w-52 shrink-0 flex flex-col"
+      <aside className="w-56 shrink-0 flex flex-col"
         style={{
-          background: "rgba(246,246,248,0.88)",
-          backdropFilter: "blur(20px) saturate(180%)",
-          WebkitBackdropFilter: "blur(20px) saturate(180%)",
-          borderRight: "0.5px solid rgba(0,0,0,0.1)",
+          background: A.sidebar,
+          borderRight: "1px solid rgba(255,255,255,0.06)",
         }}>
-        {/* Logo */}
-        <div className="px-5 pt-6 pb-4">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #0071e3 0%, #34aadc 100%)" }}>
-              <Activity size={15} className="text-white" strokeWidth={2.5} />
+        <div className="px-5 py-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-md flex items-center justify-center"
+              style={{ background: A.blue }}>
+              <Activity size={14} className="text-white" strokeWidth={2.5} />
             </div>
             <div>
-              <div className="text-sm font-semibold" style={{ color: A.label }}>{PRODUCT_NAME}</div>
-              <div className="text-[10px]" style={{ color: A.gray1 }}>{PRODUCT_TAGLINE}</div>
+              <div className="text-sm font-semibold leading-none text-white">{PRODUCT_NAME}</div>
+              <div className="text-[10px] mt-1" style={{ color: A.sidebarSub }}>{PRODUCT_TAGLINE}</div>
             </div>
-          </div>
-
-          {/* System status pill */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: "#f0faf4" }}>
-            <span className="w-1.5 h-1.5 rounded-full shrink-0 animate-pulse" style={{ background: A.green }} />
-            <span className="text-[11px] font-medium" style={{ color: A.green }}>系统正常运行</span>
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 px-3 space-y-3 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
           {navGroups.map((group) => (
             <div key={group.label}>
-              <div className="text-[10px] font-semibold uppercase tracking-widest px-2 mb-1.5" style={{ color: A.gray2 }}>{group.label}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-widest px-2 mb-2" style={{ color: "rgba(148,163,184,0.58)" }}>{group.label}</div>
               <div className="space-y-0.5">
                 {group.itemIds.map((itemId) => {
                   const item = navItems.find((entry) => entry.id === itemId);
@@ -512,23 +502,23 @@ export default function FlowChainApp() {
                   return (
                     <div key={item.id} className="space-y-0.5">
                       <button onClick={() => setActive(item.id)}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150"
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-medium transition-colors duration-150"
                         style={isActive
-                          ? { background: A.white, color: A.blue, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
-                          : { background: "transparent", color: A.gray1 }}>
+                          ? { background: A.sidebarAccent, color: "#f8fafc" }
+                          : { background: "transparent", color: A.sidebarSub }}>
                         <item.icon size={15} strokeWidth={isActive ? 2 : 1.8} />
                         <span className="truncate">{item.label}</span>
                       </button>
                       {isActive && item.children && (
-                        <div className="ml-5 pl-3 py-1 space-y-0.5" style={{ borderLeft: "1px solid rgba(0,0,0,0.08)" }}>
+                        <div className="ml-4 pl-3 py-1 space-y-0.5" style={{ borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
                           {item.children.map((child) => {
                             const childActive = active === child.id || (active === item.id && child.id === item.id);
                             return (
                               <button key={child.id} onClick={() => setActive(child.id)}
-                                className="w-full text-left px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+                                className="w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors"
                                 style={childActive
-                                  ? { background: "#f0f6ff", color: A.blue }
-                                  : { background: "transparent", color: A.gray1 }}>
+                                  ? { background: "rgba(37,99,235,0.16)", color: "#bfdbfe" }
+                                  : { background: "transparent", color: A.sidebarSub }}>
                                 {child.label}
                               </button>
                             );
@@ -543,46 +533,27 @@ export default function FlowChainApp() {
           ))}
         </nav>
 
-        {/* Bottom */}
-        <div className="px-3 pb-5 space-y-1">
+        <div className="p-3 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           <button
             onClick={() => setAiVisible((v) => !v)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-medium transition-colors duration-150"
             style={aiVisible
-              ? { background: "#f0f6ff", color: A.blue }
-              : { background: "transparent", color: A.gray1 }}>
+              ? { background: A.sidebarAccent, color: "#f8fafc" }
+              : { background: "transparent", color: A.sidebarSub }}>
             <Sparkles size={15} strokeWidth={1.8} />
             <span>AI 助手</span>
             <div className={`ml-auto w-2 h-2 rounded-full transition-colors`}
-              style={{ background: aiVisible ? A.blue : A.gray4 }} />
+              style={{ background: aiVisible ? A.blue : "rgba(148,163,184,0.34)" }} />
           </button>
-
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/60 transition-colors">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold text-white shrink-0"
-              style={{ background: "linear-gradient(135deg, #0071e3, #34aadc)" }}>
-              {user.name.slice(0, 1)}
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-medium truncate" style={{ color: A.label }}>{user.name}</div>
-              <div className="text-[10px] truncate" style={{ color: A.gray2 }}>{user.role}</div>
-            </div>
-            <button onClick={logout} className="ml-auto w-6 h-6 rounded-lg flex items-center justify-center hover:bg-white"
-              style={{ color: A.gray2 }}>
-              <LogOut size={12} />
-            </button>
-          </div>
         </div>
       </aside>
 
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Topbar */}
-        <header className="h-12 flex items-center justify-between px-6 shrink-0"
+        <header className="h-12 flex items-center justify-between px-6 shrink-0 bg-white"
           style={{
-            background: "rgba(246,246,248,0.72)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            borderBottom: "0.5px solid rgba(0,0,0,0.08)",
+            borderBottom: `1px solid ${A.border}`,
           }}>
           <div className="flex items-center gap-2 text-sm">
             <span style={{ color: A.gray2 }}>{PRODUCT_NAME}</span>
@@ -597,23 +568,59 @@ export default function FlowChainApp() {
             <span className="text-xs ml-2" style={{ color: A.gray2 }}>{user.company}</span>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => exportModulePdf(activeChildLabel || activeModuleLabel, user.company)}
-              className="h-8 px-3 rounded-xl flex items-center gap-1.5 text-xs font-medium transition-colors hover:bg-white"
-              style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
-              <Printer size={13} />
-              导出 PDF
-            </button>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs cursor-pointer"
-              style={{ background: A.white, borderColor: "rgba(0,0,0,0.08)", color: A.gray1 }}>
-              <Search size={12} />
-              <span>搜索</span>
-              <kbd className="ml-3 text-[10px] px-1.5 py-0.5 rounded-md" style={{ background: A.gray5, color: A.gray1 }}>⌘K</kbd>
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs cursor-pointer"
+              style={{ color: A.gray1 }}>
+              <Search size={14} />
+              <span>搜索单号、供应商、物料…</span>
             </div>
-            <button className="relative w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-white"
+            <button className="relative p-2 rounded-md transition-colors hover:bg-slate-100"
               style={{ color: A.gray1 }}>
               <Bell size={15} strokeWidth={1.8} />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: A.red }} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </button>
+            <div className="relative">
+              <button
+                onClick={() => setProfileOpen((value) => !value)}
+                className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-md hover:bg-slate-100 transition-colors"
+              >
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-[11px] font-semibold">
+                  {user.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="hidden sm:block text-left">
+                  <div className="text-[12px] font-medium leading-tight" style={{ color: A.label }}>{user.name}</div>
+                  <div className="text-[10px] leading-tight" style={{ color: A.gray2 }}>{user.role}</div>
+                </div>
+              </button>
+
+              {profileOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setProfileOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20">
+                    {[
+                      { icon: User, label: "My Profile", onClick: () => toast("个人资料", { description: "个人资料页待接入" }) },
+                      { icon: Settings, label: "Settings", onClick: () => toast("设置", { description: "设置页待接入" }) },
+                      { icon: LogOut, label: "Sign Out", onClick: logout },
+                    ].map(({ icon: Icon, label, onClick }) => (
+                      <button
+                        key={label}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                        onClick={() => {
+                          setProfileOpen(false);
+                          onClick();
+                        }}
+                      >
+                        <Icon size={13} className="text-slate-400" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 

@@ -169,8 +169,8 @@ export function DocumentHistoryPanel({
 
 export function Card({ children, className = "", style = {} }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   return (
-    <div className={`bg-white rounded-2xl ${className}`}
-      style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.06)", ...style }}>
+    <div className={`bg-white rounded-xl border ${className}`}
+      style={{ borderColor: A.border, boxShadow: "0 1px 2px rgba(15,23,42,0.04)", ...style }}>
       {children}
     </div>
   );
@@ -182,10 +182,10 @@ export function KpiCard({ label, value, sub, delta, positive, icon: Icon, color 
 }) {
   const c = color ?? A.blue;
   return (
-    <Card className="p-5 flex flex-col gap-4">
+    <Card className="p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${c}18` }}>
-          <Icon size={16} style={{ color: c }} strokeWidth={1.8} />
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${c}12` }}>
+          <Icon size={15} style={{ color: c }} strokeWidth={1.8} />
         </div>
         {delta !== undefined && (
           <div className="flex items-center gap-0.5 text-xs font-medium"
@@ -196,7 +196,7 @@ export function KpiCard({ label, value, sub, delta, positive, icon: Icon, color 
         )}
       </div>
       <div>
-        <div className="text-[22px] font-semibold tracking-tight" style={{ color: A.label }}>{value}</div>
+        <div className="text-[24px] font-semibold tracking-tight leading-none font-mono" style={{ color: A.label }}>{value}</div>
         <div className="text-xs mt-0.5" style={{ color: A.sub }}>{label}</div>
         {sub && <div className="text-[11px] mt-0.5" style={{ color: A.gray2 }}>{sub}</div>}
       </div>

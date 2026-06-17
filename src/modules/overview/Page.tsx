@@ -439,6 +439,8 @@ function buildMasterDataEvidence(): EvidenceDetail {
 
 export default function OverviewPanel({ onNavigate, onPrepareReplenishmentRequest, onOpenAi }: OverviewPanelProps) {
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceDetail | null>(null);
+  const [showAllActions, setShowAllActions] = useState(false);
+  const [showMoreSummary, setShowMoreSummary] = useState(false);
   const [dashboardOrders, setDashboardOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [dashboardRequests, setDashboardRequests] = useState<PurchaseRequest[]>([]);
   const [dashboardRfqs, setDashboardRfqs] = useState<RfqRecord[]>(RFQS);
@@ -728,11 +730,21 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   const quickLinks = [
     { label: "采购管理", id: "procurement" },
     { label: "库存管理", id: "inventory" },
+    { label: "供应商管理", id: "srm" },
     { label: "财务协同", id: "finance" },
     { label: "预测与 MRP", id: "forecast" },
-    { label: "报表中心", id: "reports" },
-    { label: "数据管理", id: "imports" },
   ];
+  const visibleKpis = [
+    kpis[0],
+    kpis[1],
+    { label: "待审批 PR / PO", value: String(pendingRequests.length + pendingOrders.length), sub: `${fmt(openPrValue)} PR · ${fmt(openPoValue)} PO`, icon: FileCheck2, color: A.orange },
+    { label: "库存 / 供应风险", value: String(inventoryRiskItems.length + supplierRisks.length), sub: `${topRiskSku?.sku || "库存稳定"} · ${supplierRisks[0]?.name || "供应稳定"}`, icon: Package, color: A.teal },
+  ];
+  const focusCards = [
+    risks.find((risk) => risk.title === "库存短缺"),
+    risks.find((risk) => risk.title === "供应商延迟 / 质量"),
+    risks.find((risk) => risk.title === "发票金额 / 收货差异"),
+  ].filter(Boolean) as typeof risks[number][];
 
   function exportEvidence(detail: EvidenceDetail) {
     exportRowsToCsv(`cockpit-evidence-${safeFilenamePart(detail.object)}.csv`, evidenceRowsForExport(detail));
@@ -753,26 +765,126 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
               </span>
             </div>
             <p className="text-sm" style={{ color: A.sub }}>从重点动作、运营风险、决策建议和证据包开始处理。</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {quickLinks.map((link) => (
-              <button key={link.id} onClick={() => onNavigate(link.id)}
-                className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-90"
-                style={{ color: A.gray1, background: A.gray6 }}>
-                {link.label}
-              </button>
-            ))}
+            <div className="mt-3 rounded-xl px-3 py-2 text-xs leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
+              今日重点集中在供应商延迟、库存短缺和发票/收货差异，建议优先处理高影响事项。
+            </div>
           </div>
         </div>
       </Card>
 
-      <div className="grid grid-cols-6 gap-2">
-        {kpis.map((kpi) => (
+      <div className="grid grid-cols-4 gap-3">
+        {visibleKpis.map((kpi) => (
           <KpiCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} color={kpi.color} />
         ))}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-4 items-start">
+      <div className="grid grid-cols-5 gap-4">
+        <Card className="col-span-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: A.label }}>优先事项</h2>
+              <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先看最重要的三条，再进入证据或处理页面。</p>
+            </div>
+            <button onClick={() => setShowMoreSummary((value) => !value)}
+              className="text-[11px] px-3 py-1.5 rounded-md font-medium"
+              style={{ background: showMoreSummary ? A.gray6 : "#eef4ff", color: A.blue }}>
+              {showMoreSummary ? "收起摘要" : "更多摘要"}
+            </button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {focusCards.map((risk) => {
+              const style = priorityStyle(risk.level as ActionRow["priority"]);
+              return (
+                <div key={risk.title} className="flex items-center justify-between gap-3 rounded-lg px-3 py-3 border" style={{ background: A.white, borderColor: A.border }}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Chip label={risk.level} color={style.color} bg={style.bg} />
+                      <div className="text-[12px] font-semibold" style={{ color: A.label }}>{risk.title}</div>
+                    </div>
+                    <div className="text-[11px] mt-1 truncate" style={{ color: A.sub }}>{risk.object} · {risk.evidence}</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {risk.detail && (
+                      <button onClick={() => setSelectedEvidence(risk.detail)}
+                        className="text-[11px] px-2.5 py-1.5 rounded-md font-medium"
+                        style={{ background: "#eef4ff", color: A.blue }}>
+                        查看证据
+                      </button>
+                    )}
+                    <button onClick={() => onNavigate(risk.moduleId)}
+                      className="text-[11px] px-2.5 py-1.5 rounded-md font-medium text-white"
+                      style={{ background: A.blue }}>
+                      进入处理
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <Card className="col-span-2 p-4">
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>进入工作台</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先进入模块，详细表格在模块内展开。</p>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {quickLinks.map((link) => {
+              const signal = link.id === "procurement" ? `${pendingRequests.length + pendingOrders.length}`
+                : link.id === "inventory" ? `${inventoryRiskItems.length}`
+                  : link.id === "srm" ? `${supplierRisks.length}`
+                    : link.id === "finance" ? `${invoiceRisks.length}`
+                      : "MRP";
+              return (
+                <button key={link.id} onClick={() => onNavigate(link.id)}
+                  className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium hover:bg-slate-50 transition-colors"
+                  style={{ background: A.white, borderColor: A.border, color: A.label }}>
+                  <span className="truncate">{link.label}</span>
+                  <span className="rounded px-1.5 py-px text-[10px]" style={{ background: "#eef4ff", color: A.blue }}>{signal}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 rounded-lg border px-3 py-3" style={{ borderColor: A.border, background: A.gray6 }}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[12px] font-semibold" style={{ color: A.label }}>今日关键动作</h3>
+                <p className="text-[10px] mt-0.5" style={{ color: A.sub }}>完整行动队列按需展开。</p>
+              </div>
+              <button onClick={() => setShowAllActions((value) => !value)}
+                className="text-[11px] px-3 py-1.5 rounded-md font-medium"
+                style={{ background: showAllActions ? A.white : A.blue, color: showAllActions ? A.label : A.white }}>
+                {showAllActions ? "收起" : `${actionRows.length} 项`}
+              </button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {showMoreSummary && (
+        <Card className="p-4">
+          <SectionHeader title="更多摘要" />
+          <div className="grid grid-cols-3 gap-3">
+            {decisionCards.slice(0, 3).map((card) => (
+              <div key={card.id} className="rounded-lg p-3" style={{ background: A.gray6 }}>
+                <div className="text-xs font-semibold" style={{ color: A.blue }}>{card.recommendation}</div>
+                <div className="text-[10px] leading-4 mt-2" style={{ color: A.sub }}>{card.businessImpact}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid grid-cols-7 gap-2">
+            {pulse.map((item) => (
+              <div key={item.label} className="rounded-lg p-3" style={{ background: A.white, border: `1px solid ${A.border}` }}>
+                <div className="text-[10px] truncate" style={{ color: A.gray2 }}>{item.label}</div>
+                <div className="text-base font-semibold mt-1 truncate" style={{ color: item.color }}>{item.value}</div>
+                <div className="text-[10px] mt-0.5 truncate" style={{ color: A.sub }}>{item.note}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {showAllActions && (
         <Card>
           <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
             <div>
@@ -822,108 +934,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
             </table>
           </div>
         </Card>
-
-        <div className="space-y-4">
-          <Card className="p-4">
-            <SectionHeader title="运营风险 Top Risks" />
-            <div className="space-y-2">
-              {risks.map((risk) => {
-                const style = priorityStyle(risk.level as ActionRow["priority"]);
-                return (
-                  <div key={risk.title}
-                    className="w-full text-left rounded-xl p-3 transition-colors hover:bg-blue-50/60"
-                    style={{ background: A.gray6 }}>
-                    <button onClick={() => onNavigate(risk.moduleId)} className="w-full text-left">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs font-semibold" style={{ color: A.label }}>{risk.title}</div>
-                        <Chip label={risk.level} color={style.color} bg={style.bg} />
-                      </div>
-                      <div className="text-[11px] mt-1" style={{ color: A.blue }}>{risk.object}</div>
-                      <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{risk.evidence}</div>
-                      <div className="text-[10px] mt-2 font-medium" style={{ color: style.color }}>{risk.next}</div>
-                    </button>
-                    {risk.detail && (
-                      <button onClick={() => setSelectedEvidence(risk.detail)}
-                        className="text-[10px] mt-2 font-medium"
-                        style={{ color: A.blue }}>
-                        查看证据
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-
-          <Card className="p-4">
-            <SectionHeader title="AI 决策卡"
-              right={<button onClick={onOpenAi} className="text-[11px] px-2 py-1 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>打开 AI</button>} />
-            <div className="space-y-2">
-              {decisionCards.map((card) => (
-                <div key={card.id} className="rounded-xl p-3" style={{ background: "#f0f6ff" }}>
-                  <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: A.blue }}>
-                    <Sparkles size={13} /> {card.recommendation}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 mt-3 text-[10px]">
-                    <div className="rounded-lg p-2" style={{ background: A.white }}>
-                      <div style={{ color: A.gray2 }}>业务影响</div>
-                      <div className="font-semibold mt-0.5 truncate" style={{ color: A.red }}>{card.businessImpact}</div>
-                    </div>
-                    <div className="rounded-lg p-2" style={{ background: A.white }}>
-                      <div style={{ color: A.gray2 }}>置信度</div>
-                      <div className="font-semibold mt-0.5" style={{ color: A.green }}>{card.confidence}</div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-[10px] leading-4" style={{ color: A.sub }}>
-                    <span className="font-medium" style={{ color: A.gray1 }}>证据：</span>{card.evidenceUsed}
-                  </div>
-                  <div className="mt-1 text-[10px] leading-4" style={{ color: A.orange }}>
-                    {card.riskWarning}
-                  </div>
-                  <div className="mt-3 grid grid-cols-3 gap-1.5">
-                    <button onClick={() => setSelectedEvidence(card.detail)}
-                      className="text-[11px] px-2 py-1.5 rounded-md font-medium"
-                      style={{ background: A.white, color: A.blue }}>
-                      查看证据
-                    </button>
-                    <button onClick={() => onNavigate(card.moduleId)}
-                      className="text-[11px] px-2 py-1.5 rounded-md font-medium"
-                      style={{ background: A.white, color: A.label }}>
-                      打开模块
-                    </button>
-                    <button onClick={() => exportEvidence(card.detail)}
-                      className="text-[11px] px-2 py-1.5 rounded-md font-medium"
-                      style={{ background: A.white, color: A.gray1 }}>
-                      导出证据
-                    </button>
-                  </div>
-                  <button onClick={card.onAction || (() => onNavigate(card.moduleId))}
-                    className="mt-2 w-full text-[11px] px-2 py-1.5 rounded-md font-medium text-white"
-                    style={{ background: A.blue }}>
-                    {card.suggestedAction}
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="text-[10px] leading-4 mt-2" style={{ color: A.gray2 }}>
-              建议卡用于行动复核，单据创建和库存调整需由对应业务流程确认。
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      <Card className="p-4">
-        <SectionHeader title="核心运营脉搏" />
-        <div className="grid grid-cols-7 gap-2">
-          {pulse.map((item) => (
-            <div key={item.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-              <div className="text-[10px] truncate" style={{ color: A.gray2 }}>{item.label}</div>
-              <div className="text-base font-semibold mt-1 truncate" style={{ color: item.color }}>{item.value}</div>
-              <div className="text-[10px] mt-0.5 truncate" style={{ color: A.sub }}>{item.note}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
+      )}
 
       <Modal
         open={Boolean(selectedEvidence)}

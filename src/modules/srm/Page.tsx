@@ -207,17 +207,19 @@ export default function SrmPage({ initialView = "overview" }: { initialView?: Sr
             <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
               统一查看供应商主数据、绩效、风险、准入认证、RFx 参与、合同协同和对账影响，支撑采购与库存供应连续性。
             </p>
+            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
+              首屏聚焦供应商健康、风险证据和下一步动作，明细表留在各子页。
+            </div>
           </div>
           <ContextualImportActions entityLabel="供应商" templateName="供应商" compact />
         </div>
       </Card>
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <KpiCard label="供应商总数" value={String(kpis.totalSuppliers)} sub="SRM 覆盖" icon={Building2} color={A.blue} />
         <KpiCard label="高风险供应商" value={String(kpis.highRiskSuppliers)} sub="风险或整改" icon={AlertTriangle} color={A.red} />
         <KpiCard label="待认证 / 待复核" value={String(kpis.certificationReview)} sub="准入状态" icon={ShieldCheck} color={A.orange} />
         <KpiCard label="开放 RFx" value={String(kpis.openRfqs)} sub="寻源参与" icon={ClipboardCheck} color={A.purple} />
-        <KpiCard label="对账 / 发票异常" value={String(kpis.reconciliationOrInvoiceExceptions)} sub="需协同复核" icon={FileSpreadsheet} color={A.teal} />
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -238,45 +240,13 @@ export default function SrmPage({ initialView = "overview" }: { initialView?: Sr
         </div>
       </div>
 
-      <div className="text-xs leading-5 px-1" style={{ color: A.sub }}>
-        {tabSubtitles[tab]}
-      </div>
+      <div className="text-xs leading-5 px-1" style={{ color: A.sub }}>{tabSubtitles[tab]}</div>
 
       {tab === "overview" && (
-        <div className="grid grid-cols-3 gap-3">
-          {rows.slice(0, 3).map((row) => {
-            const style = statusStyle(row.flag);
-            return (
-              <Card key={row.supplier.code} className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold" style={{ color: A.label }}>{row.supplier.name}</div>
-                    <div className="text-[11px] mt-1" style={{ color: A.sub }}>{row.category} · {row.supplier.paymentTerms}</div>
-                  </div>
-                  <Chip label={row.flag} color={style.color} bg={style.bg} />
-                </div>
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  {[
-                    ["准时率", `${row.onTimeRate}%`],
-                    ["质量", `${row.qualityRate}%`],
-                    ["风险分", row.riskScore],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-lg p-2" style={{ background: A.gray6 }}>
-                      <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
-                      <div className="text-xs font-semibold mt-1" style={{ color: A.label }}>{value}</div>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={() => setSelected(row)} className="mt-4 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
-                  查看 SRM 证据
-                </button>
-              </Card>
-            );
-          })}
-        </div>
+        <SrmOverview rows={rows} onDetail={setSelected} onOpenTab={setTab} />
       )}
 
-      {["overview", "master", "performance", "risk", "certification"].includes(tab) && (
+      {["master", "performance", "risk", "certification"].includes(tab) && (
         <SupplierTable rows={rows} mode={tab} onDetail={setSelected} />
       )}
 
@@ -342,6 +312,73 @@ export default function SrmPage({ initialView = "overview" }: { initialView?: Sr
           </div>
         </Card>
       )}
+    </div>
+  );
+}
+
+function SrmOverview({ rows, onDetail, onOpenTab }: { rows: SupplierSrmRow[]; onDetail: (row: SupplierSrmRow) => void; onOpenTab: (tab: SrmTab) => void }) {
+  const riskRows = [...rows]
+    .filter((row) => row.supplier.riskStatus !== "低" || row.invoiceVarianceCount > 0 || row.reconciliationException || row.supplier.certificationStatus !== "已认证")
+    .sort((a, b) => b.riskScore - a.riskScore)
+    .slice(0, 3);
+  const entries = [
+    { tab: "master" as const, title: "供应商主数据", desc: "基础档案、付款条款、默认税码和启停状态。", signal: `${rows.length} 个供应商`, icon: Building2 },
+    { tab: "performance" as const, title: "供应商绩效", desc: "准时率、质量合格率、响应分和趋势。", signal: "绩效证据", icon: Award },
+    { tab: "risk" as const, title: "供应商风险", desc: "交付、质量、发票和对账影响。", signal: `${riskRows.length} 个优先风险`, icon: AlertTriangle },
+    { tab: "certification" as const, title: "认证与准入", desc: "准入、认证状态、整改和到期风险。", signal: "待复核准入", icon: ShieldCheck },
+    { tab: "sourcing" as const, title: "RFx 参与", desc: "寻源邀请、报价参与和授标记录。", signal: `${RFQS.length} 个 RFx`, icon: ClipboardCheck },
+    { tab: "contracts" as const, title: "合同与目录", desc: "框架合同、目录覆盖和消耗进度。", signal: `${CONTRACTS.length} 份合同`, icon: Handshake },
+    { tab: "portal" as const, title: "供应商门户", desc: "供应商协同状态，采购执行仍在采购工作台。", signal: "协同概览", icon: FileSpreadsheet },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        {riskRows.map((row) => {
+          const style = statusStyle(row.supplier.riskStatus === "低" ? row.flag : row.supplier.riskStatus);
+          return (
+            <Card key={row.supplier.code} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: A.label }}>{row.supplier.name}</div>
+                  <div className="text-[11px] mt-1" style={{ color: A.sub }}>{row.category} · {row.supplier.paymentTerms}</div>
+                </div>
+                <Chip label={row.supplier.riskStatus} color={style.color} bg={style.bg} />
+              </div>
+              <div className="text-[11px] leading-5 mt-3" style={{ color: A.sub }}>
+                收货异常 {row.grnExceptionCount} · 发票差异 {row.invoiceVarianceCount} · 对账 {row.reconciliationException ? "需复核" : "稳定"}
+              </div>
+              <div className="text-[11px] mt-2 font-medium" style={{ color: A.blue }}>{row.nextAction}</div>
+              <button onClick={() => onDetail(row)} className="mt-4 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
+                查看 SRM 证据
+              </button>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-4 gap-3">
+        {entries.map((entry) => {
+          const Icon = entry.icon;
+          return (
+            <Card key={entry.tab} className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: A.gray6, color: A.blue }}>
+                  <Icon size={15} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold" style={{ color: A.label }}>{entry.title}</div>
+                  <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>{entry.desc}</div>
+                  <div className="text-[11px] mt-2 font-medium" style={{ color: A.blue }}>{entry.signal}</div>
+                </div>
+              </div>
+              <button onClick={() => onOpenTab(entry.tab)} className="mt-3 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+                进入
+              </button>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

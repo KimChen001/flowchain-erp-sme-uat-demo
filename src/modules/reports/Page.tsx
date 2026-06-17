@@ -991,7 +991,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
         </div>
       </Card>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="标准报表" value={String(reports.length)} sub="报表中心 v1" icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="销售/采购/库存/主数据/财务/计划/审计" icon={Database} color={A.green} />
         <KpiCard label="API / Fallback" value={String(apiCount)} sub="只读现有端点" icon={RefreshCw} color={A.orange} />

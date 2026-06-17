@@ -12,7 +12,7 @@ import { creditMemoTaxSummary, formatTaxRate } from "../../domain/finance/tax";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 
-type FinanceTab = "invoices" | "payables" | "credits" | "reconciliation" | "settlement";
+type FinanceTab = "overview" | "invoices" | "payables" | "credits" | "reconciliation" | "settlement";
 
 const financePayables = [
   ...SUPPLIER_INVOICES.filter(isInvoicePayableReady).map(invoiceToPayable),
@@ -244,9 +244,10 @@ function SettlementPreparation() {
   );
 }
 
-export default function FinanceWorkbench({ initialView = "invoices" }: { initialView?: FinanceTab }) {
+export default function FinanceWorkbench({ initialView = "overview" }: { initialView?: FinanceTab }) {
   const [tab, setTab] = useState<FinanceTab>(initialView);
   const tabs = [
+    { id: "overview", label: "财务总览", icon: CheckCircle2 },
     { id: "invoices", label: "供应商发票", icon: FileText },
     { id: "payables", label: "应付账款", icon: CreditCard },
     { id: "credits", label: "贷项冲减", icon: ReceiptText },
@@ -266,23 +267,61 @@ export default function FinanceWorkbench({ initialView = "invoices" }: { initial
             <p className="text-xs leading-5 mt-1" style={{ color: A.sub }}>
               管理供应商发票、AP 状态、应付账款、贷项冲减、供应商对账与结算准备。
             </p>
+            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
+              这里只展示协同可见性，不进入 GL、支付执行或会计过账。
+            </div>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: A.green }}>
             <CheckCircle2 size={13} /> 财务工作台
           </div>
         </div>
       </Card>
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         {financeSummaryCards().map((item) => (
           <KpiCard key={item.label} {...item} />
         ))}
       </div>
       <SubTabs tabs={tabs as any} value={tab} onChange={(value) => setTab(value as FinanceTab)} />
+      {tab === "overview" && <FinanceOverview onOpenTab={setTab} />}
       {tab === "invoices" && <SupplierInvoiceRegister mode="finance" />}
       {tab === "payables" && <PayablesPanel />}
       {tab === "credits" && <CreditMemoOffsetPanel />}
       {tab === "reconciliation" && <SupplierReconciliationPanel />}
       {tab === "settlement" && <SettlementPreparation />}
+    </div>
+  );
+}
+
+function FinanceOverview({ onOpenTab }: { onOpenTab: (tab: FinanceTab) => void }) {
+  const reconciliationExceptions = SUPPLIER_RECONCILIATION_STATEMENTS.filter((item) =>
+    item.exceptionCount > 0 || item.totalVarianceAmount > 0 || ["存在差异", "已驳回"].includes(item.status)
+  );
+  const entries = [
+    { tab: "invoices" as const, title: "供应商发票", desc: "发票登记、税额拆分、PO/GRN 匹配和异常复核。", signal: `${SUPPLIER_INVOICES.length} 张发票`, icon: FileText },
+    { tab: "payables" as const, title: "应付账款", desc: "查看 AP 状态和未关闭应付，不执行付款。", signal: `${financePayables.filter((item) => item.status !== "已付款").length} 笔未关闭`, icon: CreditCard },
+    { tab: "credits" as const, title: "贷项冲减", desc: "供应商贷项通知、退货关联和 AP 冲减可见性。", signal: `${SUPPLIER_CREDIT_MEMOS.length} 张贷项`, icon: ReceiptText },
+    { tab: "reconciliation" as const, title: "供应商对账", desc: "供应商期间对账、差异和未结余额。", signal: `${reconciliationExceptions.length} 个异常`, icon: FileSpreadsheet },
+    { tab: "settlement" as const, title: "结算准备", desc: "付款前可见性清单，不包含支付执行或 GL。", signal: `${settlementRows().filter((row) => row.readiness === "可结算").length} 个可结算`, icon: HandCoins },
+  ];
+
+  return (
+    <div className="grid grid-cols-5 gap-3">
+      {entries.map((entry) => {
+        const Icon = entry.icon;
+        return (
+          <Card key={entry.tab} className="p-4">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={{ background: A.gray6, color: A.blue }}>
+              <Icon size={15} />
+            </div>
+            <div className="text-sm font-semibold" style={{ color: A.label }}>{entry.title}</div>
+            <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>{entry.desc}</div>
+            <div className="text-[11px] font-medium mt-2" style={{ color: A.blue }}>{entry.signal}</div>
+            <button onClick={() => onOpenTab(entry.tab)} className="mt-3 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+              进入
+            </button>
+          </Card>
+        );
+      })}
     </div>
   );
 }

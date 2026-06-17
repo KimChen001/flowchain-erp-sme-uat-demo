@@ -29,7 +29,6 @@ import {
   type TimelineStep,
 } from "../../components/document/DocumentShell";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
-import { exportModulePdf } from "../../lib/pdf-export";
 import { NewPOModal } from "./components/NewPOModal";
 import { POStatusPill } from "./components/POStatusPill";
 import { TrackShipmentModal } from "./components/TrackShipmentModal";
@@ -162,9 +161,6 @@ export default function PurchasingOrdersPage() {
     } catch (error) {
       toast.error("采购订单下发失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     }
-  }
-  function downloadPDF(poId: string) {
-    exportModulePdf(`采购订单 ${poId}`, "新辰智能制造");
   }
   function exportCsv() {
     if (filtered.length === 0) {
@@ -546,9 +542,6 @@ export default function PurchasingOrdersPage() {
                 className="flex-1 text-xs py-2 rounded-lg font-medium text-white hover:opacity-90 transition-opacity"
                 style={{ background: A.blue }}>跟踪发货</button>
             )}
-            <button onClick={() => downloadPDF(selectedPO.po)}
-              className="flex-1 text-xs py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-              style={{ background: A.gray6, color: A.label }}>下载 PDF</button>
             {!["已完成", "已取消"].includes(selectedPO.status) && (
               <button onClick={() => cancel(selectedPO.po)}
                 className="text-xs px-3 py-2 rounded-lg font-medium hover:bg-red-50 transition-colors"

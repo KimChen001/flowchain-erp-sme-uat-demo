@@ -4,12 +4,12 @@ import { toast } from "sonner";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { A, Card, Chip, KpiCard, Modal, SubTabs } from "../../components/ui";
 import { ITEM_MASTER, PAYMENT_TERMS, SUPPLIER_MASTER, TAX_CODES, WAREHOUSE_BINS } from "../../data/master-data";
-import { itemUsageSummary, supplierUsageSummary, warehouseUsageSummary } from "../../domain/master-data/helpers";
+import { itemUsageSummary, masterDataQualitySignals, supplierUsageSummary, warehouseUsageSummary } from "../../domain/master-data/helpers";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import type { ItemMaster, PaymentTerm, SupplierMaster, TaxCode, WarehouseBin } from "../../types/scm";
 
-type MasterDataTab = "items" | "suppliers" | "warehouses" | "tax-codes" | "payment-terms";
+type MasterDataTab = "overview" | "items" | "suppliers" | "warehouses" | "tax-codes" | "payment-terms";
 type DetailRecord =
   | { type: "items"; item: ItemMaster }
   | { type: "suppliers"; item: SupplierMaster }
@@ -18,6 +18,7 @@ type DetailRecord =
   | { type: "payment-terms"; item: PaymentTerm };
 
 const tabs = [
+  { id: "overview", label: "主数据总览", icon: Database },
   { id: "items", label: "物料主数据", icon: Package },
   { id: "suppliers", label: "供应商主数据", icon: Truck },
   { id: "warehouses", label: "仓库 / 库位", icon: Warehouse },
@@ -143,7 +144,7 @@ function DetailModal({ detail, onClose }: { detail: DetailRecord | null; onClose
   );
 }
 
-export default function MasterDataPage({ initialView = "items" }: { initialView?: MasterDataTab }) {
+export default function MasterDataPage({ initialView = "overview" }: { initialView?: MasterDataTab }) {
   const [tab, setTab] = useState<MasterDataTab>(initialView);
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<DetailRecord | null>(null);
@@ -254,13 +255,18 @@ export default function MasterDataPage({ initialView = "items" }: { initialView?
           描述: item.description,
         })),
       },
-    } satisfies Record<MasterDataTab, { filename: string; rows: Record<string, unknown>[] }>;
+    } satisfies Record<Exclude<MasterDataTab, "overview">, { filename: string; rows: Record<string, unknown>[] }>;
+    if (tab === "overview") {
+      toast("请选择一个主数据视图导出");
+      return;
+    }
     const current = configs[tab];
     exportRowsToCsv(current.filename, current.rows);
     toast.success("CSV 已导出");
   }
 
   const importLabels = {
+    overview: ["主数据", "主数据"],
     items: ["物料主数据", "物料"],
     suppliers: ["供应商主数据", "供应商"],
     warehouses: ["仓库库位", "库位"],
@@ -280,17 +286,19 @@ export default function MasterDataPage({ initialView = "items" }: { initialView?
             <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
               统一维护物料、供应商、仓库库位、税码与付款条款，为采购、库存、发票和 SRM 流程提供基础数据。
             </p>
+            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
+              首屏先看质量摘要和控制范围，再进入具体主数据表。
+            </div>
           </div>
           <ContextualImportActions entityLabel={entityLabel} templateName={templateName} compact />
         </div>
       </Card>
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <KpiCard label="物料主数据" value={String(ITEM_MASTER.length)} sub={`${ITEM_MASTER.filter((item) => item.status === "待完善").length} 条待完善`} icon={Package} color={A.blue} />
         <KpiCard label="供应商主数据" value={String(SUPPLIER_MASTER.length)} sub={`${SUPPLIER_MASTER.filter((item) => item.riskStatus === "高").length} 个高风险`} icon={Truck} color={A.purple} />
         <KpiCard label="仓库 / 库位" value={String(WAREHOUSE_BINS.length)} sub={`${WAREHOUSE_BINS.filter((item) => item.available).length} 个可用`} icon={Warehouse} color={A.green} />
         <KpiCard label="税码" value={String(TAX_CODES.length)} sub={`${TAX_CODES.filter((item) => item.status === "启用").length} 个启用`} icon={Tags} color={A.orange} />
-        <KpiCard label="付款条款" value={String(PAYMENT_TERMS.length)} sub={`${PAYMENT_TERMS.filter((item) => item.status === "启用").length} 个启用`} icon={FileSpreadsheet} color={A.teal} />
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -312,6 +320,9 @@ export default function MasterDataPage({ initialView = "items" }: { initialView?
       </div>
 
       <Card>
+        {tab === "overview" && (
+          <MasterDataOverview onOpenTab={setTab} />
+        )}
         {tab === "items" && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -441,6 +452,58 @@ export default function MasterDataPage({ initialView = "items" }: { initialView?
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+function MasterDataOverview({ onOpenTab }: { onOpenTab: (tab: MasterDataTab) => void }) {
+  const quality = masterDataQualitySignals();
+  const entries = [
+    { tab: "items" as const, title: "物料主数据", desc: "SKU、规格、库存策略、默认仓库、默认供应商和税码。", signal: `${ITEM_MASTER.length} 条记录`, icon: Package },
+    { tab: "suppliers" as const, title: "供应商主数据", desc: "供应商编码、付款条款、默认税码、联系人和启停状态。", signal: `${SUPPLIER_MASTER.length} 条记录`, icon: Truck },
+    { tab: "warehouses" as const, title: "仓库 / 库位", desc: "仓库、库区、库位容量、QA 状态和负责人。", signal: `${WAREHOUSE_BINS.length} 个库位`, icon: Warehouse },
+    { tab: "tax-codes" as const, title: "税码", desc: "采购与发票协同使用的税码、税率和默认状态。", signal: `${TAX_CODES.length} 个税码`, icon: Tags },
+    { tab: "payment-terms" as const, title: "付款条款", desc: "供应商协同和 AP 可见性使用的付款规则。", signal: `${PAYMENT_TERMS.length} 个条款`, icon: FileSpreadsheet },
+  ];
+
+  return (
+    <div className="p-5 space-y-4">
+      <div className="rounded-xl p-4" style={{ background: "#f0f6ff" }}>
+        <div className="text-sm font-semibold" style={{ color: A.label }}>主数据控制范围</div>
+        <p className="text-xs leading-5 mt-1" style={{ color: A.sub }}>
+          主数据只维护源头记录，为采购、库存、发票和 SRM 提供基础数据；供应商风险解释和交易处理仍回到对应业务工作台。
+        </p>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "缺少默认税码", value: quality.missingTaxCode, color: A.red },
+          { label: "缺少默认供应商", value: quality.missingSupplier, color: A.orange },
+          { label: "待复核记录", value: quality.totalIssues, color: A.blue },
+        ].map((item) => (
+          <div key={item.label} className="rounded-xl p-4" style={{ background: A.gray6 }}>
+            <div className="text-[11px]" style={{ color: A.gray2 }}>{item.label}</div>
+            <div className="text-xl font-semibold mt-1" style={{ color: item.color }}>{item.value}</div>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-5 gap-3">
+        {entries.map((entry) => {
+          const Icon = entry.icon;
+          return (
+            <div key={entry.tab} className="rounded-xl p-4" style={{ background: A.gray6 }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={{ background: A.white, color: A.blue }}>
+                <Icon size={15} />
+              </div>
+              <div className="text-sm font-semibold" style={{ color: A.label }}>{entry.title}</div>
+              <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>{entry.desc}</div>
+              <div className="text-[11px] font-medium mt-2" style={{ color: A.blue }}>{entry.signal}</div>
+              <button onClick={() => onOpenTab(entry.tab)} className="mt-3 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.white, color: A.blue }}>
+                进入
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

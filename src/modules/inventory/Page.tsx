@@ -1035,7 +1035,7 @@ export default function InventoryPage({ initialView = "overview" }: { initialVie
   return (
     <div className="space-y-4">
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as InvTab)} />
-      {tab === "overview"  && <InventoryOverview />}
+      {tab === "overview"  && <InventoryLanding onOpenTab={setTab} />}
       {tab === "lots"      && <InventoryLots />}
       {tab === "transfer"  && <InventoryTransfers />}
       {tab === "count"     && <InventoryCycleCount />}
@@ -1043,6 +1043,116 @@ export default function InventoryPage({ initialView = "overview" }: { initialVie
       {tab === "movements" && <InventoryMovementLedger />}
       {tab === "exceptions" && <InventoryExceptionDocuments />}
       {tab === "bins"      && <InventoryWarehouseMap />}
+    </div>
+  );
+}
+
+function InventoryLanding({ onOpenTab }: { onOpenTab: (tab: InvTab) => void }) {
+  const plannedItems = inventoryItems.map((item) => ({ ...item, plan: inventoryPlan(item) }));
+  const riskItems = plannedItems.filter((item) => item.status !== "正常" || item.plan.suggestedQty > 0);
+  const exceptionDocs = buildInventoryExceptionDocuments();
+  const topRisk = riskItems[0];
+  const topException = exceptionDocs.find((doc) => doc.status !== "已关闭") || exceptionDocs[0];
+  const frozenLot = LOTS.find((lot) => lot.status === "冻结" || lot.status === "近效期");
+  const transferExceptions = TRANSFERS.filter((transfer) => ["在途", "待审批"].includes(transfer.status));
+  const frozenCount = LOTS.filter((lot) => lot.status === "冻结").length;
+  const entries = [
+    { tab: "movements" as const, title: "库存事务流水", desc: "查看采购入库、退货、调拨、调整和盘点形成的库存变化。", signal: `${INVENTORY_MOVEMENT_LEDGER.length} 条流水`, icon: History },
+    { tab: "exceptions" as const, title: "库存异常单据", desc: "解释库存变化原因、证据链和关闭动作。", signal: `${exceptionDocs.length} 张异常单据`, icon: AlertTriangle },
+    { tab: "lots" as const, title: "批次 / 序列号", desc: "追踪批次、序列号、效期和冻结状态。", signal: `${LOTS.length} 个批次`, icon: Layers },
+    { tab: "transfer" as const, title: "库间调拨", desc: "跟进调拨申请、在途和签收差异。", signal: `${TRANSFERS.length} 张调拨`, icon: ArrowLeftRight },
+    { tab: "count" as const, title: "循环盘点", desc: "查看盘点计划、执行状态和差异复核。", signal: `${VARIANCES.length} 个差异`, icon: ClipboardCheck },
+    { tab: "abcxyz" as const, title: "ABC/XYZ", desc: "按价值和需求波动查看库存策略。", signal: "策略矩阵", icon: Boxes },
+    { tab: "bins" as const, title: "库位地图", desc: "查看库位容量、热度和可用状态。", signal: "库位热力", icon: Grid3x3 },
+  ];
+  const primaryEntries = entries.slice(0, 4);
+  const secondaryEntries = entries.slice(4);
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>库存管理</h1>
+            <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
+              查看库存健康、事务流水、异常单据、批次序列号、调拨、盘点和库位状态。
+            </p>
+            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
+              先看风险 SKU、异常单据和冻结批次，其余明细放在事务流水、盘点和库位子页里。
+            </div>
+          </div>
+          <button onClick={() => onOpenTab("exceptions")} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>
+            处理异常
+          </button>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-5 gap-3">
+        <KpiCard label="风险 SKU" value={String(riskItems.length)} sub={topRisk?.sku || "稳定"} icon={Package} color={A.red} />
+        <KpiCard label="库存异常单据" value={String(exceptionDocs.length)} sub="待复核/处理中" icon={AlertTriangle} color={A.orange} />
+        <KpiCard label="冻结库存" value={String(frozenCount)} sub="QA 或锁定状态" icon={ShieldCheck} color={A.purple} />
+        <KpiCard label="调拨差异" value={String(transferExceptions.length)} sub="在途/待审批" icon={ArrowLeftRight} color={A.indigo} />
+        <KpiCard label="盘点差异" value={String(VARIANCES.length)} sub="待复核关闭" icon={ClipboardCheck} color={A.teal} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { title: "库存短缺风险", object: topRisk?.sku || "库存池", body: topRisk ? `${topRisk.name} 覆盖 ${topRisk.plan.daysCover} 天，建议补货 ${topRisk.plan.suggestedQty.toLocaleString()} ${topRisk.plan.unit}` : "当前未发现高优先级短缺。", tab: "movements" as const },
+          { title: "异常单据", object: topException?.id || "异常单据", body: topException ? `${topException.type} · ${topException.sku} · ${topException.nextAction}` : "暂无待处理异常单据。", tab: "exceptions" as const },
+          { title: "冻结 / QA Hold", object: frozenLot?.lot || "批次库存", body: frozenLot ? `${frozenLot.sku} · ${frozenLot.name} · ${frozenLot.status}` : "暂无冻结或近效期重点批次。", tab: "lots" as const },
+        ].map((item) => (
+          <Card key={item.title} className="p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-xs font-semibold" style={{ color: A.label }}>{item.title}</div>
+                <div className="text-[11px] mt-1 font-medium" style={{ color: A.blue }}>{item.object}</div>
+              </div>
+              <Chip label="优先" color={A.orange} bg="#fff8f0" />
+            </div>
+            <div className="text-[11px] leading-5 mt-3" style={{ color: A.sub }}>{item.body}</div>
+            <button onClick={() => onOpenTab(item.tab)} className="mt-3 text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
+              进入处理
+            </button>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {primaryEntries.map((entry) => {
+          const Icon = entry.icon;
+          return (
+            <Card key={entry.tab} className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: A.gray6, color: A.blue }}>
+                  <Icon size={15} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold" style={{ color: A.label }}>{entry.title}</div>
+                  <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>{entry.desc}</div>
+                  <div className="text-[11px] mt-2 font-medium" style={{ color: A.blue }}>{entry.signal}</div>
+                </div>
+              </div>
+              <button onClick={() => onOpenTab(entry.tab)} className="mt-3 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
+                进入
+              </button>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {secondaryEntries.map((entry) => (
+          <button
+            key={entry.tab}
+            onClick={() => onOpenTab(entry.tab)}
+            className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-[11px] font-medium transition-colors"
+            style={{ background: A.white, color: A.gray1, boxShadow: `0 0 0 0.5px ${A.border}` }}
+          >
+            <span>{entry.title}</span>
+            <span className="rounded-full px-1.5 py-px text-[10px]" style={{ background: A.gray6, color: A.blue }}>{entry.signal}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

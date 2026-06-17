@@ -884,6 +884,9 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
               业务数据导入可在对应业务页面发起；数据管理用于集中复核导入任务记录、模板管理、数据校验结果、失败行处理和导入历史。
             </p>
+            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
+              首屏聚焦导入复核，不替代业务页面里的上下文导入。
+            </div>
           </div>
           {onNavigate && (
             <button onClick={() => onNavigate("reports")}
@@ -895,7 +898,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
         </div>
       </Card>
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard label="模板管理" value={String(IMPORT_CONFIGS.length)} sub="CSV 模板" icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="导入任务" value={String(parsedRows.length)} sub={fileName || "等待校验"} icon={Upload} color={A.purple} />
         <KpiCard label="数据校验结果" value={String(validRows.length)} sub="有效行" icon={CheckCircle2} color={A.green} />
