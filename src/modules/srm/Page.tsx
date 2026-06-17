@@ -39,6 +39,17 @@ const tabs = [
   { id: "portal", label: "供应商门户", icon: FileSpreadsheet },
 ] as const;
 
+const tabSubtitles: Record<SrmTab, string> = {
+  overview: "聚焦供应商健康度、异常协同和下一步处理优先级。",
+  master: "查看供应商主档、商业条款、默认税码和基础状态。",
+  performance: "跟踪准时率、质量合格率、响应分和绩效证据。",
+  risk: "识别高风险、收货异常、发票差异和对账影响供应商。",
+  certification: "复核供应商准入、认证状态、整改和到期风险。",
+  sourcing: "汇总 RFx 邀请、报价参与和寻源结果。",
+  contracts: "查看框架合同、目录覆盖、价格条款和消耗进度。",
+  portal: "汇总供应商协同状态；采购侧报价、订单与收货协同仍在采购工作台处理。",
+};
+
 function statusStyle(status: string) {
   if (["低", "已认证", "启用", "战略", "核心", "执行中"].includes(status)) return { color: A.green, bg: "#f0faf4" };
   if (["高", "整改中", "整改", "已到期"].includes(status)) return { color: A.red, bg: "#fff1f0" };
@@ -225,6 +236,10 @@ export default function SrmPage({ initialView = "overview" }: { initialView?: Sr
             <FileSpreadsheet size={13} /> 导出 CSV
           </button>
         </div>
+      </div>
+
+      <div className="text-xs leading-5 px-1" style={{ color: A.sub }}>
+        {tabSubtitles[tab]}
       </div>
 
       {tab === "overview" && (

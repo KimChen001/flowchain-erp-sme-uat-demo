@@ -27,7 +27,6 @@ import { inventoryPlan } from "../domain/inventory/planning";
 import { inventoryPurchaseRequestPayload } from "../domain/inventory/purchase-request";
 import ReceivingPanel from "../modules/receiving/Page";
 import InventoryPanel from "../modules/inventory/Page";
-import InventoryExceptionDocuments from "../modules/inventory/InventoryExceptionDocuments";
 import ForecastPanel from "../modules/forecast/Page";
 import OverviewPanel from "../modules/overview/Page";
 import SalesPanel from "../modules/sales/Page";
@@ -429,7 +428,6 @@ export default function FlowChainApp() {
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiVisible(true)} />,
     inventory:   <InventoryPanel initialView={activeView as any} />,
-    "inventory:exceptions": <InventoryExceptionDocuments />,
     sales:       <SalesPanel />,
     forecast:    <ForecastPanel />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.

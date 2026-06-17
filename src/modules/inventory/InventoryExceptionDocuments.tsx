@@ -35,6 +35,14 @@ function typeColor(type: InventoryExceptionDocumentType) {
   return A.orange;
 }
 
+function nextActionFor(status: InventoryExceptionDocumentStatus, fallback: string) {
+  if (status === "已关闭") return "归档异常证据";
+  if (status === "已复核") return "等待关闭";
+  if (status === "已驳回") return "补充证据后退回复核";
+  if (status === "处理中") return "跟进异常处理";
+  return fallback;
+}
+
 export default function InventoryExceptionDocuments() {
   const [documents, setDocuments] = useState<InventoryExceptionDocument[]>(() => buildInventoryExceptionDocuments());
   const [typeFilter, setTypeFilter] = useState<"全部" | InventoryExceptionDocumentType>("全部");
@@ -57,8 +65,8 @@ export default function InventoryExceptionDocuments() {
   const summary = inventoryExceptionSummary(documents);
 
   function updateStatus(doc: InventoryExceptionDocument, status: InventoryExceptionDocumentStatus, message: string) {
-    setDocuments((rows) => rows.map((row) => row.id === doc.id ? { ...row, status, nextAction: status === "已关闭" ? "归档异常证据" : status === "已复核" ? "等待关闭" : row.nextAction } : row));
-    setSelected((current) => current?.id === doc.id ? { ...current, status, nextAction: status === "已关闭" ? "归档异常证据" : status === "已复核" ? "等待关闭" : current.nextAction } : current);
+    setDocuments((rows) => rows.map((row) => row.id === doc.id ? { ...row, status, nextAction: nextActionFor(status, row.nextAction) } : row));
+    setSelected((current) => current?.id === doc.id ? { ...current, status, nextAction: nextActionFor(status, current.nextAction) } : current);
     toast.success(message, { description: doc.id });
   }
 
@@ -146,6 +154,7 @@ export default function InventoryExceptionDocuments() {
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => setSelected(doc)} className="px-2.5 py-1 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>详情</button>
                         <button onClick={() => updateStatus(doc, "已复核", "库存异常单据已标记复核")} className="px-2.5 py-1 rounded-md text-[11px] font-medium" style={{ background: "#f0faf4", color: A.green }}>复核</button>
+                        <button onClick={() => toast("更多操作", { description: `${doc.id} · ${doc.nextAction}` })} className="px-2.5 py-1 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.gray1 }}>更多</button>
                       </div>
                     </td>
                   </tr>

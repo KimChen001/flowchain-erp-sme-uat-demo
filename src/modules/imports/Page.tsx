@@ -22,7 +22,7 @@ import {
 } from "../../lib/csv-import";
 import { A, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
+type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "supplierPerformance" | "supplierCertification" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
 type ValidationResult = {
   rowNumber: number;
@@ -457,6 +457,57 @@ const IMPORT_CONFIGS: ImportConfig[] = [
           原因: value(row, "原因"),
           下一步: value(row, "下一步"),
         },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "supplierPerformance",
+    label: "供应商绩效导入",
+    module: "主数据",
+    description: "导入供应商准时率、质量合格率、响应分和评级，用于供应商管理绩效视图校验。",
+    templateFilename: "supplier-performance-template.csv",
+    requiredFields: ["供应商编码", "供应商名称", "准时率", "质量合格率", "响应分", "评级", "统计期间"],
+    optionalFields: ["风险状态", "负责人", "备注"],
+    sampleRows: [
+      { 供应商编码: "SUP-001", 供应商名称: "江苏铝合金集团", 准时率: 94, 质量合格率: 98.5, 响应分: 86, 评级: "A", 统计期间: "2026-W23", 风险状态: "低", 负责人: "沈佳" },
+    ],
+    notes: ["供应商绩效导入用于 SRM 绩效复核，不会自动调整采购授标结果。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["供应商编码", "供应商名称", "准时率", "质量合格率", "响应分", "评级", "统计期间"]);
+      const onTime = parseNonNegativeNumber(value(row, "准时率"));
+      const quality = parseNonNegativeNumber(value(row, "质量合格率"));
+      const response = parseNonNegativeNumber(value(row, "响应分"));
+      if (onTime == null || onTime > 100) errors.push("准时率必须为 0-100 的数字");
+      if (quality == null || quality > 100) errors.push("质量合格率必须为 0-100 的数字");
+      if (response == null || response > 100) errors.push("响应分必须为 0-100 的数字");
+      const warnings = duplicateWarnings(rows, row, (item) => `${value(item, "供应商编码")}::${value(item, "统计期间")}`, "存在重复供应商+统计期间");
+      return {
+        normalized: { 供应商编码: value(row, "供应商编码"), 供应商名称: value(row, "供应商名称"), 准时率: onTime ?? value(row, "准时率"), 质量合格率: quality ?? value(row, "质量合格率"), 响应分: response ?? value(row, "响应分"), 评级: value(row, "评级"), 统计期间: value(row, "统计期间"), 风险状态: value(row, "风险状态"), 负责人: value(row, "负责人"), 备注: value(row, "备注") },
+        errors,
+        warnings,
+      };
+    },
+  },
+  {
+    id: "supplierCertification",
+    label: "供应商认证导入",
+    module: "主数据",
+    description: "导入供应商认证、准入、风险和有效期信息，用于供应商管理认证视图校验。",
+    templateFilename: "supplier-certification-template.csv",
+    requiredFields: ["供应商编码", "供应商名称", "认证状态", "风险状态", "有效期至", "负责人"],
+    optionalFields: ["证书编号", "准入品类", "复核意见"],
+    sampleRows: [
+      { 供应商编码: "SUP-001", 供应商名称: "江苏铝合金集团", 认证状态: "已认证", 风险状态: "低", 有效期至: "2026-12-31", 负责人: "沈佳", 证书编号: "CERT-2026-001", 准入品类: "金属材料" },
+    ],
+    notes: ["供应商认证导入用于准入资料复核和到期提醒，不会自动启停供应商。"],
+    validateRow: (row, rows) => {
+      const errors = baseErrors(row, ["供应商编码", "供应商名称", "认证状态", "风险状态", "有效期至", "负责人"]);
+      if (value(row, "有效期至") && !parseDateLike(value(row, "有效期至"))) errors.push("有效期至需为可识别日期");
+      const warnings = duplicateWarnings(rows, row, (item) => value(item, "供应商编码"), "存在重复供应商编码");
+      return {
+        normalized: { 供应商编码: value(row, "供应商编码"), 供应商名称: value(row, "供应商名称"), 认证状态: value(row, "认证状态"), 风险状态: value(row, "风险状态"), 有效期至: value(row, "有效期至"), 负责人: value(row, "负责人"), 证书编号: value(row, "证书编号"), 准入品类: value(row, "准入品类"), 复核意见: value(row, "复核意见") },
         errors,
         warnings,
       };

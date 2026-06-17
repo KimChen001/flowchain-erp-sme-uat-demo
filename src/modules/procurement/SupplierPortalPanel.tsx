@@ -58,7 +58,12 @@ export default function SupplierPortalPanel() {
       <Card>
         <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商绩效记分卡</h2>
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商绩效记分卡</h2>
+              <p className="text-[11px] mt-1" style={{ color: A.sub }}>
+                完整供应商绩效、风险和认证视图请在供应商管理中查看；本页聚焦采购侧报价、订单与收货协同。
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-[11px]" style={{ color: A.gray2 }}>PO + GRN 质检动态评分</span>
               <ContextualImportActions entityLabel="供应商" compact />

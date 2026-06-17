@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -20,6 +20,7 @@ import {
 } from "../../components/ui";
 import InventoryMovementLedger from "./InventoryMovementLedger";
 import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
+import { buildInventoryExceptionDocuments } from "../../domain/inventory/exceptions";
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
@@ -1016,6 +1017,7 @@ function InventoryWarehouseMap() {
 type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins" | "exceptions";
 export default function InventoryPage({ initialView = "overview" }: { initialView?: InvTab }) {
   const [tab, setTab] = useState<InvTab>(initialView);
+  const exceptionCount = useMemo(() => buildInventoryExceptionDocuments().length, []);
   const tabs = [
     { id: "overview",  label: "库存总览",  icon: Package,         count: "8,412" },
     { id: "lots",      label: "批次/序列号", icon: Layers,          count: LOTS.length },
@@ -1023,7 +1025,7 @@ export default function InventoryPage({ initialView = "overview" }: { initialVie
     { id: "count",     label: "循环盘点",    icon: ClipboardCheck,  count: COUNT_PLANS.length },
     { id: "abcxyz",    label: "ABC/XYZ 分类", icon: Boxes,           count: "10" },
     { id: "movements", label: "事务流水",    icon: History,         count: INVENTORY_MOVEMENT_LEDGER.length },
-    { id: "exceptions", label: "库存异常单据", icon: AlertTriangle,   count: "12" },
+    { id: "exceptions", label: "库存异常单据", icon: AlertTriangle,   count: exceptionCount },
     { id: "bins",      label: "库位地图",    icon: Grid3x3,         count: "60" },
   ] as const;
   useEffect(() => {
