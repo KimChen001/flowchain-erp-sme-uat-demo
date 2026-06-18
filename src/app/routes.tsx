@@ -74,7 +74,7 @@ export const navItems = [
   {
     icon: CircleDollarSign, label: "财务协同", id: "finance",
     children: [
-      { id: "finance", label: "发票与应付" },
+      { id: "finance", label: "财务总览" },
       { id: "finance:invoices", label: "供应商发票" },
       { id: "finance:payables", label: "应付账款" },
       { id: "finance:credits", label: "贷项冲减" },

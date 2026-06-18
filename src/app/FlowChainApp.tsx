@@ -601,9 +601,9 @@ export default function FlowChainApp() {
                   <div className="fixed inset-0 z-10" onClick={() => setProfileOpen(false)} />
                   <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20">
                     {[
-                      { icon: User, label: "My Profile", onClick: () => toast("个人资料", { description: "个人资料页待接入" }) },
-                      { icon: Settings, label: "Settings", onClick: () => toast("设置", { description: "设置页待接入" }) },
-                      { icon: LogOut, label: "Sign Out", onClick: logout },
+                      { icon: User, label: "用户档案", onClick: () => toast("用户档案", { description: "用户档案页待接入" }) },
+                      { icon: Settings, label: "设置", onClick: () => toast("设置", { description: "设置页待接入" }) },
+                      { icon: LogOut, label: "退出登录", onClick: logout },
                     ].map(({ icon: Icon, label, onClick }) => (
                       <button
                         key={label}

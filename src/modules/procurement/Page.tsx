@@ -148,8 +148,8 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
       return {
         id: `po-${order.po}`,
         bucket: [isApproval ? "approval" : "tracking", formatDueLabel(due).startsWith("逾期") ? "overdue" : "tracking"],
-        kind: isApproval ? "采购申请" : "采购订单",
-        docNo: isApproval ? (order.sourceRequest || order.po) : order.po,
+        kind: "采购订单",
+        docNo: order.po,
         title: isApproval
           ? `${order.sourceName || order.supplier} · 待审批`
           : isTracking
@@ -159,9 +159,9 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
         amount: `${order.amount.toLocaleString("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 0 }).replace("CNY", "¥")}`,
         due: formatDueLabel(due),
         status: order.status,
-        moduleId: "requests",
-        note: order.reason || `${order.items} 行 · ${order.owner}`,
-        tone: queueTone(isApproval ? "采购申请" : "采购订单", due),
+        moduleId: "orders",
+        note: order.sourceRequest ? `${order.sourceRequest} · ${order.items} 行 · ${order.owner}` : (order.reason || `${order.items} 行 · ${order.owner}`),
+        tone: queueTone("采购订单", due),
       };
     });
 
