@@ -1,4 +1,5 @@
 import { fetch as undiciFetch } from 'undici'
+import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
 import {
   ensureMarketPrices,
@@ -378,6 +379,11 @@ async function callConfiguredAi(body, db, ctx) {
 
 export async function handleAiRoute(ctx) {
   const { req, res, url, db, send, readBody, writeDb, event } = ctx
+
+  if (req.method === 'GET' && url.pathname === '/api/ai/tools') {
+    send(res, 200, { tools: getAiToolRegistry() })
+    return true
+  }
 
   if (req.method === 'POST' && url.pathname === '/api/ai/chat') {
     const startedAt = Date.now()

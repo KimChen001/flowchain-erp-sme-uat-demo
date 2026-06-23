@@ -14,6 +14,7 @@ import { handleInventoryMovementsRoute } from './inventory-movements.routes.mjs'
 import { handleSupplierPerformanceRoute } from './supplier-performance.routes.mjs'
 import { handleSupplierRecommendationsRoute } from './supplier-recommendations.routes.mjs'
 import { handleAuditLogRoute } from './audit-log.routes.mjs'
+import { handleContextRoute } from './context.routes.mjs'
 import { handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import {
@@ -969,6 +970,7 @@ export function createScmServer() {
 
     if (await handleMrpRoute(routeContext)) return
     if (await handleSopRoute(routeContext)) return
+    if (await handleContextRoute(routeContext)) return
     if (await handleMarketRoute(routeContext)) return
     if (await handleAiRoute(routeContext)) return
     if (await handleRfqsRoute(routeContext)) return
