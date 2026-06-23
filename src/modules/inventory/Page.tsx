@@ -671,7 +671,7 @@ function InventoryCycleCount() {
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="本周计划"   value={String(plans.length)} sub="ABC 循环盘点"             icon={ClipboardCheck} color={A.blue}   />
         <KpiCard label="完成"        value={String(completed)}     sub={`完成率 ${(completed / plans.length * 100).toFixed(0)}%`} icon={CheckCircle2}   color={A.green}  />
-        <KpiCard label="进行中"      value={String(inProgress)}    sub="手持终端实时同步"          icon={Loader2}        color={A.orange} />
+        <KpiCard label="进行中"      value={String(inProgress)}    sub="手持终端回传"              icon={Loader2}        color={A.orange} />
         <KpiCard label="盘点准确率"  value={`${accuracy}%`}        sub="行业基准 99.5%"           delta={parseFloat(accuracy) >= 99.5 ? "达标" : "未达"} positive={parseFloat(accuracy) >= 99.5} icon={Activity} color={A.purple} />
       </div>
 

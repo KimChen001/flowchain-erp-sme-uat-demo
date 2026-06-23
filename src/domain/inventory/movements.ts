@@ -3,8 +3,8 @@ import type { InventoryMovement, InventoryMovementStatus, InventoryMovementType 
 export const INVENTORY_MOVEMENT_TYPE_LABELS: Record<InventoryMovementType, string> = {
   PurchaseReceipt: "采购入库",
   PurchaseReturn: "采购退货",
-  SalesDelivery: "销售出库",
-  SalesReturn: "销售退货",
+  SalesDelivery: "需求出库",
+  SalesReturn: "退货入库",
   StockAdjustment: "库存调整",
   StockTransfer: "库存调拨",
   CycleCountVariance: "盘点差异",
@@ -57,7 +57,7 @@ export function filterInventoryMovements(
 export function inventoryMovementExportRows(movements: InventoryMovement[]) {
   return movements.map((item) => ({
     单据号: item.movementId,
-    类型: item.movementLabel,
+    类型: INVENTORY_MOVEMENT_TYPE_LABELS[item.movementType],
     日期: item.date,
     SKU: item.sku,
     品名: item.itemName,
@@ -67,7 +67,7 @@ export function inventoryMovementExportRows(movements: InventoryMovement[]) {
     关联PO: item.relatedPo || "",
     关联GRN: item.relatedGrn || "",
     关联退货: item.relatedReturn || "",
-    关联销售订单: item.relatedSalesOrder || "",
+    关联出库需求: item.relatedSalesOrder || "",
     入库: item.quantityIn,
     出库: item.quantityOut,
     调整: item.adjustmentQty,

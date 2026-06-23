@@ -9,7 +9,6 @@ import {
   Package,
   RefreshCw,
   ShieldCheck,
-  ShoppingCart,
   CreditCard,
   TrendingUp,
 } from "lucide-react";
@@ -36,8 +35,6 @@ import {
   inventoryItems,
   purchaseOrders,
   receivingDocs,
-  salesData,
-  topProducts,
 } from "../../data/demo-data";
 import { ITEM_MASTER, PAYMENT_TERMS, SUPPLIER_MASTER, TAX_CODES, WAREHOUSE_BINS } from "../../data/master-data";
 import { inventoryPlan } from "../../domain/inventory/planning";
@@ -69,9 +66,9 @@ import { srmReportRows, supplierCertificationReportRows, supplierRiskReportRows 
 import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ReportModule = "销售" | "采购" | "库存" | "主数据" | "财务" | "预测/MRP" | "供应商" | "审计";
+type ReportModule = "采购" | "库存" | "主数据" | "财务" | "预测/MRP" | "供应商" | "审计";
 type SourceKind = "Core" | "Computed" | "API" | "API fallback" | "Module";
-type RouteId = "sales" | "procurement" | "finance" | "inventory" | "forecast" | "master-data" | "srm" | `procurement:${string}` | `inventory:${string}` | `finance:${string}` | `master-data:${string}` | `srm:${string}`;
+type RouteId = "procurement" | "finance" | "inventory" | "forecast" | "master-data" | "srm" | `procurement:${string}` | `inventory:${string}` | `finance:${string}` | `master-data:${string}` | `srm:${string}`;
 type ReportRows = Record<string, unknown>[];
 
 type ReportEntry = {
@@ -93,7 +90,7 @@ type ReportsPanelProps = {
   initialView?: "procurement" | "inventory" | "finance";
 };
 
-const FILTERS = ["全部", "销售", "采购", "库存", "主数据", "财务", "预测/MRP", "供应商", "审计"] as const;
+const FILTERS = ["全部", "采购", "库存", "主数据", "财务", "预测/MRP", "供应商", "审计"] as const;
 const DEFAULT_METHOD: Method = "hw";
 const DEFAULT_HORIZON = 6;
 
@@ -123,7 +120,6 @@ function badgeStyle(kind: SourceKind) {
 
 function moduleColor(module: ReportModule) {
   return ({
-    销售: A.blue,
     采购: A.purple,
     库存: A.green,
     主数据: A.gray1,
@@ -327,52 +323,6 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
   }, [initialView]);
 
   const reports = useMemo<ReportEntry[]>(() => [
-    {
-      id: "sales-monthly",
-      name: "Sales Monthly Performance",
-      module: "销售",
-      description: "月度销售额、订单量与毛利率标准报表。",
-      source: "salesData · operational dataset",
-      sourceKind: "Core",
-      updated: "2026 baseline",
-      filename: "reports-sales-monthly-export.csv",
-      sourceModule: "sales",
-      rows: () => salesData.map((row) => ({ 月份: row.month, 销售额: row.revenue, 订单数: row.orders, 毛利率: row.margin })),
-    },
-    {
-      id: "sales-products",
-      name: "Top Products Report",
-      module: "销售",
-      description: "TOP 产品销售额、增长率、销量、毛利率与退货率。",
-      source: "topProducts · operational dataset",
-      sourceKind: "Core",
-      updated: "2026 baseline",
-      filename: "reports-sales-top-products-export.csv",
-      sourceModule: "sales",
-      rows: () => topProducts.map((row) => ({ 产品名称: row.name, 年销售额: row.revenue, 增长率: row.growth, 销售量: row.units, 毛利率: row.margin, 退货率: row.returnRate })),
-    },
-    {
-      id: "sales-orders",
-      name: "Sales Orders Report",
-      module: "销售",
-      description: "销售订单的当前 UI state 报表入口。",
-      source: "Sales module local state",
-      sourceKind: "Module",
-      updated: "模块内导出可用",
-      sourceModule: "sales",
-      comingLaterReason: "销售订单数据目前是 Sales 页面内部 state；为避免重构边界，请在销售订单页使用模块内导出。",
-    },
-    {
-      id: "sales-customers",
-      name: "Customers Report",
-      module: "销售",
-      description: "客户主数据与信用风险报表入口。",
-      source: "Sales module local state",
-      sourceKind: "Module",
-      updated: "模块内导出可用",
-      sourceModule: "sales",
-      comingLaterReason: "客户主数据目前是 Sales 页面内部常量；本轮不重构 Sales 数据边界。",
-    },
     {
       id: "procurement-contracts",
       name: "Procurement Contracts Report",
@@ -871,7 +821,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       id: "forecast-source",
       name: "Legacy Forecast Trend Report",
       module: "预测/MRP",
-      description: "原始销售预测趋势、实际值、预测值和上下界。",
+      description: "原始需求预测趋势、实际值、预测值和上下界。",
       source: "forecastData · operational dataset",
       sourceKind: "Core",
       updated: "2026 baseline",
@@ -993,7 +943,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="标准报表" value={String(reports.length)} sub="报表中心 v1" icon={FileSpreadsheet} color={A.blue} />
-        <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="销售/采购/库存/主数据/财务/计划/审计" icon={Database} color={A.green} />
+        <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="采购/库存/主数据/财务/计划/供应商/审计" icon={Database} color={A.green} />
         <KpiCard label="API / Fallback" value={String(apiCount)} sub="只读现有端点" icon={RefreshCw} color={A.orange} />
         <KpiCard label="可导出" value={String(exportReadyCount)} sub="CSV 标准导出" icon={ShieldCheck} color={A.purple} />
       </div>
@@ -1005,7 +955,6 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
             <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>{visibleReports.length} 个报表 · {filterLabel}</p>
           </div>
           <div className="flex items-center gap-3 text-[10px]" style={{ color: A.gray2 }}>
-            <span className="flex items-center gap-1"><ShoppingCart size={11} /> 销售</span>
             <span className="flex items-center gap-1"><ClipboardList size={11} /> 采购</span>
             <span className="flex items-center gap-1"><Package size={11} /> 库存</span>
             <span className="flex items-center gap-1"><CreditCard size={11} /> 财务</span>

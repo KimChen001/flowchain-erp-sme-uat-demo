@@ -21,7 +21,7 @@ import { AI_INSIGHTS } from "./ai-insights";
 
 const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存管理",
-  sales: "销售表现", forecast: "预测与 MRP",
+  forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
   procurement: "采购管理", finance: "财务协同",
 };
@@ -36,9 +36,8 @@ const insightMeta = {
 const QUICK_QUESTIONS: Record<string, string[]> = {
   overview: ["本周最重要的风险是什么？", "今天的铁的市场价格"],
   inventory: ["为什么这些 SKU 会断货？", "结合汇率和新闻看补货风险"],
-  sales: ["哪些产品值得优先备货？", "销售下滑的原因是什么？"],
-  forecast: ["这个预测模型靠谱吗？", "外部信号会影响预测吗？"],
-  purchasing: ["哪些采购单应该优先审批？", "结合外部风险调整采购计划"],
+  forecast: ["这个预测模型靠谱吗？", "市场参考会影响预测吗？"],
+  purchasing: ["哪些采购单应该优先审批？", "结合供应风险调整采购计划"],
   receiving: ["哪些到货异常最紧急？", "供应商延期会影响什么？"],
   procurement: ["采购成本为什么上涨？", "结合汇率看采购成本"],
 };
@@ -114,7 +113,7 @@ export default function AiPanel({ moduleId }: { moduleId: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [lastConfidence, setLastConfidence] = useState<AiConfidence | null>(null);
   const [asking, setAsking] = useState(false);
-  const [externalStatus, setExternalStatus] = useState("外部信号加载中");
+  const [externalStatus, setExternalStatus] = useState("市场参考加载中");
   const [marketPrices, setMarketPrices] = useState<MarketPrice[]>([]);
   const [marketStatus, setMarketStatus] = useState("行情数据加载中");
   const timer = useRef<ReturnType<typeof setTimeout>>();
@@ -141,8 +140,8 @@ export default function AiPanel({ moduleId }: { moduleId: string }) {
     }]);
     setLastConfidence(null);
     apiJson<{ signals: { type: string }[] }>("/api/external-signals")
-      .then((data) => setExternalStatus(`外部信号 ${data.signals.length} 条`))
-      .catch(() => setExternalStatus("外部信号暂不可用"));
+      .then((data) => setExternalStatus(`市场参考 ${data.signals.length} 条`))
+      .catch(() => setExternalStatus("市场参考暂不可用"));
     apiJson<{ asOf: string; prices: MarketPrice[] }>("/api/market-prices")
       .then((data) => {
         setMarketPrices(data.prices);
@@ -185,7 +184,7 @@ export default function AiPanel({ moduleId }: { moduleId: string }) {
           ? "行情数据: "
         : `${result.provider === "doubao" ? "豆包" : "GPT"}: `;
       const timing = typeof result.timingMs === "number"
-        ? `\n\n耗时 ${result.timingMs}ms · 模型 ${result.modelMs ?? "-"}ms · ${result.usedWeb ? `外部信号 ${result.externalMs ?? "-"}ms` : "未使用外部信号"}`
+        ? `\n\n耗时 ${result.timingMs}ms · 模型 ${result.modelMs ?? "-"}ms · ${result.usedWeb ? `市场参考 ${result.externalMs ?? "-"}ms` : "未使用市场参考"}`
         : "";
       if (result.confidence) setLastConfidence(result.confidence);
       setMessages((prev) => [...prev, { role: "assistant", content: `${prefix}${result.content}${timing}`, confidence: result.confidence }]);
@@ -369,7 +368,7 @@ export default function AiPanel({ moduleId }: { moduleId: string }) {
               })}
             </div>
             <div className="text-[9px] mt-1.5" style={{ color: A.gray2 }}>
-              非实时市场数据 · 点击卡片生成采购影响分析
+              非实时市场参考 · 点击卡片生成采购影响分析
             </div>
           </div>
 

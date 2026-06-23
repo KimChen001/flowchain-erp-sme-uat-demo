@@ -70,8 +70,8 @@ export default function InventoryMovementLedger() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard label="今日库存移动" value={String(summary.count)} sub="库存事务流水" icon={ClipboardList} color={A.blue} />
-        <KpiCard label="入库数量" value={summary.inboundQty.toLocaleString("zh-CN")} sub="采购入库 / 销售退货" icon={PackagePlus} color={A.green} />
-        <KpiCard label="出库数量" value={summary.outboundQty.toLocaleString("zh-CN")} sub="销售出库 / 采购退货" icon={PackageMinus} color={A.orange} />
+        <KpiCard label="入库数量" value={summary.inboundQty.toLocaleString("zh-CN")} sub="采购入库 / 退货入库" icon={PackagePlus} color={A.green} />
+        <KpiCard label="出库数量" value={summary.outboundQty.toLocaleString("zh-CN")} sub="需求出库 / 采购退货" icon={PackageMinus} color={A.orange} />
         <KpiCard label="调整数量" value={summary.adjustmentQty.toLocaleString("zh-CN")} sub="库存调整 / 盘点差异" icon={SlidersHorizontal} color={summary.adjustmentQty < 0 ? A.red : A.purple} />
         <KpiCard label="待复核异常" value={String(summary.exceptionCount)} sub="库存异常与盘点差异" icon={AlertTriangle} color={summary.exceptionCount ? A.red : A.green} />
       </div>
@@ -81,7 +81,7 @@ export default function InventoryMovementLedger() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>库存事务流水</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              追踪采购入库、退货、销售出库、调拨、调整与盘点差异形成的库存影响。
+              追踪采购入库、退货入库、需求出库、调拨、调整与盘点差异形成的库存影响。
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -135,7 +135,7 @@ export default function InventoryMovementLedger() {
                   <tr key={item.movementId} className="hover:bg-blue-50/40 transition-colors"
                     style={{ borderBottom: index < visibleMovements.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                     <td className="px-4 py-3 tabular-nums font-medium" style={{ color: A.blue }}>{item.movementId}</td>
-                    <td className="px-4 py-3"><Chip label={item.movementLabel} color={typeColor(item.movementType)} bg={`${typeColor(item.movementType)}18`} /></td>
+                    <td className="px-4 py-3"><Chip label={INVENTORY_MOVEMENT_TYPE_LABELS[item.movementType]} color={typeColor(item.movementType)} bg={`${typeColor(item.movementType)}18`} /></td>
                     <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.sub }}>{item.date}</td>
                     <td className="px-4 py-3 tabular-nums" style={{ color: A.blue }}>{item.sku}</td>
                     <td className="px-4 py-3 min-w-[150px]" style={{ color: A.label }}>{item.itemName}</td>
@@ -173,7 +173,7 @@ export default function InventoryMovementLedger() {
         open={Boolean(selected)}
         onClose={() => setSelected(null)}
         title={selected ? selected.movementId : "库存事务"}
-        subtitle={selected ? `${selected.movementLabel} · ${selected.status}` : undefined}
+        subtitle={selected ? `${INVENTORY_MOVEMENT_TYPE_LABELS[selected.movementType]} · ${selected.status}` : undefined}
         width={860}
         footer={<button onClick={() => setSelected(null)} className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: A.white, color: A.label }}>关闭</button>}
       >

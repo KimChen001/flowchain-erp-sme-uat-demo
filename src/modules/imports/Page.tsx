@@ -22,7 +22,7 @@ import {
 } from "../../lib/csv-import";
 import { A, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "supplierPerformance" | "supplierCertification" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "salesOrders" | "contractPrices" | "forecastDemand" | "customers" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
+type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "supplierPerformance" | "supplierCertification" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "contractPrices" | "forecastDemand" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
 type ValidationResult = {
   rowNumber: number;
@@ -61,7 +61,7 @@ type ImportsPanelProps = {
   initialView?: "templates" | "validation" | "failed";
 };
 
-const FILTERS = ["全部", "采购", "库存", "销售", "预测", "主数据"] as const;
+const FILTERS = ["全部", "采购", "库存", "预测", "主数据"] as const;
 
 function value(row: CsvRow, key: string) {
   return String(row[key] ?? "").trim();
@@ -400,7 +400,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     description: "上传库存移动、来源单据、数量影响和复核状态，用于库存事务流水预览。",
     templateFilename: "inventory-movement-ledger-template.csv",
     requiredFields: ["单据号", "类型", "日期", "SKU", "品名", "仓库", "库位", "来源单据", "单位", "状态"],
-    optionalFields: ["关联PO", "关联GRN", "关联退货", "关联销售订单", "入库", "出库", "调整", "负责人", "原因", "库存影响", "关联证据"],
+    optionalFields: ["关联PO", "关联GRN", "关联退货", "关联出库需求", "入库", "出库", "调整", "负责人", "原因", "库存影响", "关联证据"],
     sampleRows: [
       { 单据号: "IM-IMPORT-001", 类型: "采购入库", 日期: "2026-06-01", SKU: "SKU-00558", 品名: "不锈钢螺栓 M8×30", 仓库: "上海总仓", 库位: "A-07-22", 来源单据: "GRN-202606-0101", 关联PO: "PO-2026-1301", 关联GRN: "GRN-202606-0101", 入库: 5000, 出库: 0, 调整: 0, 单位: "件", 状态: "已确认", 负责人: "刘建华", 原因: "采购入库", 库存影响: "可用库存增加 5,000 件", 关联证据: "GRN/PO" },
       { 单据号: "IM-IMPORT-002", 类型: "盘点差异", 日期: "2026-06-01", SKU: "SKU-00412", 品名: "伺服电机 750W", 仓库: "上海总仓", 库位: "D-02-01", 来源单据: "CC-2026-W22-D1", 入库: 0, 出库: 0, 调整: -1, 单位: "台", 状态: "待复核", 负责人: "刘建华", 原因: "账实差异", 库存影响: "账面库存减少 1 台", 关联证据: "盘点计划" },
@@ -418,7 +418,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
       if ((Number(quantityIn || 0) + Number(quantityOut || 0) + Math.abs(Number(adjustment || 0))) === 0) errors.push("入库、出库或调整至少填写一项");
       const warnings = duplicateWarnings(rows, row, (item) => value(item, "单据号"), "存在重复库存移动单据号");
       return {
-        normalized: { 单据号: value(row, "单据号"), 类型: value(row, "类型"), 日期: value(row, "日期"), SKU: value(row, "SKU"), 品名: value(row, "品名"), 仓库: value(row, "仓库"), 库位: value(row, "库位"), 来源单据: value(row, "来源单据"), 关联PO: value(row, "关联PO"), 关联GRN: value(row, "关联GRN"), 关联退货: value(row, "关联退货"), 关联销售订单: value(row, "关联销售订单"), 入库: quantityIn ?? value(row, "入库"), 出库: quantityOut ?? value(row, "出库"), 调整: adjustment, 单位: value(row, "单位"), 状态: value(row, "状态"), 负责人: value(row, "负责人"), 原因: value(row, "原因"), 库存影响: value(row, "库存影响"), 关联证据: value(row, "关联证据") },
+        normalized: { 单据号: value(row, "单据号"), 类型: value(row, "类型"), 日期: value(row, "日期"), SKU: value(row, "SKU"), 品名: value(row, "品名"), 仓库: value(row, "仓库"), 库位: value(row, "库位"), 来源单据: value(row, "来源单据"), 关联PO: value(row, "关联PO"), 关联GRN: value(row, "关联GRN"), 关联退货: value(row, "关联退货"), 关联出库需求: value(row, "关联出库需求"), 入库: quantityIn ?? value(row, "入库"), 出库: quantityOut ?? value(row, "出库"), 调整: adjustment, 单位: value(row, "单位"), 状态: value(row, "状态"), 负责人: value(row, "负责人"), 原因: value(row, "原因"), 库存影响: value(row, "库存影响"), 关联证据: value(row, "关联证据") },
         errors,
         warnings,
       };
@@ -514,33 +514,6 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     },
   },
   {
-    id: "salesOrders",
-    label: "销售订单导入",
-    module: "销售",
-    description: "上传离线客户订单，预览金额、状态和交付需求。",
-    templateFilename: "sales-orders-template.csv",
-    requiredFields: ["订单号", "客户", "SKU", "品名", "数量", "单价", "需求日期"],
-    optionalFields: ["状态", "销售负责人", "交付地址", "客户信用等级", "备注"],
-    sampleRows: [
-      { 订单号: "SO-IMPORT-001", 客户: "华东工业集团", SKU: "SKU-00412", 品名: "伺服电机 750W", 数量: 8, 单价: 2980, 需求日期: "2026-06-15", 状态: "草稿", 销售负责人: "张磊", 交付地址: "上海", 客户信用等级: "A", 备注: "" },
-      { 订单号: "SO-IMPORT-002", 客户: "京海科技", SKU: "SKU-00623", 品名: "控制器主板 V3.2", 数量: 3, 单价: 12400, 需求日期: "2026-06-18", 状态: "", 销售负责人: "陈晨", 交付地址: "北京", 客户信用等级: "A", 备注: "线下订单" },
-    ],
-    notes: ["适合导入客户邮件或 Excel 订单。", "导入后形成批次预览，销售订单创建需在销售流程中确认。"],
-    validateRow: (row, rows) => {
-      const errors = baseErrors(row, ["订单号", "客户", "SKU", "品名", "数量", "单价", "需求日期"]);
-      const qty = parsePositiveNumber(value(row, "数量"));
-      const price = parseNonNegativeNumber(value(row, "单价"));
-      if (qty == null) errors.push("数量必须大于 0");
-      if (price == null) errors.push("单价必须为非负数");
-      const warnings = duplicateWarnings(rows, row, (item) => value(item, "订单号"), "存在重复订单号");
-      return {
-        normalized: { 订单号: value(row, "订单号"), 客户: value(row, "客户"), SKU: value(row, "SKU"), 品名: value(row, "品名"), 数量: qty ?? value(row, "数量"), 单价: price ?? value(row, "单价"), 金额: qty != null && price != null ? qty * price : "", 需求日期: value(row, "需求日期"), 状态: value(row, "状态") || "草稿", 销售负责人: value(row, "销售负责人"), 交付地址: value(row, "交付地址"), 客户信用等级: value(row, "客户信用等级"), 备注: value(row, "备注") },
-        errors,
-        warnings,
-      };
-    },
-  },
-  {
     id: "contractPrices",
     label: "采购合同价格导入",
     module: "采购",
@@ -575,8 +548,8 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     requiredFields: ["SKU", "品名", "月份", "需求量"],
     optionalFields: ["来源", "备注"],
     sampleRows: [
-      { SKU: "SKU-00412", 品名: "伺服电机 750W", 月份: "2026-01", 需求量: 132, 来源: "销售历史", 备注: "" },
-      { SKU: "SKU-00412", 品名: "伺服电机 750W", 月份: "2026-02", 需求量: 145, 来源: "销售历史", 备注: "" },
+      { SKU: "SKU-00412", 品名: "伺服电机 750W", 月份: "2026-01", 需求量: 132, 来源: "需求历史", 备注: "" },
+      { SKU: "SKU-00412", 品名: "伺服电机 750W", 月份: "2026-02", 需求量: 145, 来源: "需求历史", 备注: "" },
     ],
     notes: ["可先整理需求历史，再到 Forecast 模块输入区域运行模型。", "本页不会直接修改 ForecastPanel state。"],
     validateRow: (row) => {
@@ -587,27 +560,6 @@ const IMPORT_CONFIGS: ImportConfig[] = [
         normalized: { SKU: value(row, "SKU"), 品名: value(row, "品名"), 月份: value(row, "月份"), 需求量: demand ?? value(row, "需求量"), 来源: value(row, "来源"), 备注: value(row, "备注") },
         errors,
         warnings: [],
-      };
-    },
-  },
-  {
-    id: "customers",
-    label: "客户主数据导入",
-    module: "主数据",
-    description: "校验预览客户编码、联系人、邮箱、信用等级与付款条款。",
-    templateFilename: "customers-template.csv",
-    requiredFields: ["客户编号", "客户名称", "联系人", "联系邮箱"],
-    optionalFields: ["信用等级", "付款条款", "地区", "备注"],
-    sampleRows: [
-      { 客户编号: "C-2001", 客户名称: "华东工业集团", 联系人: "王经理", 联系邮箱: "wang@example.com", 信用等级: "A", 付款条款: "Net 60", 地区: "华东", 备注: "" },
-    ],
-    notes: ["主数据导入形成校验预览和批次记录。"],
-    validateRow: (row) => {
-      const errors = baseErrors(row, ["客户编号", "客户名称", "联系人", "联系邮箱"]);
-      return {
-        normalized: { 客户编号: value(row, "客户编号"), 客户名称: value(row, "客户名称"), 联系人: value(row, "联系人"), 联系邮箱: value(row, "联系邮箱"), 信用等级: value(row, "信用等级"), 付款条款: value(row, "付款条款"), 地区: value(row, "地区"), 备注: value(row, "备注") },
-        errors,
-        warnings: emailWarning(value(row, "联系邮箱"), "联系邮箱"),
       };
     },
   },

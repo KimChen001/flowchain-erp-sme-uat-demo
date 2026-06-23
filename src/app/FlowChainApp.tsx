@@ -28,7 +28,6 @@ import ReceivingPanel from "../modules/receiving/Page";
 import InventoryPanel from "../modules/inventory/Page";
 import ForecastPanel from "../modules/forecast/Page";
 import OverviewPanel from "../modules/overview/Page";
-import SalesPanel from "../modules/sales/Page";
 import ProcurementPanel from "../modules/procurement/Page";
 import FinanceWorkbench from "../modules/finance/Page";
 import SrmPage from "../modules/srm/Page";
@@ -166,7 +165,7 @@ function ReplenishmentRequestModal({
 
 const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存管理",
-  sales: "销售表现", forecast: "预测与 MRP",
+  forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
   procurement: "采购管理", finance: "财务协同", "master-data": "主数据", srm: "供应商管理", reports: "报表中心", imports: "数据管理",
 };
@@ -229,7 +228,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => 
               把采购、入库、预测和 AI insight 放进同一个工作台。
             </h1>
             <p className="text-base leading-7 max-w-xl" style={{ color: A.sub }}>
-              这是一个可交互的供应链 ERP 工作台。用户登录后，系统会保存用户档案，并支持继续扩展公司级租户、权限、审批流和业务数据服务。
+              这是一个可交互的供应链协同工作台。用户登录后，系统会保存用户档案，后续可扩展公司级租户、权限边界、审批协同和业务数据服务。
             </p>
           </div>
 
@@ -429,7 +428,6 @@ export default function FlowChainApp() {
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiVisible(true)} />,
     inventory:   <InventoryPanel initialView={activeView as any} />,
-    sales:       <SalesPanel />,
     forecast:    <ForecastPanel />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
     purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} onOpenRfq={() => setActive("procurement:rfq")} />,

@@ -16,7 +16,7 @@ import { fmt } from "../../lib/format";
 import { A, Card, Chip, KpiCard, Modal, SectionHeader } from "../../components/ui";
 import { FORECAST_SKUS, INVENTORY_MOVEMENT_LEDGER, inventoryItems, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
 import { inventoryPlan } from "../../domain/inventory/planning";
-import { isInventoryMovementException, netInventoryImpact } from "../../domain/inventory/movements";
+import { INVENTORY_MOVEMENT_TYPE_LABELS, isInventoryMovementException, netInventoryImpact } from "../../domain/inventory/movements";
 import { isStatementException, statementToCockpitSignal } from "../../domain/procurement/reconciliation";
 import { calculateReturnFinancialImpact, isReturnException, returnToCockpitSignal } from "../../domain/procurement/returns";
 import { masterDataQualitySignals } from "../../domain/master-data/helpers";
@@ -208,10 +208,10 @@ function buildInventoryMovementEvidence(item: InventoryMovement): EvidenceDetail
     object: item.movementId,
     module: "库存事务流水",
     moduleId: "inventory:movements",
-    businessReason: "库存事务流水用于追踪采购入库、采购退货、销售出库、调拨、调整和盘点差异形成的库存影响，需要及时关闭待复核异常。",
+    businessReason: "库存事务流水用于追踪采购入库、采购退货、需求出库、调拨、调整和盘点差异形成的库存影响，需要及时关闭待复核异常。",
     evidence: [
       { label: "移动单号", value: item.movementId },
-      { label: "类型", value: item.movementLabel },
+      { label: "类型", value: INVENTORY_MOVEMENT_TYPE_LABELS[item.movementType] },
       { label: "SKU", value: item.sku },
       { label: "品名", value: item.itemName },
       { label: "仓库/库位", value: `${item.warehouse} / ${item.location}` },
@@ -528,7 +528,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       priority: item.status === "异常处理" || item.movementType === "CycleCountVariance" ? "高" as const : "中" as const,
       title: item.movementType === "CycleCountVariance" ? "盘点差异待关闭" : "待复核库存移动",
       object: item.movementId,
-      evidence: `${item.movementLabel} · ${item.sourceDocument} · 期末影响 ${netInventoryImpact(item).toLocaleString()} ${item.unit}`,
+      evidence: `${INVENTORY_MOVEMENT_TYPE_LABELS[item.movementType]} · ${item.sourceDocument} · 期末影响 ${netInventoryImpact(item).toLocaleString()} ${item.unit}`,
       module: "库存事务流水",
       moduleId: "inventory:exceptions",
       cta: "查看异常单据",
