@@ -84,7 +84,7 @@ const scoreDimensions = [
     title: "交货准时",
     weight: 20,
     owner: "采购运营",
-    refresh: "每次 GRN 入库后实时重算",
+    refresh: "可按 GRN 入库、订单关闭等业务事件刷新评分依据",
     source: "PO 承诺日期、GRN 实际到货日期、紧急订单标记",
     items: [
       { name: "准时交货率", weight: 40, rule: "近 90 天准时行数 / 总行数 * 100" },
@@ -126,10 +126,10 @@ const scoreDimensions = [
     title: "风险评估",
     weight: 20,
     owner: "供应风险负责人",
-    refresh: "外部财务数据每月同步，交付与集中度随业务事件更新",
-    source: "外部评级、采购额占比、地区风险表、交付延迟记录",
+    refresh: "随交付异常、采购集中度和规则复核更新评分依据",
+    source: "采购额占比、地区风险表、交付延迟记录；后续可接入外部风险数据",
     items: [
-      { name: "财务稳定性", weight: 30, rule: "外部评级转换为 0-100 分" },
+      { name: "财务稳定性", weight: 30, rule: "外部风险数据可作为扩展输入并映射为评分" },
       { name: "交货延迟风险", weight: 35, rule: "延迟率越高分越低，与交货准时数据反向映射" },
       { name: "供应集中度", weight: 20, rule: "采购额占比 >50% 为 20；<20% 为 90" },
       { name: "地缘政治风险", weight: 15, rule: "按供应商注册地和人工维护地区风险系数表映射" },
@@ -197,7 +197,7 @@ function SupplierDetailModal({ row, onClose }: { row: SupplierSrmRow | null; onC
               <Chip label={overallStyle.label} color={overallStyle.color} bg={overallStyle.bg} />
             </div>
             <div className="text-[11px] leading-5 mt-3" style={{ color: A.sub }}>
-              分数由后端评分服务按当前规则版本返回；前端负责展示评分、证据和下一步动作。
+              评分按当前规则版本计算，前端展示评分、证据和下一步动作；后续可接入服务端评分能力。
             </div>
           </Card>
           <Card className="p-4" style={{ boxShadow: "none", background: A.gray6 }}>
@@ -805,7 +805,7 @@ function ScoringRulesWorkbench() {
           <div className="flex items-center gap-2 shrink-0">
             <Chip label="规则版本 SRM-SCORE-2026.06" color={A.blue} bg="#f0f6ff" />
             <button
-              onClick={() => toast("规则草稿", { description: "权重调整会先进入草稿，发布后由后端评分服务生效。" })}
+              onClick={() => toast("规则草稿", { description: "权重调整会先进入草稿，发布后用于后续评分刷新。" })}
               className="h-8 px-3 rounded-lg text-xs font-medium text-white"
               style={{ background: A.blue }}>
               新建规则草稿
@@ -818,7 +818,7 @@ function ScoringRulesWorkbench() {
             { label: "维度数", value: "5", sub: "合规 / 交付 / 绩效 / RFx / 风险", icon: SlidersHorizontal, color: A.blue },
             { label: "总权重", value: `${scoreDimensions.reduce((sum, item) => sum + item.weight, 0)}%`, sub: "当前规则已平衡", icon: CheckCircle2, color: A.green },
             { label: "风险阈值", value: "65", sub: "低于阈值自动展开", icon: AlertTriangle, color: A.red },
-            { label: "刷新策略", value: "事件 + 定时", sub: "GRN / RFx / 证书 / 外部数据", icon: RefreshCw, color: A.purple },
+            { label: "刷新策略", value: "事件 + 复核", sub: "GRN / RFx / 证书 / 风险规则", icon: RefreshCw, color: A.purple },
           ].map((item) => (
             <KpiCard key={item.label} label={item.label} value={item.value} sub={item.sub} icon={item.icon} color={item.color} />
           ))}
@@ -895,7 +895,7 @@ function ScoringRulesWorkbench() {
               </div>
               <div className="flex gap-2">
                 <CheckCircle2 size={13} style={{ color: A.green }} className="mt-0.5 shrink-0" />
-                <span>发布后由后端评分服务重算供应商评分，前端刷新展示。</span>
+                <span>发布后用于后续评分刷新，前端展示更新后的评分和证据。</span>
               </div>
               <div className="flex gap-2">
                 <CheckCircle2 size={13} style={{ color: A.green }} className="mt-0.5 shrink-0" />
