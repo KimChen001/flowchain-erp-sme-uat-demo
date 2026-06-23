@@ -627,7 +627,7 @@ export default function FlowChainApp() {
         {/* Content + AI panel */}
         <div className="flex-1 flex overflow-hidden">
           <main className="flex-1 overflow-auto p-6">
-            <div id="module-export-scope" className="max-w-6xl mx-auto">
+            <div id="module-export-scope" className={`mx-auto ${activeModule === "srm" ? "max-w-[1600px]" : "max-w-6xl"}`}>
               <PanelErrorBoundary key={active} moduleLabel={activeChildLabel || activeModuleLabel}>
                 {panels[activeModule] || panels[active] || panels.overview}
               </PanelErrorBoundary>

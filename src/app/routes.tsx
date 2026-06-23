@@ -55,6 +55,7 @@ export const navItems = [
       { id: "srm:performance", label: "供应商绩效" },
       { id: "srm:risk", label: "供应商风险" },
       { id: "srm:certification", label: "认证与准入" },
+      { id: "srm:scoring", label: "评分体系" },
       { id: "srm:sourcing", label: "RFx 参与" },
       { id: "srm:contracts", label: "合同与目录" },
       { id: "srm:portal", label: "供应商门户" },
