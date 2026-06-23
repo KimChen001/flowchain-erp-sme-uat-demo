@@ -1,92 +1,20 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, CreditCard, FileSpreadsheet, FileText, HandCoins, ReceiptText } from "lucide-react";
+import { CheckCircle2, CreditCard, FileSpreadsheet, FileText, HandCoins, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import { A, Card, Chip, KpiCard, SubTabs } from "../../components/ui";
 import PayablesPanel from "../procurement/PayablesPanel";
 import SupplierInvoiceRegister from "../procurement/SupplierInvoiceRegister";
 import SupplierReconciliationPanel from "../procurement/SupplierReconciliationPanel";
-import { PAYABLES, PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
+import { PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
 import { creditMemoExportRows } from "../../domain/procurement/returns";
-import { invoiceToPayable, isInvoicePayableReady } from "../../domain/procurement/invoice-matching";
 import { creditMemoTaxSummary, formatTaxRate } from "../../domain/finance/tax";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
+import FinanceOverview from "./FinanceOverview";
+import SettlementPreparation from "./SettlementPreparation";
+import { financeSummaryCards } from "./finance-summary";
 
-type FinanceTab = "overview" | "invoices" | "payables" | "credits" | "reconciliation" | "settlement";
-
-const financePayables = [
-  ...SUPPLIER_INVOICES.filter(isInvoicePayableReady).map(invoiceToPayable),
-  ...PAYABLES.filter((item) => !SUPPLIER_INVOICES.some((invoice) => invoice.invoiceNumber === item.invoice)),
-];
-
-function financeSummaryCards() {
-  const openPayables = financePayables.filter((item) => item.status !== "已付款");
-  const creditOffset = SUPPLIER_CREDIT_MEMOS
-    .filter((memo) => ["已确认", "已冲减应付", "已关闭"].includes(memo.status))
-    .reduce((sum, memo) => sum + memo.totalCredit, 0);
-  const reconciliationExceptions = SUPPLIER_RECONCILIATION_STATEMENTS.filter((item) =>
-    item.exceptionCount > 0 || item.totalVarianceAmount > 0 || ["存在差异", "已驳回"].includes(item.status)
-  );
-  const settlementReady = settlementRows().filter((row) => row.readiness === "可结算").length;
-
-  return [
-    { label: "供应商发票", value: String(SUPPLIER_INVOICES.length), sub: "发票登记与匹配状态", icon: FileText, color: A.blue },
-    { label: "应付敞口", value: fmt(openPayables.reduce((sum, item) => sum + item.amount, 0)), sub: `${openPayables.length} 笔未关闭 AP`, icon: CreditCard, color: A.purple },
-    { label: "贷项冲减", value: fmt(creditOffset), sub: `${SUPPLIER_CREDIT_MEMOS.length} 张贷项通知`, icon: ReceiptText, color: A.teal },
-    { label: "对账异常", value: String(reconciliationExceptions.length), sub: "差异、驳回或逾期需复核", icon: AlertTriangle, color: A.orange },
-    { label: "结算准备", value: String(settlementReady), sub: "供应商可进入结算复核", icon: HandCoins, color: A.green },
-  ];
-}
-
-function settlementRows() {
-  const suppliers = Array.from(new Set([
-    ...SUPPLIER_INVOICES.map((invoice) => invoice.supplier),
-    ...financePayables.map((payable) => payable.supplier),
-    ...SUPPLIER_CREDIT_MEMOS.map((memo) => memo.supplier),
-    ...SUPPLIER_RECONCILIATION_STATEMENTS.map((statement) => statement.supplier),
-  ]));
-
-  return suppliers.map((supplier) => {
-    const invoices = SUPPLIER_INVOICES.filter((invoice) => invoice.supplier === supplier);
-    const payables = financePayables.filter((payable) => payable.supplier === supplier && payable.status !== "已付款");
-    const credits = SUPPLIER_CREDIT_MEMOS.filter((memo) => memo.supplier === supplier);
-    const reconciliation = SUPPLIER_RECONCILIATION_STATEMENTS.find((statement) => statement.supplier === supplier);
-    const invoiceAmount = invoices
-      .filter((invoice) => ["已审批", "已过账应付", "已付款"].includes(invoice.status) || invoice.postedToAp)
-      .reduce((sum, invoice) => sum + invoice.total, 0);
-    const creditAmount = credits
-      .filter((memo) => ["已确认", "已冲减应付", "已关闭"].includes(memo.status))
-      .reduce((sum, memo) => sum + memo.totalCredit, 0);
-    const openPayable = Math.max(0, payables.reduce((sum, payable) => sum + payable.amount, 0) - creditAmount);
-    const blocked = Boolean(reconciliation && (reconciliation.exceptionCount > 0 || reconciliation.totalVarianceAmount > 0 || reconciliation.status === "已驳回"));
-    const hasPendingCredit = credits.some((memo) => ["草稿", "待确认", "已驳回"].includes(memo.status));
-    const readiness = blocked ? "暂缓" : hasPendingCredit || openPayable > 0 ? "需复核" : "可结算";
-    const nextStep = blocked
-      ? "先关闭对账差异"
-      : hasPendingCredit
-        ? "确认贷项冲减"
-        : openPayable > 0
-          ? "复核 AP 余额"
-          : "进入结算复核";
-
-    return {
-      supplier,
-      invoiceAmount,
-      creditAmount,
-      openPayable,
-      reconciliationStatus: reconciliation?.status || "待生成",
-      readiness,
-      owner: reconciliation?.owner || invoices[0]?.apOwner || credits[0]?.owner || "财务协同",
-      nextStep,
-    };
-  }).sort((a, b) => b.openPayable - a.openPayable);
-}
-
-function readinessStyle(status: string) {
-  if (status === "可结算") return { color: A.green, bg: "#f0faf4" };
-  if (status === "暂缓") return { color: A.red, bg: "#fff1f0" };
-  return { color: A.orange, bg: "#fff8f0" };
-}
+export type FinanceTab = "overview" | "invoices" | "payables" | "credits" | "reconciliation" | "settlement";
 
 function CreditMemoOffsetPanel() {
   const rows = SUPPLIER_CREDIT_MEMOS.map((memo) => {
@@ -176,74 +104,6 @@ function CreditMemoOffsetPanel() {
   );
 }
 
-function SettlementPreparation() {
-  const rows = settlementRows();
-
-  function exportCsv() {
-    if (rows.length === 0) {
-      toast.warning("暂无可导出的数据");
-      return;
-    }
-    exportRowsToCsv("finance-settlement-readiness-export.csv", rows.map((row) => ({
-      供应商: row.supplier,
-      发票金额: row.invoiceAmount,
-      贷项冲减: row.creditAmount,
-      未结应付: row.openPayable,
-      对账状态: row.reconciliationStatus,
-      结算准备: row.readiness,
-      负责人: row.owner,
-      下一步: row.nextStep,
-    })));
-    toast.success("CSV 已导出", { description: "结算准备清单" });
-  }
-
-  return (
-    <Card>
-      <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-        <div>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>结算准备</h2>
-          <p className="text-[11px] leading-5 mt-1 max-w-2xl" style={{ color: A.sub }}>
-            汇总供应商发票、应付账款、贷项冲减和供应商对账状态，形成付款前的结算准备清单。
-          </p>
-        </div>
-        <button onClick={exportCsv}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
-          style={{ background: A.gray6, color: A.blue }}>
-          <FileSpreadsheet size={13} /> 导出 CSV
-        </button>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["供应商", "发票金额", "贷项冲减", "未结应付", "对账状态", "结算准备", "负责人", "下一步"].map((header) => (
-                <th key={header} className="text-left px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => {
-              const style = readinessStyle(row.readiness);
-              return (
-                <tr key={row.supplier} style={{ borderBottom: index < rows.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                  <td className="px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.label }}>{row.supplier}</td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{fmt(row.invoiceAmount)}</td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.green }}>{fmt(row.creditAmount)}</td>
-                  <td className="px-5 py-3 font-semibold whitespace-nowrap" style={{ color: row.openPayable > 0 ? A.orange : A.label }}>{fmt(row.openPayable)}</td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{row.reconciliationStatus}</td>
-                  <td className="px-5 py-3 whitespace-nowrap"><Chip label={row.readiness} color={style.color} bg={style.bg} /></td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{row.owner}</td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.blue }}>{row.nextStep}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-}
-
 export default function FinanceWorkbench({ initialView = "overview" }: { initialView?: FinanceTab }) {
   const [tab, setTab] = useState<FinanceTab>(initialView);
   const tabs = [
@@ -288,40 +148,6 @@ export default function FinanceWorkbench({ initialView = "overview" }: { initial
       {tab === "credits" && <CreditMemoOffsetPanel />}
       {tab === "reconciliation" && <SupplierReconciliationPanel />}
       {tab === "settlement" && <SettlementPreparation />}
-    </div>
-  );
-}
-
-function FinanceOverview({ onOpenTab }: { onOpenTab: (tab: FinanceTab) => void }) {
-  const reconciliationExceptions = SUPPLIER_RECONCILIATION_STATEMENTS.filter((item) =>
-    item.exceptionCount > 0 || item.totalVarianceAmount > 0 || ["存在差异", "已驳回"].includes(item.status)
-  );
-  const entries = [
-    { tab: "invoices" as const, title: "供应商发票", desc: "发票登记、税额拆分、PO/GRN 匹配和异常复核。", signal: `${SUPPLIER_INVOICES.length} 张发票`, icon: FileText },
-    { tab: "payables" as const, title: "应付账款", desc: "查看 AP 状态和未关闭应付，不执行付款。", signal: `${financePayables.filter((item) => item.status !== "已付款").length} 笔未关闭`, icon: CreditCard },
-    { tab: "credits" as const, title: "贷项冲减", desc: "供应商贷项通知、退货关联和 AP 冲减可见性。", signal: `${SUPPLIER_CREDIT_MEMOS.length} 张贷项`, icon: ReceiptText },
-    { tab: "reconciliation" as const, title: "供应商对账", desc: "供应商期间对账、差异和未结余额。", signal: `${reconciliationExceptions.length} 个异常`, icon: FileSpreadsheet },
-    { tab: "settlement" as const, title: "结算准备", desc: "付款前可见性清单，不包含支付执行或 GL。", signal: `${settlementRows().filter((row) => row.readiness === "可结算").length} 个可结算`, icon: HandCoins },
-  ];
-
-  return (
-    <div className="grid grid-cols-5 gap-3">
-      {entries.map((entry) => {
-        const Icon = entry.icon;
-        return (
-          <Card key={entry.tab} className="p-4">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={{ background: A.gray6, color: A.blue }}>
-              <Icon size={15} />
-            </div>
-            <div className="text-sm font-semibold" style={{ color: A.label }}>{entry.title}</div>
-            <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>{entry.desc}</div>
-            <div className="text-[11px] font-medium mt-2" style={{ color: A.blue }}>{entry.signal}</div>
-            <button onClick={() => onOpenTab(entry.tab)} className="mt-3 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              进入
-            </button>
-          </Card>
-        );
-      })}
     </div>
   );
 }
