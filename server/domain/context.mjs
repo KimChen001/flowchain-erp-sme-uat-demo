@@ -14,8 +14,8 @@ export const currentTenantContext = Object.freeze({
 
 const defaultUser = Object.freeze({
   id: 'user-buyer-001',
-  name: 'Kim Chen',
-  email: 'buyer@example.com',
+  name: 'FlowChain Buyer',
+  email: 'buyer@flowchain.local',
   role: 'buyer',
   department: 'Procurement',
   locale: 'zh-CN',
@@ -74,4 +74,3 @@ export function buildCurrentContext(db = {}, authorization = '') {
     permissionsContext: permissionsForUser(user),
   }
 }
-

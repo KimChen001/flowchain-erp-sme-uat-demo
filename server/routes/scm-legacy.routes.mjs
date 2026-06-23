@@ -15,6 +15,7 @@ import { handleSupplierPerformanceRoute } from './supplier-performance.routes.mj
 import { handleSupplierRecommendationsRoute } from './supplier-recommendations.routes.mjs'
 import { handleAuditLogRoute } from './audit-log.routes.mjs'
 import { handleContextRoute } from './context.routes.mjs'
+import { handleMasterDataRoute } from './master-data.routes.mjs'
 import { handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import {
@@ -971,6 +972,7 @@ export function createScmServer() {
     if (await handleMrpRoute(routeContext)) return
     if (await handleSopRoute(routeContext)) return
     if (await handleContextRoute(routeContext)) return
+    if (await handleMasterDataRoute(routeContext)) return
     if (await handleMarketRoute(routeContext)) return
     if (await handleAiRoute(routeContext)) return
     if (await handleRfqsRoute(routeContext)) return

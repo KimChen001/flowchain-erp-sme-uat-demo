@@ -39,6 +39,8 @@ test('GET /api/me returns current user, tenant, and permissions context', async 
   assert.ok(handled)
   assert.equal(route.response.status, 200)
   assert.equal(route.response.payload.user.id, 'user-buyer-001')
+  assert.equal(route.response.payload.user.name, 'FlowChain Buyer')
+  assert.equal(route.response.payload.user.email, 'buyer@flowchain.local')
   assert.equal(route.response.payload.user.role, 'buyer')
   assert.equal(route.response.payload.tenant.id, 'tenant-flowchain-sme')
   assert.equal(route.response.payload.permissionsContext.canPrepareDrafts, true)
