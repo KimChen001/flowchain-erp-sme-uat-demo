@@ -38,7 +38,7 @@ export const aiToolRegistry = Object.freeze([
     mode: 'read',
     description: 'Summarize inventory shortage, excess, and exception risk signals.',
     inputSchema: { itemId: 'string?', warehouseId: 'string?' },
-    outputCardTypes: ['inventory_risk', 'evidence', 'recommended_actions'],
+    outputCardTypes: ['inventory_risk_summary', 'evidence', 'recommended_actions'],
     requiresUserReview: false,
     writesBusinessData: false,
     audit: { recordInvocation: true, action: 'ai_tool_invoked' },
@@ -49,7 +49,7 @@ export const aiToolRegistry = Object.freeze([
     mode: 'read',
     description: 'Retrieve open purchase orders, optionally filtered by supplier or item.',
     inputSchema: { supplierId: 'string?', itemId: 'string?' },
-    outputCardTypes: ['procurement_exception', 'evidence', 'recommended_actions'],
+    outputCardTypes: ['procurement_exception_summary', 'evidence', 'recommended_actions'],
     requiresUserReview: false,
     writesBusinessData: false,
     audit: { recordInvocation: true, action: 'ai_tool_invoked' },
@@ -60,7 +60,7 @@ export const aiToolRegistry = Object.freeze([
     mode: 'read',
     description: 'Retrieve purchase orders that appear overdue or need follow-up.',
     inputSchema: { supplierId: 'string?', itemId: 'string?' },
-    outputCardTypes: ['procurement_exception', 'evidence', 'recommended_actions'],
+    outputCardTypes: ['procurement_exception_summary', 'evidence', 'recommended_actions'],
     requiresUserReview: false,
     writesBusinessData: false,
     audit: { recordInvocation: true, action: 'ai_tool_invoked' },
@@ -71,7 +71,7 @@ export const aiToolRegistry = Object.freeze([
     mode: 'read',
     description: 'Summarize procurement issues such as overdue POs, pending PRs, RFQ delays, and receiving exceptions.',
     inputSchema: { urgency: 'string?', ownerId: 'string?' },
-    outputCardTypes: ['procurement_exception', 'evidence', 'recommended_actions'],
+    outputCardTypes: ['procurement_exception_summary', 'evidence', 'recommended_actions'],
     requiresUserReview: false,
     writesBusinessData: false,
     audit: { recordInvocation: true, action: 'ai_tool_invoked' },
@@ -119,4 +119,3 @@ export function getAiToolRegistry() {
     audit: { ...tool.audit },
   }))
 }
-
