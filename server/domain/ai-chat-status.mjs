@@ -70,7 +70,28 @@ function tokenMatch(message, value) {
 }
 
 function isTerminalStatus(status = '') {
-  return ['已完成', '已取消', '已关闭', '已驳回', '已转PO'].includes(String(status || ''))
+  const normalized = String(status || '').trim().toLowerCase().replace(/\s+/g, '_')
+  return new Set([
+    '已完成',
+    '已取消',
+    '已关闭',
+    '已驳回',
+    '已转po',
+    '已转_po',
+    '已提交',
+    '已过账',
+    'completed',
+    'complete',
+    'closed',
+    'cancelled',
+    'canceled',
+    'rejected',
+    'converted',
+    'converted_to_po',
+    'submitted',
+    'posted',
+    'done',
+  ]).has(normalized)
 }
 
 function parseBusinessDate(value = '', now = new Date()) {
@@ -134,6 +155,16 @@ function rawItemFor(db = {}, item = {}) {
 function quantityForItem(db = {}, item = {}) {
   const normalizedQuantity = itemQuantity(item)
   return normalizedQuantity === null ? itemQuantity(rawItemFor(db, item)) : normalizedQuantity
+}
+
+function purchaseRequestsFor(db = {}, options = {}) {
+  if (typeof options.ensurePurchaseRequests === 'function') return asArray(options.ensurePurchaseRequests(db))
+  return asArray(db.purchaseRequests)
+}
+
+function inventoryMovementsFor(db = {}, options = {}) {
+  if (typeof options.ensureInventoryMovements === 'function') return asArray(options.ensureInventoryMovements(db))
+  return asArray(db.inventoryMovements)
 }
 
 function movementItemMatches(movement = {}, item = {}) {
@@ -267,7 +298,7 @@ function buildSupplierStatusResponse(db = {}, message = '', options = {}) {
   }
 }
 
-function buildInventoryStatusResponse(db = {}, message = '') {
+function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
   const { matches, slot } = resolveItemMatches(db, message)
   const items = listMasterItems(db)
   const warehouses = listMasterWarehouses(db)
@@ -288,12 +319,18 @@ function buildInventoryStatusResponse(db = {}, message = '') {
   if (matches.length === 1) {
     const item = matches[0]
     const quantity = quantityForItem(db, item)
-    const movements = asArray(db.inventoryMovements).filter((movement) => movementItemMatches(movement, item))
+    const movements = inventoryMovementsFor(db, options).filter((movement) => movementItemMatches(movement, item))
     const movementDelta = movements.reduce((sum, movement) => sum + movementQuantity(movement), 0)
     const hasQuantity = quantity !== null
-    const riskLevel = hasQuantity && quantity <= 0 ? 'high' : hasQuantity && quantity < item.moq ? 'medium' : 'unknown'
+    const riskLevel = hasQuantity
+      ? quantity <= 0
+        ? 'high'
+        : quantity < item.moq
+          ? 'medium'
+          : 'low'
+      : 'unknown'
     const riskReason = hasQuantity
-      ? (quantity <= 0 ? 'Available quantity is zero or below.' : quantity < item.moq ? 'Available quantity is below MOQ.' : 'Available quantity does not show an immediate shortage signal.')
+      ? (quantity <= 0 ? 'Available quantity is zero or below.' : quantity < item.moq ? 'Available quantity is below MOQ.' : 'Available quantity is at or above MOQ.')
       : 'Current data does not expose a safe stock balance.'
     const warehouse = warehouses.find((record) => record.id === item.defaultWarehouseId)
     const data = {
@@ -338,7 +375,7 @@ function buildInventoryStatusResponse(db = {}, message = '') {
     }
   }
 
-  const movementCount = asArray(db.inventoryMovements).length
+  const movementCount = inventoryMovementsFor(db, options).length
   const quantityItems = items.filter((item) => quantityForItem(db, item) !== null)
   const riskItems = quantityItems.filter((item) => quantityForItem(db, item) <= 0 || quantityForItem(db, item) < item.moq)
   const evidence = [
@@ -385,7 +422,7 @@ function buildInventoryStatusResponse(db = {}, message = '') {
 
 function buildProcurementExceptionResponse(db = {}, message = '', options = {}) {
   const purchaseOrders = asArray(db.purchaseOrders)
-  const purchaseRequests = asArray(db.purchaseRequests)
+  const purchaseRequests = purchaseRequestsFor(db, options)
   const rfqs = asArray(db.rfqs)
   const receivingDocs = asArray(db.receivingDocs)
   const overduePos = purchaseOrders.filter((po) => isOverduePurchaseOrder(po, options.now))

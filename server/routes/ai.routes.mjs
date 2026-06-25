@@ -379,7 +379,7 @@ async function callConfiguredAi(body, db, ctx) {
 }
 
 export async function handleAiRoute(ctx) {
-  const { req, res, url, db, send, readBody, writeDb, event } = ctx
+  const { req, res, url, db, send, readBody, writeDb, event, ensurePurchaseRequests, ensureInventoryMovements } = ctx
 
   if (req.method === 'GET' && url.pathname === '/api/ai/tools') {
     send(res, 200, { tools: getAiToolRegistry() })
@@ -392,7 +392,7 @@ export async function handleAiRoute(ctx) {
     body.question = normalizeAiChatMessage(body)
     if (!body.question) return send(res, 400, { error: 'question is required' })
 
-    const statusQuery = buildAiChatStatusResponse(db, body)
+    const statusQuery = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
     if (statusQuery) {
       const result = {
         ...statusQuery,
