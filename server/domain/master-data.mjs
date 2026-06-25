@@ -4,14 +4,15 @@ const defaultWarehouse = Object.freeze({
   type: 'warehouse',
   status: 'active',
   parentId: null,
+  sourceType: 'default_reference',
 })
 
 const defaultPaymentTerms = Object.freeze([
-  { id: 'NET30', label: 'Net 30', days: 30, status: 'active' },
+  { id: 'NET30', label: 'Net 30', days: 30, status: 'active', sourceType: 'default_reference' },
 ])
 
 const defaultTaxCodes = Object.freeze([
-  { id: 'TAX-STD', label: 'Standard Tax', rate: 0.1, status: 'active' },
+  { id: 'TAX-STD', label: 'Standard Tax', rate: 0.1, status: 'active', sourceType: 'default_reference' },
 ])
 
 function asArray(value) {
@@ -43,6 +44,33 @@ function supplierIdFor(supplier = {}, index = 0) {
   return `SUP-${stableKey(supplier.name || supplier.code, String(index + 1).padStart(3, '0'))}`
 }
 
+function findSupplierReadModel(suppliers = [], value = '') {
+  const key = String(value || '').trim().toLowerCase()
+  if (!key) return null
+  return suppliers.find((supplier) =>
+    [supplier.id, supplier.name].some((candidate) => String(candidate || '').toLowerCase() === key)
+  ) || null
+}
+
+function resolvePreferredSupplier(item = {}, suppliers = []) {
+  const explicitId = item.preferredSupplierId || item.supplierId || ''
+  const supplierName = item.preferredSupplier || item.supplier || item.supplierName || ''
+  const matched = findSupplierReadModel(suppliers, explicitId) || findSupplierReadModel(suppliers, supplierName)
+  if (matched) {
+    return { preferredSupplierId: matched.id, preferredSupplierSource: 'matched_supplier_master' }
+  }
+  if (explicitId) {
+    return { preferredSupplierId: String(explicitId), preferredSupplierSource: 'fallback' }
+  }
+  if (supplierName) {
+    return {
+      preferredSupplierId: `SUP-${stableKey(supplierName, 'PREFERRED')}`,
+      preferredSupplierSource: 'derived_from_item_supplier_name',
+    }
+  }
+  return { preferredSupplierId: '', preferredSupplierSource: 'missing' }
+}
+
 function normalizeRisk(value) {
   const raw = String(value || '').trim().toLowerCase()
   if (raw === '高' || raw === 'high') return 'high'
@@ -52,19 +80,21 @@ function normalizeRisk(value) {
 }
 
 function supplierScoreFor(supplier = {}) {
-  if (supplier.score || supplier.rating || supplier.grade) return String(supplier.score || supplier.rating || supplier.grade)
+  if (supplier.score || supplier.rating || supplier.grade) {
+    return { score: String(supplier.score || supplier.rating || supplier.grade), scoreSource: 'explicit' }
+  }
   const onTime = toNumber(supplier.onTimeRate, 0)
   const quality = toNumber(supplier.qualityRate, 0)
+  if (!onTime && !quality) return { score: '', scoreSource: 'missing' }
   const average = onTime || quality ? (onTime + quality) / (onTime && quality ? 2 : 1) : 0
-  if (average >= 90) return 'A'
-  if (average >= 80) return 'B+'
-  if (average >= 70) return 'B'
-  return 'C'
+  const score = average >= 90 ? 'A' : average >= 80 ? 'B+' : average >= 70 ? 'B' : 'C'
+  // Master Data exposes fallback source metadata only; official scoring belongs to SRM snapshots.
+  return { score, scoreSource: 'derived_performance_fallback' }
 }
 
-export function normalizeMasterItem(item = {}, index = 0) {
+export function normalizeMasterItem(item = {}, index = 0, suppliers = []) {
   const sku = String(item.sku || item.code || item.id || item.itemId || '').trim()
-  const supplierId = item.preferredSupplierId || item.supplierId || (item.supplier ? `SUP-${stableKey(item.supplier, 'PREFERRED')}` : '')
+  const supplier = resolvePreferredSupplier(item, suppliers)
   return {
     id: itemIdFor(item, index),
     sku,
@@ -72,7 +102,8 @@ export function normalizeMasterItem(item = {}, index = 0) {
     category: item.category || 'Uncategorized',
     baseUom: item.baseUom || item.uom || item.unit || 'pcs',
     defaultWarehouseId: item.defaultWarehouseId || item.warehouseId || defaultWarehouse.id,
-    preferredSupplierId: supplierId,
+    preferredSupplierId: supplier.preferredSupplierId,
+    preferredSupplierSource: supplier.preferredSupplierSource,
     leadTimeDays: toNumber(item.leadTimeDays ?? item.leadTime ?? item.leadTimePeriods, 0),
     moq: toNumber(item.moq ?? item.minimumOrderQuantity, 1),
     batchMultiple: toNumber(item.batchMultiple, 1),
@@ -81,7 +112,8 @@ export function normalizeMasterItem(item = {}, index = 0) {
 }
 
 export function listMasterItems(db = {}) {
-  return asArray(db.products).map(normalizeMasterItem)
+  const suppliers = listMasterSuppliers(db)
+  return asArray(db.products).map((item, index) => normalizeMasterItem(item, index, suppliers))
 }
 
 export function findMasterItem(db = {}, id = '') {
@@ -93,12 +125,14 @@ export function findMasterItem(db = {}, id = '') {
 
 export function normalizeMasterSupplier(supplier = {}, index = 0) {
   const category = supplier.category || supplier.type || 'General'
+  const score = supplierScoreFor(supplier)
   return {
     id: supplierIdFor(supplier, index),
     name: supplier.name || supplier.supplierName || `Supplier ${index + 1}`,
     status: supplier.status || 'active',
     risk: normalizeRisk(supplier.risk),
-    score: supplierScoreFor(supplier),
+    score: score.score,
+    scoreSource: score.scoreSource,
     defaultCurrency: supplier.defaultCurrency || supplier.currency || 'USD',
     paymentTermsId: supplier.paymentTermsId || supplier.paymentTerms || 'NET30',
     categories: Array.isArray(supplier.categories) ? supplier.categories : [category].filter(Boolean),
@@ -124,14 +158,20 @@ export function listMasterWarehouses(db = {}) {
     type: warehouse.type || 'warehouse',
     status: warehouse.status || 'active',
     parentId: warehouse.parentId ?? null,
+    sourceType: warehouse.sourceType || 'explicit_data',
   }))
-  const inferredIds = new Set([
-    ...listMasterItems(db).map((item) => item.defaultWarehouseId),
-    ...asArray(db.inventoryMovements).map((movement) => movement.warehouseId),
-  ].filter(Boolean))
-  const inferred = Array.from(inferredIds)
-    .filter((id) => !explicit.some((warehouse) => warehouse.id === id))
-    .map((id) => ({ ...defaultWarehouse, id, name: id === defaultWarehouse.id ? defaultWarehouse.name : id }))
+  const knownIds = new Set(explicit.map((warehouse) => warehouse.id))
+  const inferred = []
+  for (const id of new Set(asArray(db.products).map((item) => item.defaultWarehouseId || item.warehouseId).filter(Boolean))) {
+    if (knownIds.has(id)) continue
+    knownIds.add(id)
+    inferred.push({ ...defaultWarehouse, id, name: id === defaultWarehouse.id ? defaultWarehouse.name : id, sourceType: 'derived_from_items' })
+  }
+  for (const id of new Set(asArray(db.inventoryMovements).map((movement) => movement.warehouseId).filter(Boolean))) {
+    if (knownIds.has(id)) continue
+    knownIds.add(id)
+    inferred.push({ ...defaultWarehouse, id, name: id === defaultWarehouse.id ? defaultWarehouse.name : id, sourceType: 'derived_from_transactions' })
+  }
   const warehouses = [...explicit, ...inferred]
   return warehouses.length ? warehouses : [{ ...defaultWarehouse }]
 }
@@ -142,6 +182,7 @@ export function listPaymentTerms(db = {}) {
     label: term.label || term.name || term.id || 'Net 30',
     days: toNumber(term.days ?? term.netDays, 30),
     status: term.status || 'active',
+    sourceType: term.sourceType || 'explicit_data',
   }))
   return terms.length ? terms : defaultPaymentTerms.map((term) => ({ ...term }))
 }
@@ -152,6 +193,7 @@ export function listTaxCodes(db = {}) {
     label: code.label || code.name || code.id || 'Standard Tax',
     rate: toNumber(code.rate, 0),
     status: code.status || 'active',
+    sourceType: code.sourceType || 'explicit_data',
   }))
   return codes.length ? codes : defaultTaxCodes.map((code) => ({ ...code }))
 }
