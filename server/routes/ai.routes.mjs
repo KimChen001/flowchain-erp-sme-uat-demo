@@ -1,6 +1,7 @@
 import { fetch as undiciFetch } from 'undici'
 import { buildAiDraftPreparationResponse } from '../domain/ai-draft-preparation.mjs'
 import { buildAiChatStatusResponse, normalizeAiChatMessage } from '../domain/ai-chat-status.mjs'
+import { buildAiProcurementOperationalResponse } from '../domain/ai-procurement-operational-query.mjs'
 import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-query.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
@@ -395,7 +396,8 @@ export async function handleAiRoute(ctx) {
     if (!body.question) return send(res, 400, { error: 'question is required' })
 
     const statusQuery = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
-    if (statusQuery) {
+    const deferredProcurementException = statusQuery?.intent?.name === 'procurement_exception_query' ? statusQuery : null
+    if (statusQuery && !deferredProcurementException) {
       const result = {
         ...statusQuery,
         usedWeb: false,
@@ -404,6 +406,21 @@ export async function handleAiRoute(ctx) {
         modelMs: 0,
       }
       event(db, 'ai_chat_status_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
+      await writeDb(db)
+      send(res, 200, result)
+      return true
+    }
+
+    const procurementOperationalQuery = buildAiProcurementOperationalResponse(db, body, { ensurePurchaseRequests, ensureRfqs })
+    if (procurementOperationalQuery) {
+      const result = {
+        ...procurementOperationalQuery,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      event(db, 'ai_procurement_operational_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
       await writeDb(db)
       send(res, 200, result)
       return true
@@ -419,6 +436,20 @@ export async function handleAiRoute(ctx) {
         modelMs: 0,
       }
       event(db, 'ai_rfq_operational_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
+      await writeDb(db)
+      send(res, 200, result)
+      return true
+    }
+
+    if (deferredProcurementException) {
+      const result = {
+        ...deferredProcurementException,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      event(db, 'ai_chat_status_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
       await writeDb(db)
       send(res, 200, result)
       return true

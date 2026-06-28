@@ -203,7 +203,7 @@ test('PR prompt can map priority through tenant priority configuration', () => {
   assert.equal(draft.priorityConfidence, 'high')
 })
 
-test('PR status question remains procurement status query, not draft preparation', async () => {
+test('PR status question remains read-only procurement query, not draft preparation', async () => {
   const route = createRouteContext({ message: 'PR status' }, createDb({
     purchaseRequests: [{ pr: 'PR-001', status: '待审批' }],
   }))
@@ -211,8 +211,8 @@ test('PR status question remains procurement status query, not draft preparation
 
   assert.ok(handled)
   assert.equal(route.response.status, 200)
-  assert.equal(route.response.payload.intent.name, 'procurement_exception_query')
-  assert.equal(route.response.payload.cards[0].type, 'procurement_exception_summary')
+  assert.equal(route.response.payload.intent.name, 'pr_status_query')
+  assert.equal(route.response.payload.cards[0].type, 'missing_fields')
 })
 
 test('RFQ prompt with SKU and quantity returns reviewable rfq_draft', async () => {
