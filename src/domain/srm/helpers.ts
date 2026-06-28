@@ -11,11 +11,12 @@ import {
 } from "../../data/demo-data";
 import { SUPPLIER_MASTER } from "../../data/master-data";
 import { fmt } from "../../lib/format";
+import type { SupplierMaster } from "../../types/scm";
 
 export type SupplierSrmRow = ReturnType<typeof buildSrmSupplierRows>[number];
 
-export function buildSrmSupplierRows() {
-  return SUPPLIER_MASTER.map((supplier) => {
+export function buildSrmSupplierRows(suppliers: SupplierMaster[] = SUPPLIER_MASTER) {
+  return suppliers.map((supplier) => {
     const portal = PORTAL_SUPPLIERS.find((item) => item.name === supplier.name);
     const pos = purchaseOrders.filter((order) => order.supplier === supplier.name);
     const openPoCount = pos.filter((order) => !["已完成", "已取消", "已驳回"].includes(order.status)).length;
@@ -75,8 +76,8 @@ export function srmKpis(rows = buildSrmSupplierRows()) {
   };
 }
 
-export function srmReportRows() {
-  return buildSrmSupplierRows().map((row) => ({
+export function srmReportRows(rows = buildSrmSupplierRows()) {
+  return rows.map((row) => ({
     供应商编码: row.supplier.code,
     供应商: row.supplier.name,
     品类: row.category,
@@ -96,8 +97,8 @@ export function srmReportRows() {
   }));
 }
 
-export function supplierRiskReportRows() {
-  return buildSrmSupplierRows().map((row) => ({
+export function supplierRiskReportRows(rows = buildSrmSupplierRows()) {
+  return rows.map((row) => ({
     供应商: row.supplier.name,
     风险状态: row.supplier.riskStatus,
     SRM风险分: row.riskScore,
@@ -111,8 +112,8 @@ export function supplierRiskReportRows() {
   }));
 }
 
-export function supplierCertificationReportRows() {
-  return buildSrmSupplierRows().map((row) => ({
+export function supplierCertificationReportRows(rows = buildSrmSupplierRows()) {
+  return rows.map((row) => ({
     供应商编码: row.supplier.code,
     供应商: row.supplier.name,
     品类: row.category,

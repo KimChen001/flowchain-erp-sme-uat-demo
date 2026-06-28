@@ -15,6 +15,7 @@ import {
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { A, Card, Chip, KpiCard, SectionHeader, SubTabs } from "../../components/ui";
 import { CONTRACTS, RFQS } from "../../data/demo-data";
+import { SUPPLIER_MASTER } from "../../data/master-data";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   buildSrmSupplierRows,
@@ -25,6 +26,8 @@ import {
   type SupplierSrmRow,
 } from "../../domain/srm/helpers";
 import { exportRowsToCsv } from "../../lib/data-export";
+import type { SupplierMaster } from "../../types/scm";
+import { fetchSrmSupplierProfiles } from "./api";
 import ScoringRulesWorkbench from "./ScoringRulesWorkbench";
 import SrmOverview from "./SrmOverview";
 import SupplierDetailModal from "./SupplierDetailModal";
@@ -81,12 +84,20 @@ export default function SrmPage({
   const [tab, setTab] = useState<SrmTab>(initialView);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<SupplierSrmRow | null>(null);
+  const [supplierProfiles, setSupplierProfiles] = useState<SupplierMaster[]>(SUPPLIER_MASTER);
 
   useEffect(() => {
     if (initialView) setTab(initialView);
   }, [initialView]);
 
-  const allRows = useMemo(() => buildSrmSupplierRows(), []);
+  useEffect(() => {
+    let alive = true;
+    fetchSrmSupplierProfiles(SUPPLIER_MASTER)
+      .then((profiles) => { if (alive) setSupplierProfiles(profiles); });
+    return () => { alive = false; };
+  }, []);
+
+  const allRows = useMemo(() => buildSrmSupplierRows(supplierProfiles), [supplierProfiles]);
   const query = search.trim().toLowerCase();
   const rows = useMemo(() => allRows.filter((row) =>
     !query || [row.supplier.name, row.supplier.code, row.category, row.supplier.riskStatus, row.supplier.certificationStatus].some((value) => String(value).toLowerCase().includes(query))
@@ -108,8 +119,8 @@ export default function SrmPage({
   }, [selected?.supplier.code, selected?.supplier.name, onActiveContextChange]);
 
   function exportCurrent() {
-    if (tab === "risk") return exportCsv("supplier-risk-report.csv", supplierRiskReportRows());
-    if (tab === "certification") return exportCsv("supplier-certification-report.csv", supplierCertificationReportRows());
+    if (tab === "risk") return exportCsv("supplier-risk-report.csv", supplierRiskReportRows(allRows));
+    if (tab === "certification") return exportCsv("supplier-certification-report.csv", supplierCertificationReportRows(allRows));
     if (tab === "scoring") return exportCsv("srm-score-rules-export.csv", scoreDimensions.flatMap((dimension) =>
       dimension.items.map((item) => ({
         维度: dimension.title,
@@ -124,7 +135,7 @@ export default function SrmPage({
     ));
     if (tab === "contracts") return exportCsv("srm-contract-catalog-export.csv", CONTRACTS.map((contract) => ({ 合同编号: contract.id, 供应商: contract.supplier, 范围: contract.scope, 承诺量: contract.commitVol, 价格条款: contract.price, 起始日期: contract.start, 到期日期: contract.end, 消耗率: contract.consumed, 状态: contract.status })));
     if (tab === "sourcing") return exportCsv("srm-rfx-participation-export.csv", RFQS.map((rfq) => ({ RFx编号: rfq.id, 标题: rfq.title, 品类: rfq.category, 邀请供应商: rfq.suppliers, 已报价: rfq.quoted, 最优供应商: rfq.bestSupplier, 最优报价: rfq.bestPrice, 截止日期: rfq.due, 状态: rfq.status })));
-    return exportCsv("supplier-srm-performance-report.csv", srmReportRows());
+    return exportCsv("supplier-srm-performance-report.csv", srmReportRows(allRows));
   }
 
   return (
