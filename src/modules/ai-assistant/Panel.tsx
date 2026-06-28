@@ -3,7 +3,7 @@ import { Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { A } from "../../components/ui";
 
-type ActiveContext = {
+export type ActiveContext = {
   module?: string;
   entityType?: "supplier" | "item" | "rfq" | "purchase_request";
   entityId?: string;
@@ -48,6 +48,13 @@ const PAGE_LABELS: Record<string, string> = {
 };
 
 const QUICK_PROMPTS = ["解释当前页面", "下一步建议", "查看异常"];
+
+const CONTEXTUAL_QUICK_PROMPTS: Record<NonNullable<ActiveContext["entityType"]>, string[]> = {
+  supplier: ["解释这个供应商", "查看 RFQ 参与", "查看风险原因"],
+  item: ["查看库存风险", "解释最近变动", "准备 PR 草稿"],
+  rfq: ["查看 RFQ 状态", "谁还没回复", "下一步建议"],
+  purchase_request: ["查看 PR 状态", "解释审批进度", "下一步建议"],
+};
 
 function hasValue(value: unknown) {
   return value !== undefined && value !== null && value !== "";
@@ -370,6 +377,14 @@ export default function FloatingAiAssistant({
     setInput("");
   }, [moduleId]);
 
+  const currentContext = cleanActiveContext(activeContext);
+  const quickPrompts = currentContext?.entityType
+    ? CONTEXTUAL_QUICK_PROMPTS[currentContext.entityType]
+    : QUICK_PROMPTS;
+  const contextLabel = currentContext
+    ? currentContext.entityLabel || currentContext.entityId
+    : "";
+
   async function askAi(text: string) {
     const message = text.trim();
     if (!message || asking) return;
@@ -422,7 +437,7 @@ export default function FloatingAiAssistant({
                 AI 助手
               </div>
               <div className="text-[11px] truncate" style={{ color: A.gray2 }}>
-                基于当前页面上下文回答
+                {contextLabel ? `当前上下文：${contextLabel}` : "基于当前页面上下文回答"}
               </div>
             </div>
             <button
@@ -438,7 +453,9 @@ export default function FloatingAiAssistant({
           <div ref={scrollRef} className="h-[min(360px,52vh)] overflow-auto px-4 py-3 space-y-3">
             {messages.length === 0 && (
               <div className="rounded-xl px-3 py-3 text-sm leading-6" style={{ background: A.gray6, color: A.sub }}>
-                你正在查看{PAGE_LABELS[moduleId] ?? "当前页面"}。可以询问当前供应商、库存、采购或 RFQ 状态。
+                {contextLabel
+                  ? `你正在查看${PAGE_LABELS[moduleId] ?? "当前页面"}，当前上下文是 ${contextLabel}。`
+                  : `你正在查看${PAGE_LABELS[moduleId] ?? "当前页面"}。可以询问当前供应商、库存、采购或 RFQ 状态。`}
               </div>
             )}
             {messages.map((message, index) => (
@@ -467,7 +484,7 @@ export default function FloatingAiAssistant({
 
           <div className="px-4 pb-3">
             <div className="flex flex-wrap gap-2 mb-3">
-              {QUICK_PROMPTS.map((prompt) => (
+              {quickPrompts.map((prompt) => (
                 <button
                   key={prompt}
                   onClick={() => askAi(prompt)}

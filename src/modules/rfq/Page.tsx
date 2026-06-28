@@ -7,8 +7,13 @@ import { RFQS } from "../../data/demo-data";
 import type { RfqRecord } from "../../types/scm";
 import { A, Card, Chip, DocumentHistoryPanel, KpiCard } from "../../components/ui";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
+import type { ActiveContext } from "../ai-assistant/Panel";
 
-export default function PurchasingRFQPage() {
+export default function PurchasingRFQPage({
+  onActiveContextChange,
+}: {
+  onActiveContextChange?: (context: ActiveContext | null) => void;
+}) {
   const [rfqs, setRfqs] = useState<RfqRecord[]>(RFQS);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(RFQS[0]?.id ?? "");
@@ -27,6 +32,22 @@ export default function PurchasingRFQPage() {
   }, []);
 
   const selectedRfq = rfqs.find((item) => item.id === selectedId) ?? rfqs[0] ?? null;
+
+  useEffect(() => {
+    if (!selectedRfq) {
+      onActiveContextChange?.(null);
+      return;
+    }
+    onActiveContextChange?.({
+      module: "procurement",
+      entityType: "rfq",
+      entityId: selectedRfq.id,
+      entityLabel: selectedRfq.title || selectedRfq.id,
+      view: "rfqs",
+    });
+    return () => onActiveContextChange?.(null);
+  }, [selectedRfq?.id, selectedRfq?.title, onActiveContextChange]);
+
   const exportCsv = () => {
     if (rfqs.length === 0) {
       toast.warning("暂无可导出的数据");

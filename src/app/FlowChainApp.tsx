@@ -32,7 +32,7 @@ import ProcurementPanel from "../modules/procurement/Page";
 import FinanceWorkbench from "../modules/finance/Page";
 import SrmPage from "../modules/srm/Page";
 import MasterDataPage from "../modules/master-data/Page";
-import AiPanel from "../modules/ai-assistant/Panel";
+import AiPanel, { type ActiveContext } from "../modules/ai-assistant/Panel";
 import ReportsPanel from "../modules/reports/Page";
 import ImportsPanel from "../modules/imports/Page";
 
@@ -343,6 +343,7 @@ export default function FlowChainApp() {
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(null);
   const [replenishmentSku, setReplenishmentSku] = useState<string | null>(null);
   const [aiOpenSignal, setAiOpenSignal] = useState(0);
+  const [aiActiveContext, setAiActiveContext] = useState<ActiveContext | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [unreadCount] = useState(3);
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
@@ -417,17 +418,28 @@ export default function FlowChainApp() {
   const activeNavItem = navItems.find((item) => item.id === activeModule);
   const activeChildLabel = activeNavItem?.children?.find((item) => item.id === active)?.label;
 
+  useEffect(() => {
+    setAiActiveContext((current) => {
+      const contextModule = current?.module;
+      const activeContextModule = activeModule === "rfq" || activeModule === "purchaseRequests" || activeModule === "purchasing"
+        ? "procurement"
+        : activeModule;
+      if (!contextModule || contextModule === activeContextModule) return current;
+      return null;
+    });
+  }, [activeModule]);
+
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} />,
-    inventory:   <InventoryPanel initialView={activeView as any} />,
+    inventory:   <InventoryPanel initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
     forecast:    <ForecastPanel />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
-    purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} onOpenRfq={() => setActive("procurement:rfq")} />,
+    purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
     purchasing:  <ProcurementPanel view="orders" />,
-    rfq:         <ProcurementPanel view="rfq" />,
+    rfq:         <ProcurementPanel view="rfq" onActiveContextChange={setAiActiveContext} />,
     receiving:   <ReceivingPanel />,
-    procurement: <ProcurementPanel view={activeView as any} />,
-    srm: <SrmPage initialView={activeView as any} />,
+    procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
+    srm: <SrmPage initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
     "master-data": <MasterDataPage initialView={activeView as any} />,
     finance:     <FinanceWorkbench initialView={activeView as any} />,
     reports:     <ReportsPanel initialView={activeView as any} onNavigate={setActive} />,
@@ -621,7 +633,7 @@ export default function FlowChainApp() {
           </main>
         </div>
       </div>
-      <AiPanel moduleId={activeModule} openSignal={aiOpenSignal} />
+      <AiPanel moduleId={activeModule} activeContext={aiActiveContext} openSignal={aiOpenSignal} />
     </div>
   );
 }

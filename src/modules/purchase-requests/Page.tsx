@@ -22,6 +22,7 @@ import {
   type TimelineStep,
 } from "../../components/document/DocumentShell";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
+import type { ActiveContext } from "../ai-assistant/Panel";
 
 function prTimeline(pr: PurchaseRequest): TimelineStep[] {
   const rejected = pr.status === "已驳回" || pr.status === "已取消";
@@ -224,7 +225,15 @@ function NewPRModal({ open, onClose, onCreate }: {
   );
 }
 
-export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: PurchaseIntent | null; onOpenRfq?: () => void }) {
+export default function PurchaseRequestsPage({
+  intent,
+  onOpenRfq,
+  onActiveContextChange,
+}: {
+  intent: PurchaseIntent | null;
+  onOpenRfq?: () => void;
+  onActiveContextChange?: (context: ActiveContext | null) => void;
+}) {
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"全部" | PurchaseRequestStatus>("全部");
@@ -301,6 +310,21 @@ export default function PurchaseRequestsPage({ intent, onOpenRfq }: { intent: Pu
       .catch(() => { if (alive) setSupplierRecommendationResult(null); });
     return () => { alive = false; };
   }, [selected?.pr, selected?.sourceSku, selected?.quantity, selected?.supplier]);
+
+  useEffect(() => {
+    if (!detailOpen || !selected) {
+      onActiveContextChange?.(null);
+      return;
+    }
+    onActiveContextChange?.({
+      module: "procurement",
+      entityType: "purchase_request",
+      entityId: selected.pr,
+      entityLabel: selected.sourceName ? `${selected.pr} · ${selected.sourceName}` : selected.pr,
+      view: "requests",
+    });
+    return () => onActiveContextChange?.(null);
+  }, [detailOpen, selected?.pr, selected?.sourceName, onActiveContextChange]);
 
   async function updateRequestStatus(pr: string, status: PurchaseRequestStatus) {
     const updated = await apiJson<PurchaseRequest>(`/api/purchase-requests/${encodeURIComponent(pr)}/status`, {

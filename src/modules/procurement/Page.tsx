@@ -13,6 +13,7 @@ import PurchasingRequests from "../purchase-requests/Page";
 import PurchasingOrders from "../purchasing/Page";
 import PurchasingRFQ from "../rfq/Page";
 import ReceivingPanel from "../receiving/Page";
+import type { ActiveContext } from "../ai-assistant/Panel";
 
 type PurTab = "overview" | "requests" | "rfq" | "orders" | "contracts" | "receiving" | "invoices" | "match" | "returns" | "portal";
 type WorkbenchFilter = "all" | "approval" | "overdue" | "tracking";
@@ -21,12 +22,13 @@ type ProcurementPanelProps = {
   intent?: PurchaseIntent | null;
   onOpenRfq?: () => void;
   view?: PurTab;
+  onActiveContextChange?: (context: ActiveContext | null) => void;
 };
 
-export default function ProcurementPanel({ intent = null, onOpenRfq, view }: ProcurementPanelProps) {
-  if (view === "requests") return <PurchasingRequests intent={intent} onOpenRfq={onOpenRfq} />;
+export default function ProcurementPanel({ intent = null, onOpenRfq, view, onActiveContextChange }: ProcurementPanelProps) {
+  if (view === "requests") return <PurchasingRequests intent={intent} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
   if (view === "orders") return <PurchasingOrders />;
-  if (view === "rfq") return <PurchasingRFQ />;
+  if (view === "rfq") return <PurchasingRFQ onActiveContextChange={onActiveContextChange} />;
   if (view === "contracts") return <ContractsPanel />;
   if (view === "invoices") return <SupplierInvoiceRegister mode="procurement" />;
   if (view === "match") return <ThreeWayMatchPanel />;
@@ -34,10 +36,18 @@ export default function ProcurementPanel({ intent = null, onOpenRfq, view }: Pro
   if (view === "receiving") return <ReceivingPanel />;
   if (view === "portal") return <SupplierPortalPanel />;
 
-  return <PurchasingPanel intent={intent} />;
+  return <PurchasingPanel intent={intent} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
 }
 
-function PurchasingPanel({ intent }: { intent: PurchaseIntent | null }) {
+function PurchasingPanel({
+  intent,
+  onOpenRfq,
+  onActiveContextChange,
+}: {
+  intent: PurchaseIntent | null;
+  onOpenRfq?: () => void;
+  onActiveContextChange?: (context: ActiveContext | null) => void;
+}) {
   const [tab, setTab] = useState<PurTab>("overview");
   const tabs = [
     { id: "overview",  label: "工作台",     icon: ClipboardCheck },
@@ -60,9 +70,9 @@ function PurchasingPanel({ intent }: { intent: PurchaseIntent | null }) {
     <div className="space-y-4">
       {tab !== "overview" && <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as PurTab)} />}
       {tab === "overview" && <ProcurementOverview onOpenTab={setTab} onOpenDetailViews={() => setTab("requests")} />}
-      {tab === "requests"  && <PurchasingRequests intent={intent} />}
+      {tab === "requests"  && <PurchasingRequests intent={intent} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />}
       {tab === "orders"    && <PurchasingOrders />}
-      {tab === "rfq"       && <PurchasingRFQ />}
+      {tab === "rfq"       && <PurchasingRFQ onActiveContextChange={onActiveContextChange} />}
       {tab === "contracts" && <ContractsPanel />}
       {tab === "receiving" && <ReceivingPanel />}
       {tab === "invoices"  && <SupplierInvoiceRegister mode="procurement" />}

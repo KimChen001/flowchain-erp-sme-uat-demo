@@ -21,6 +21,7 @@ import {
 import InventoryMovementLedger from "./InventoryMovementLedger";
 import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
 import { buildInventoryExceptionDocuments } from "../../domain/inventory/exceptions";
+import type { ActiveContext } from "../ai-assistant/Panel";
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
@@ -1015,7 +1016,13 @@ function InventoryWarehouseMap() {
 
 // ─── Inventory · Master Wrapper ───────────────────────────────────────────────
 type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins" | "exceptions";
-export default function InventoryPage({ initialView = "overview" }: { initialView?: InvTab }) {
+export default function InventoryPage({
+  initialView = "overview",
+  onActiveContextChange,
+}: {
+  initialView?: InvTab;
+  onActiveContextChange?: (context: ActiveContext | null) => void;
+}) {
   const [tab, setTab] = useState<InvTab>(initialView);
   const exceptionCount = useMemo(() => buildInventoryExceptionDocuments().length, []);
   const tabs = [
@@ -1032,10 +1039,14 @@ export default function InventoryPage({ initialView = "overview" }: { initialVie
     if (initialView) setTab(initialView);
   }, [initialView]);
 
+  useEffect(() => {
+    if (tab !== "overview") onActiveContextChange?.(null);
+  }, [tab, onActiveContextChange]);
+
   return (
     <div className="space-y-4">
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as InvTab)} />
-      {tab === "overview"  && <InventoryLanding onOpenTab={setTab} />}
+      {tab === "overview"  && <InventoryLanding onOpenTab={setTab} onActiveContextChange={onActiveContextChange} />}
       {tab === "lots"      && <InventoryLots />}
       {tab === "transfer"  && <InventoryTransfers />}
       {tab === "count"     && <InventoryCycleCount />}
@@ -1047,13 +1058,21 @@ export default function InventoryPage({ initialView = "overview" }: { initialVie
   );
 }
 
-function InventoryLanding({ onOpenTab }: { onOpenTab: (tab: InvTab) => void }) {
+function InventoryLanding({
+  onOpenTab,
+  onActiveContextChange,
+}: {
+  onOpenTab: (tab: InvTab) => void;
+  onActiveContextChange?: (context: ActiveContext | null) => void;
+}) {
+  const [selectedSku, setSelectedSku] = useState("");
   const plannedItems = inventoryItems.map((item) => ({ ...item, plan: inventoryPlan(item) }));
   const riskItems = plannedItems.filter((item) => item.status !== "正常" || item.plan.suggestedQty > 0);
   const exceptionDocs = buildInventoryExceptionDocuments();
   const topRisk = riskItems[0];
   const topException = exceptionDocs.find((doc) => doc.status !== "已关闭") || exceptionDocs[0];
   const frozenLot = LOTS.find((lot) => lot.status === "冻结" || lot.status === "近效期");
+  const selectedItem = inventoryItems.find((item) => item.sku === selectedSku) ?? null;
   const transferExceptions = TRANSFERS.filter((transfer) => ["在途", "待审批"].includes(transfer.status));
   const frozenCount = LOTS.filter((lot) => lot.status === "冻结").length;
   const entries = [
@@ -1067,6 +1086,20 @@ function InventoryLanding({ onOpenTab }: { onOpenTab: (tab: InvTab) => void }) {
   ];
   const primaryEntries = entries.slice(0, 4);
   const secondaryEntries = entries.slice(4);
+
+  useEffect(() => {
+    if (!selectedItem) {
+      onActiveContextChange?.(null);
+      return;
+    }
+    onActiveContextChange?.({
+      module: "inventory",
+      entityType: "item",
+      entityId: selectedItem.sku,
+      entityLabel: selectedItem.name || selectedItem.sku,
+    });
+    return () => onActiveContextChange?.(null);
+  }, [selectedItem?.sku, selectedItem?.name, onActiveContextChange]);
 
   return (
     <div className="space-y-4">
@@ -1097,23 +1130,44 @@ function InventoryLanding({ onOpenTab }: { onOpenTab: (tab: InvTab) => void }) {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { title: "库存短缺风险", object: topRisk?.sku || "库存池", body: topRisk ? `${topRisk.name} 覆盖 ${topRisk.plan.daysCover} 天，建议补货 ${topRisk.plan.suggestedQty.toLocaleString()} ${topRisk.plan.unit}` : "当前未发现高优先级短缺。", tab: "movements" as const },
-          { title: "异常单据", object: topException?.id || "异常单据", body: topException ? `${topException.type} · ${topException.sku} · ${topException.nextAction}` : "暂无待处理异常单据。", tab: "exceptions" as const },
-          { title: "冻结 / QA Hold", object: frozenLot?.lot || "批次库存", body: frozenLot ? `${frozenLot.sku} · ${frozenLot.name} · ${frozenLot.status}` : "暂无冻结或近效期重点批次。", tab: "lots" as const },
+          { title: "库存短缺风险", object: topRisk?.sku || "库存池", sku: topRisk?.sku, body: topRisk ? `${topRisk.name} 覆盖 ${topRisk.plan.daysCover} 天，建议补货 ${topRisk.plan.suggestedQty.toLocaleString()} ${topRisk.plan.unit}` : "当前未发现高优先级短缺。", tab: "movements" as const },
+          { title: "异常单据", object: topException?.id || "异常单据", sku: topException?.sku, body: topException ? `${topException.type} · ${topException.sku} · ${topException.nextAction}` : "暂无待处理异常单据。", tab: "exceptions" as const },
+          { title: "冻结 / QA Hold", object: frozenLot?.lot || "批次库存", sku: frozenLot?.sku, body: frozenLot ? `${frozenLot.sku} · ${frozenLot.name} · ${frozenLot.status}` : "暂无冻结或近效期重点批次。", tab: "lots" as const },
         ].map((item) => (
-          <Card key={item.title} className="p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="text-xs font-semibold" style={{ color: A.label }}>{item.title}</div>
-                <div className="text-[11px] mt-1 font-medium" style={{ color: A.blue }}>{item.object}</div>
+          <div
+            key={item.title}
+            className="text-left"
+            onClick={() => item.sku && setSelectedSku(item.sku)}
+            onKeyDown={(event) => {
+              if ((event.key === "Enter" || event.key === " ") && item.sku) {
+                event.preventDefault();
+                setSelectedSku(item.sku);
+              }
+            }}
+            role={item.sku ? "button" : undefined}
+            tabIndex={item.sku ? 0 : undefined}
+            style={{ cursor: item.sku ? "pointer" : "default" }}
+          >
+            <Card
+              className="p-4 h-full"
+              style={{ border: item.sku && selectedSku === item.sku ? `1px solid ${A.blue}` : undefined }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-xs font-semibold" style={{ color: A.label }}>{item.title}</div>
+                  <div className="text-[11px] mt-1 font-medium" style={{ color: A.blue }}>{item.object}</div>
+                </div>
+                <Chip label="优先" color={A.orange} bg="#fff8f0" />
               </div>
-              <Chip label="优先" color={A.orange} bg="#fff8f0" />
-            </div>
-            <div className="text-[11px] leading-5 mt-3" style={{ color: A.sub }}>{item.body}</div>
-            <button onClick={() => onOpenTab(item.tab)} className="mt-3 text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
-              进入处理
-            </button>
-          </Card>
+              <div className="text-[11px] leading-5 mt-3" style={{ color: A.sub }}>{item.body}</div>
+              <button onClick={(event) => {
+                event.stopPropagation();
+                onOpenTab(item.tab);
+              }} className="mt-3 text-[11px] px-2.5 py-1.5 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
+                进入处理
+              </button>
+            </Card>
+          </div>
         ))}
       </div>
 

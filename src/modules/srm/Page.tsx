@@ -15,6 +15,7 @@ import {
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { A, Card, Chip, KpiCard, SectionHeader, SubTabs } from "../../components/ui";
 import { CONTRACTS, RFQS } from "../../data/demo-data";
+import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   buildSrmSupplierRows,
   supplierCertificationReportRows,
@@ -70,7 +71,13 @@ function exportCsv(filename: string, rows: Record<string, unknown>[]) {
   toast.success("CSV 已导出");
 }
 
-export default function SrmPage({ initialView = "overview" }: { initialView?: SrmTab }) {
+export default function SrmPage({
+  initialView = "overview",
+  onActiveContextChange,
+}: {
+  initialView?: SrmTab;
+  onActiveContextChange?: (context: ActiveContext | null) => void;
+}) {
   const [tab, setTab] = useState<SrmTab>(initialView);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<SupplierSrmRow | null>(null);
@@ -85,6 +92,20 @@ export default function SrmPage({ initialView = "overview" }: { initialView?: Sr
     !query || [row.supplier.name, row.supplier.code, row.category, row.supplier.riskStatus, row.supplier.certificationStatus].some((value) => String(value).toLowerCase().includes(query))
   ), [allRows, query]);
   const kpis = srmKpis(allRows);
+
+  useEffect(() => {
+    if (!selected) {
+      onActiveContextChange?.(null);
+      return;
+    }
+    onActiveContextChange?.({
+      module: "srm",
+      entityType: "supplier",
+      entityId: selected.supplier.code,
+      entityLabel: selected.supplier.name,
+    });
+    return () => onActiveContextChange?.(null);
+  }, [selected?.supplier.code, selected?.supplier.name, onActiveContextChange]);
 
   function exportCurrent() {
     if (tab === "risk") return exportCsv("supplier-risk-report.csv", supplierRiskReportRows());
