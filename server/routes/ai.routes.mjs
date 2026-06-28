@@ -1,4 +1,5 @@
 import { fetch as undiciFetch } from 'undici'
+import { buildAiDraftPreparationResponse } from '../domain/ai-draft-preparation.mjs'
 import { buildAiChatStatusResponse, normalizeAiChatMessage } from '../domain/ai-chat-status.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
@@ -402,6 +403,24 @@ export async function handleAiRoute(ctx) {
         modelMs: 0,
       }
       event(db, 'ai_chat_status_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
+      await writeDb(db)
+      send(res, 200, result)
+      return true
+    }
+
+    const draftPreparation = buildAiDraftPreparationResponse(db, body, {
+      authorization: req.headers.authorization || '',
+    })
+    if (draftPreparation) {
+      const result = {
+        ...draftPreparation,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      const missingCount = result.cards.find((card) => card.type === 'missing_fields')?.fields?.length || 0
+      event(db, 'ai_draft_prepared', `AI prepared ${result.intent.name} with ${missingCount} missing fields`, result.intent.name)
       await writeDb(db)
       send(res, 200, result)
       return true
