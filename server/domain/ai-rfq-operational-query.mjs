@@ -1,4 +1,8 @@
 import { listMasterItems, listMasterSuppliers } from './master-data.mjs'
+import {
+  activeContextEvidence,
+  resolveContextualEntityId,
+} from './ai-active-context.mjs'
 
 export const aiRfqOperationalCapabilityCatalog = Object.freeze([
   {
@@ -86,6 +90,10 @@ function rfqsFor(db = {}, options = {}) {
 
 function extractRfqId(message = '') {
   return message.match(rfqIdPattern)?.[0] || ''
+}
+
+function resolveRfqId(body = {}, message = '') {
+  return resolveContextualEntityId(body, message, 'rfq', extractRfqId(message))
 }
 
 function findRfq(rfqs = [], id = '') {
@@ -300,7 +308,8 @@ function buildRfqNotFoundResponse(rfqId = '', intentName = 'rfq_status_query') {
 
 function buildRfqStatusResponse(db = {}, message = '', options = {}) {
   const rfqs = rfqsFor(db, options)
-  const rfqId = extractRfqId(message)
+  const resolution = resolveRfqId(options.body, message)
+  const rfqId = resolution.entityId
   if (!rfqId) return buildMissingRfqIdResponse()
   const rfq = findRfq(rfqs, rfqId)
   if (!rfq) return buildRfqNotFoundResponse(rfqId)
@@ -309,6 +318,8 @@ function buildRfqStatusResponse(db = {}, message = '', options = {}) {
     { type: 'rfq', id: rfqIdFor(rfq), summary: 'Matched RFQ record.' },
     { type: 'supplier_response_evidence', id: rfqIdFor(rfq), summary: stats.source === 'response_records' ? 'Supplier response status came from response records.' : 'Supplier response status came from RFQ summary fields.' },
   ]
+  const contextEvidence = activeContextEvidence(resolution.context, 'rfq')
+  if (contextEvidence) evidence.push(contextEvidence)
   if (stats.source === 'missing_response_detail') evidence.push({ type: 'limited_data', id: rfqIdFor(rfq), summary: 'RFQ response details are not available in current data.' })
   return {
     message: `${rfqIdFor(rfq)} is ${normalizeStatus(rfq.status)}.`,
@@ -341,7 +352,8 @@ function pendingRfqSummary(rfqs = [], db = {}) {
 
 function buildRfqResponseQuery(db = {}, message = '', options = {}) {
   const rfqs = rfqsFor(db, options)
-  const rfqId = extractRfqId(message)
+  const resolution = resolveRfqId(options.body, message)
+  const rfqId = resolution.entityId
   if (rfqId) {
     const rfq = findRfq(rfqs, rfqId)
     if (!rfq) return buildRfqNotFoundResponse(rfqId, 'rfq_response_query')
@@ -350,6 +362,8 @@ function buildRfqResponseQuery(db = {}, message = '', options = {}) {
       { type: 'rfq', id: rfqIdFor(rfq), summary: 'Matched RFQ record.' },
       { type: 'supplier_response_evidence', id: rfqIdFor(rfq), summary: stats.source === 'response_records' ? 'Supplier response status came from response records.' : 'Supplier response status came from RFQ summary fields.' },
     ]
+    const contextEvidence = activeContextEvidence(resolution.context, 'rfq')
+    if (contextEvidence) evidence.push(contextEvidence)
     return {
       message: `${rfqIdFor(rfq)} has ${stats.pendingSupplierCount} pending supplier responses.`,
       intent: { name: 'rfq_response_query', confidence: 0.86, slots: { rfqId: rfqIdFor(rfq), supplier: null } },
@@ -477,11 +491,12 @@ export function buildAiRfqOperationalResponse(db = {}, body = {}, options = {}) 
   const message = normalizeRfqOperationalMessage(body)
   const intent = detectAiRfqOperationalIntent(message)
   if (!intent) return null
+  const contextOptions = { ...options, body }
   const response = intent === 'rfq_status_query'
-    ? buildRfqStatusResponse(db, message, options)
+    ? buildRfqStatusResponse(db, message, contextOptions)
     : intent === 'rfq_response_query'
-      ? buildRfqResponseQuery(db, message, options)
-      : buildSupplierParticipationQuery(db, message, options)
+      ? buildRfqResponseQuery(db, message, contextOptions)
+      : buildSupplierParticipationQuery(db, message, contextOptions)
   return {
     provider: 'local_rfq_operational_query',
     mode: 'read',

@@ -3,6 +3,10 @@ import {
   listMasterSuppliers,
   listMasterWarehouses,
 } from './master-data.mjs'
+import {
+  activeContextEvidence,
+  resolveContextualEntityId,
+} from './ai-active-context.mjs'
 
 export const aiChatStatusCapabilityCatalog = Object.freeze([
   {
@@ -32,7 +36,7 @@ export const aiChatStatusCapabilityCatalog = Object.freeze([
 ])
 
 const supplierIntentPattern = /供应商|supplier|SUP-[A-Z0-9-]+/i
-const inventoryIntentPattern = /库存|inventory|stock|shortage|缺货|断货|补货|仓库|warehouse|SKU|item/i
+const inventoryIntentPattern = /库存|inventory|stock|shortage|缺货|断货|补货|仓库|warehouse|SKU|item|物料/i
 const procurementIntentPattern = /采购.*(?:异常|问题|待处理|状态)|procurement|purchase\s+(?:order|orders|issues|exceptions)|po\s+(?:status|pending|overdue)|order\s+(?:status|pending|overdue)|overdue|逾期|异常|问题|待处理|pending\s+(?:procurement|pr|po)|pr\s+(?:status|pending)|grn|receiving/i
 
 function asArray(value) {
@@ -179,13 +183,14 @@ function movementQuantity(movement = {}) {
   return 0
 }
 
-function resolveSupplierMatches(db = {}, message = '') {
+function resolveSupplierMatches(db = {}, message = '', options = {}) {
   const suppliers = listMasterSuppliers(db)
   const idMatch = message.match(/\bSUP-[A-Z0-9-]+\b/i)?.[0]
   if (idMatch) {
     return {
       slot: idMatch.toUpperCase(),
       matches: suppliers.filter((supplier) => normalizedText(supplier.id) === normalizedText(idMatch)),
+      context: null,
     }
   }
   const matches = suppliers.filter((supplier) =>
@@ -194,10 +199,27 @@ function resolveSupplierMatches(db = {}, message = '') {
     tokenMatch(message, supplier.name)
   )
   const unique = Array.from(new Map(matches.map((supplier) => [supplier.id, supplier])).values())
-  return { slot: idMatch || '', matches: unique }
+  if (unique.length) return { slot: idMatch || '', matches: unique, context: null }
+  const resolution = resolveContextualEntityId(options.body, message, 'supplier')
+  if (resolution.source === 'active_context') {
+    const contextMatches = suppliers.filter((supplier) =>
+      [supplier.id, supplier.name].some((candidate) =>
+        normalizedText(candidate) === normalizedText(resolution.entityId) ||
+        normalizedText(candidate) === normalizedText(resolution.context?.entityLabel)
+      )
+    )
+    if (contextMatches.length) {
+      return {
+        slot: resolution.entityId,
+        matches: contextMatches,
+        context: resolution.context,
+      }
+    }
+  }
+  return { slot: idMatch || '', matches: unique, context: null }
 }
 
-function resolveItemMatches(db = {}, message = '') {
+function resolveItemMatches(db = {}, message = '', options = {}) {
   const items = listMasterItems(db)
   const skuMatch = message.match(/\b[A-Z]{1,6}[-]?\d{2,}\b/i)?.[0]
   const matches = items.filter((item) =>
@@ -208,7 +230,24 @@ function resolveItemMatches(db = {}, message = '') {
     tokenMatch(message, item.name)
   )
   const unique = Array.from(new Map(matches.map((item) => [item.id, item])).values())
-  return { slot: skuMatch || '', matches: unique }
+  if (unique.length) return { slot: skuMatch || '', matches: unique, context: null }
+  const resolution = resolveContextualEntityId(options.body, message, 'item')
+  if (resolution.source === 'active_context') {
+    const contextMatches = items.filter((item) =>
+      [item.id, item.sku, item.name].some((candidate) =>
+        normalizedText(candidate) === normalizedText(resolution.entityId) ||
+        normalizedText(candidate) === normalizedText(resolution.context?.entityLabel)
+      )
+    )
+    if (contextMatches.length) {
+      return {
+        slot: resolution.entityId,
+        matches: contextMatches,
+        context: resolution.context,
+      }
+    }
+  }
+  return { slot: skuMatch || '', matches: unique, context: null }
 }
 
 function recommendedActions(actions = []) {
@@ -220,7 +259,7 @@ function evidenceCard(evidence = []) {
 }
 
 function buildSupplierStatusResponse(db = {}, message = '', options = {}) {
-  const { matches, slot } = resolveSupplierMatches(db, message)
+  const { matches, slot, context } = resolveSupplierMatches(db, message, options)
   const intent = { name: 'supplier_status_query', confidence: slot ? 0.9 : 0.82, slots: { supplier: slot || '' } }
   if (matches.length === 0) {
     const missing = {
@@ -278,6 +317,8 @@ function buildSupplierStatusResponse(db = {}, message = '', options = {}) {
     { type: 'supplier_master', id: supplier.id, summary: 'Matched supplier from Master Data.' },
     { type: 'supplier_score_source', id: supplier.id, summary: `Score source is ${supplier.scoreSource}.` },
   ]
+  const contextEvidence = activeContextEvidence(context, 'supplier')
+  if (contextEvidence) evidence.push(contextEvidence)
   if (openPos.length) evidence.push({ type: 'purchase_order', id: 'open_purchase_orders', summary: `${openPos.length} related open purchase orders found.` })
   if (overduePos.length) evidence.push({ type: 'purchase_order', id: purchaseOrderId(overduePos[0]), summary: `${overduePos.length} related purchase orders appear overdue.` })
   if (receivingIssues.length) evidence.push({ type: 'receiving', id: receivingIssues[0].grn || receivingIssues[0].id || '', summary: `${receivingIssues.length} related receiving issues found.` })
@@ -299,7 +340,7 @@ function buildSupplierStatusResponse(db = {}, message = '', options = {}) {
 }
 
 function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
-  const { matches, slot } = resolveItemMatches(db, message)
+  const { matches, slot, context } = resolveItemMatches(db, message, options)
   const items = listMasterItems(db)
   const warehouses = listMasterWarehouses(db)
   const intent = { name: 'inventory_status_query', confidence: slot ? 0.88 : 0.8, slots: { item: slot || '' } }
@@ -354,6 +395,8 @@ function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
         ? { type: 'warehouse_reference', id: warehouse.id, summary: `Warehouse source type is ${warehouse.sourceType}.` }
         : { type: 'warehouse_reference', id: item.defaultWarehouseId, summary: 'Warehouse reference was not found in Master Data.' },
     ]
+    const contextEvidence = activeContextEvidence(context, 'item')
+    if (contextEvidence) evidence.push(contextEvidence)
     if (movements.length) evidence.push({ type: 'inventory_movement', id: movements[0].id || movements[0].movementId || '', summary: `${movements.length} related inventory movements found; observed delta ${movementDelta}.` })
     if (!hasQuantity) evidence.push({ type: 'missing_quantity_evidence', id: item.id, summary: 'No safe current stock balance field is available.' })
 
@@ -361,7 +404,7 @@ function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
       message: hasQuantity
         ? `${item.sku || item.name} has available quantity ${quantity} ${item.baseUom}.`
         : `${item.sku || item.name} is available in item master, but current stock balance is not available from the current data.`,
-      intent: { ...intent, slots: { item: item.sku || item.id } },
+      intent: { ...intent, slots: { item: context?.entityId || item.sku || item.id } },
       cards: [
         { type: 'inventory_status', title: item.sku || item.name, data },
         evidenceCard(evidence),
@@ -525,11 +568,12 @@ export function buildAiChatStatusResponse(db = {}, body = {}, options = {}) {
   const message = normalizeAiChatMessage(body)
   const intent = detectAiChatStatusIntent(message)
   if (!intent) return null
+  const contextOptions = { ...options, body }
   const response = intent === 'supplier_status_query'
-    ? buildSupplierStatusResponse(db, message, options)
+    ? buildSupplierStatusResponse(db, message, contextOptions)
     : intent === 'inventory_status_query'
-      ? buildInventoryStatusResponse(db, message, options)
-      : buildProcurementExceptionResponse(db, message, options)
+      ? buildInventoryStatusResponse(db, message, contextOptions)
+      : buildProcurementExceptionResponse(db, message, contextOptions)
   return {
     provider: 'local_status_query',
     mode: 'read',

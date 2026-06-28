@@ -175,6 +175,43 @@ test('supplier id query resolves canonical supplier id', async () => {
   assert.deepEqual(businessSnapshot(db), before)
 })
 
+test('supplier status query resolves supplier id from active context', async () => {
+  const db = createDb()
+  const before = businessSnapshot(db)
+  const route = createRouteContext({
+    message: '这个供应商最近怎么样？',
+    activeContext: {
+      module: 'srm',
+      entityType: 'supplier',
+      entityId: 'SUP-001',
+      entityLabel: 'ABC Components',
+    },
+  }, db)
+  const handled = await handleAiRoute(route.ctx)
+
+  assert.ok(handled)
+  assert.equal(route.response.status, 200)
+  assert.equal(route.response.payload.intent.name, 'supplier_status_query')
+  assert.equal(route.response.payload.intent.slots.supplier, 'SUP-001')
+  assert.equal(route.response.payload.cards[0].type, 'supplier_status')
+  assert.ok(route.response.payload.evidence.some((item) => item.type === 'active_context' && item.id === 'SUP-001'))
+  assert.deepEqual(businessSnapshot(db), before)
+})
+
+test('supplier status query does not use incompatible active context', () => {
+  const response = buildAiChatStatusResponse(createDb(), {
+    message: '这个供应商最近怎么样？',
+    activeContext: {
+      entityType: 'rfq',
+      entityId: 'RFQ-1001',
+    },
+  })
+
+  assert.equal(response.intent.name, 'supplier_status_query')
+  assert.ok(response.cards.some((card) => card.type === 'missing_fields'))
+  assert.equal(response.evidence.some((item) => item.type === 'active_context'), false)
+})
+
 test('supplier query returns missing field card when supplier is not found', () => {
   const response = buildAiChatStatusResponse(createDb(), { message: 'supplier Missing Vendor status' })
 
@@ -212,6 +249,39 @@ test('item-specific inventory query returns missing quantity evidence when balan
   assert.ok(route.response.payload.evidence.some((item) => item.type === 'missing_quantity_evidence'))
   assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'))
   assert.deepEqual(businessSnapshot(db), before)
+})
+
+test('item-specific inventory query resolves item id from active context', () => {
+  const response = buildAiChatStatusResponse(createDb(), {
+    message: '这个 item 库存够不够？',
+    activeContext: {
+      module: 'inventory',
+      entityType: 'item',
+      entityId: 'ITEM-A100',
+      entityLabel: 'Motor A100',
+    },
+  })
+
+  assert.equal(response.intent.name, 'inventory_status_query')
+  assert.equal(response.intent.slots.item, 'ITEM-A100')
+  assert.equal(response.cards[0].type, 'inventory_status')
+  assert.equal(response.cards[0].data.itemId, 'ITEM-A100')
+  assert.equal(response.cards[0].data.sku, 'A100')
+  assert.ok(response.evidence.some((item) => item.type === 'active_context' && item.id === 'ITEM-A100'))
+})
+
+test('item-specific inventory query does not use incompatible active context', () => {
+  const response = buildAiChatStatusResponse(createDb(), {
+    message: '这个 item 库存够不够？',
+    activeContext: {
+      entityType: 'supplier',
+      entityId: 'SUP-001',
+    },
+  })
+
+  assert.equal(response.intent.name, 'inventory_status_query')
+  assert.equal(response.cards[0].type, 'inventory_risk_summary')
+  assert.equal(response.evidence.some((item) => item.type === 'active_context'), false)
 })
 
 test('item-specific inventory query marks zero quantity as high risk', () => {

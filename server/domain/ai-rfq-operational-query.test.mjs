@@ -141,6 +141,28 @@ test('RFQ missing id returns missing field card', () => {
   assert.ok(response.evidence.some((item) => item.type === 'rfq'))
 })
 
+test('RFQ status query resolves RFQ id from active context', async () => {
+  const db = createDb()
+  const before = businessSnapshot(db)
+  const route = createRouteContext({
+    message: '这个 RFQ 现在什么状态？',
+    activeContext: {
+      module: 'procurement',
+      entityType: 'rfq',
+      entityId: 'RFQ-1001',
+    },
+  }, db)
+  const handled = await handleAiRoute(route.ctx)
+
+  assert.ok(handled)
+  assert.equal(route.response.status, 200)
+  assert.equal(route.response.payload.intent.name, 'rfq_status_query')
+  assert.equal(route.response.payload.cards[0].type, 'rfq_status')
+  assert.equal(route.response.payload.cards[0].data.rfqId, 'RFQ-1001')
+  assert.ok(route.response.payload.evidence.some((item) => item.type === 'active_context' && item.id === 'RFQ-1001'))
+  assert.deepEqual(businessSnapshot(db), before)
+})
+
 test('RFQ not found returns empty state behavior', () => {
   const response = buildAiRfqOperationalResponse(createDb(), { message: 'RFQ-404 status' })
 
@@ -166,6 +188,37 @@ test('RFQ-specific response prompt returns response summary for one RFQ', () => 
   assert.equal(response.intent.slots.rfqId, 'RFQ-1001')
   assert.equal(response.cards[0].data.rfqsWithPendingResponses, 1)
   assert.ok(response.evidence.some((item) => item.type === 'supplier_response_evidence'))
+})
+
+test('RFQ response query resolves RFQ id from active context', () => {
+  const response = buildAiRfqOperationalResponse(createDb(), {
+    message: '这个 RFQ 哪些供应商还没回复？',
+    activeContext: {
+      module: 'procurement',
+      entityType: 'rfq',
+      entityId: 'RFQ-1001',
+    },
+  })
+
+  assert.equal(response.intent.name, 'rfq_response_query')
+  assert.equal(response.intent.slots.rfqId, 'RFQ-1001')
+  assert.equal(response.cards[0].type, 'rfq_response_summary')
+  assert.equal(response.cards[0].data.rfqsWithPendingResponses, 1)
+  assert.ok(response.evidence.some((item) => item.type === 'active_context' && item.id === 'RFQ-1001'))
+})
+
+test('explicit RFQ id overrides active RFQ context', () => {
+  const response = buildAiRfqOperationalResponse(createDb(), {
+    message: 'RFQ-1002 status',
+    activeContext: {
+      entityType: 'rfq',
+      entityId: 'RFQ-1001',
+    },
+  })
+
+  assert.equal(response.intent.name, 'rfq_status_query')
+  assert.equal(response.cards[0].data.rfqId, 'RFQ-1002')
+  assert.equal(response.evidence.some((item) => item.type === 'active_context'), false)
 })
 
 test('RFQ response query returns empty state when no pending responses exist', () => {
