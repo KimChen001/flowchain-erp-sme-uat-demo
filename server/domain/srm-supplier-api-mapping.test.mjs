@@ -112,6 +112,24 @@ test('normalizeSrmSupplierProfiles merges by supplier id or code', async () => {
   assert.equal(rows[0].qualityRate, 96)
 })
 
+test('normalizeSrmSupplierProfiles preserves legacy matching identity for renamed API suppliers', async () => {
+  const { mod } = await loadSrmApiModule()
+  const rows = mod.normalizeSrmSupplierProfiles([
+    {
+      id: 'SUP-001',
+      name: 'API Supplier Co., Ltd.',
+      risk: '低',
+    },
+  ], fallbackSuppliers)
+
+  assert.equal(rows[0].name, 'API Supplier Co., Ltd.')
+  assert.equal(rows[0].legacyName, 'Fallback Supplier')
+  assert.deepEqual(rows[0].matchNames, ['SUP-001', 'API Supplier Co., Ltd.', 'Fallback Supplier'])
+  assert.equal(rows[0].contact, '王经理')
+  assert.equal(rows[0].onTimeRate, 91)
+  assert.equal(rows[0].qualityRate, 96)
+})
+
 test('normalizeSrmSupplierProfiles creates a reasonable row for API-only suppliers', async () => {
   const { mod } = await loadSrmApiModule()
   const rows = mod.normalizeSrmSupplierProfiles([
@@ -150,4 +168,33 @@ test('normalizeSrmSupplierProfiles maps inactive and disabled supplier status co
   assert.equal(rows[0].riskStatus, '高')
   assert.equal(rows[0].onTimeRate, 91)
   assert.equal(rows[0].qualityRate, 96)
+})
+
+test('supplier relationship matching supports API and legacy names without fuzzy substring matching', async () => {
+  const { build } = await import('esbuild')
+  const dir = await mkdtemp(path.join(tmpdir(), 'srm-helper-'))
+  const outfile = path.join(dir, 'helpers.mjs')
+  await build({
+    entryPoints: ['src/domain/srm/helpers.ts'],
+    outfile,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    external: ['react', 'react-dom'],
+    logLevel: 'silent',
+  })
+  const helpers = await import(pathToFileURL(outfile).href)
+  const supplier = {
+    code: 'SUP-001',
+    name: 'API Supplier Co., Ltd.',
+    legacyName: 'Fallback Supplier',
+    matchNames: ['SUP-001', 'API Supplier Co., Ltd.', 'Fallback Supplier'],
+  }
+
+  assert.equal(helpers.matchesSupplierName('API Supplier Co., Ltd.', supplier), true)
+  assert.equal(helpers.matchesSupplierName('Fallback Supplier', supplier), true)
+  assert.equal(helpers.matchesSupplierName('SUP-001', supplier), true)
+  assert.equal(helpers.matchesSupplierName('Supplier Co', supplier), false)
+  assert.equal(helpers.matchesSupplierName('Unrelated Supplier', supplier), false)
+  await rm(dir, { recursive: true, force: true })
 })

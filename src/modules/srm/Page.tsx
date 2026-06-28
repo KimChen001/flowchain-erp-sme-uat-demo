@@ -26,8 +26,7 @@ import {
   type SupplierSrmRow,
 } from "../../domain/srm/helpers";
 import { exportRowsToCsv } from "../../lib/data-export";
-import type { SupplierMaster } from "../../types/scm";
-import { fetchSrmSupplierProfiles } from "./api";
+import { fetchSrmSupplierProfiles, type SrmSupplierProfile } from "./api";
 import ScoringRulesWorkbench from "./ScoringRulesWorkbench";
 import SrmOverview from "./SrmOverview";
 import SupplierDetailModal from "./SupplierDetailModal";
@@ -84,7 +83,7 @@ export default function SrmPage({
   const [tab, setTab] = useState<SrmTab>(initialView);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<SupplierSrmRow | null>(null);
-  const [supplierProfiles, setSupplierProfiles] = useState<SupplierMaster[]>(SUPPLIER_MASTER);
+  const [supplierProfiles, setSupplierProfiles] = useState<SrmSupplierProfile[]>(SUPPLIER_MASTER);
 
   useEffect(() => {
     if (initialView) setTab(initialView);

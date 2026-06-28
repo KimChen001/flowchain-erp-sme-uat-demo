@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { A } from "../../components/ui";
+import { getContextualQuickPrompts } from "./prompts";
 
 export type ActiveContext = {
   module?: string;
@@ -45,15 +46,6 @@ const PAGE_LABELS: Record<string, string> = {
   procurement: "采购管理",
   srm: "供应商管理",
   finance: "财务协同",
-};
-
-const QUICK_PROMPTS = ["解释当前页面", "下一步建议", "查看异常"];
-
-const CONTEXTUAL_QUICK_PROMPTS: Record<NonNullable<ActiveContext["entityType"]>, string[]> = {
-  supplier: ["解释这个供应商", "查看 RFQ 参与", "查看风险原因"],
-  item: ["查看库存风险", "解释最近变动", "准备 PR 草稿"],
-  rfq: ["查看 RFQ 状态", "谁还没回复", "下一步建议"],
-  purchase_request: ["查看 PR 状态", "解释审批进度", "下一步建议"],
 };
 
 function hasValue(value: unknown) {
@@ -527,9 +519,7 @@ export default function FloatingAiAssistant({
   }, [moduleId]);
 
   const currentContext = cleanActiveContext(activeContext);
-  const quickPrompts = currentContext?.entityType
-    ? CONTEXTUAL_QUICK_PROMPTS[currentContext.entityType]
-    : QUICK_PROMPTS;
+  const quickPrompts = getContextualQuickPrompts({ moduleId, activeContext: currentContext });
   const contextLabel = currentContext
     ? currentContext.entityLabel || currentContext.entityId
     : "";

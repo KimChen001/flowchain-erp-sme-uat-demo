@@ -1,6 +1,12 @@
 import { apiJson } from "../../lib/api-client";
 import type { SupplierMaster } from "../../types/scm";
 
+export type SrmSupplierProfile = SupplierMaster & {
+  legacyCode?: string;
+  legacyName?: string;
+  matchNames?: string[];
+};
+
 type ApiMasterSupplier = {
   id?: string;
   name?: string;
@@ -48,6 +54,19 @@ function supplierNameFallback(apiSupplier: ApiMasterSupplier, fallback?: Supplie
   return text(apiSupplier.name, fallback?.name || text(apiSupplier.id, `供应商 ${index + 1}`));
 }
 
+function uniqueText(values: unknown[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  values.forEach((value) => {
+    const next = text(value);
+    const key = next.toLowerCase();
+    if (!next || seen.has(key)) return;
+    seen.add(key);
+    result.push(next);
+  });
+  return result;
+}
+
 function isSupplierArrayPayload(payload: unknown): payload is { suppliers: ApiMasterSupplier[] } {
   return Boolean(payload) && typeof payload === "object" && Array.isArray((payload as { suppliers?: unknown }).suppliers);
 }
@@ -55,14 +74,16 @@ function isSupplierArrayPayload(payload: unknown): payload is { suppliers: ApiMa
 export function normalizeSrmSupplierProfiles(
   apiSuppliers: ApiMasterSupplier[] | undefined,
   fallbackSuppliers: SupplierMaster[],
-): SupplierMaster[] {
+): SrmSupplierProfile[] {
   if (!apiSuppliers) return fallbackSuppliers;
   return apiSuppliers.map((apiSupplier, index) => {
     const fallback = fallbackSupplier(fallbackSuppliers, apiSupplier, index);
     const preferred = apiSupplier.preferred === true;
+    const code = text(apiSupplier.id, fallback?.code || `SUP-${index + 1}`);
+    const name = supplierNameFallback(apiSupplier, fallback, index);
     return {
-      code: text(apiSupplier.id, fallback?.code || `SUP-${index + 1}`),
-      name: supplierNameFallback(apiSupplier, fallback, index),
+      code,
+      name,
       category: text(apiSupplier.categories?.[0], fallback?.category || "未分类"),
       contact: fallback?.contact || "",
       email: fallback?.email || "",
@@ -77,11 +98,14 @@ export function normalizeSrmSupplierProfiles(
       riskStatus: riskStatus(apiSupplier.risk || fallback?.riskStatus),
       certificationStatus: fallback?.certificationStatus || (preferred ? "已认证" : "待复核"),
       status: supplierStatus(apiSupplier.status || fallback?.status),
+      legacyCode: fallback?.code && fallback.code !== code ? fallback.code : undefined,
+      legacyName: fallback?.name && fallback.name !== name ? fallback.name : undefined,
+      matchNames: uniqueText([code, name, fallback?.code, fallback?.name]),
     };
   });
 }
 
-export async function fetchSrmSupplierProfiles(fallbackSuppliers: SupplierMaster[]): Promise<SupplierMaster[]> {
+export async function fetchSrmSupplierProfiles(fallbackSuppliers: SupplierMaster[]): Promise<SrmSupplierProfile[]> {
   try {
     const payload = await apiJson<unknown>("/api/master-data/suppliers");
     if (!isSupplierArrayPayload(payload)) return fallbackSuppliers;

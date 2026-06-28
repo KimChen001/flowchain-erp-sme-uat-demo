@@ -14,20 +14,44 @@ import { fmt } from "../../lib/format";
 import type { SupplierMaster } from "../../types/scm";
 
 export type SupplierSrmRow = ReturnType<typeof buildSrmSupplierRows>[number];
+export type SupplierRelationshipProfile = SupplierMaster & {
+  legacyCode?: string;
+  legacyName?: string;
+  matchNames?: string[];
+};
 
-export function buildSrmSupplierRows(suppliers: SupplierMaster[] = SUPPLIER_MASTER) {
+function normalizedSupplierKey(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+export function supplierRelationshipKeys(supplier: SupplierRelationshipProfile) {
+  return Array.from(new Set([
+    supplier.code,
+    supplier.name,
+    supplier.legacyCode,
+    supplier.legacyName,
+    ...(Array.isArray(supplier.matchNames) ? supplier.matchNames : []),
+  ].map(normalizedSupplierKey).filter(Boolean)));
+}
+
+export function matchesSupplierName(value: unknown, supplier: SupplierRelationshipProfile) {
+  const key = normalizedSupplierKey(value);
+  return Boolean(key) && supplierRelationshipKeys(supplier).includes(key);
+}
+
+export function buildSrmSupplierRows(suppliers: SupplierRelationshipProfile[] = SUPPLIER_MASTER) {
   return suppliers.map((supplier) => {
-    const portal = PORTAL_SUPPLIERS.find((item) => item.name === supplier.name);
-    const pos = purchaseOrders.filter((order) => order.supplier === supplier.name);
+    const portal = PORTAL_SUPPLIERS.find((item) => matchesSupplierName(item.name, supplier));
+    const pos = purchaseOrders.filter((order) => matchesSupplierName(order.supplier, supplier));
     const openPoCount = pos.filter((order) => !["已完成", "已取消", "已驳回"].includes(order.status)).length;
-    const grns = receivingDocs.filter((doc) => doc.supplier === supplier.name);
-    const rfqs = RFQS.filter((rfq) => rfq.bestSupplier === supplier.name);
-    const contracts = CONTRACTS.filter((contract) => contract.supplier === supplier.name);
-    const invoices = SUPPLIER_INVOICES.filter((invoice) => invoice.supplier === supplier.name);
+    const grns = receivingDocs.filter((doc) => matchesSupplierName(doc.supplier, supplier));
+    const rfqs = RFQS.filter((rfq) => matchesSupplierName(rfq.bestSupplier, supplier));
+    const contracts = CONTRACTS.filter((contract) => matchesSupplierName(contract.supplier, supplier));
+    const invoices = SUPPLIER_INVOICES.filter((invoice) => matchesSupplierName(invoice.supplier, supplier));
     const invoiceVarianceCount = invoices.filter((invoice) => invoice.varianceType !== "无差异" || ["人工复核", "差异待处理"].includes(invoice.matchStatus)).length;
-    const credits = SUPPLIER_CREDIT_MEMOS.filter((memo) => memo.supplier === supplier.name);
-    const reconciliation = SUPPLIER_RECONCILIATION_STATEMENTS.find((statement) => statement.supplier === supplier.name);
-    const returns = PURCHASE_RETURNS.filter((item) => item.supplier === supplier.name);
+    const credits = SUPPLIER_CREDIT_MEMOS.filter((memo) => matchesSupplierName(memo.supplier, supplier));
+    const reconciliation = SUPPLIER_RECONCILIATION_STATEMENTS.find((statement) => matchesSupplierName(statement.supplier, supplier));
+    const returns = PURCHASE_RETURNS.filter((item) => matchesSupplierName(item.supplier, supplier));
     const reconciliationException = reconciliation ? reconciliation.totalVarianceAmount > 0 || reconciliation.overdueAmount > 0 || ["存在差异", "已驳回", "待确认"].includes(reconciliation.status) : false;
     const riskScore = supplier.riskStatus === "高" ? 86 : supplier.certificationStatus !== "已认证" ? 72 : invoiceVarianceCount > 0 || reconciliationException ? 66 : 42;
     const nextAction = supplier.certificationStatus !== "已认证"

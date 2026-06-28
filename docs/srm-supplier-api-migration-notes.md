@@ -45,6 +45,16 @@ The narrower master-data supplier API must not erase richer SRM displays. These 
 - No write behavior was added.
 - No backend persistence behavior changed.
 
+## Relationship Matching Bridge
+
+API-preferred supplier code and name are the display identity in SRM. During this partial migration, the previous fallback supplier code/name may be retained internally as relationship matching metadata.
+
+This lets SRM keep existing PO, RFQ, contract, invoice, credit memo, receiving, purchase return, and reconciliation evidence even when the backend supplier name differs from the previous frontend supplier name. Matching is exact after trim/lowercase normalization; it does not use partial or fuzzy matching.
+
+The bridge is internal only. Legacy names, fallback names, and match candidate lists are not customer-visible fields.
+
+Future backend APIs should eventually link SRM evidence by stable supplier IDs instead of display names.
+
 ## Active Context
 
 Supplier detail activeContext remains unchanged in shape:
