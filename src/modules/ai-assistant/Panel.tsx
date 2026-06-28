@@ -106,6 +106,7 @@ export default function FloatingAiAssistant({
         method: "POST",
         body: JSON.stringify({
           moduleId,
+          question: message,
           message,
           ...(context ? { activeContext: context } : {}),
         }),
@@ -117,11 +118,12 @@ export default function FloatingAiAssistant({
         { role: "assistant", content: summary ? `${content}\n\n${summary}` : content },
       ]);
     } catch (error) {
+      console.error("AI assistant request failed", error);
       setMessages((current) => [
         ...current,
         {
           role: "assistant",
-          content: error instanceof Error ? error.message : "AI 助手暂时无法连接，请稍后再试。",
+          content: "AI 助手暂时无法连接，请稍后再试。",
         },
       ]);
     } finally {
