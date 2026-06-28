@@ -1,0 +1,282 @@
+import { apiJson } from "../../lib/api-client";
+import type { ItemMaster, PaymentTerm, SupplierMaster, TaxCode, WarehouseBin } from "../../types/scm";
+
+type ApiMasterItem = {
+  id?: string;
+  sku?: string;
+  name?: string;
+  category?: string;
+  baseUom?: string;
+  defaultWarehouseId?: string;
+  preferredSupplierId?: string;
+  leadTimeDays?: number;
+  moq?: number;
+  batchMultiple?: number;
+  status?: string;
+};
+
+type ApiMasterSupplier = {
+  id?: string;
+  name?: string;
+  status?: string;
+  risk?: string;
+  score?: string | number;
+  defaultCurrency?: string;
+  paymentTermsId?: string;
+  categories?: string[];
+  preferred?: boolean;
+};
+
+type ApiMasterWarehouse = {
+  id?: string;
+  name?: string;
+  type?: string;
+  status?: string;
+  parentId?: string | null;
+};
+
+type ApiPaymentTerm = {
+  id?: string;
+  label?: string;
+  days?: number;
+  status?: string;
+};
+
+type ApiTaxCode = {
+  id?: string;
+  label?: string;
+  rate?: number;
+  status?: string;
+};
+
+type MasterDataApiSnapshot = {
+  items?: ApiMasterItem[];
+  suppliers?: ApiMasterSupplier[];
+  warehouses?: ApiMasterWarehouse[];
+  paymentTerms?: ApiPaymentTerm[];
+  taxCodes?: ApiTaxCode[];
+};
+
+export type MasterDataSnapshot = {
+  items: ItemMaster[];
+  suppliers: SupplierMaster[];
+  warehouses: WarehouseBin[];
+  paymentTerms: PaymentTerm[];
+  taxCodes: TaxCode[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function arrayField<T>(payload: unknown, key: string): T[] {
+  if (!isRecord(payload) || !Array.isArray(payload[key])) throw new Error(`Invalid master data response: ${key}`);
+  return payload[key] as T[];
+}
+
+async function readOptional<T>(url: string, key: string): Promise<T[] | undefined> {
+  try {
+    return arrayField<T>(await apiJson<unknown>(url), key);
+  } catch {
+    return undefined;
+  }
+}
+
+function text(value: unknown, fallback = "") {
+  const next = String(value ?? "").trim();
+  return next || fallback;
+}
+
+function numberValue(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function statusValue<T extends string>(value: unknown, allowed: readonly T[], fallback: T) {
+  return allowed.includes(value as T) ? value as T : fallback;
+}
+
+function backendStatus(value: unknown) {
+  const raw = text(value).toLowerCase();
+  if (["inactive", "disabled", "停用"].includes(raw)) return "停用";
+  if (["draft", "review", "pending", "待完善", "待复核"].includes(raw)) return "待完善";
+  return "启用";
+}
+
+function reviewStatus(value: unknown): "启用" | "待复核" | "停用" {
+  const raw = text(value).toLowerCase();
+  if (["inactive", "disabled", "停用"].includes(raw)) return "停用";
+  if (["draft", "review", "pending", "待完善", "待复核"].includes(raw)) return "待复核";
+  return "启用";
+}
+
+function riskStatus(value: unknown): SupplierMaster["riskStatus"] {
+  const raw = text(value).toLowerCase();
+  if (["high", "高"].includes(raw)) return "高";
+  if (["low", "低"].includes(raw)) return "低";
+  return "中";
+}
+
+function supplierByIdOrName(suppliers: SupplierMaster[], value: unknown) {
+  const key = text(value).toLowerCase();
+  if (!key) return null;
+  return suppliers.find((supplier) =>
+    [supplier.code, supplier.name].some((candidate) => candidate.toLowerCase() === key)
+  ) || null;
+}
+
+function fallbackItem(fallback: ItemMaster[], apiItem: ApiMasterItem, index: number) {
+  const key = text(apiItem.sku || apiItem.id || apiItem.name).toLowerCase();
+  return fallback.find((item) =>
+    [item.sku, item.name].some((candidate) => candidate.toLowerCase() === key)
+  ) || fallback[index];
+}
+
+function fallbackSupplier(fallback: SupplierMaster[], apiSupplier: ApiMasterSupplier, index: number) {
+  const key = text(apiSupplier.id || apiSupplier.name).toLowerCase();
+  return fallback.find((supplier) =>
+    [supplier.code, supplier.name].some((candidate) => candidate.toLowerCase() === key)
+  ) || fallback[index];
+}
+
+export function normalizeItemRows(
+  apiItems: ApiMasterItem[] | undefined,
+  fallbackItems: ItemMaster[],
+  suppliers: SupplierMaster[],
+): ItemMaster[] {
+  if (!apiItems) return fallbackItems;
+  return apiItems.map((apiItem, index) => {
+    const fallback = fallbackItem(fallbackItems, apiItem, index);
+    const supplier = supplierByIdOrName(suppliers, apiItem.preferredSupplierId);
+    const status = backendStatus(apiItem.status);
+    return {
+      sku: text(apiItem.sku || apiItem.id, fallback?.sku || `ITEM-${index + 1}`),
+      name: text(apiItem.name, fallback?.name || text(apiItem.sku || apiItem.id, `物料 ${index + 1}`)),
+      category: text(apiItem.category, fallback?.category || "未分类"),
+      specification: fallback?.specification || "",
+      unit: text(apiItem.baseUom, fallback?.unit || "件"),
+      defaultWarehouse: text(apiItem.defaultWarehouseId, fallback?.defaultWarehouse || ""),
+      defaultBin: fallback?.defaultBin || "",
+      safetyStock: numberValue(fallback?.safetyStock, 0),
+      maxStock: numberValue(fallback?.maxStock, 0),
+      reorderPoint: numberValue(apiItem.moq, fallback?.reorderPoint || 0),
+      leadTimeDays: numberValue(apiItem.leadTimeDays, fallback?.leadTimeDays || 0),
+      batchManaged: fallback?.batchManaged ?? false,
+      serialManaged: fallback?.serialManaged ?? false,
+      qaRequired: fallback?.qaRequired ?? false,
+      defaultSupplier: supplier?.name || text(apiItem.preferredSupplierId, fallback?.defaultSupplier || ""),
+      defaultTaxCode: fallback?.defaultTaxCode || "",
+      status: statusValue(status, ["启用", "待完善", "停用"] as const, "启用"),
+    };
+  });
+}
+
+export function normalizeSupplierRows(
+  apiSuppliers: ApiMasterSupplier[] | undefined,
+  fallbackSuppliers: SupplierMaster[],
+): SupplierMaster[] {
+  if (!apiSuppliers) return fallbackSuppliers;
+  return apiSuppliers.map((apiSupplier, index) => {
+    const fallback = fallbackSupplier(fallbackSuppliers, apiSupplier, index);
+    const category = text(apiSupplier.categories?.[0], fallback?.category || "未分类");
+    return {
+      code: text(apiSupplier.id, fallback?.code || `SUP-${index + 1}`),
+      name: text(apiSupplier.name, fallback?.name || `供应商 ${index + 1}`),
+      category,
+      contact: fallback?.contact || "",
+      email: fallback?.email || "",
+      phone: fallback?.phone || "",
+      paymentTerms: text(apiSupplier.paymentTermsId, fallback?.paymentTerms || ""),
+      currency: text(apiSupplier.defaultCurrency, fallback?.currency || "CNY"),
+      taxId: fallback?.taxId || "",
+      defaultTaxCode: fallback?.defaultTaxCode || "",
+      rating: numberValue(apiSupplier.score, fallback?.rating || 0),
+      onTimeRate: fallback?.onTimeRate || 0,
+      qualityRate: fallback?.qualityRate || 0,
+      riskStatus: riskStatus(apiSupplier.risk || fallback?.riskStatus),
+      certificationStatus: fallback?.certificationStatus || (apiSupplier.preferred ? "已认证" : "待复核"),
+      status: statusValue(backendStatus(apiSupplier.status || fallback?.status), ["启用", "待完善", "停用"] as const, "启用"),
+    };
+  });
+}
+
+export function normalizeWarehouseRows(
+  apiWarehouses: ApiMasterWarehouse[] | undefined,
+  fallbackWarehouses: WarehouseBin[],
+): WarehouseBin[] {
+  if (!apiWarehouses) return fallbackWarehouses;
+  return apiWarehouses.map((apiWarehouse, index) => {
+    const fallback = fallbackWarehouses.find((item) => item.warehouseCode === apiWarehouse.id || item.warehouseName === apiWarehouse.name) || fallbackWarehouses[index];
+    const status = text(apiWarehouse.status).toLowerCase();
+    return {
+      warehouseCode: text(apiWarehouse.id, fallback?.warehouseCode || `WH-${index + 1}`),
+      warehouseName: text(apiWarehouse.name, fallback?.warehouseName || text(apiWarehouse.id, `仓库 ${index + 1}`)),
+      zone: fallback?.zone || text(apiWarehouse.type, "默认库区"),
+      bin: fallback?.bin || text(apiWarehouse.id, `BIN-${index + 1}`),
+      capacity: numberValue(fallback?.capacity, 0),
+      utilization: numberValue(fallback?.utilization, 0),
+      temperatureRequirement: fallback?.temperatureRequirement || "常温",
+      qaStatus: fallback?.qaStatus || (["inactive", "disabled", "frozen"].includes(status) ? "冻结" : "可用"),
+      available: fallback?.available ?? !["inactive", "disabled", "frozen"].includes(status),
+      owner: fallback?.owner || "",
+    };
+  });
+}
+
+export function normalizePaymentTermRows(
+  apiPaymentTerms: ApiPaymentTerm[] | undefined,
+  fallbackPaymentTerms: PaymentTerm[],
+): PaymentTerm[] {
+  if (!apiPaymentTerms) return fallbackPaymentTerms;
+  return apiPaymentTerms.map((apiTerm, index) => {
+    const fallback = fallbackPaymentTerms.find((item) => item.code === apiTerm.id || item.name === apiTerm.label) || fallbackPaymentTerms[index];
+    return {
+      code: text(apiTerm.id, fallback?.code || `TERM-${index + 1}`),
+      name: text(apiTerm.label, fallback?.name || text(apiTerm.id, `付款条款 ${index + 1}`)),
+      netDays: numberValue(apiTerm.days, fallback?.netDays || 0),
+      discountRule: fallback?.discountRule || "无现金折扣",
+      dueDateRule: fallback?.dueDateRule || `发票日期后 ${numberValue(apiTerm.days, fallback?.netDays || 0)} 天到期`,
+      status: reviewStatus(apiTerm.status || fallback?.status),
+      description: fallback?.description || "",
+    };
+  });
+}
+
+export function normalizeTaxCodeRows(
+  apiTaxCodes: ApiTaxCode[] | undefined,
+  fallbackTaxCodes: TaxCode[],
+): TaxCode[] {
+  if (!apiTaxCodes) return fallbackTaxCodes;
+  return apiTaxCodes.map((apiCode, index) => {
+    const fallback = fallbackTaxCodes.find((item) => item.code === apiCode.id || item.name === apiCode.label) || fallbackTaxCodes[index];
+    return {
+      code: text(apiCode.id, fallback?.code || `TAX-${index + 1}`),
+      name: text(apiCode.label, fallback?.name || text(apiCode.id, `税码 ${index + 1}`)),
+      rate: numberValue(apiCode.rate, fallback?.rate || 0),
+      type: fallback?.type || (numberValue(apiCode.rate, 0) > 0 ? "进项税" : "免税"),
+      region: fallback?.region || "中国大陆",
+      isDefault: fallback?.isDefault ?? index === 0,
+      status: reviewStatus(apiCode.status || fallback?.status),
+      description: fallback?.description || "",
+    };
+  });
+}
+
+export async function fetchMasterDataSnapshot(fallback: MasterDataSnapshot): Promise<MasterDataSnapshot> {
+  const [items, suppliers, warehouses, paymentTerms, taxCodes] = await Promise.all([
+    readOptional<ApiMasterItem>("/api/master-data/items", "items"),
+    readOptional<ApiMasterSupplier>("/api/master-data/suppliers", "suppliers"),
+    readOptional<ApiMasterWarehouse>("/api/master-data/warehouses", "warehouses"),
+    readOptional<ApiPaymentTerm>("/api/master-data/payment-terms", "paymentTerms"),
+    readOptional<ApiTaxCode>("/api/master-data/tax-codes", "taxCodes"),
+  ]);
+  const apiSnapshot: MasterDataApiSnapshot = { items, suppliers, warehouses, paymentTerms, taxCodes };
+  const normalizedSuppliers = normalizeSupplierRows(apiSnapshot.suppliers, fallback.suppliers);
+  return {
+    suppliers: normalizedSuppliers,
+    items: normalizeItemRows(apiSnapshot.items, fallback.items, normalizedSuppliers),
+    warehouses: normalizeWarehouseRows(apiSnapshot.warehouses, fallback.warehouses),
+    paymentTerms: normalizePaymentTermRows(apiSnapshot.paymentTerms, fallback.paymentTerms),
+    taxCodes: normalizeTaxCodeRows(apiSnapshot.taxCodes, fallback.taxCodes),
+  };
+}

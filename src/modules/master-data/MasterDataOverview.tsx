@@ -1,17 +1,32 @@
 import { FileSpreadsheet, Package, Tags, Truck, Warehouse } from "lucide-react";
 import { A } from "../../components/ui";
-import { ITEM_MASTER, PAYMENT_TERMS, SUPPLIER_MASTER, TAX_CODES, WAREHOUSE_BINS } from "../../data/master-data";
-import { masterDataQualitySignals } from "../../domain/master-data/helpers";
 import type { MasterDataTab } from "./Page";
+import type { MasterDataSnapshot } from "./api";
 
-export default function MasterDataOverview({ onOpenTab }: { onOpenTab: (tab: MasterDataTab) => void }) {
-  const quality = masterDataQualitySignals();
+function masterDataQualitySignals(data: MasterDataSnapshot) {
+  const missingTaxCode = data.items.filter((item) => !item.defaultTaxCode).length + data.suppliers.filter((supplier) => !supplier.defaultTaxCode).length;
+  const missingSupplier = data.items.filter((item) => !item.defaultSupplier).length;
+  const inactiveBins = data.warehouses.filter((bin) => !bin.available || bin.qaStatus !== "可用").length;
+  const incompleteItems = data.items.filter((item) => item.status === "待完善").length;
+  const supplierReview = data.suppliers.filter((supplier) => ["整改中", "待复核"].includes(supplier.certificationStatus)).length;
+  const taxCodeReview = data.taxCodes.filter((taxCode) => taxCode.status === "待复核").length;
+  const paymentTermReview = data.paymentTerms.filter((term) => term.status === "待复核").length;
+  return {
+    missingTaxCode,
+    missingSupplier,
+    inactiveBins,
+    totalIssues: missingTaxCode + missingSupplier + inactiveBins + incompleteItems + supplierReview + taxCodeReview + paymentTermReview,
+  };
+}
+
+export default function MasterDataOverview({ data, onOpenTab }: { data: MasterDataSnapshot; onOpenTab: (tab: MasterDataTab) => void }) {
+  const quality = masterDataQualitySignals(data);
   const entries = [
-    { tab: "items" as const, title: "物料主数据", desc: "SKU、规格、库存策略、默认仓库、默认供应商和税码。", signal: `${ITEM_MASTER.length} 条记录`, icon: Package },
-    { tab: "suppliers" as const, title: "供应商主数据", desc: "供应商编码、付款条款、默认税码、联系人和启停状态。", signal: `${SUPPLIER_MASTER.length} 条记录`, icon: Truck },
-    { tab: "warehouses" as const, title: "仓库 / 库位", desc: "仓库、库区、库位容量、QA 状态和负责人。", signal: `${WAREHOUSE_BINS.length} 个库位`, icon: Warehouse },
-    { tab: "tax-codes" as const, title: "税码", desc: "采购与发票协同使用的税码、税率和默认状态。", signal: `${TAX_CODES.length} 个税码`, icon: Tags },
-    { tab: "payment-terms" as const, title: "付款条款", desc: "供应商协同和 AP 可见性使用的付款规则。", signal: `${PAYMENT_TERMS.length} 个条款`, icon: FileSpreadsheet },
+    { tab: "items" as const, title: "物料主数据", desc: "SKU、规格、库存策略、默认仓库、默认供应商和税码。", signal: `${data.items.length} 条记录`, icon: Package },
+    { tab: "suppliers" as const, title: "供应商主数据", desc: "供应商编码、付款条款、默认税码、联系人和启停状态。", signal: `${data.suppliers.length} 条记录`, icon: Truck },
+    { tab: "warehouses" as const, title: "仓库 / 库位", desc: "仓库、库区、库位容量、QA 状态和负责人。", signal: `${data.warehouses.length} 个库位`, icon: Warehouse },
+    { tab: "tax-codes" as const, title: "税码", desc: "采购与发票协同使用的税码、税率和默认状态。", signal: `${data.taxCodes.length} 个税码`, icon: Tags },
+    { tab: "payment-terms" as const, title: "付款条款", desc: "供应商协同和 AP 可见性使用的付款规则。", signal: `${data.paymentTerms.length} 个条款`, icon: FileSpreadsheet },
   ];
 
   return (

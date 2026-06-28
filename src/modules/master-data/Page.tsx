@@ -3,9 +3,11 @@ import { Database, FileSpreadsheet, Package, Search, Tags, Truck, Warehouse } fr
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { A, Card, KpiCard, SubTabs } from "../../components/ui";
 import { ITEM_MASTER, PAYMENT_TERMS, SUPPLIER_MASTER, TAX_CODES, WAREHOUSE_BINS } from "../../data/master-data";
+import type { ActiveContext } from "../ai-assistant/Panel";
 import MasterDataDetailModal, { type DetailRecord } from "./MasterDataDetailModal";
 import MasterDataOverview from "./MasterDataOverview";
 import MasterDataTables from "./MasterDataTables";
+import { fetchMasterDataSnapshot, type MasterDataSnapshot } from "./api";
 import { exportMasterDataCsv } from "./export";
 
 export type MasterDataTab = "overview" | "items" | "suppliers" | "warehouses" | "tax-codes" | "payment-terms";
@@ -20,31 +22,79 @@ const tabs = [
   { id: "payment-terms", label: "付款条款", icon: FileSpreadsheet },
 ] as const;
 
-export default function MasterDataPage({ initialView = "overview" }: { initialView?: MasterDataTab }) {
+const fallbackMasterData: MasterDataSnapshot = {
+  items: ITEM_MASTER,
+  suppliers: SUPPLIER_MASTER,
+  warehouses: WAREHOUSE_BINS,
+  taxCodes: TAX_CODES,
+  paymentTerms: PAYMENT_TERMS,
+};
+
+export default function MasterDataPage({
+  initialView = "overview",
+  onActiveContextChange,
+}: {
+  initialView?: MasterDataTab;
+  onActiveContextChange?: (context: ActiveContext | null) => void;
+}) {
   const [tab, setTab] = useState<MasterDataTab>(initialView);
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<DetailRecord | null>(null);
+  const [masterData, setMasterData] = useState<MasterDataSnapshot>(fallbackMasterData);
 
   useEffect(() => {
     if (initialView) setTab(initialView);
   }, [initialView]);
 
+  useEffect(() => {
+    let alive = true;
+    fetchMasterDataSnapshot(fallbackMasterData)
+      .then((snapshot) => { if (alive) setMasterData(snapshot); })
+      .catch(() => { if (alive) setMasterData(fallbackMasterData); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!detail || (detail.type !== "items" && detail.type !== "suppliers")) {
+      onActiveContextChange?.(null);
+      return;
+    }
+    if (detail.type === "items") {
+      onActiveContextChange?.({
+        module: "master-data",
+        entityType: "item",
+        entityId: detail.item.sku,
+        entityLabel: detail.item.name || detail.item.sku,
+        view: "items",
+      });
+      return () => onActiveContextChange?.(null);
+    }
+    onActiveContextChange?.({
+      module: "master-data",
+      entityType: "supplier",
+      entityId: detail.item.code,
+      entityLabel: detail.item.name,
+      view: "suppliers",
+    });
+    return () => onActiveContextChange?.(null);
+  }, [detail, onActiveContextChange]);
+
   const query = search.trim().toLowerCase();
-  const filteredItems = useMemo(() => ITEM_MASTER.filter((item) =>
+  const filteredItems = useMemo(() => masterData.items.filter((item) =>
     !query || [item.sku, item.name, item.category, item.defaultSupplier, item.defaultBin, item.defaultTaxCode].some((value) => value.toLowerCase().includes(query))
-  ), [query]);
-  const filteredSuppliers = useMemo(() => SUPPLIER_MASTER.filter((item) =>
+  ), [masterData.items, query]);
+  const filteredSuppliers = useMemo(() => masterData.suppliers.filter((item) =>
     !query || [item.code, item.name, item.category, item.contact, item.paymentTerms, item.defaultTaxCode].some((value) => value.toLowerCase().includes(query))
-  ), [query]);
-  const filteredWarehouses = useMemo(() => WAREHOUSE_BINS.filter((item) =>
+  ), [masterData.suppliers, query]);
+  const filteredWarehouses = useMemo(() => masterData.warehouses.filter((item) =>
     !query || [item.warehouseCode, item.warehouseName, item.zone, item.bin, item.owner].some((value) => value.toLowerCase().includes(query))
-  ), [query]);
-  const filteredTaxCodes = useMemo(() => TAX_CODES.filter((item) =>
+  ), [masterData.warehouses, query]);
+  const filteredTaxCodes = useMemo(() => masterData.taxCodes.filter((item) =>
     !query || [item.code, item.name, item.type, item.region, item.description].some((value) => value.toLowerCase().includes(query))
-  ), [query]);
-  const filteredPaymentTerms = useMemo(() => PAYMENT_TERMS.filter((item) =>
+  ), [masterData.taxCodes, query]);
+  const filteredPaymentTerms = useMemo(() => masterData.paymentTerms.filter((item) =>
     !query || [item.code, item.name, item.description].some((value) => value.toLowerCase().includes(query))
-  ), [query]);
+  ), [masterData.paymentTerms, query]);
 
   function exportCurrent() {
     exportMasterDataCsv(tab, {
@@ -86,10 +136,10 @@ export default function MasterDataPage({ initialView = "overview" }: { initialVi
       </Card>
 
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="物料主数据" value={String(ITEM_MASTER.length)} sub={`${ITEM_MASTER.filter((item) => item.status === "待完善").length} 条待完善`} icon={Package} color={A.blue} />
-        <KpiCard label="供应商主数据" value={String(SUPPLIER_MASTER.length)} sub={`${SUPPLIER_MASTER.filter((item) => item.riskStatus === "高").length} 个高风险`} icon={Truck} color={A.purple} />
-        <KpiCard label="仓库 / 库位" value={String(WAREHOUSE_BINS.length)} sub={`${WAREHOUSE_BINS.filter((item) => item.available).length} 个可用`} icon={Warehouse} color={A.green} />
-        <KpiCard label="税码" value={String(TAX_CODES.length)} sub={`${TAX_CODES.filter((item) => item.status === "启用").length} 个启用`} icon={Tags} color={A.orange} />
+        <KpiCard label="物料主数据" value={String(masterData.items.length)} sub={`${masterData.items.filter((item) => item.status === "待完善").length} 条待完善`} icon={Package} color={A.blue} />
+        <KpiCard label="供应商主数据" value={String(masterData.suppliers.length)} sub={`${masterData.suppliers.filter((item) => item.riskStatus === "高").length} 个高风险`} icon={Truck} color={A.purple} />
+        <KpiCard label="仓库 / 库位" value={String(masterData.warehouses.length)} sub={`${masterData.warehouses.filter((item) => item.available).length} 个可用`} icon={Warehouse} color={A.green} />
+        <KpiCard label="税码" value={String(masterData.taxCodes.length)} sub={`${masterData.taxCodes.filter((item) => item.status === "启用").length} 个启用`} icon={Tags} color={A.orange} />
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -112,7 +162,7 @@ export default function MasterDataPage({ initialView = "overview" }: { initialVi
 
       <Card>
         {tab === "overview" ? (
-          <MasterDataOverview onOpenTab={setTab} />
+          <MasterDataOverview data={masterData} onOpenTab={setTab} />
         ) : (
           <MasterDataTables
             tab={tab as MasterDataTableTab}

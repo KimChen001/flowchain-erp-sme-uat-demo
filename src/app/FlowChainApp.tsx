@@ -440,7 +440,7 @@ export default function FlowChainApp() {
     receiving:   <ReceivingPanel />,
     procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
     srm: <SrmPage initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
-    "master-data": <MasterDataPage initialView={activeView as any} />,
+    "master-data": <MasterDataPage initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
     finance:     <FinanceWorkbench initialView={activeView as any} />,
     reports:     <ReportsPanel initialView={activeView as any} onNavigate={setActive} />,
     imports:     <ImportsPanel initialView={activeView as any} onNavigate={setActive} />,
