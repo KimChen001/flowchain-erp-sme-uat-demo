@@ -22,7 +22,7 @@ type AiChatCard = {
   type?: string;
   title?: string;
   data?: Record<string, unknown>;
-  fields?: { name?: string; reason?: string }[];
+  fields?: { name?: string; reason?: string }[] | Record<string, unknown> | null;
   actions?: { label?: string; kind?: string; target?: string }[];
   evidence?: { type?: string; id?: string; summary?: string }[];
   matches?: Record<string, unknown>[];
@@ -63,6 +63,42 @@ function fieldEntries(fields: [string, unknown][]) {
   return fields.filter(([, value]) => hasValue(value));
 }
 
+function normalizeFieldPairs(fields: AiChatCard["fields"]) {
+  if (Array.isArray(fields)) {
+    return fields.map((field) => [field.name, field.reason] as [unknown, unknown]).filter(([name]) => hasValue(name));
+  }
+  if (fields && typeof fields === "object") {
+    return Object.entries(fields);
+  }
+  return [];
+}
+
+function safeInternalTarget(target: unknown) {
+  const value = String(target || "").trim();
+  return value.startsWith("/") && !value.startsWith("//") ? value : "";
+}
+
+function bestText(...values: unknown[]) {
+  const found = values.find(hasValue);
+  return found === undefined ? "" : textValue(found);
+}
+
+function compactCandidateLabel(candidate: Record<string, unknown>) {
+  return bestText(
+    [candidate.supplierId, candidate.name].filter(Boolean).join(" · "),
+    [candidate.itemId, candidate.sku, candidate.name].filter(Boolean).join(" · "),
+    [candidate.rfqId, candidate.title].filter(Boolean).join(" · "),
+    [candidate.id, candidate.label].filter(Boolean).join(" · "),
+    candidate.name,
+    candidate.title,
+    candidate.label,
+  );
+}
+
+function priorityDisplayValue(data: Record<string, unknown>) {
+  return bestText(data.priorityLabel, data.priorityId, data.prioritySignal, data.prioritySource);
+}
+
 function CardShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ background: A.white, border: `1px solid ${A.border}` }}>
@@ -87,15 +123,15 @@ function KeyValueGrid({ fields }: { fields: [string, unknown][] }) {
   );
 }
 
-function MiniList({ items }: { items: unknown[] }) {
-  const rows = items.slice(0, 2).filter(Boolean);
+function MiniList({ items, limit = 2 }: { items: unknown[]; limit?: number }) {
+  const rows = items.slice(0, limit).filter(Boolean);
   if (!rows.length) return null;
   return (
     <div className="space-y-1">
       {rows.map((item, index) => {
         const row = typeof item === "object" && item ? item as Record<string, unknown> : { value: item };
-        const title = row.title || row.rfqId || row.id || row.pr || row.value;
-        const detail = row.reason || row.status || row.responseStatus || row.dueDate || row.riskLevel;
+        const title = compactCandidateLabel(row) || row.title || row.rfqId || row.id || row.pr || row.value || "匹配项";
+        const detail = row.reason || row.status || row.responseStatus || row.dueDate || row.riskLevel || row.summary;
         return (
           <div key={`${textValue(title)}-${index}`} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
             {hasValue(title) && <div className="text-[11px] font-medium truncate" style={{ color: A.label }}>{textValue(title)}</div>}
@@ -187,13 +223,17 @@ function AiResponseCard({ card }: { card: AiChatCard }) {
       return (
         <CardShell title={card.title || "采购申请草稿"}>
           <KeyValueGrid fields={[
-            ["物料", data.itemName || data.name || data.sku || data.itemId],
+            ["物料", data.itemLabel || data.itemName || data.name || data.sku || data.itemId],
             ["数量", data.quantity],
             ["需求日期", data.requiredDate],
             ["仓库", data.warehouseId || data.defaultWarehouseId],
             ["供应商", data.preferredSupplierId || data.supplierId || data.supplier],
-            ["优先级", data.priority || data.prioritySource],
-            ["状态", data.status || "draft / review required"],
+            ["优先级", priorityDisplayValue(data)],
+            ["优先级来源", data.prioritySource],
+            ["优先级置信度", data.priorityConfidence],
+            ["单据状态", data.documentStatus],
+            ["需要复核", (card as Record<string, unknown>).reviewRequired],
+            ["状态", data.status],
           ]} />
         </CardShell>
       );
@@ -206,20 +246,25 @@ function AiResponseCard({ card }: { card: AiChatCard }) {
             ["交期", data.targetDeliveryDate || data.requiredDate],
             ["候选供应商", data.supplierCandidateCount || (Array.isArray(data.supplierCandidates) ? data.supplierCandidates.length : "")],
             ["报价截止", data.quotationDeadline],
-            ["状态", data.status || "draft / review required"],
+            ["优先级", priorityDisplayValue(data)],
+            ["优先级来源", data.prioritySource],
+            ["优先级置信度", data.priorityConfidence],
+            ["单据状态", data.documentStatus],
+            ["需要复核", (card as Record<string, unknown>).reviewRequired],
+            ["状态", data.status],
           ]} />
         </CardShell>
       );
     case "missing_fields":
       return (
         <CardShell title="需补充信息">
-          <MiniList items={(card.fields || []).map((field) => ({ title: field.name, reason: field.reason }))} />
+          <MiniList items={normalizeFieldPairs(card.fields).map(([name, value]) => ({ title: name, reason: value }))} />
         </CardShell>
       );
     case "confidence_summary":
       return (
-        <CardShell title={card.title || "字段置信度"}>
-          <MiniList items={(card.fields || []).map((field) => ({ title: field.name, reason: field.reason }))} />
+        <CardShell title={card.title || "字段级置信度"}>
+          <MiniList items={normalizeFieldPairs(card.fields).map(([name, value]) => ({ title: name, reason: value }))} limit={3} />
         </CardShell>
       );
     case "recommended_actions": {
@@ -228,8 +273,8 @@ function AiResponseCard({ card }: { card: AiChatCard }) {
       return (
         <CardShell title="建议操作">
           <div className="flex flex-wrap gap-1.5">
-            {actions.slice(0, 3).map((action) => action.kind === "deep_link" && action.target ? (
-              <a key={`${action.label}-${action.target}`} href={action.target} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>
+            {actions.slice(0, 3).map((action) => action.kind === "deep_link" && safeInternalTarget(action.target) ? (
+              <a key={`${action.label}-${action.target}`} href={safeInternalTarget(action.target)} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>
                 {action.label || "打开"}
               </a>
             ) : (
@@ -242,21 +287,24 @@ function AiResponseCard({ card }: { card: AiChatCard }) {
       );
     }
     case "evidence":
+      if (!card.evidence?.length) return null;
       return (
         <CardShell title="依据">
-          <MiniList items={(card.evidence || []).map((item) => ({ title: [item.type, item.id].filter(Boolean).join(" · "), reason: item.summary }))} />
+          <MiniList items={card.evidence.map((item) => ({ title: [item.type, item.id].filter(Boolean).join(" · "), reason: item.summary }))} limit={3} />
         </CardShell>
       );
     case "empty_state":
       return (
         <CardShell title={card.title || "暂无结果"}>
-          <div className="text-[11px] leading-5" style={{ color: A.gray1 }}>{textValue((card as Record<string, unknown>).reason)}</div>
+          <div className="text-[11px] leading-5" style={{ color: A.gray1 }}>
+            {bestText((card as Record<string, unknown>).reason, (card as Record<string, unknown>).message, (card as Record<string, unknown>).summary, data.reason, data.message, data.summary) || "当前没有匹配结果。"}
+          </div>
         </CardShell>
       );
     case "ambiguous_match":
       return (
         <CardShell title={card.title || "需要选择匹配项"}>
-          <MiniList items={card.matches || []} />
+          <MiniList items={card.matches?.length ? card.matches : ["请提供更具体的信息。"]} limit={3} />
         </CardShell>
       );
     default:
