@@ -342,10 +342,7 @@ export default function FlowChainApp() {
   const [active, setActive] = useState("overview");
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(null);
   const [replenishmentSku, setReplenishmentSku] = useState<string | null>(null);
-  const [aiVisible, setAiVisible] = useState(false);
-  const [aiPanelMode, setAiPanelMode] = useState<"compact" | "expanded">(() =>
-    localStorage.getItem("scm-demo-ai-panel-mode") === "expanded" ? "expanded" : "compact"
-  );
+  const [aiOpenSignal, setAiOpenSignal] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [unreadCount] = useState(3);
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
@@ -415,18 +412,13 @@ export default function FlowChainApp() {
 
   const replenishmentItem = replenishmentSku ? inventoryItems.find((item) => item.sku === replenishmentSku) ?? null : null;
 
-  useEffect(() => {
-    localStorage.setItem("scm-demo-ai-panel-mode", aiPanelMode);
-  }, [aiPanelMode]);
-
   const { moduleId: activeModule, viewId: activeView } = splitActive(active);
-  const compactAiPanelWidth = activeModule === "overview" ? "w-[300px]" : "w-[320px]";
   const activeModuleLabel = PAGE_LABELS[activeModule] || activeModule;
   const activeNavItem = navItems.find((item) => item.id === activeModule);
   const activeChildLabel = activeNavItem?.children?.find((item) => item.id === active)?.label;
 
   const panels: Record<string, React.ReactNode> = {
-    overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiVisible(true)} />,
+    overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} />,
     inventory:   <InventoryPanel initialView={activeView as any} />,
     forecast:    <ForecastPanel />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
@@ -533,15 +525,11 @@ export default function FlowChainApp() {
 
         <div className="p-3 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           <button
-            onClick={() => setAiVisible((v) => !v)}
+            onClick={() => setAiOpenSignal(Date.now())}
             className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-medium transition-colors duration-150"
-            style={aiVisible
-              ? { background: A.sidebarAccent, color: "#f8fafc" }
-              : { background: "transparent", color: A.sidebarSub }}>
+            style={{ background: "transparent", color: A.sidebarSub }}>
             <Sparkles size={15} strokeWidth={1.8} />
             <span>AI 助手</span>
-            <div className={`ml-auto w-2 h-2 rounded-full transition-colors`}
-              style={{ background: aiVisible ? A.blue : "rgba(148,163,184,0.34)" }} />
           </button>
         </div>
       </aside>
@@ -622,7 +610,7 @@ export default function FlowChainApp() {
           </div>
         </header>
 
-        {/* Content + AI panel */}
+        {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           <main className="flex-1 overflow-auto p-6">
             <div id="module-export-scope" className={`mx-auto ${activeModule === "srm" ? "max-w-[1600px]" : "max-w-6xl"}`}>
@@ -631,25 +619,9 @@ export default function FlowChainApp() {
               </PanelErrorBoundary>
             </div>
           </main>
-
-          {aiVisible && (
-            <div className={`${aiPanelMode === "expanded" ? "w-[440px]" : compactAiPanelWidth} shrink-0 overflow-hidden flex flex-col transition-all duration-200`}>
-              <div className="h-9 px-3 flex items-center justify-between bg-white" style={{ borderLeft: "0.5px solid rgba(0,0,0,0.1)", borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
-                <span className="text-[11px] font-medium" style={{ color: A.gray1 }}>
-                  AI 助手 · {aiPanelMode === "expanded" ? "展开模式" : "紧凑模式"}
-                </span>
-                <button
-                  onClick={() => setAiPanelMode((mode) => mode === "expanded" ? "compact" : "expanded")}
-                  className="text-[11px] px-2 py-1 rounded-md font-medium"
-                  style={{ background: "#f0f6ff", color: A.blue }}>
-                  {aiPanelMode === "expanded" ? "收起" : "展开"}
-                </button>
-              </div>
-              <AiPanel moduleId={activeModule} />
-            </div>
-          )}
         </div>
       </div>
+      <AiPanel moduleId={activeModule} openSignal={aiOpenSignal} />
     </div>
   );
 }
