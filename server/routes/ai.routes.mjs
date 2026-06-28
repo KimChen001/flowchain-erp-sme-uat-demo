@@ -1,6 +1,7 @@
 import { fetch as undiciFetch } from 'undici'
 import { buildAiDraftPreparationResponse } from '../domain/ai-draft-preparation.mjs'
 import { buildAiChatStatusResponse, normalizeAiChatMessage } from '../domain/ai-chat-status.mjs'
+import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-query.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
 import {
@@ -380,7 +381,7 @@ async function callConfiguredAi(body, db, ctx) {
 }
 
 export async function handleAiRoute(ctx) {
-  const { req, res, url, db, send, readBody, writeDb, event, ensurePurchaseRequests, ensureInventoryMovements } = ctx
+  const { req, res, url, db, send, readBody, writeDb, event, ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs } = ctx
 
   if (req.method === 'GET' && url.pathname === '/api/ai/tools') {
     send(res, 200, { tools: getAiToolRegistry() })
@@ -403,6 +404,21 @@ export async function handleAiRoute(ctx) {
         modelMs: 0,
       }
       event(db, 'ai_chat_status_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
+      await writeDb(db)
+      send(res, 200, result)
+      return true
+    }
+
+    const rfqOperationalQuery = buildAiRfqOperationalResponse(db, body, { ensureRfqs })
+    if (rfqOperationalQuery) {
+      const result = {
+        ...rfqOperationalQuery,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      event(db, 'ai_rfq_operational_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
       await writeDb(db)
       send(res, 200, result)
       return true

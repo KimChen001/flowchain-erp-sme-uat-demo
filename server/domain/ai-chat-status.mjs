@@ -33,7 +33,7 @@ export const aiChatStatusCapabilityCatalog = Object.freeze([
 
 const supplierIntentPattern = /供应商|supplier|SUP-[A-Z0-9-]+/i
 const inventoryIntentPattern = /库存|inventory|stock|shortage|缺货|断货|补货|仓库|warehouse|SKU|item/i
-const procurementIntentPattern = /采购.*(?:异常|问题|待处理|状态)|procurement|purchase\s+(?:order|orders|issues|exceptions)|po\s+(?:status|pending|overdue)|order\s+(?:status|pending|overdue)|overdue|逾期|异常|问题|待处理|pending\s+(?:procurement|pr|rfq|po)|rfq\s+(?:status|pending)|pr\s+(?:status|pending)|grn|receiving/i
+const procurementIntentPattern = /采购.*(?:异常|问题|待处理|状态)|procurement|purchase\s+(?:order|orders|issues|exceptions)|po\s+(?:status|pending|overdue)|order\s+(?:status|pending|overdue)|overdue|逾期|异常|问题|待处理|pending\s+(?:procurement|pr|po)|pr\s+(?:status|pending)|grn|receiving/i
 
 function asArray(value) {
   return Array.isArray(value) ? value : []

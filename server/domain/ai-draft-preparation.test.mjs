@@ -273,7 +273,7 @@ test('RFQ pending question remains procurement status query, not draft preparati
 
   assert.ok(handled)
   assert.equal(route.response.status, 200)
-  assert.equal(route.response.payload.intent.name, 'procurement_exception_query')
+  assert.equal(route.response.payload.intent.name, 'rfq_response_query')
 })
 
 test('unsupported prompts fall through deterministic draft handler', () => {
