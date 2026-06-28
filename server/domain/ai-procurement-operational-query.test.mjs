@@ -178,6 +178,17 @@ test('procurement operational intent detection keeps draft and RFQ prompts out',
   assert.equal(detectAiProcurementOperationalIntent('RFQ pending'), null)
 })
 
+test('Chinese helper phrases still resolve read-only procurement operational intents', () => {
+  assert.equal(detectAiProcurementOperationalIntent('帮我看看采购有什么要跟？'), 'procurement_followup_summary_query')
+  assert.equal(detectAiProcurementOperationalIntent('帮我看一下哪些 PO 快逾期了？'), 'po_overdue_query')
+  assert.equal(detectAiProcurementOperationalIntent('帮我查一下 PR-1001 到哪一步了？'), 'pr_status_query')
+  assert.equal(detectAiProcurementOperationalIntent('帮我看看这个 PR 为什么还没转 PO？', {
+    activeContext: { entityType: 'purchase_request', entityId: 'PR-1001' },
+  }), 'pr_conversion_status_query')
+  assert.equal(detectAiProcurementOperationalIntent('帮我看看哪些收货有异常？'), 'receiving_exception_query')
+  assert.equal(detectAiProcurementOperationalIntent('帮我查 PO-1001 收货怎么样？'), 'receiving_status_query')
+})
+
 test('explicit PR id returns pr_status_query and does not mutate data', async () => {
   const db = createDb()
   const before = businessSnapshot(db)
@@ -338,6 +349,18 @@ test('procurement follow-up summary returns read-only counts', async () => {
 
 test('intent precedence preserves draft, RFQ, and existing supplier/inventory routes', async () => {
   const db = createDb()
+
+  const prDraftCn = createRouteContext({ message: '帮我生成 PR A100 300 urgent' }, db)
+  await handleAiRoute(prDraftCn.ctx)
+  assert.equal(prDraftCn.response.payload.intent.name, 'prepare_purchase_request_draft')
+
+  const prDraftStart = createRouteContext({ message: '帮我起一个 PR A100 300' }, db)
+  await handleAiRoute(prDraftStart.ctx)
+  assert.equal(prDraftStart.response.payload.intent.name, 'prepare_purchase_request_draft')
+
+  const rfqDraftCn = createRouteContext({ message: '帮我做一个 RFQ for A100 qty 1000' }, db)
+  await handleAiRoute(rfqDraftCn.ctx)
+  assert.equal(rfqDraftCn.response.payload.intent.name, 'prepare_rfq_draft')
 
   const rfqDraft = createRouteContext({ message: 'Create RFQ for A100 qty 1000' }, db)
   await handleAiRoute(rfqDraft.ctx)

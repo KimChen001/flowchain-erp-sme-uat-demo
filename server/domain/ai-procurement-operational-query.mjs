@@ -65,7 +65,7 @@ export const aiProcurementOperationalCapabilityCatalog = Object.freeze([
 const prIdPattern = /\bPR[-\w]*\d+\b/i
 const poIdPattern = /\bPO[-\w]*\d+\b/i
 const receivingIdPattern = /\b(?:GRN|RCV|RECEIPT)[-\w]*\d+\b/i
-const draftVerbPattern = /create|prepare|generate|start|draft|帮我|生成|准备|起一个|做一个/i
+const draftVerbPattern = /create|prepare|generate|start|draft|生成|创建|准备|起草|起一个|做一个|新建/i
 const rfqPattern = /\bRFQ\b|询价|报价请求/i
 
 function asArray(value) {

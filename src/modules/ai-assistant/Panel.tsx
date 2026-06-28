@@ -106,6 +106,43 @@ function priorityDisplayValue(data: Record<string, unknown>) {
   return bestText(data.priorityLabel, data.priorityId, data.prioritySignal, data.prioritySource);
 }
 
+function arrayValue(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function yesNoValue(value: unknown) {
+  if (!hasValue(value)) return "";
+  return value === true ? "是" : value === false ? "否" : textValue(value);
+}
+
+function compactProcurementList(items: unknown[], type: "pr" | "po" | "receiving" | "issue") {
+  return items.map((item) => {
+    const row = typeof item === "object" && item ? item as Record<string, unknown> : { value: item };
+    if (type === "pr") {
+      return {
+        title: bestText(row.prId, row.pr, row.id, "PR"),
+        reason: [row.status, row.requiredDate, row.supplier].filter(hasValue).map(textValue).join(" · "),
+      };
+    }
+    if (type === "po") {
+      return {
+        title: bestText(row.poId, row.po, row.id, "PO"),
+        reason: [row.supplier, row.status, row.expectedDate, row.riskLevel].filter(hasValue).map(textValue).join(" · "),
+      };
+    }
+    if (type === "receiving") {
+      return {
+        title: bestText(row.receivingId, row.grn, row.id, "收货单"),
+        reason: [row.poId, row.supplier, row.varianceType, row.status].filter(hasValue).map(textValue).join(" · "),
+      };
+    }
+    return {
+      title: [row.type, row.id].filter(hasValue).map(textValue).join(" · ") || bestText(row.title, row.id, "重点事项"),
+      reason: bestText(row.summary, row.reason, row.status),
+    };
+  });
+}
+
 function CardShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ background: A.white, border: `1px solid ${A.border}` }}>
@@ -224,6 +261,118 @@ function AiResponseCard({ card }: { card: AiChatCard }) {
             ["已回复", data.respondedCount],
           ]} />
           {Array.isArray(data.recentRfqs) && <MiniList items={data.recentRfqs} />}
+        </CardShell>
+      );
+    case "pr_status":
+      return (
+        <CardShell title={card.title || "采购申请状态"}>
+          <KeyValueGrid fields={[
+            ["PR", data.prId],
+            ["状态", data.status],
+            ["申请人", data.requester],
+            ["采购负责人", data.buyer],
+            ["供应商", data.supplier],
+            ["物料", data.sku || data.itemId],
+            ["数量", data.quantity],
+            ["需求日期", data.requiredDate],
+            ["优先级", data.priority],
+            ["金额", data.amount],
+            ["关联 PO", data.linkedPo],
+            ["关联 RFQ", data.linkedRfq],
+            ["来源", data.source],
+          ]} />
+        </CardShell>
+      );
+    case "pr_conversion_status":
+      return (
+        <CardShell title={card.title || "PR 转单状态"}>
+          <KeyValueGrid fields={[
+            ["PR", data.prId],
+            ["状态", data.status],
+            ["可转 PO", yesNoValue(data.canConvert)],
+            ["阻塞原因", data.blockedReason],
+            ["关联 PO", data.linkedPo],
+            ["关联 RFQ", data.linkedRfq],
+            ["下一步", data.nextStep],
+          ]} />
+        </CardShell>
+      );
+    case "pr_conversion_summary":
+      return (
+        <CardShell title={card.title || "待转单采购申请"}>
+          <KeyValueGrid fields={[
+            ["待转 PO 的 PR", data.approvedNotConvertedCount],
+            ["待审批 PR", data.pendingApprovalCount],
+          ]} />
+          <MiniList items={compactProcurementList(arrayValue(data.topRequests), "pr")} limit={3} />
+        </CardShell>
+      );
+    case "po_status":
+      return (
+        <CardShell title={card.title || "采购订单状态"}>
+          <KeyValueGrid fields={[
+            ["PO", data.poId],
+            ["状态", data.status],
+            ["供应商", data.supplier],
+            ["来源 PR", data.sourceRequest],
+            ["预计日期", data.expectedDate],
+            ["已逾期", yesNoValue(data.overdue)],
+            ["临近到期", yesNoValue(data.dueSoon)],
+            ["订单数量", data.orderedQuantity],
+            ["已收数量", data.receivedQuantity],
+            ["收货状态", data.receivingStatus],
+            ["收货单数", data.receivingDocCount],
+          ]} />
+        </CardShell>
+      );
+    case "po_overdue_summary":
+      return (
+        <CardShell title={card.title || "PO 跟进摘要"}>
+          <KeyValueGrid fields={[
+            ["逾期 PO", data.overdueCount],
+            ["临近到期", data.dueSoonCount],
+          ]} />
+          <MiniList items={compactProcurementList(arrayValue(data.topPurchaseOrders), "po")} limit={3} />
+        </CardShell>
+      );
+    case "receiving_status":
+      return (
+        <CardShell title={card.title || "收货状态"}>
+          <KeyValueGrid fields={[
+            ["收货单", data.receivingId],
+            ["PO", data.poId],
+            ["供应商", data.supplier],
+            ["状态", data.status],
+            ["已收数量", data.receivedQuantity],
+            ["预计数量", data.expectedQuantity],
+            ["差异", data.variance],
+            ["不合格数量", data.failedQuantity],
+            ["是否异常", yesNoValue(data.exception)],
+            ["仓库", data.warehouse],
+          ]} />
+        </CardShell>
+      );
+    case "receiving_exception_summary":
+      return (
+        <CardShell title={card.title || "收货异常"}>
+          <KeyValueGrid fields={[
+            ["异常收货", data.exceptionCount],
+            ["未关闭异常", data.openExceptionCount],
+          ]} />
+          <MiniList items={compactProcurementList(arrayValue(data.topExceptions), "receiving")} limit={3} />
+        </CardShell>
+      );
+    case "procurement_followup_summary":
+      return (
+        <CardShell title={card.title || "采购跟进摘要"}>
+          <KeyValueGrid fields={[
+            ["待审批 PR", data.pendingPrCount],
+            ["待转 PO 的 PR", data.approvedNotConvertedPrCount],
+            ["待回复 RFQ", data.pendingRfqResponseCount],
+            ["逾期 PO", data.overduePoCount],
+            ["收货异常", data.receivingExceptionCount],
+          ]} />
+          <MiniList items={compactProcurementList(arrayValue(data.topIssues), "issue")} limit={3} />
         </CardShell>
       );
     case "pr_draft":
