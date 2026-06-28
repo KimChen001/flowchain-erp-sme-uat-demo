@@ -77,7 +77,10 @@ function arrayField<T>(payload: unknown, key: string): T[] {
 async function readOptional<T>(url: string, key: string): Promise<T[] | undefined> {
   try {
     return arrayField<T>(await apiJson<unknown>(url), key);
-  } catch {
+  } catch (error) {
+    if ((import.meta as any).env?.DEV) {
+      console.warn(`[master-data] falling back for ${url}`, error);
+    }
     return undefined;
   }
 }
@@ -208,6 +211,7 @@ export function normalizeWarehouseRows(
   return apiWarehouses.map((apiWarehouse, index) => {
     const fallback = fallbackWarehouses.find((item) => item.warehouseCode === apiWarehouse.id || item.warehouseName === apiWarehouse.name) || fallbackWarehouses[index];
     const status = text(apiWarehouse.status).toLowerCase();
+    const blocked = ["inactive", "disabled", "frozen", "停用", "冻结"].includes(status);
     return {
       warehouseCode: text(apiWarehouse.id, fallback?.warehouseCode || `WH-${index + 1}`),
       warehouseName: text(apiWarehouse.name, fallback?.warehouseName || text(apiWarehouse.id, `仓库 ${index + 1}`)),
@@ -216,8 +220,8 @@ export function normalizeWarehouseRows(
       capacity: numberValue(fallback?.capacity, 0),
       utilization: numberValue(fallback?.utilization, 0),
       temperatureRequirement: fallback?.temperatureRequirement || "常温",
-      qaStatus: fallback?.qaStatus || (["inactive", "disabled", "frozen"].includes(status) ? "冻结" : "可用"),
-      available: fallback?.available ?? !["inactive", "disabled", "frozen"].includes(status),
+      qaStatus: blocked ? "冻结" : fallback?.qaStatus || "可用",
+      available: blocked ? false : fallback?.available ?? true,
       owner: fallback?.owner || "",
     };
   });
