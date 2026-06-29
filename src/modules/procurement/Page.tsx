@@ -23,12 +23,13 @@ type ProcurementPanelProps = {
   onOpenRfq?: () => void;
   view?: PurTab;
   onActiveContextChange?: (context: ActiveContext | null) => void;
+  focus?: { entityType: string; entityId: string; at: number } | null;
 };
 
-export default function ProcurementPanel({ intent = null, onOpenRfq, view, onActiveContextChange }: ProcurementPanelProps) {
-  if (view === "requests") return <PurchasingRequests intent={intent} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
-  if (view === "orders") return <PurchasingOrders onActiveContextChange={onActiveContextChange} />;
-  if (view === "rfq") return <PurchasingRFQ onActiveContextChange={onActiveContextChange} />;
+export default function ProcurementPanel({ intent = null, onOpenRfq, view, onActiveContextChange, focus }: ProcurementPanelProps) {
+  if (view === "requests") return <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
+  if (view === "orders") return <PurchasingOrders focus={focus} onActiveContextChange={onActiveContextChange} />;
+  if (view === "rfq") return <PurchasingRFQ focus={focus} onActiveContextChange={onActiveContextChange} />;
   if (view === "contracts") return <ContractsPanel />;
   if (view === "invoices") return <SupplierInvoiceRegister mode="procurement" />;
   if (view === "match") return <ThreeWayMatchPanel />;
@@ -36,17 +37,19 @@ export default function ProcurementPanel({ intent = null, onOpenRfq, view, onAct
   if (view === "receiving") return <ReceivingPanel />;
   if (view === "portal") return <SupplierPortalPanel />;
 
-  return <PurchasingPanel intent={intent} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
+  return <PurchasingPanel intent={intent} focus={focus} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
 }
 
 function PurchasingPanel({
   intent,
   onOpenRfq,
   onActiveContextChange,
+  focus,
 }: {
   intent: PurchaseIntent | null;
   onOpenRfq?: () => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
+  focus?: { entityType: string; entityId: string; at: number } | null;
 }) {
   const [tab, setTab] = useState<PurTab>("overview");
   const tabs = [
@@ -70,9 +73,9 @@ function PurchasingPanel({
     <div className="space-y-4">
       {tab !== "overview" && <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as PurTab)} />}
       {tab === "overview" && <ProcurementOverview onOpenTab={setTab} onOpenDetailViews={() => setTab("requests")} />}
-      {tab === "requests"  && <PurchasingRequests intent={intent} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />}
-      {tab === "orders"    && <PurchasingOrders onActiveContextChange={onActiveContextChange} />}
-      {tab === "rfq"       && <PurchasingRFQ onActiveContextChange={onActiveContextChange} />}
+      {tab === "requests"  && <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />}
+      {tab === "orders"    && <PurchasingOrders focus={focus} onActiveContextChange={onActiveContextChange} />}
+      {tab === "rfq"       && <PurchasingRFQ focus={focus} onActiveContextChange={onActiveContextChange} />}
       {tab === "contracts" && <ContractsPanel />}
       {tab === "receiving" && <ReceivingPanel />}
       {tab === "invoices"  && <SupplierInvoiceRegister mode="procurement" />}

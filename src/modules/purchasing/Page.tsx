@@ -107,8 +107,10 @@ function exportPoDetail(po: PurchaseOrder) {
 }
 
 export default function PurchasingOrdersPage({
+  focus,
   onActiveContextChange,
 }: {
+  focus?: { entityType: string; entityId: string; at: number } | null;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
@@ -131,6 +133,13 @@ export default function PurchasingOrdersPage({
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  useEffect(() => {
+    if (focus?.entityType !== "purchase_order" || !focus.entityId) return;
+    if (!orders.some((order) => order.po === focus.entityId)) return;
+    setSelectedId(focus.entityId);
+    setViewMode("detail");
+  }, [focus?.at, focus?.entityType, focus?.entityId, orders]);
 
   const filtered = filterPurchaseOrdersForWorkbench(orders, filters);
   const sourceOptions = Array.from(new Set(orders.map((order) => order.source || "manual"))).sort();

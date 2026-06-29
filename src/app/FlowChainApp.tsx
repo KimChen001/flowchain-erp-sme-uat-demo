@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Toaster, toast } from "sonner";
 import {
   AlertTriangle,
@@ -7,6 +7,7 @@ import {
   Loader2,
   ShieldCheck,
   Lock,
+  X,
 } from "lucide-react";
 import { navGroups, navItems } from "./routes";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
@@ -168,6 +169,40 @@ const PAGE_LABELS: Record<string, string> = {
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
   procurement: "采购管理", finance: "财务协同", "master-data": "主数据", srm: "供应商管理", reports: "报表中心", imports: "数据管理",
+};
+
+type GlobalSearchResult = {
+  id: string;
+  type: string;
+  label: string;
+  subtitle: string;
+  status: string;
+  moduleId: string;
+  entityType: string;
+  entityId: string;
+  entityLabel: string;
+  evidence: Array<{ label: string; value: string }>;
+  score: number;
+  matchedFields: string[];
+};
+
+type GlobalSearchFocus = {
+  entityType: string;
+  entityId: string;
+  at: number;
+};
+
+const SEARCH_TYPE_LABELS: Record<string, string> = {
+  purchase_request: "PR",
+  rfq: "RFQ",
+  purchase_order: "PO",
+  receiving_doc: "GRN",
+  supplier_invoice: "发票",
+  supplier: "供应商",
+  item: "物料",
+  inventory_item: "库存",
+  warehouse: "仓库",
+  bin: "库位",
 };
 
 function splitActive(active: string) {
@@ -345,6 +380,13 @@ export default function FlowChainApp() {
   const [aiOpenSignal, setAiOpenSignal] = useState(0);
   const [aiActiveContext, setAiActiveContext] = useState<ActiveContext | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [searchFocus, setSearchFocus] = useState<GlobalSearchFocus | null>(null);
+  const searchRef = useRef<HTMLFormElement | null>(null);
   const [unreadCount] = useState(3);
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
   const [user, setUser] = useState<DemoUser | null>(() => {
@@ -429,16 +471,52 @@ export default function FlowChainApp() {
     });
   }, [activeModule]);
 
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!searchRef.current?.contains(event.target as Node)) setSearchOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
+
+  async function runGlobalSearch(query = searchQuery) {
+    const trimmed = query.trim();
+    setSearchQuery(query);
+    setSearchError("");
+    if (!trimmed) {
+      setSearchResults([]);
+      setSearchOpen(false);
+      return;
+    }
+    setSearchLoading(true);
+    setSearchOpen(true);
+    try {
+      const payload = await apiJson<{ query: string; results: GlobalSearchResult[]; total: number }>(`/api/search?q=${encodeURIComponent(trimmed)}`);
+      setSearchResults(payload.results);
+    } catch (error) {
+      setSearchResults([]);
+      setSearchError(error instanceof Error ? error.message : "搜索暂不可用");
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  function openSearchResult(result: GlobalSearchResult) {
+    setActive(result.moduleId || "overview");
+    setSearchFocus({ entityType: result.entityType, entityId: result.entityId, at: Date.now() });
+    setSearchOpen(false);
+  }
+
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} />,
     inventory:   <InventoryPanel initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
     forecast:    <ForecastPanel />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
-    purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
-    purchasing:  <ProcurementPanel view="orders" />,
-    rfq:         <ProcurementPanel view="rfq" onActiveContextChange={setAiActiveContext} />,
+    purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
+    purchasing:  <ProcurementPanel view="orders" focus={searchFocus} />,
+    rfq:         <ProcurementPanel view="rfq" focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
     receiving:   <ReceivingPanel />,
-    procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
+    procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
     srm: <SrmPage initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
     "master-data": <MasterDataPage initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
     finance:     <FinanceWorkbench initialView={activeView as any} />,
@@ -566,11 +644,83 @@ export default function FlowChainApp() {
             <span className="text-xs ml-2" style={{ color: A.gray2 }}>{user.company}</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs cursor-pointer"
-              style={{ color: A.gray1 }}>
-              <Search size={14} />
-              <span>搜索单号、供应商、物料…</span>
-            </div>
+            <form ref={searchRef} onSubmit={(event) => { event.preventDefault(); runGlobalSearch(); }}
+              className="relative hidden sm:block">
+              <div className="flex items-center gap-2 w-72 px-3 py-1.5 rounded-lg text-xs"
+                style={{ color: A.gray1, background: A.gray6 }}>
+                <button type="submit" className="shrink-0" aria-label="搜索业务记录">
+                  {searchLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                </button>
+                <input
+                  value={searchQuery}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    if (!event.target.value.trim()) {
+                      setSearchResults([]);
+                      setSearchOpen(false);
+                    }
+                  }}
+                  onFocus={() => { if (searchQuery.trim()) setSearchOpen(true); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setSearchOpen(false);
+                  }}
+                  placeholder="搜索业务记录"
+                  className="w-full bg-transparent outline-none text-xs"
+                  style={{ color: A.label }}
+                />
+                {searchQuery && (
+                  <button type="button" aria-label="清空搜索"
+                    onClick={() => { setSearchQuery(""); setSearchResults([]); setSearchOpen(false); setSearchError(""); }}
+                    className="shrink-0">
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+              {searchOpen && (
+                <div className="absolute right-0 top-full mt-2 w-[420px] rounded-xl shadow-xl z-30 overflow-hidden"
+                  style={{ background: A.white, border: `1px solid ${A.border}` }}>
+                  <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: `1px solid ${A.border}` }}>
+                    <span className="text-[11px] font-semibold" style={{ color: A.label }}>搜索结果</span>
+                    <span className="text-[10px]" style={{ color: A.gray2 }}>{searchLoading ? "搜索中..." : `${searchResults.length} 条`}</span>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {searchLoading && (
+                      <div className="px-4 py-6 text-xs flex items-center gap-2" style={{ color: A.gray1 }}>
+                        <Loader2 size={14} className="animate-spin" /> 搜索中...
+                      </div>
+                    )}
+                    {!searchLoading && searchError && (
+                      <div className="px-4 py-6 text-xs" style={{ color: A.red }}>{searchError}</div>
+                    )}
+                    {!searchLoading && !searchError && searchResults.length === 0 && (
+                      <div className="px-4 py-6 text-xs" style={{ color: A.gray2 }}>未找到匹配的业务记录</div>
+                    )}
+                    {!searchLoading && !searchError && searchResults.map((result) => (
+                      <button key={result.id} type="button" onClick={() => openSearchResult(result)}
+                        className="w-full text-left px-3 py-3 hover:bg-blue-50/50 transition-colors"
+                        style={{ borderBottom: `1px solid ${A.border}` }}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: "#eef4ff", color: A.blue }}>
+                                {SEARCH_TYPE_LABELS[result.type] || result.type}
+                              </span>
+                              <span className="text-xs font-semibold truncate" style={{ color: A.label }}>{result.label}</span>
+                            </div>
+                            <div className="text-[11px] mt-1 truncate" style={{ color: A.sub }}>{result.subtitle || result.entityLabel}</div>
+                          </div>
+                          {result.status && (
+                            <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: A.gray6, color: A.gray1 }}>
+                              {result.status}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </form>
             <button className="relative p-2 rounded-md transition-colors hover:bg-slate-100"
               style={{ color: A.gray1 }}>
               <Bell size={15} strokeWidth={1.8} />

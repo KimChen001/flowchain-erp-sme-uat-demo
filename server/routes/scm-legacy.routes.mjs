@@ -16,6 +16,7 @@ import { handleSupplierRecommendationsRoute } from './supplier-recommendations.r
 import { handleAuditLogRoute } from './audit-log.routes.mjs'
 import { handleContextRoute } from './context.routes.mjs'
 import { handleMasterDataRoute } from './master-data.routes.mjs'
+import { handleSearchRoute } from './search.routes.mjs'
 import { handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import {
@@ -972,6 +973,7 @@ export function createScmServer() {
     if (await handleMrpRoute(routeContext)) return
     if (await handleSopRoute(routeContext)) return
     if (await handleContextRoute(routeContext)) return
+    if (await handleSearchRoute(routeContext)) return
     if (await handleMasterDataRoute(routeContext)) return
     if (await handleMarketRoute(routeContext)) return
     if (await handleAiRoute(routeContext)) return
@@ -987,6 +989,10 @@ export function createScmServer() {
     if (!url.pathname.startsWith('/api/')) return sendStatic(req, res, url)
     return send(res, 404, { error: 'Not found' })
   } catch (error) {
+    if (res.headersSent) {
+      res.end()
+      return
+    }
     return send(res, 500, { error: error.message })
   }
   })

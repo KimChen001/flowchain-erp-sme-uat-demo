@@ -244,10 +244,12 @@ function NewPRModal({ open, onClose, onCreate }: {
 
 export default function PurchaseRequestsPage({
   intent,
+  focus,
   onOpenRfq,
   onActiveContextChange,
 }: {
   intent: PurchaseIntent | null;
+  focus?: { entityType: string; entityId: string; at: number } | null;
   onOpenRfq?: () => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
@@ -279,6 +281,13 @@ export default function PurchaseRequestsPage({
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [intent?.createdAt]);
+
+  useEffect(() => {
+    if (focus?.entityType !== "purchase_request" || !focus.entityId) return;
+    if (!requests.some((item) => item.pr === focus.entityId)) return;
+    setSelectedId(focus.entityId);
+    setViewMode("detail");
+  }, [focus?.at, focus?.entityType, focus?.entityId, requests]);
 
   const filtered = filterPurchaseRequestsForWorkbench(requests, filters);
   const sourceOptions = Array.from(new Set(requests.map((item) => item.source || "manual"))).sort();

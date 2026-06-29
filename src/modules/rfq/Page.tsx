@@ -28,8 +28,10 @@ import {
 type RfqViewMode = "list" | "detail";
 
 export default function PurchasingRFQPage({
+  focus,
   onActiveContextChange,
 }: {
+  focus?: { entityType: string; entityId: string; at: number } | null;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [rfqs, setRfqs] = useState<RfqRecord[]>(RFQS);
@@ -50,6 +52,13 @@ export default function PurchasingRFQPage({
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  useEffect(() => {
+    if (focus?.entityType !== "rfq" || !focus.entityId) return;
+    if (!rfqs.some((item) => item.id === focus.entityId)) return;
+    setSelectedId(focus.entityId);
+    setViewMode("detail");
+  }, [focus?.at, focus?.entityType, focus?.entityId, rfqs]);
 
   const filtered = filterRfqsForWorkbench(rfqs, filters);
   const selectedRfq = rfqs.find((item) => item.id === selectedId) ?? filtered[0] ?? rfqs[0] ?? null;
