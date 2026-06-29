@@ -40,6 +40,16 @@ import {
   filterPurchaseOrdersForWorkbench,
   type PurchaseOrderWorkbenchFilters,
 } from "./filters";
+import {
+  tableMinLgClass,
+  tableScrollClass,
+  tdActionClass,
+  tdIdClass,
+  tdNameClass,
+  tdNowrapClass,
+  tdNumericClass,
+  thClass,
+} from "../../components/ui/workbenchTable";
 
 type PurchaseOrderViewMode = "list" | "detail";
 
@@ -520,12 +530,12 @@ export default function PurchasingOrdersPage({
             <Plus size={11} /> 新建 PO
           </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+          <table className={tableMinLgClass}>
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
                 {["PO 编号", "供应商", "来源", "金额", "项目", "到货进度", "ETA", "状态", "操作"].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                  <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -537,20 +547,20 @@ export default function PurchasingOrdersPage({
                   <tr key={o.po}
                     className="transition-colors hover:bg-blue-50/40"
                     style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className="px-4 py-3 font-medium">
+                    <td className={tdIdClass}>
                       <button onClick={() => openDetail(o.po)} className="hover:underline" style={{ color: A.blue }}>{o.po}</button>
                     </td>
-                    <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{o.supplier}</td>
-                    <td className="px-4 py-3">
+                    <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{o.supplier}</td>
+                    <td className={tdNowrapClass}>
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
                         style={{ background: o.source === "forecast" ? "#f0f6ff" : A.gray6, color: o.source === "forecast" ? A.blue : A.gray1 }}>
                         {o.source === "forecast" ? <Sparkles size={10} /> : <FileText size={10} />}
                         {o.source === "forecast" ? "预测" : "手工"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(o.amount)}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{totals.lineCount}</td>
-                    <td className="px-4 py-3 w-28">
+                    <td className={`${tdNumericClass} font-semibold`} style={{ color: A.label }}>{fmt(o.amount)}</td>
+                    <td className={tdNumericClass} style={{ color: A.sub }}>{totals.lineCount}</td>
+                    <td className={`${tdNowrapClass} w-36`}>
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
                           <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? A.green : pct > 0 ? A.teal : A.gray4 }} />
@@ -558,9 +568,9 @@ export default function PurchasingOrdersPage({
                         <span className="text-[10px] w-12 text-right" style={{ color: A.gray1 }}>{totals.totalReceivedQty}/{totals.totalOrderedQty}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{o.eta}</td>
-                    <td className="px-4 py-3"><POStatusPill status={o.status} /></td>
-                    <td className="px-4 py-3">
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{o.eta}</td>
+                    <td className={tdNowrapClass}><POStatusPill status={o.status} /></td>
+                    <td className={tdActionClass}>
                       <button onClick={() => openDetail(o.po)}
                         className="px-2 py-1 text-[11px] font-medium rounded-md"
                         style={{ background: "#f0f6ff", color: A.blue }}>

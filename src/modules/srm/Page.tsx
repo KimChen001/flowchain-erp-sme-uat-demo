@@ -27,11 +27,26 @@ import {
 } from "../../domain/srm/helpers";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fetchSrmSupplierProfiles, type SrmSupplierProfile } from "./api";
+import {
+  defaultSrmSupplierWorkbenchFilters,
+  filterSrmSuppliersForWorkbench,
+  type SrmSupplierWorkbenchFilters,
+  type SupplierFlagFilter,
+} from "./filters";
 import ScoringRulesWorkbench from "./ScoringRulesWorkbench";
 import SrmOverview from "./SrmOverview";
 import SupplierDetailModal from "./SupplierDetailModal";
 import SupplierTable, { type SupplierTableMode } from "./SupplierTable";
 import { scoreDimensions } from "./scoring";
+import {
+  tableMinMdClass,
+  tableScrollClass,
+  tdWideIdClass,
+  tdWideNameClass,
+  tdWideNowrapClass,
+  tdWideNumericClass,
+  thWideClass,
+} from "../../components/ui/workbenchTable";
 
 type SrmTab = "overview" | "master" | "performance" | "risk" | "certification" | "sourcing" | "contracts" | "portal" | "scoring";
 
@@ -70,7 +85,17 @@ function exportCsv(filename: string, rows: Record<string, unknown>[]) {
     return;
   }
   exportRowsToCsv(filename, rows);
-  toast.success("CSV 已导出");
+  toast.success("导出文件已生成");
+}
+
+function uniqueOptions(values: Array<string | undefined>) {
+  return ["全部", ...Array.from(new Set(values.filter(Boolean) as string[]))];
+}
+
+function supplierRowsForTab(rows: SupplierSrmRow[], tab: SrmTab) {
+  if (tab === "risk") return rows.filter((row) => row.supplier.riskStatus !== "低" || row.invoiceVarianceCount > 0 || row.reconciliationException);
+  if (tab === "certification") return rows.filter((row) => row.supplier.certificationStatus !== "已认证" || row.supplier.status !== "启用");
+  return rows;
 }
 
 export default function SrmPage({
@@ -81,7 +106,7 @@ export default function SrmPage({
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [tab, setTab] = useState<SrmTab>(initialView);
-  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<SrmSupplierWorkbenchFilters>(defaultSrmSupplierWorkbenchFilters);
   const [selected, setSelected] = useState<SupplierSrmRow | null>(null);
   const [supplierProfiles, setSupplierProfiles] = useState<SrmSupplierProfile[]>(SUPPLIER_MASTER);
 
@@ -97,11 +122,17 @@ export default function SrmPage({
   }, []);
 
   const allRows = useMemo(() => buildSrmSupplierRows(supplierProfiles), [supplierProfiles]);
-  const query = search.trim().toLowerCase();
-  const rows = useMemo(() => allRows.filter((row) =>
-    !query || [row.supplier.name, row.supplier.code, row.category, row.supplier.riskStatus, row.supplier.certificationStatus].some((value) => String(value).toLowerCase().includes(query))
-  ), [allRows, query]);
+  const rows = useMemo(() => filterSrmSuppliersForWorkbench(allRows, filters), [allRows, filters]);
+  const tabRows = useMemo(() => supplierRowsForTab(rows, tab), [rows, tab]);
   const kpis = srmKpis(allRows);
+  const categoryOptions = useMemo(() => uniqueOptions(allRows.map((row) => row.category)), [allRows]);
+  const riskOptions = useMemo(() => uniqueOptions(allRows.map((row) => row.supplier.riskStatus)), [allRows]);
+  const certificationOptions = useMemo(() => uniqueOptions(allRows.map((row) => row.supplier.certificationStatus)), [allRows]);
+  const statusOptions = useMemo(() => uniqueOptions(allRows.map((row) => row.supplier.status)), [allRows]);
+
+  function updateFilter<K extends keyof SrmSupplierWorkbenchFilters>(key: K, value: SrmSupplierWorkbenchFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
 
   useEffect(() => {
     if (!selected) {
@@ -118,8 +149,8 @@ export default function SrmPage({
   }, [selected?.supplier.code, selected?.supplier.name, onActiveContextChange]);
 
   function exportCurrent() {
-    if (tab === "risk") return exportCsv("supplier-risk-report.csv", supplierRiskReportRows(allRows));
-    if (tab === "certification") return exportCsv("supplier-certification-report.csv", supplierCertificationReportRows(allRows));
+    if (tab === "risk") return exportCsv("supplier-risk-report.csv", supplierRiskReportRows(tabRows));
+    if (tab === "certification") return exportCsv("supplier-certification-report.csv", supplierCertificationReportRows(tabRows));
     if (tab === "scoring") return exportCsv("srm-score-rules-export.csv", scoreDimensions.flatMap((dimension) =>
       dimension.items.map((item) => ({
         维度: dimension.title,
@@ -134,7 +165,7 @@ export default function SrmPage({
     ));
     if (tab === "contracts") return exportCsv("srm-contract-catalog-export.csv", CONTRACTS.map((contract) => ({ 合同编号: contract.id, 供应商: contract.supplier, 范围: contract.scope, 承诺量: contract.commitVol, 价格条款: contract.price, 起始日期: contract.start, 到期日期: contract.end, 消耗率: contract.consumed, 状态: contract.status })));
     if (tab === "sourcing") return exportCsv("srm-rfx-participation-export.csv", RFQS.map((rfq) => ({ RFx编号: rfq.id, 标题: rfq.title, 品类: rfq.category, 邀请供应商: rfq.suppliers, 已报价: rfq.quoted, 最优供应商: rfq.bestSupplier, 最优报价: rfq.bestPrice, 截止日期: rfq.due, 状态: rfq.status })));
-    return exportCsv("supplier-srm-performance-report.csv", srmReportRows(allRows));
+    return exportCsv("supplier-srm-performance-report.csv", srmReportRows(tabRows));
   }
 
   return (
@@ -165,22 +196,75 @@ export default function SrmPage({
           <div className="flex items-center justify-between gap-3">
             <SubTabs tabs={tabs as any} value={tab} onChange={(value) => setTab(value as SrmTab)} />
             <div className="flex items-center gap-2">
-              <div className="h-8 px-2 rounded-lg flex items-center gap-1.5" style={{ background: A.white, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
-                <Search size={12} style={{ color: A.gray2 }} />
-                <input value={search} onChange={(event) => setSearch(event.target.value)}
-                  placeholder="搜索供应商"
-                  className="w-44 bg-transparent outline-none text-xs"
-                  style={{ color: A.label }} />
-              </div>
               <button onClick={exportCurrent}
                 className="h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5"
                 style={{ background: "#f0f6ff", color: A.blue }}>
-                <FileSpreadsheet size={13} /> 导出 CSV
+                <FileSpreadsheet size={13} /> 导出当前结果
               </button>
             </div>
           </div>
 
           <div className="text-xs leading-5 px-1" style={{ color: A.sub }}>{tabSubtitles[tab]}</div>
+
+          {["master", "performance", "risk", "certification"].includes(tab) && (
+            <Card className="p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h2 className="text-sm font-semibold" style={{ color: A.label }}>供应商查询</h2>
+                  <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>共 {allRows.length} 家，当前筛选 {tabRows.length} 家</p>
+                </div>
+                <button onClick={() => setFilters(defaultSrmSupplierWorkbenchFilters)}
+                  className="h-8 px-3 rounded-lg text-xs font-medium"
+                  style={{ background: A.gray6, color: A.label }}>
+                  重置
+                </button>
+              </div>
+              <div className="grid grid-cols-6 gap-2">
+                <label className="h-8 px-2 rounded-lg flex items-center gap-1.5 col-span-2" style={{ background: A.white, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
+                  <Search size={12} style={{ color: A.gray2 }} />
+                  <input value={filters.supplier} onChange={(event) => updateFilter("supplier", event.target.value)}
+                    placeholder="供应商编码 / 名称"
+                    className="w-full bg-transparent outline-none text-xs"
+                    style={{ color: A.label }} />
+                </label>
+                {[
+                  ["category", "品类", categoryOptions],
+                  ["riskStatus", "风险", riskOptions],
+                  ["certificationStatus", "认证", certificationOptions],
+                  ["status", "状态", statusOptions],
+                ].map(([key, label, options]) => (
+                  <select key={key as string} value={filters[key as keyof SrmSupplierWorkbenchFilters] as string}
+                    onChange={(event) => updateFilter(key as keyof SrmSupplierWorkbenchFilters, event.target.value as never)}
+                    className="h-8 rounded-lg px-2 text-xs outline-none"
+                    style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}
+                    aria-label={label as string}>
+                    {(options as string[]).map((option) => <option key={option} value={option}>{label}: {option}</option>)}
+                  </select>
+                ))}
+                <input value={filters.scoreFrom} onChange={(event) => updateFilter("scoreFrom", event.target.value)}
+                  placeholder="评分从"
+                  className="h-8 rounded-lg px-2 text-xs outline-none"
+                  style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }} />
+                <input value={filters.scoreTo} onChange={(event) => updateFilter("scoreTo", event.target.value)}
+                  placeholder="评分到"
+                  className="h-8 rounded-lg px-2 text-xs outline-none"
+                  style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }} />
+                {[
+                  ["hasOpenPo", "开放 PO"],
+                  ["hasInvoiceVariance", "发票差异"],
+                  ["hasReconciliationException", "对账异常"],
+                ].map(([key, label]) => (
+                  <select key={key} value={filters[key as keyof SrmSupplierWorkbenchFilters] as string}
+                    onChange={(event) => updateFilter(key as keyof SrmSupplierWorkbenchFilters, event.target.value as SupplierFlagFilter as never)}
+                    className="h-8 rounded-lg px-2 text-xs outline-none"
+                    style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}
+                    aria-label={label}>
+                    {(["全部", "是", "否"] as const).map((option) => <option key={option} value={option}>{label}: {option}</option>)}
+                  </select>
+                ))}
+              </div>
+            </Card>
+          )}
         </>
       )}
 
@@ -198,18 +282,18 @@ export default function SrmPage({
 
       {tab === "sourcing" && (
         <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead><tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>{["RFx", "标题", "品类", "邀请/报价", "最优供应商", "最优报价", "截止日期", "状态"].map((h) => <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>)}</tr></thead>
+          <div className={tableScrollClass}>
+            <table className={tableMinMdClass}>
+              <thead><tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>{["RFx", "标题", "品类", "邀请/报价", "最优供应商", "最优报价", "截止日期", "状态"].map((h) => <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>)}</tr></thead>
               <tbody>{RFQS.map((rfq, index) => <tr key={rfq.id} style={{ borderBottom: index < RFQS.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className="px-5 py-3 font-semibold" style={{ color: A.blue }}>{rfq.id}</td>
-                <td className="px-5 py-3" style={{ color: A.label }}>{rfq.title}</td>
-                <td className="px-5 py-3" style={{ color: A.sub }}>{rfq.category}</td>
-                <td className="px-5 py-3" style={{ color: A.label }}>{rfq.quoted}/{rfq.suppliers}</td>
-                <td className="px-5 py-3" style={{ color: A.label }}>{rfq.bestSupplier}</td>
-                <td className="px-5 py-3" style={{ color: A.green }}>{rfq.bestPrice}</td>
-                <td className="px-5 py-3" style={{ color: A.sub }}>{rfq.due}</td>
-                <td className="px-5 py-3"><Chip label={rfq.status} color={rfq.status === "进行中" || rfq.status === "比价中" ? A.orange : A.green} bg={rfq.status === "进行中" || rfq.status === "比价中" ? "#fff8f0" : "#f0faf4"} /></td>
+                <td className={tdWideIdClass} style={{ color: A.blue }}>{rfq.id}</td>
+                <td className={`${tdWideNameClass} max-w-[260px] truncate`} style={{ color: A.label }}>{rfq.title}</td>
+                <td className={tdWideNowrapClass} style={{ color: A.sub }}>{rfq.category}</td>
+                <td className={tdWideNumericClass} style={{ color: A.label }}>{rfq.quoted}/{rfq.suppliers}</td>
+                <td className={`${tdWideNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{rfq.bestSupplier}</td>
+                <td className={tdWideNumericClass} style={{ color: A.green }}>{rfq.bestPrice}</td>
+                <td className={tdWideNowrapClass} style={{ color: A.sub }}>{rfq.due}</td>
+                <td className={tdWideNowrapClass}><Chip label={rfq.status} color={rfq.status === "进行中" || rfq.status === "比价中" ? A.orange : A.green} bg={rfq.status === "进行中" || rfq.status === "比价中" ? "#fff8f0" : "#f0faf4"} /></td>
               </tr>)}</tbody>
             </table>
           </div>
@@ -218,21 +302,21 @@ export default function SrmPage({
 
       {tab === "contracts" && (
         <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead><tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>{["合同编号", "供应商", "范围", "承诺量", "价格条款", "起始", "到期", "消耗进度", "状态"].map((h) => <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>)}</tr></thead>
+          <div className={tableScrollClass}>
+            <table className={tableMinMdClass}>
+              <thead><tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>{["合同编号", "供应商", "范围", "承诺量", "价格条款", "起始", "到期", "消耗进度", "状态"].map((h) => <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>)}</tr></thead>
               <tbody>{CONTRACTS.map((contract, index) => {
                 const style = statusStyle(contract.status);
                 return <tr key={contract.id} style={{ borderBottom: index < CONTRACTS.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                  <td className="px-5 py-3 font-semibold" style={{ color: A.blue }}>{contract.id}</td>
-                  <td className="px-5 py-3" style={{ color: A.label }}>{contract.supplier}</td>
-                  <td className="px-5 py-3" style={{ color: A.sub }}>{contract.scope}</td>
-                  <td className="px-5 py-3" style={{ color: A.label }}>{contract.commitVol}</td>
-                  <td className="px-5 py-3" style={{ color: A.green }}>{contract.price}</td>
-                  <td className="px-5 py-3" style={{ color: A.sub }}>{contract.start}</td>
-                  <td className="px-5 py-3" style={{ color: A.sub }}>{contract.end}</td>
-                  <td className="px-5 py-3" style={{ color: A.label }}>{Math.round(contract.consumed * 100)}%</td>
-                  <td className="px-5 py-3"><Chip label={contract.status} color={style.color} bg={style.bg} /></td>
+                  <td className={tdWideIdClass} style={{ color: A.blue }}>{contract.id}</td>
+                  <td className={`${tdWideNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{contract.supplier}</td>
+                  <td className={`${tdWideNameClass} max-w-[220px] truncate`} style={{ color: A.sub }}>{contract.scope}</td>
+                  <td className={tdWideNumericClass} style={{ color: A.label }}>{contract.commitVol}</td>
+                  <td className={tdWideNowrapClass} style={{ color: A.green }}>{contract.price}</td>
+                  <td className={tdWideNowrapClass} style={{ color: A.sub }}>{contract.start}</td>
+                  <td className={tdWideNowrapClass} style={{ color: A.sub }}>{contract.end}</td>
+                  <td className={tdWideNumericClass} style={{ color: A.label }}>{Math.round(contract.consumed * 100)}%</td>
+                  <td className={tdWideNowrapClass}><Chip label={contract.status} color={style.color} bg={style.bg} /></td>
                 </tr>;
               })}</tbody>
             </table>

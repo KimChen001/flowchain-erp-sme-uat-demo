@@ -27,6 +27,16 @@ import {
   type TimelineStep,
 } from "../../components/document/DocumentShell";
 import { getGrnLinkedDocuments } from "../../domain/procurement/document-links";
+import {
+  tableMinLgClass,
+  tableMinMdClass,
+  tableScrollClass,
+  thClass,
+  thWideClass,
+  tdWideIdClass,
+  tdWideNameClass,
+  tdWideNowrapClass,
+} from "../../components/ui/workbenchTable";
 
 const recvStatusMeta: Record<RecvStatus, { color: string; bg: string }> = {
   "待收货": { color: A.gray1, bg: A.gray6 },
@@ -85,7 +95,7 @@ function exportReceivingDetail(grn: ReceivingDoc) {
     状态: line.status || "",
   }));
   exportRowsToCsv(`receiving-detail-${grn.grn}.csv`, [...headerRows, ...lineRows]);
-  toast.success("收货单详情 CSV 已导出");
+  toast.success("收货单详情已导出");
 }
 
 // ─── Receiving · ERP Data ─────────────────────────────────────────────────────
@@ -178,20 +188,21 @@ function ReceivingASN() {
         <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>ASN 预到货通知</h2>
         </div>
-        <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+        <table className={tableMinMdClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["ASN 编号", "PO", "供应商", "预计到达", "承运", "运单号", "件数", "重量(kg)", "状态", "操作"].map(h => (
-                <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {asns.map((a, i) => (
               <tr key={a.id} style={{ borderBottom: i < asns.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className="px-5 py-3 font-medium" style={{ color: A.blue }}>{a.id}</td>
-                <td className="px-5 py-3" style={{ color: A.sub }}>{a.po}</td>
-                <td className="px-5 py-3" style={{ color: A.label }}>{a.supplier}</td>
+                <td className={tdWideIdClass} style={{ color: A.blue }}>{a.id}</td>
+                <td className={tdWideNowrapClass} style={{ color: A.sub }}>{a.po}</td>
+                <td className={`${tdWideNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{a.supplier}</td>
                 <td className="px-5 py-3" style={{ color: a.status === "延误" ? A.red : A.label }}>{a.eta}</td>
                 <td className="px-5 py-3" style={{ color: A.sub }}>{a.carrier}</td>
                 <td className="px-5 py-3" style={{ color: A.sub }}>{a.awb}</td>
@@ -210,6 +221,7 @@ function ReceivingASN() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );
@@ -229,7 +241,8 @@ function ReceivingQC() {
         <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>AQL 抽样计划 (GB/T 2828.1)</h2>
         </div>
-        <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+        <table className={tableMinLgClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["计划编号", "名称", "AQL 等级", "抽样方案", "Critical", "Major", "Minor", "适用范围", "检验方法"].map(h => (
@@ -253,6 +266,7 @@ function ReceivingQC() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
 
       <Card className="p-5">
@@ -299,11 +313,12 @@ function ReceivingExceptions() {
         <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>收货异常工单</h2>
         </div>
-        <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+        <table className={tableMinMdClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["工单编号", "GRN", "异常类型", "详情", "严重度", "责任人", "创建", "状态", "操作"].map(h => (
-                <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -333,6 +348,7 @@ function ReceivingExceptions() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );
@@ -366,11 +382,12 @@ function ReceivingReturns() {
         <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>退货供应商 (SRN)</h2>
         </div>
-        <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+        <table className={tableMinMdClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["SRN 编号", "原 PO", "供应商", "原因", "数量", "金额", "创建", "状态", "操作"].map(h => (
-                <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -396,6 +413,7 @@ function ReceivingReturns() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );
@@ -409,7 +427,8 @@ function ReceivingOps() {
   const [qcOpen, setQcOpen] = useState(false);
   const [activeGrn, setActiveGrn] = useState<ReceivingDoc | null>(null);
   const [selectedGrnId, setSelectedGrnId] = useState(receivingDocs[0]?.grn ?? "");
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [showGrnDetail, setShowGrnDetail] = useState(false);
+  const [erpDocOpen, setErpDocOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -503,6 +522,8 @@ function ReceivingOps() {
         <KpiCard label="异常处理"   value={String(exceptions)}   sub="本月累计 12 起"    delta="+1 vs 昨日" positive={false} icon={AlertCircle} color={A.red}    />
       </div>
 
+      {!showGrnDetail && (
+      <>
       {/* Schedule + Dock */}
       <div className="grid grid-cols-5 gap-3">
         <Card className="col-span-3 p-5">
@@ -587,11 +608,12 @@ function ReceivingOps() {
             </button>
           </div>
         </div>
-        <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+        <table className={tableMinLgClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["GRN", "关联 PO", "供应商", "到货时间", "Dock", "收货人", "质检", "入库", "状态", "操作"].map((h) => (
-                <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -602,7 +624,7 @@ function ReceivingOps() {
               const acceptedQty = lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
               const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
               return (
-              <tr key={r.grn} onClick={() => setSelectedGrnId(r.grn)}
+              <tr key={r.grn} onClick={() => { setSelectedGrnId(r.grn); setShowGrnDetail(true); }}
                 className="cursor-pointer hover:bg-blue-50/40 transition-colors"
                 style={{
                   borderBottom: i < docs.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none",
@@ -632,25 +654,30 @@ function ReceivingOps() {
                 <td className="px-4 py-3" style={{ color: r.warehouse === "—" ? A.gray3 : A.label }}>{r.warehouse}</td>
                 <td className="px-4 py-3"><RecvStatusPill status={r.status} /></td>
                 <td className="px-4 py-3">
+                  <button onClick={(event) => { event.stopPropagation(); setSelectedGrnId(r.grn); setShowGrnDetail(true); }}
+                    className="text-[11px] px-2 py-1 rounded-md font-medium hover:bg-gray-200 transition-colors mr-2"
+                    style={{ background: A.gray6, color: A.label }}>
+                    查看详情
+                  </button>
                   {r.status === "待收货" && (
-                    <button onClick={() => signIn(r)}
+                    <button onClick={(event) => { event.stopPropagation(); signIn(r); }}
                       className="text-[11px] px-2 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
                       style={{ background: A.blue }}>签收</button>
                   )}
                   {r.status === "质检中" && (
-                    <button onClick={() => openQC(r)}
+                    <button onClick={(event) => { event.stopPropagation(); openQC(r); }}
                       className="text-[11px] px-2 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity flex items-center gap-1"
                       style={{ background: A.orange }}>
                       <ScanLine size={10} /> 开始质检
                     </button>
                   )}
                   {r.status === "异常处理" && (
-                    <button onClick={() => openQC(r)}
+                    <button onClick={(event) => { event.stopPropagation(); openQC(r); }}
                       className="text-[11px] px-2 py-1 rounded-md font-medium hover:bg-red-100 transition-colors"
                       style={{ background: "#fff1f0", color: A.red }}>查看异常</button>
                   )}
                   {r.status === "已入库" && (
-                    <button onClick={() => openQC(r)}
+                    <button onClick={(event) => { event.stopPropagation(); openQC(r); }}
                       className="text-[11px] px-2 py-1 rounded-md font-medium hover:bg-gray-200 transition-colors"
                       style={{ background: A.gray6, color: A.label }}>查看</button>
                   )}
@@ -660,63 +687,129 @@ function ReceivingOps() {
             })}
           </tbody>
         </table>
+        </div>
       </Card>
-
-      {selectedGrn && (
-        <Card className="p-5">
-          <div className="grid grid-cols-5 gap-4">
-            <div className="col-span-2">
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>收货单详情</div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="text-base font-semibold tracking-tight" style={{ color: A.label }}>{selectedGrn.grn}</div>
-                <RecvStatusPill status={selectedGrn.status} />
-              </div>
-              <div className="space-y-2 text-xs">
-                {[
-                  ["关联 PO", selectedGrn.po],
-                  ["供应商", selectedGrn.supplier],
-                  ["收货人", selectedGrn.receiver || "—"],
-                  ["入库库位", selectedGrn.warehouse || "—"],
-                  ["库存移动", selectedGrn.inventoryMovementIds?.join(", ") || "—"],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between gap-3">
-                    <span style={{ color: A.gray1 }}>{label}</span>
-                    <span className="font-medium text-right truncate" style={{ color: A.label }}>{value}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-3 gap-2 mt-3 text-[10px]">
-                {(() => {
-                  const lines = grnLinesOf(selectedGrn);
-                  return [
-                    ["收货", lines.reduce((sum, line) => sum + toNumber(line.receivedQty), 0)],
-                    ["合格", lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0)],
-                    ["拒收", lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0)],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-                      <div style={{ color: A.gray2 }}>{label}</div>
-                      <div className="font-semibold tabular-nums" style={{ color: A.label }}>{Number(value).toLocaleString()}</div>
-                    </div>
-                  ));
-                })()}
-              </div>
-              <button onClick={() => setDetailOpen(true)}
-                className="mt-3 h-8 px-3 rounded-lg text-xs font-semibold"
-                style={{ background: "#f0f6ff", color: A.blue }}>
-                查看 ERP 单据
-              </button>
-            </div>
-            <div className="col-span-3">
-              <DocumentHistoryPanel
-                entityType="receivingDoc"
-                entityId={selectedGrn.grn}
-                title="收货单历史"
-                refreshKey={selectedGrn.lastAuditId || selectedGrn.auditTrailIds?.join(",") || selectedGrn.status}
-              />
-            </div>
-          </div>
-        </Card>
+      </>
       )}
+
+      {showGrnDetail && selectedGrn && (() => {
+        const lines = grnLinesOf(selectedGrn);
+        const receivedQty = lines.reduce((sum, line) => sum + toNumber(line.receivedQty), 0);
+        const acceptedQty = lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
+        const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
+        return (
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-4 pb-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+              <div>
+                <button onClick={() => setShowGrnDetail(false)}
+                  className="mb-3 text-[11px] px-3 py-1.5 rounded-lg font-medium"
+                  style={{ background: A.gray6, color: A.label }}>
+                  返回列表
+                </button>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold tracking-tight" style={{ color: A.label }}>{selectedGrn.grn}</h2>
+                  <RecvStatusPill status={selectedGrn.status} />
+                </div>
+                <p className="text-xs mt-1" style={{ color: A.sub }}>{selectedGrn.supplier} · PO {selectedGrn.po} · {selectedGrn.arrived}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedGrn.status === "待收货" && (
+                  <button onClick={() => signIn(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>签收</button>
+                )}
+                {(selectedGrn.status === "质检中" || selectedGrn.status === "异常处理" || selectedGrn.status === "已入库") && (
+                  <button onClick={() => openQC(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: selectedGrn.status === "异常处理" ? "#fff1f0" : "#fff8f0", color: selectedGrn.status === "异常处理" ? A.red : A.orange }}>
+                    {selectedGrn.status === "质检中" ? "开始质检" : selectedGrn.status === "异常处理" ? "查看异常" : "查看质检"}
+                  </button>
+                )}
+                <button onClick={() => setErpDocOpen(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>查看 ERP 单据</button>
+                <button onClick={() => exportReceivingDetail(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3 mt-4">
+              {[
+                ["收货数量", receivedQty],
+                ["合格数量", acceptedQty],
+                ["拒收数量", rejectedQty],
+                ["行项目", lines.length],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
+                  <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="text-base font-semibold tabular-nums mt-0.5" style={{ color: label === "拒收数量" && Number(value) > 0 ? A.red : A.label }}>{Number(value).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-5 gap-4 mt-4">
+              <div className="col-span-2 rounded-xl p-4" style={{ background: A.gray6 }}>
+                <SectionHeader title="基础信息" />
+                <div className="space-y-2 text-xs mt-3">
+                  {[
+                    ["关联 PO", selectedGrn.po],
+                    ["供应商", selectedGrn.supplier],
+                    ["收货人", selectedGrn.receiver || "—"],
+                    ["仓库", selectedGrn.warehouse || "—"],
+                    ["Dock", selectedGrn.dock || "—"],
+                    ["库存移动", selectedGrn.inventoryMovementIds?.join(", ") || "—"],
+                    ["库存应用", selectedGrn.inventoryApplied ? "已应用" : "未应用"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-3">
+                      <span style={{ color: A.gray1 }}>{label}</span>
+                      <span className="font-medium text-right truncate" style={{ color: A.label }}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="col-span-3">
+                <DocumentHistoryPanel
+                  entityType="receivingDoc"
+                  entityId={selectedGrn.grn}
+                  title="收货单历史"
+                  refreshKey={selectedGrn.lastAuditId || selectedGrn.auditTrailIds?.join(",") || selectedGrn.status}
+                />
+              </div>
+            </div>
+
+            <div className={`${tableScrollClass} mt-4 rounded-xl border`} style={{ borderColor: A.border }}>
+              <table className={tableMinMdClass}>
+                <thead>
+                  <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                    {["SKU", "品名", "订单数量", "收货数量", "合格数量", "拒收数量", "单位", "仓库", "状态"].map((header) => (
+                      <th key={header} className={thWideClass} style={{ color: A.gray1 }}>{header}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(lines.length ? lines : [{
+                    grnLineId: `${selectedGrn.grn}-SUMMARY`,
+                    sku: "SUMMARY",
+                    itemName: "收货汇总行",
+                    orderedQty: selectedGrn.items,
+                    receivedQty: selectedGrn.items,
+                    acceptedQty: selectedGrn.passed,
+                    rejectedQty: selectedGrn.failed,
+                    unit: "件",
+                    warehouseId: selectedGrn.warehouse,
+                    status: selectedGrn.status,
+                  }]).map((line, index) => (
+                    <tr key={line.grnLineId || line.sku} style={{ borderBottom: index < lines.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                      <td className={tdWideIdClass} style={{ color: A.blue }}>{line.sku}</td>
+                      <td className={`${tdWideNameClass} max-w-[240px] truncate`} style={{ color: A.label }}>{line.itemName || "—"}</td>
+                      <td className={tdWideNowrapClass} style={{ color: A.label }}>{Number((line as any).orderedQty ?? 0).toLocaleString()}</td>
+                      <td className={tdWideNowrapClass} style={{ color: A.label }}>{Number(line.receivedQty || 0).toLocaleString()}</td>
+                      <td className={tdWideNowrapClass} style={{ color: A.green }}>{Number(line.acceptedQty || 0).toLocaleString()}</td>
+                      <td className={tdWideNowrapClass} style={{ color: Number(line.rejectedQty || 0) > 0 ? A.red : A.gray2 }}>{Number(line.rejectedQty || 0).toLocaleString()}</td>
+                      <td className={tdWideNowrapClass} style={{ color: A.sub }}>{line.unit || "件"}</td>
+                      <td className={tdWideNowrapClass} style={{ color: A.sub }}>{line.warehouseId || selectedGrn.warehouse || "—"}</td>
+                      <td className={tdWideNowrapClass}><RecvStatusPill status={line.status || selectedGrn.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* QC exceptions */}
       <Card className="p-5">
@@ -758,7 +851,7 @@ function ReceivingOps() {
       <ScanReceiveModal open={scanOpen} onClose={() => setScanOpen(false)}
         candidates={orders.filter((p) => ["已发出", "部分到货"].includes(p.status) && poLinesOf(p).some((line) => lineRemaining(line) > 0))}
         onReceive={startReceive} />
-      <Modal open={detailOpen && Boolean(selectedGrn)} onClose={() => setDetailOpen(false)} width={980}
+      <Modal open={erpDocOpen && Boolean(selectedGrn)} onClose={() => setErpDocOpen(false)} width={980}
         title="收货单" subtitle="GRN · ERP document form">
         {selectedGrn && (() => {
           const lines = grnLinesOf(selectedGrn);
@@ -826,7 +919,7 @@ function ReceivingOps() {
               />
               <DocumentEvidencePanel
                 linkedDocuments={getGrnLinkedDocuments(selectedGrn, purchaseOrders, SUPPLIER_INVOICES)}
-                provenance="GRN dataset · API fallback"
+                provenance="GRN / API"
                 notes={selectedGrn.status === "异常处理" ? "异常收货需要进入采购退货、贷项通知或应付冲减流程，并会影响供应商发票匹配。" : "收货明细用于库存可用量、三单匹配和异常处理证据链。"}
                 evidence={[
                   { label: "关联 PO", value: selectedGrn.po },
@@ -841,8 +934,8 @@ function ReceivingOps() {
               <DocumentActionBar>
                 <button onClick={() => toast("发票协同位于采购管理", { description: "可在发票协同视图查看 GRN 关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票</button>
                 <button onClick={() => toast("三单匹配位于采购管理", { description: "可在三单匹配视图查看 PO / GRN / 发票对比。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>打开三单匹配</button>
-                <button onClick={() => exportReceivingDetail(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
-                <button onClick={() => setDetailOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
+                <button onClick={() => exportReceivingDetail(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
+                <button onClick={() => setErpDocOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
               </DocumentActionBar>
             </DocumentShell>
           );

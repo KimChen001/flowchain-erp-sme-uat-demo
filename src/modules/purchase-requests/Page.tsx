@@ -28,6 +28,16 @@ import {
   filterPurchaseRequestsForWorkbench,
   type PurchaseRequestWorkbenchFilters,
 } from "./filters";
+import {
+  tableMinLgClass,
+  tableScrollClass,
+  tdActionClass,
+  tdIdClass,
+  tdNameClass,
+  tdNowrapClass,
+  tdNumericClass,
+  thClass,
+} from "../../components/ui/workbenchTable";
 
 type PurchaseRequestViewMode = "list" | "detail";
 
@@ -615,36 +625,38 @@ export default function PurchaseRequestsPage({
         {filtered.length === 0 ? (
           <div className="py-12 text-center text-xs" style={{ color: A.gray2 }}>暂无采购申请。可在预测分析中生成预测补货申请。</div>
         ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {["PR 编号", "来源", "物料", "供应商", "申请 / 采购", "需求日期", "数量", "金额", "优先级", "状态", "操作"].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item, idx) => {
-                const sourceMeta = purchaseRequestSourceMeta(item.source);
-                const SourceIcon = sourceMeta.icon;
-                return (
-                  <tr key={item.pr} className="hover:bg-blue-50/40 transition-colors" style={{ borderBottom: idx < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className="px-4 py-3 font-medium"><button onClick={() => openDetail(item.pr)} className="hover:underline" style={{ color: A.blue }}>{item.pr}</button></td>
-                    <td className="px-4 py-3"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: sourceMeta.bg, color: sourceMeta.color }}><SourceIcon size={10} />{sourceMeta.label}</span></td>
-                    <td className="px-4 py-3"><div className="font-medium" style={{ color: A.label }}>{item.sourceSku || "—"}</div><div className="text-[10px] mt-0.5 truncate max-w-36" style={{ color: A.gray2 }}>{item.sourceName}</div></td>
-                    <td className="px-4 py-3" style={{ color: A.label }}>{item.supplier}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{item.requester} / {item.buyer}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{item.requiredDate}</td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.sub }}>{Number(item.quantity || 0).toLocaleString()} {item.unit}</td>
-                    <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(item.amount)}</td>
-                    <td className="px-4 py-3" style={{ color: item.priority === "高" ? A.red : item.priority === "中" ? A.orange : A.green }}>{item.priority}</td>
-                    <td className="px-4 py-3"><PRStatusPill status={item.status} /></td>
-                    <td className="px-4 py-3"><button onClick={() => openDetail(item.pr)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className={tableScrollClass}>
+            <table className={tableMinLgClass}>
+              <thead>
+                <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                  {["PR 编号", "来源", "物料", "供应商", "申请 / 采购", "需求日期", "数量", "金额", "优先级", "状态", "操作"].map((h) => (
+                    <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item, idx) => {
+                  const sourceMeta = purchaseRequestSourceMeta(item.source);
+                  const SourceIcon = sourceMeta.icon;
+                  return (
+                    <tr key={item.pr} className="hover:bg-blue-50/40 transition-colors" style={{ borderBottom: idx < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                      <td className={tdIdClass}><button onClick={() => openDetail(item.pr)} className="hover:underline" style={{ color: A.blue }}>{item.pr}</button></td>
+                      <td className={tdNowrapClass}><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: sourceMeta.bg, color: sourceMeta.color }}><SourceIcon size={10} />{sourceMeta.label}</span></td>
+                      <td className={`${tdNameClass} max-w-[240px]`}><div className="font-medium truncate" style={{ color: A.label }}>{item.sourceSku || "—"}</div><div className="text-[10px] mt-0.5 truncate" style={{ color: A.gray2 }}>{item.sourceName}</div></td>
+                      <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{item.supplier}</td>
+                      <td className={tdNowrapClass} style={{ color: A.sub }}>{item.requester} / {item.buyer}</td>
+                      <td className={tdNowrapClass} style={{ color: A.sub }}>{item.requiredDate}</td>
+                      <td className={tdNumericClass} style={{ color: A.sub }}>{Number(item.quantity || 0).toLocaleString()} {item.unit}</td>
+                      <td className={`${tdNumericClass} font-semibold`} style={{ color: A.label }}>{fmt(item.amount)}</td>
+                      <td className={tdNowrapClass} style={{ color: item.priority === "高" ? A.red : item.priority === "中" ? A.orange : A.green }}>{item.priority}</td>
+                      <td className={tdNowrapClass}><PRStatusPill status={item.status} /></td>
+                      <td className={tdActionClass}><button onClick={() => openDetail(item.pr)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
       <NewPRModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={createManualRequest} />

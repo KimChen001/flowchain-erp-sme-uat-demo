@@ -14,6 +14,16 @@ import {
   rfqResponseStatus,
   type RfqWorkbenchFilters,
 } from "./filters";
+import {
+  tableMinMdClass,
+  tableScrollClass,
+  tdActionClass,
+  tdIdClass,
+  tdNameClass,
+  tdNowrapClass,
+  tdNumericClass,
+  thWideClass,
+} from "../../components/ui/workbenchTable";
 
 type RfqViewMode = "list" | "detail";
 
@@ -230,57 +240,61 @@ export default function PurchasingRFQPage({
             <ContextualImportActions entityLabel="RFx" compact />
           </div>
         </div>
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["RFQ 编号", "标题", "品类", "邀请 / 报价", "最优价", "最优供应商", "截止", "状态", "操作"].map(h => (
-                <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r, i) => {
-              const style = rfqStatusStyle(r.status);
-              return (
-                <tr key={r.id}
-                  className="hover:bg-blue-50/40 transition-colors"
-                  style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                  <td className="px-5 py-3 font-medium"><button onClick={() => openDetail(r.id)} className="hover:underline" style={{ color: A.blue }}>{r.id}</button></td>
-                  <td className="px-5 py-3 font-medium" style={{ color: A.label }}>
-                    <div>{r.title}</div>
-                    {(r.sourceRequest || r.linkedPo) && (
-                      <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>
-                        {[r.sourceRequest, r.sourceSku, r.linkedPo ? `已生成 ${r.linkedPo}` : ""].filter(Boolean).join(" · ")}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-5 py-3" style={{ color: A.sub }}>{r.category}</td>
-                  <td className="px-5 py-3" style={{ color: A.label }}>
-                    <span style={{ color: A.green, fontWeight: 500 }}>{r.quoted}</span>
-                    <span style={{ color: A.gray1 }}> / {r.suppliers}</span>
-                    <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>{rfqResponseStatus(r)}</div>
-                  </td>
-                  <td className="px-5 py-3 font-medium" style={{ color: A.label }}>¥{r.bestPrice}</td>
-                  <td className="px-5 py-3" style={{ color: A.sub }}>{r.bestSupplier}</td>
-                  <td className="px-5 py-3" style={{ color: A.label }}>{r.due}</td>
-                  <td className="px-5 py-3">
-                    <Chip label={r.status} color={style.color} bg={style.bg} />
-                  </td>
-                  <td className="px-5 py-3">
-                    {(r.status === "比价中" || r.status === "进行中") &&
-                      <button onClick={() => award(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md text-white mr-2" style={{ background: A.blue }}>授标</button>}
-                    <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button>
-                  </td>
-                </tr>
-              );
-            })}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={9} className="px-5 py-12 text-center text-xs" style={{ color: A.gray2 }}>当前条件下暂无 RFQ</td>
+        <div className={tableScrollClass}>
+          <table className={tableMinMdClass}>
+            <thead>
+              <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                {["RFQ 编号", "标题", "品类", "邀请 / 报价", "最优价", "最优供应商", "截止", "状态", "操作"].map(h => (
+                  <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>
+                ))}
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map((r, i) => {
+                const style = rfqStatusStyle(r.status);
+                return (
+                  <tr key={r.id}
+                    className="hover:bg-blue-50/40 transition-colors"
+                    style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                    <td className={tdIdClass}><button onClick={() => openDetail(r.id)} className="hover:underline" style={{ color: A.blue }}>{r.id}</button></td>
+                    <td className={`${tdNameClass} max-w-[260px] font-medium`} style={{ color: A.label }}>
+                      <div className="truncate">{r.title}</div>
+                      {(r.sourceRequest || r.linkedPo) && (
+                        <div className="text-[10px] mt-0.5 truncate" style={{ color: A.gray2 }}>
+                          {[r.sourceRequest, r.sourceSku, r.linkedPo ? `已生成 ${r.linkedPo}` : ""].filter(Boolean).join(" · ")}
+                        </div>
+                      )}
+                    </td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{r.category}</td>
+                    <td className={tdNumericClass} style={{ color: A.label }}>
+                      <span style={{ color: A.green, fontWeight: 500 }}>{r.quoted}</span>
+                      <span style={{ color: A.gray1 }}> / {r.suppliers}</span>
+                      <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>{rfqResponseStatus(r)}</div>
+                    </td>
+                    <td className={`${tdNumericClass} font-medium`} style={{ color: A.label }}>¥{r.bestPrice}</td>
+                    <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.sub }}>{r.bestSupplier}</td>
+                    <td className={tdNowrapClass} style={{ color: A.label }}>{r.due}</td>
+                    <td className={tdNowrapClass}>
+                      <Chip label={r.status} color={style.color} bg={style.bg} />
+                    </td>
+                    <td className={tdActionClass}>
+                      <div className="flex items-center gap-2">
+                        {(r.status === "比价中" || r.status === "进行中") &&
+                          <button onClick={() => award(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md text-white" style={{ background: A.blue }}>授标</button>}
+                        <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-5 py-12 text-center text-xs" style={{ color: A.gray2 }}>当前条件下暂无 RFQ</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );

@@ -22,6 +22,18 @@ import InventoryMovementLedger from "./InventoryMovementLedger";
 import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
 import { buildInventoryExceptionDocuments } from "../../domain/inventory/exceptions";
 import type { ActiveContext } from "../ai-assistant/Panel";
+import {
+  tableMinLgClass,
+  tableMinMdClass,
+  tableMinSmClass,
+  tableScrollClass,
+  tdActionClass,
+  tdIdClass,
+  tdNameClass,
+  tdNowrapClass,
+  tdNumericClass,
+  thClass,
+} from "../../components/ui/workbenchTable";
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
@@ -239,15 +251,15 @@ function InventoryOverview() {
           <button onClick={exportStockCsv}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
             style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={13} /> 导出 CSV
+            <FileSpreadsheet size={13} /> 导出当前结果
           </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className={tableMinLgClass}>
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
                 {["SKU", "品名", "库存/可用", "安全线", "覆盖", "ROP", "建议量", "策略", "供应商", "状态", "动作"].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                  <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -258,17 +270,17 @@ function InventoryOverview() {
                   <tr key={item.sku}
                     className="transition-colors hover:bg-blue-50/40"
                     style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>{item.sku}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium" style={{ color: A.label }}>{item.name}</div>
-                      <div className="text-[10px]" style={{ color: A.sub }}>{item.category} · {item.location}</div>
+                    <td className={tdIdClass} style={{ color: A.blue }}>{item.sku}</td>
+                    <td className={`${tdNameClass} max-w-[240px]`}>
+                      <div className="font-medium truncate" style={{ color: A.label }}>{item.name}</div>
+                      <div className="text-[10px] truncate" style={{ color: A.sub }}>{item.category} · {item.location}</div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className={tdNumericClass}>
                       <div className="font-medium" style={{ color: A.label }}>{item.qty.toLocaleString()}</div>
                       <div className="text-[10px]" style={{ color: A.sub }}>可用 {item.plan.projectedAvailable.toLocaleString()} {item.plan.unit}</div>
                     </td>
-                    <td className="px-4 py-3" style={{ color: A.gray1 }}>{item.min.toLocaleString()}</td>
-                    <td className="px-4 py-3 w-28">
+                    <td className={tdNumericClass} style={{ color: A.gray1 }}>{item.min.toLocaleString()}</td>
+                    <td className={`${tdNowrapClass} w-36`}>
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
                           <div className="h-full rounded-full"
@@ -277,14 +289,14 @@ function InventoryOverview() {
                         <span className="w-10 text-right text-[11px]" style={{ color: item.plan.daysCover <= item.plan.leadTimeDays ? A.red : A.gray1 }}>{item.plan.daysCover}天</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.label }}>{item.plan.reorderPoint.toLocaleString()}</td>
-                    <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: item.plan.suggestedQty > 0 ? A.orange : A.gray2 }}>
+                    <td className={tdNumericClass} style={{ color: A.label }}>{item.plan.reorderPoint.toLocaleString()}</td>
+                    <td className={`${tdNumericClass} font-semibold`} style={{ color: item.plan.suggestedQty > 0 ? A.orange : A.gray2 }}>
                       {item.plan.suggestedQty > 0 ? `${item.plan.suggestedQty.toLocaleString()} ${item.plan.unit}` : "—"}
                     </td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{item.plan.policy}</td>
-                    <td className="px-4 py-3" style={{ color: A.label }}>{item.plan.supplier}</td>
-                    <td className="px-4 py-3"><StatusPill status={item.status} /></td>
-                    <td className="px-4 py-3">
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{item.plan.policy}</td>
+                    <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{item.plan.supplier}</td>
+                    <td className={tdNowrapClass}><StatusPill status={item.status} /></td>
+                    <td className={tdActionClass}>
                       <button onClick={() => createInventoryRequest(item)}
                         disabled={item.plan.suggestedQty <= 0}
                         className="text-[11px] px-2 py-1 rounded-md font-medium"
@@ -374,18 +386,18 @@ function InventoryLots() {
           <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{tab === "lot" ? lots.length : serials.length} 条</span>
           <button onClick={exportLotsCsv}
             className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={11} /> 导出 CSV
+            <FileSpreadsheet size={11} /> 导出当前结果
           </button>
           <button onClick={() => toast("批次冻结提交 QA")}
             className="text-[11px] px-2.5 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>冻结批次</button>
         </div>
         <div className="overflow-x-auto">
           {tab === "lot" ? (
-            <table className="w-full text-xs">
+            <table className={tableMinMdClass}>
               <thead>
                 <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
                   {["批次号", "SKU", "品名", "数量", "供应商", "入库日", "效期", "库位", "COA", "状态", "操作"].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                    <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -393,19 +405,19 @@ function InventoryLots() {
                 {lots.map((l, i) => (
                   <tr key={l.lot} className="hover:bg-blue-50/40 transition-colors"
                     style={{ borderBottom: i < lots.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className="px-4 py-3 font-medium tabular-nums" style={{ color: A.indigo }}>{l.lot}</td>
-                    <td className="px-4 py-3" style={{ color: A.blue }}>{l.sku}</td>
-                    <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{l.name}</td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.label }}>{l.qty.toLocaleString()}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{l.supplier}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{l.received}</td>
-                    <td className="px-4 py-3" style={{ color: l.expiry !== "—" ? A.orange : A.gray3 }}>{l.expiry}</td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.label }}>{l.warehouse}</td>
-                    <td className="px-4 py-3">
+                    <td className={tdIdClass} style={{ color: A.indigo }}>{l.lot}</td>
+                    <td className={tdNowrapClass} style={{ color: A.blue }}>{l.sku}</td>
+                    <td className={`${tdNameClass} max-w-[220px] truncate font-medium`} style={{ color: A.label }}>{l.name}</td>
+                    <td className={tdNumericClass} style={{ color: A.label }}>{l.qty.toLocaleString()}</td>
+                    <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.sub }}>{l.supplier}</td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{l.received}</td>
+                    <td className={tdNowrapClass} style={{ color: l.expiry !== "—" ? A.orange : A.gray3 }}>{l.expiry}</td>
+                    <td className={tdNowrapClass} style={{ color: A.label }}>{l.warehouse}</td>
+                    <td className={tdNowrapClass}>
                       {l.coa ? <CheckCircle2 size={12} style={{ color: A.green }} /> : <X size={12} style={{ color: A.red }} />}
                     </td>
-                    <td className="px-4 py-3"><Chip label={l.status} color={pillColor(l.status)} bg={pillBg(l.status)} /></td>
-                    <td className="px-4 py-3">
+                    <td className={tdNowrapClass}><Chip label={l.status} color={pillColor(l.status)} bg={pillBg(l.status)} /></td>
+                    <td className={tdActionClass}>
                       <button onClick={() => toast(`批次 ${l.lot}`, { description: "追溯链：供应商→GRN→质检→入库→消耗" })}
                         className="text-[11px] px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.label }}>追溯</button>
                     </td>
@@ -414,11 +426,11 @@ function InventoryLots() {
               </tbody>
             </table>
           ) : (
-            <table className="w-full text-xs">
+            <table className={tableMinSmClass}>
               <thead>
                 <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
                   {["S/N", "SKU", "所属批次", "状态", "当前库位", "入库日", "操作"].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                    <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -426,13 +438,13 @@ function InventoryLots() {
                 {serials.map((s, i) => (
                   <tr key={s.sn} className="hover:bg-blue-50/40 transition-colors"
                     style={{ borderBottom: i < serials.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className="px-4 py-3 font-medium tabular-nums" style={{ color: A.purple }}>{s.sn}</td>
-                    <td className="px-4 py-3" style={{ color: A.blue }}>{s.sku}</td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.indigo }}>{s.lot}</td>
-                    <td className="px-4 py-3"><Chip label={s.status} color={pillColor(s.status)} bg={pillBg(s.status)} /></td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.label }}>{s.warehouse}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{s.received}</td>
-                    <td className="px-4 py-3">
+                    <td className={tdIdClass} style={{ color: A.purple }}>{s.sn}</td>
+                    <td className={tdNowrapClass} style={{ color: A.blue }}>{s.sku}</td>
+                    <td className={tdNowrapClass} style={{ color: A.indigo }}>{s.lot}</td>
+                    <td className={tdNowrapClass}><Chip label={s.status} color={pillColor(s.status)} bg={pillBg(s.status)} /></td>
+                    <td className={tdNowrapClass} style={{ color: A.label }}>{s.warehouse}</td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{s.received}</td>
+                    <td className={tdActionClass}>
                       <button onClick={() => toast(`${s.sn} 全生命周期`, { description: "采购→入库→分配→出库→保修" })}
                         className="text-[11px] px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.label }}>查看历史</button>
                     </td>
@@ -539,7 +551,7 @@ function InventoryTransfers() {
           <button onClick={exportTransfersCsv}
             className="ml-auto flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity"
             style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={11} /> 导出 CSV
+            <FileSpreadsheet size={11} /> 导出当前结果
           </button>
           <button onClick={() => setCreateOpen(true)}
             className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
@@ -547,11 +559,12 @@ function InventoryTransfers() {
             <Plus size={11} /> 新建调拨单
           </button>
         </div>
-        <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+        <table className={tableMinMdClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["调拨号", "源仓 → 目标仓", "SKU / 品名", "数量", "申请人", "承运商", "创建", "ETA", "状态", "操作"].map((h) => (
-                <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -587,6 +600,7 @@ function InventoryTransfers() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="新建调拨单" subtitle="跨仓库存调配"
@@ -682,7 +696,7 @@ function InventoryCycleCount() {
           <div className="flex items-center gap-2">
             <button onClick={exportCountPlansCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出 CSV
+              <FileSpreadsheet size={11} /> 导出当前结果
             </button>
             <button onClick={() => toast("已按 ABC 重新生成下周计划")}
               className="text-[11px] px-2.5 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>
@@ -690,11 +704,12 @@ function InventoryCycleCount() {
             </button>
           </div>
         </div>
-        <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+        <table className={tableMinSmClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["计划号", "库区", "排期", "盘点员", "方法", "进度", "差异", "状态", "操作"].map((h) => (
-                <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -739,6 +754,7 @@ function InventoryCycleCount() {
             })}
           </tbody>
         </table>
+        </div>
       </Card>
 
       <Card>
@@ -747,18 +763,19 @@ function InventoryCycleCount() {
           <div className="flex items-center gap-2">
             <button onClick={exportVariancesCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出 CSV
+              <FileSpreadsheet size={11} /> 导出当前结果
             </button>
             <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#fff8f0", color: A.orange }}>
               {VARIANCES.length} 项 · 合计 ¥{VARIANCES.reduce((s, v) => s + Math.abs(v.value), 0).toLocaleString()}
             </span>
           </div>
         </div>
-        <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+        <table className={tableMinSmClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["批次", "SKU", "品名", "账面数", "实盘数", "差异", "差异原因", "差异金额", "操作"].map((h) => (
-                <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -784,6 +801,7 @@ function InventoryCycleCount() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );
@@ -890,14 +908,15 @@ function InventoryABCXYZ() {
           <h2 className="text-sm font-semibold" style={{ color: A.label }}>SKU 分类明细</h2>
           <button onClick={exportAbcXyzCsv}
             className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={11} /> 导出 CSV
+            <FileSpreadsheet size={11} /> 导出当前结果
           </button>
         </div>
-        <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+        <table className={tableMinSmClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["SKU", "品名", "年价值", "CoV", "ABC", "XYZ", "策略"].map((h) => (
-                <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -918,6 +937,7 @@ function InventoryABCXYZ() {
             })}
           </tbody>
         </table>
+        </div>
       </Card>
     </div>
   );
@@ -959,7 +979,7 @@ function InventoryWarehouseMap() {
           right={<div className="flex items-center gap-2 text-[10px]" style={{ color: A.sub }}>
             <button onClick={exportBinsCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出 CSV
+              <FileSpreadsheet size={11} /> 导出当前结果
             </button>
             <span>低</span>
             <div className="flex h-2 w-32 rounded-full overflow-hidden">

@@ -12,6 +12,16 @@ import { fmt } from "../../lib/format";
 import type { SupplierInvoice, SupplierInvoiceStatus } from "../../types/scm";
 import { matchStatusStyle } from "./shared";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
+import {
+  tableMinXlClass,
+  tableScrollClass,
+  tdActionClass,
+  tdIdClass,
+  tdNameClass,
+  tdNowrapClass,
+  tdNumericClass,
+  thClass,
+} from "../../components/ui/workbenchTable";
 
 function invoiceStatusStyle(status: SupplierInvoiceStatus) {
   if (status === "存在差异" || status === "已驳回") return { color: A.red, bg: "#fff1f0" };
@@ -123,12 +133,12 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
   }
 
   function exportRegister() {
-    if (invoices.length === 0) {
+    if (visibleInvoices.length === 0) {
       toast.warning("暂无可导出的数据");
       return;
     }
-    exportRowsToCsv("supplier-invoices-export.csv", supplierInvoiceExportRows(invoices));
-    toast.success("导出文件已生成", { description: "供应商发票 CSV" });
+    exportRowsToCsv("supplier-invoices-export.csv", supplierInvoiceExportRows(visibleInvoices));
+    toast.success("导出文件已生成", { description: `${visibleInvoices.length} 条发票` });
   }
 
   function exportInvoice(invoice: SupplierInvoice) {
@@ -181,7 +191,7 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
       差异金额: line.varianceAmount ?? invoice.varianceAmount,
     }));
     exportRowsToCsv(`supplier-invoice-detail-${invoice.invoiceNumber}.csv`, [...headerRows, ...lineRows]);
-    toast.success("导出文件已生成", { description: "供应商发票详情 CSV" });
+    toast.success("导出文件已生成", { description: "供应商发票详情" });
   }
 
   const selectedSnapshot = selectedInvoice
@@ -229,19 +239,19 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
             <button onClick={exportRegister}
               className="h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5"
               style={{ background: "#f0f6ff", color: A.blue }}>
-              <FileSpreadsheet size={13} /> 导出 CSV
+              <FileSpreadsheet size={13} /> 导出当前结果
             </button>
           </div>
         </div>
       </Card>
 
       <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+        <div className={tableScrollClass}>
+          <table className={tableMinXlClass}>
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
                 {["发票编号", "供应商", "PO", "GRN", "发票日期", "到期日", "未税金额", "税额", "价税合计", "付款条款", "匹配状态", "发票状态", "差异类型", "操作"].map((header) => (
-                  <th key={header} className="text-left px-4 py-3 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
+                  <th key={header} className={thClass} style={{ color: A.gray1 }}>{header}</th>
                 ))}
               </tr>
             </thead>
@@ -251,20 +261,20 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
                 const matchStyle = matchStatusStyle(invoice.matchStatus);
                 return (
                   <tr key={invoice.id} style={{ borderBottom: index < visibleInvoices.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className="px-4 py-3 font-semibold" style={{ color: A.blue }}>{invoice.invoiceNumber}</td>
-                    <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{invoice.supplier}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{invoice.relatedPo || "—"}</td>
-                    <td className="px-4 py-3" style={{ color: invoice.relatedGrn ? A.sub : A.orange }}>{invoice.relatedGrn || "缺少"}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{invoice.invoiceDate}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{invoice.dueDate}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{fmt(invoice.subtotal)}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{fmt(invoice.tax)}</td>
-                    <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(invoice.total)}</td>
-                    <td className="px-4 py-3" style={{ color: A.sub }}>{invoice.paymentTerms}</td>
-                    <td className="px-4 py-3"><Chip label={invoice.matchStatus} color={matchStyle.color} bg={matchStyle.bg} /></td>
-                    <td className="px-4 py-3"><Chip label={invoice.status} color={statusStyle.color} bg={statusStyle.bg} /></td>
-                    <td className="px-4 py-3" style={{ color: invoice.varianceType === "无差异" ? A.green : A.red }}>{invoice.varianceType}</td>
-                    <td className="px-4 py-3">
+                    <td className={tdIdClass} style={{ color: A.blue }}>{invoice.invoiceNumber}</td>
+                    <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{invoice.supplier}</td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{invoice.relatedPo || "—"}</td>
+                    <td className={tdNowrapClass} style={{ color: invoice.relatedGrn ? A.sub : A.orange }}>{invoice.relatedGrn || "缺少"}</td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{invoice.invoiceDate}</td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{invoice.dueDate}</td>
+                    <td className={tdNumericClass} style={{ color: A.sub }}>{fmt(invoice.subtotal)}</td>
+                    <td className={tdNumericClass} style={{ color: A.sub }}>{fmt(invoice.tax)}</td>
+                    <td className={`${tdNumericClass} font-semibold`} style={{ color: A.label }}>{fmt(invoice.total)}</td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{invoice.paymentTerms}</td>
+                    <td className={tdNowrapClass}><Chip label={invoice.matchStatus} color={matchStyle.color} bg={matchStyle.bg} /></td>
+                    <td className={tdNowrapClass}><Chip label={invoice.status} color={statusStyle.color} bg={statusStyle.bg} /></td>
+                    <td className={tdNowrapClass} style={{ color: invoice.varianceType === "无差异" ? A.green : A.red }}>{invoice.varianceType}</td>
+                    <td className={tdActionClass}>
                       <div className="relative flex items-center gap-1">
                         <button onClick={() => setSelectedInvoice(invoice)} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>详情</button>
                         <button onClick={() => setOpenActionId((current) => current === invoice.id ? null : invoice.id)} className="px-2 py-1 rounded-md font-medium flex items-center gap-1" style={{ background: A.gray6, color: A.gray1 }}>
@@ -380,7 +390,7 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
               <button onClick={() => approve(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
               {!isProcurementMode && <button onClick={() => postToAp(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>过账到应付</button>}
               <button onClick={() => reject(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
-              <button onClick={() => exportInvoice(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
+              <button onClick={() => exportInvoice(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
               <button onClick={() => setSelectedInvoice(null)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
             </DocumentActionBar>
           </DocumentShell>

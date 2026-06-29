@@ -7,6 +7,16 @@ import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { invoiceToMatchQueueItem, type InvoiceMatchQueueItem } from "../../domain/procurement/invoice-matching";
 import { matchStatusStyle } from "./shared";
+import {
+  tableMinLgClass,
+  tableScrollClass,
+  tdWideActionClass,
+  tdWideIdClass,
+  tdWideNameClass,
+  tdWideNowrapClass,
+  tdWideNumericClass,
+  thWideClass,
+} from "../../components/ui/workbenchTable";
 
 export default function ThreeWayMatchPanel() {
   const [queue, setQueue] = useState<InvoiceMatchQueueItem[]>(() =>
@@ -33,7 +43,7 @@ export default function ThreeWayMatchPanel() {
       匹配状态: item.matchStatus,
       发票状态: item.status,
     })));
-    toast.success("导出文件已生成", { description: "三单匹配 CSV" });
+    toast.success("导出文件已生成", { description: `${queue.length} 条匹配记录` });
   };
   const resolve = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, matchStatus: "已解决", status: "已匹配", varianceAmount: 0, varianceType: "无差异" } : q));
@@ -77,52 +87,54 @@ export default function ThreeWayMatchPanel() {
           <button onClick={exportCsv}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
             style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={13} /> 导出 CSV
+            <FileSpreadsheet size={13} /> 导出当前结果
           </button>
         </div>
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["匹配号", "PO", "GRN", "发票", "供应商", "PO 金额", "GRN 金额", "发票金额", "差异类型", "差异金额", "匹配状态", "操作"].map(h => (
-                <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {queue.map((q, i) => (
-              <tr key={q.id} style={{ borderBottom: i < queue.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className="px-5 py-3 font-medium" style={{ color: A.blue }}>{q.id}</td>
-                <td className="px-5 py-3" style={{ color: A.sub }}>{q.po}</td>
-                <td className="px-5 py-3" style={{ color: A.sub }}>{q.grn}</td>
-                <td className="px-5 py-3" style={{ color: A.sub }}>{q.invoiceNumber}</td>
-                <td className="px-5 py-3" style={{ color: A.label }}>{q.supplier}</td>
-                <td className="px-5 py-3" style={{ color: A.label }}>¥{(q.poAmt / 1e4).toFixed(1)}万</td>
-                <td className="px-5 py-3" style={{ color: A.label }}>¥{(q.grnAmt / 1e4).toFixed(1)}万</td>
-                <td className="px-5 py-3" style={{ color: A.label }}>¥{(q.invAmt / 1e4).toFixed(1)}万</td>
-                <td className="px-5 py-3 font-medium" style={{ color: q.varianceType === "无差异" ? A.green : A.red }}>{q.varianceType}</td>
-                <td className="px-5 py-3 font-medium" style={{ color: q.varianceAmount === 0 ? A.green : A.red }}>{q.varianceAmount === 0 ? "—" : fmt(q.varianceAmount)}</td>
-                <td className="px-5 py-3">
-                  <Chip label={q.matchStatus} {...matchStatusStyle(q.matchStatus)} />
-                </td>
-                <td className="px-5 py-3">
-                  <div className="relative flex gap-1">
-                    <button onClick={() => setSelected(q)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>详情</button>
-                    <button onClick={() => setOpenActionId((current) => current === q.id ? null : q.id)} className="px-2 py-1 text-[11px] font-medium rounded-md flex items-center gap-1" style={{ background: A.gray6, color: A.gray1 }}>
-                      更多 <MoreHorizontal size={12} />
-                    </button>
-                    {openActionId === q.id && (
-                      <div className="absolute right-0 top-7 z-20 w-28 rounded-lg p-1 shadow-lg" style={{ background: A.white, boxShadow: "0 10px 30px rgba(15,23,42,0.12)" }}>
-                        {q.matchStatus !== "自动匹配" && <button onClick={() => resolve(q.id)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.blue }}>解决差异</button>}
-                        <button onClick={() => markMatched(q.id)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.green }}>标记匹配</button>
-                        <button onClick={() => rejectInvoice(q.id)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.red }}>退回</button>
-                      </div>
-                    )}
-                  </div>
-                </td>
+        <div className={tableScrollClass}>
+          <table className={tableMinLgClass}>
+            <thead>
+              <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                {["匹配号", "PO", "GRN", "发票", "供应商", "PO 金额", "GRN 金额", "发票金额", "差异类型", "差异金额", "匹配状态", "操作"].map(h => (
+                  <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {queue.map((q, i) => (
+                <tr key={q.id} style={{ borderBottom: i < queue.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                  <td className={tdWideIdClass} style={{ color: A.blue }}>{q.id}</td>
+                  <td className={tdWideNowrapClass} style={{ color: A.sub }}>{q.po}</td>
+                  <td className={tdWideNowrapClass} style={{ color: A.sub }}>{q.grn}</td>
+                  <td className={tdWideNowrapClass} style={{ color: A.sub }}>{q.invoiceNumber}</td>
+                  <td className={`${tdWideNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{q.supplier}</td>
+                  <td className={tdWideNumericClass} style={{ color: A.label }}>¥{(q.poAmt / 1e4).toFixed(1)}万</td>
+                  <td className={tdWideNumericClass} style={{ color: A.label }}>¥{(q.grnAmt / 1e4).toFixed(1)}万</td>
+                  <td className={tdWideNumericClass} style={{ color: A.label }}>¥{(q.invAmt / 1e4).toFixed(1)}万</td>
+                  <td className={`${tdWideNowrapClass} font-medium`} style={{ color: q.varianceType === "无差异" ? A.green : A.red }}>{q.varianceType}</td>
+                  <td className={`${tdWideNumericClass} font-medium`} style={{ color: q.varianceAmount === 0 ? A.green : A.red }}>{q.varianceAmount === 0 ? "—" : fmt(q.varianceAmount)}</td>
+                  <td className={tdWideNowrapClass}>
+                    <Chip label={q.matchStatus} {...matchStatusStyle(q.matchStatus)} />
+                  </td>
+                  <td className={tdWideActionClass}>
+                    <div className="relative flex gap-1">
+                      <button onClick={() => setSelected(q)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>详情</button>
+                      <button onClick={() => setOpenActionId((current) => current === q.id ? null : q.id)} className="px-2 py-1 text-[11px] font-medium rounded-md flex items-center gap-1" style={{ background: A.gray6, color: A.gray1 }}>
+                        更多 <MoreHorizontal size={12} />
+                      </button>
+                      {openActionId === q.id && (
+                        <div className="absolute right-0 top-7 z-20 w-28 rounded-lg p-1 shadow-lg" style={{ background: A.white, boxShadow: "0 10px 30px rgba(15,23,42,0.12)" }}>
+                          {q.matchStatus !== "自动匹配" && <button onClick={() => resolve(q.id)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.blue }}>解决差异</button>}
+                          <button onClick={() => markMatched(q.id)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.green }}>标记匹配</button>
+                          <button onClick={() => rejectInvoice(q.id)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.red }}>退回</button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Modal open={Boolean(selected)} onClose={() => setSelected(null)} width={620}

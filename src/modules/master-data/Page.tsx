@@ -155,7 +155,7 @@ export default function MasterDataPage({
           <button onClick={exportCurrent}
             className="h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5"
             style={{ background: "#f0f6ff", color: A.blue }}>
-            <FileSpreadsheet size={13} /> 导出 CSV
+            <FileSpreadsheet size={13} /> 导出当前结果
           </button>
         </div>
       </div>
