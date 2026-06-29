@@ -20,7 +20,7 @@ function localAiReply({ moduleId, question, activeInsight }, db, ctx) {
   if (priceAnswer) return priceAnswer
   const evidence = activeInsight?.title
     ? `当前系统关注「${activeInsight.title}」${activeInsight.metric ? `，核心指标是 ${activeInsight.metric}` : ''}。`
-    : `当前模块是 ${moduleId || 'SCM 工作台'}。`
+    : `当前模块是 ${moduleId || 'FlowChain 工作台'}。`
   const pending = db.purchaseOrders.filter((po) => po.status === '待审批').length
   const pendingRequests = ensurePurchaseRequests(db).filter((pr) => pr.status === '待审批').length
   const stockReceipts = db.receivingDocs.filter((doc) => doc.status === '质检中' || doc.status === '异常处理').length
@@ -67,7 +67,7 @@ function aiConfidence(body, db, result = {}, ctx) {
     forecastEvidence.push(`${products.length} 个 SKU 主数据`)
   } else {
     forecastScore -= 6
-    forecastWarnings.push('SKU 样本偏少')
+    forecastWarnings.push('SKU 覆盖偏少')
   }
   if (forecastPlans.length > 0) {
     forecastScore += 14
@@ -92,7 +92,7 @@ function aiConfidence(body, db, result = {}, ctx) {
     inventoryScore += 14
     inventoryEvidence.push(`${mrp.summary.exceptionCount} 条 MRP 例外`)
   } else {
-    inventoryWarnings.push('当前 MRP 未形成例外样本')
+    inventoryWarnings.push('当前 MRP 未形成例外覆盖')
   }
   if (inventoryMovements.length > 0) {
     inventoryScore += 7
@@ -110,7 +110,7 @@ function aiConfidence(body, db, result = {}, ctx) {
     supplierEvidence.push(`${supplierPerf.length} 个供应商绩效`)
   } else {
     supplierScore -= 4
-    supplierWarnings.push('供应商绩效样本偏少')
+    supplierWarnings.push('供应商绩效覆盖偏少')
   }
   if (grnCount >= 5) {
     supplierScore += 8
@@ -137,13 +137,13 @@ function aiConfidence(body, db, result = {}, ctx) {
   }
   if (result.provider === 'market-data') {
     externalScore += 20
-    externalEvidence.push('命中内部行情样本')
+    externalEvidence.push('命中内部行情记录')
   }
   if (/外部|新闻|汇率|市场|价格|风险|铁|钢|铝|铜|美元|原油/.test(q)) {
     externalScore += 4
     if (!externalSignalCount && result.provider !== 'market-data') {
       externalScore -= 12
-      externalWarnings.push('缺少可用的外部信号样本')
+      externalWarnings.push('缺少可用的外部信号')
     }
   } else if (!externalSignalCount && result.provider !== 'market-data') {
     externalWarnings.push('外部市场未参与本次判断')
@@ -261,8 +261,8 @@ function buildAiContext({ moduleId, activeInsight }, db, ctx) {
 
 function buildAiSystemPrompt() {
   return [
-    '你是一个供应链 ERP SaaS 内嵌 AI 分析助手。',
-    '你只能基于提供的 ERP JSON 上下文回答；如果上下文包含外部信号，可以结合外部信号说明风险。',
+    '你是 FlowChain 采购与供应链工作台内嵌 AI 分析助手。',
+    '你只能基于提供的 FlowChain 业务上下文回答；如果上下文包含外部信号，可以结合外部信号说明风险。',
     '回答要短、具体、业务化，包含数据依据和下一步建议。',
     '如果缺少关键数据，明确说需要人工确认。',
   ].join('\n')
@@ -274,6 +274,21 @@ function withOptionalDispatcher(options, dispatcher) {
 
 function shouldFetchExternalSignals(question = '') {
   return /联网|外部|新闻|汇率|关税|政策|天气|港口|航运|物流|市场|风险|国际|美元|进口/.test(question)
+}
+
+function shouldUseLocalWorkbenchReply(question = '') {
+  return /解释当前页面|当前页面|这个页面|页面在看什么|下一步|下一步建议|怎么处理|从哪里开始|what next|next action|explain/i.test(question)
+}
+
+function shouldLogAiTiming() {
+  return process.env.NODE_ENV !== 'production'
+}
+
+function logAiTiming({ startedAt, branchStartedAt, branch, body, result }) {
+  if (!shouldLogAiTiming()) return
+  const intent = result?.intent?.name || result?.provider || branch
+  const cards = Array.isArray(result?.cards) ? result.cards.length : 0
+  console.log(`[ai-chat] intent=${intent} module=${body.moduleId || 'unknown'} elapsedMs=${Date.now() - startedAt} branchMs=${Date.now() - branchStartedAt} cards=${cards}`)
 }
 
 async function callOpenAI({ moduleId, question, activeInsight }, db, ctx) {
@@ -302,7 +317,7 @@ async function callOpenAI({ moduleId, question, activeInsight }, db, ctx) {
           content: [
             {
               type: 'input_text',
-              text: `用户问题：${question}\n\nERP 上下文 JSON：${JSON.stringify(context)}`,
+              text: `用户问题：${question}\n\nFlowChain 业务上下文 JSON：${JSON.stringify(context)}`,
             },
           ],
         },
@@ -345,7 +360,7 @@ async function callDoubao({ moduleId, question, activeInsight }, db, ctx) {
         {
           role: 'user',
           content: [
-            '下面是 ERP 上下文 JSON：',
+            '下面是 FlowChain 业务上下文 JSON：',
             JSON.stringify(context),
             '',
             `请直接回答这个用户问题：${question}`,
@@ -396,6 +411,7 @@ export async function handleAiRoute(ctx) {
     body.question = normalizeAiChatMessage(body)
     if (!body.question) return send(res, 400, { error: 'question is required' })
 
+    let branchStartedAt = Date.now()
     const supplierOperationalQuery = buildAiSupplierOperationalResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs })
     if (supplierOperationalQuery) {
       const result = {
@@ -407,10 +423,12 @@ export async function handleAiRoute(ctx) {
       }
       event(db, 'ai_supplier_operational_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
       await writeDb(db)
+      logAiTiming({ startedAt, branchStartedAt, branch: 'supplier_operational', body, result })
       send(res, 200, result)
       return true
     }
 
+    branchStartedAt = Date.now()
     const statusQuery = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
     const deferredProcurementException = statusQuery?.intent?.name === 'procurement_exception_query' ? statusQuery : null
     if (statusQuery && !deferredProcurementException) {
@@ -423,10 +441,12 @@ export async function handleAiRoute(ctx) {
       }
       event(db, 'ai_chat_status_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
       await writeDb(db)
+      logAiTiming({ startedAt, branchStartedAt, branch: 'status_query', body, result })
       send(res, 200, result)
       return true
     }
 
+    branchStartedAt = Date.now()
     const procurementOperationalQuery = buildAiProcurementOperationalResponse(db, body, { ensurePurchaseRequests, ensureRfqs })
     if (procurementOperationalQuery) {
       const result = {
@@ -438,10 +458,12 @@ export async function handleAiRoute(ctx) {
       }
       event(db, 'ai_procurement_operational_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
       await writeDb(db)
+      logAiTiming({ startedAt, branchStartedAt, branch: 'procurement_operational', body, result })
       send(res, 200, result)
       return true
     }
 
+    branchStartedAt = Date.now()
     const rfqOperationalQuery = buildAiRfqOperationalResponse(db, body, { ensureRfqs })
     if (rfqOperationalQuery) {
       const result = {
@@ -453,11 +475,13 @@ export async function handleAiRoute(ctx) {
       }
       event(db, 'ai_rfq_operational_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
       await writeDb(db)
+      logAiTiming({ startedAt, branchStartedAt, branch: 'rfq_operational', body, result })
       send(res, 200, result)
       return true
     }
 
     if (deferredProcurementException) {
+      branchStartedAt = Date.now()
       const result = {
         ...deferredProcurementException,
         usedWeb: false,
@@ -467,10 +491,12 @@ export async function handleAiRoute(ctx) {
       }
       event(db, 'ai_chat_status_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
       await writeDb(db)
+      logAiTiming({ startedAt, branchStartedAt, branch: 'deferred_procurement_exception', body, result })
       send(res, 200, result)
       return true
     }
 
+    branchStartedAt = Date.now()
     const draftPreparation = buildAiDraftPreparationResponse(db, body, {
       authorization: req.headers.authorization || '',
     })
@@ -485,8 +511,26 @@ export async function handleAiRoute(ctx) {
       const missingCount = result.cards.find((card) => card.type === 'missing_fields')?.fields?.length || 0
       event(db, 'ai_draft_prepared', `AI prepared ${result.intent.name} with ${missingCount} missing fields`, result.intent.name)
       await writeDb(db)
+      logAiTiming({ startedAt, branchStartedAt, branch: 'draft_preparation', body, result })
       send(res, 200, result)
       return true
+    }
+
+    if (shouldUseLocalWorkbenchReply(body.question)) {
+      branchStartedAt = Date.now()
+      const result = {
+        provider: 'local',
+        content: localAiReply(body, db, ctx),
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      result.confidence = aiConfidence(body, db, result, ctx)
+      event(db, 'ai_chat', `AI answered ${body.moduleId || 'unknown'} question via ${result.provider}`, body.moduleId || 'ai')
+      await writeDb(db)
+      logAiTiming({ startedAt, branchStartedAt, branch: 'local_workbench', body, result })
+      return send(res, 200, result)
     }
 
     const hasMarketAnswer = Boolean(marketPriceReply(body.question, db))
@@ -499,6 +543,7 @@ export async function handleAiRoute(ctx) {
     }
     let result
     const modelStartedAt = Date.now()
+    branchStartedAt = modelStartedAt
     try {
       result = await callConfiguredAi(body, db, ctx)
     } catch (error) {
@@ -520,6 +565,7 @@ export async function handleAiRoute(ctx) {
     result.confidence = aiConfidence(body, db, result, ctx)
     event(db, 'ai_chat', `AI answered ${body.moduleId || 'unknown'} question via ${result.provider}`, body.moduleId || 'ai')
     await writeDb(db)
+    logAiTiming({ startedAt, branchStartedAt, branch: 'configured_ai', body, result })
     return send(res, 200, result)
   }
 

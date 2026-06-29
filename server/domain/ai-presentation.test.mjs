@@ -46,6 +46,27 @@ test('AI message sanitization preserves business ids', async () => {
   assert.match(output, /SKU-00412/)
 })
 
+test('AI message sanitization removes inline markdown emphasis', async () => {
+  const { mod } = await loadPresentationModule()
+  assert.equal(
+    mod.sanitizeAiMessage('**采购待办**：__风险提示__，*重点* 查看 PO-2026-1287。'),
+    '采购待办：风险提示，重点 查看 PO-2026-1287。'
+  )
+})
+
+test('AI message sanitization normalizes amount shorthand with amount context', async () => {
+  const { mod } = await loadPresentationModule()
+  assert.equal(
+    mod.sanitizeAiMessage('金额14.2万，发票金额1.4万，差异金额0.86万。'),
+    '金额 ¥142,000，发票金额 ¥14,000，差异金额 ¥8,600。'
+  )
+})
+
+test('AI message sanitization does not convert non-amount wan words', async () => {
+  const { mod } = await loadPresentationModule()
+  assert.equal(mod.sanitizeAiMessage('库存涉及万向节备件，需要查看 SKU-00412。'), '库存涉及万向节备件，需要查看 SKU-00412。')
+})
+
 test('JSON-like content with cards uses safe card message', async () => {
   const { mod } = await loadPresentationModule()
   assert.equal(mod.aiDisplayMessage('{"cards":[{"type":"supplier_status"}]}', true), '已找到相关业务记录，请查看下方结果。')

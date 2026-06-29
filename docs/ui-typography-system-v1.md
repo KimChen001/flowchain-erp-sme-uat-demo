@@ -48,3 +48,7 @@ End-user AI output should be plain business language plus structured cards.
 - Recommended actions should use readable labels and safe internal links.
 - Unknown structured card types should show `暂不支持展示该结果类型。` instead of dumping the raw card payload.
 - Amount-like strings in AI cards should use full numeric currency formatting when the field label is clearly amount-related.
+- Inline markdown emphasis such as `**采购待办**`, `__风险提示__`, and safe `*重点*` should render as plain text.
+- AI message text should normalize amount-context shorthand such as `金额14.2万`, `发票金额1.4万`, and `差异金额0.86万` to full currency display.
+- Do not convert non-amount business words that contain `万`, such as `万向节`.
+- Customer-facing AI copy should use FlowChain workbench language and avoid broad product claims that are not supported by the current screen.

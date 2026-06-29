@@ -2,6 +2,11 @@ const JSON_LIKE_START = /^[\s\r\n]*[\[{]/;
 const DEBUG_LINE = /^(intent|cards|evidence|provider|model|tool|schema)\s*[:=]/i;
 const AMOUNT_LABEL = /(金额|余额|应付|贷项|差异|订单金额|发票金额|合同金额|采购额)/;
 const WAN_AMOUNT = /^¥?\s*(-?\d+(?:\.\d+)?)\s*万$/;
+const AMOUNT_CONTEXT_WAN = /(订单金额|发票金额|合同金额|差异金额|采购额|应付|余额|贷项|报价金额|金额)\s*¥?\s*(-?\d+(?:\.\d+)?)\s*万/g;
+
+function currency(value: number) {
+  return `¥${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value)}`;
+}
 
 export function looksLikeRawJson(value: unknown) {
   if (typeof value !== "string") return false;
@@ -26,6 +31,21 @@ function parsesAsJsonLine(value: string) {
   }
 }
 
+export function stripInlineMarkdownEmphasis(value: string) {
+  return value
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/__([^_\n]+)__/g, "$1")
+    .replace(/(^|[^\w*])\*([^*\n]+)\*(?=$|[^\w*])/g, "$1$2");
+}
+
+export function normalizeAiMessageAmounts(value: string) {
+  return value.replace(AMOUNT_CONTEXT_WAN, (_match, label: string, numeric: string) => {
+    const amount = Number(numeric) * 10000;
+    if (!Number.isFinite(amount)) return _match;
+    return `${label} ${currency(amount)}`;
+  });
+}
+
 export function sanitizeAiMessage(value: unknown) {
   if (typeof value !== "string") return "";
   const lines = value.split(/\r?\n/);
@@ -42,7 +62,7 @@ export function sanitizeAiMessage(value: unknown) {
       if (parsesAsJsonLine(trimmed)) return false;
       return true;
     })
-    .map((line) => line.replace(/^\s{0,3}#{1,6}\s+/, "").trimEnd())
+    .map((line) => normalizeAiMessageAmounts(stripInlineMarkdownEmphasis(line.replace(/^\s{0,3}#{1,6}\s+/, "").trimEnd())))
     .join("\n")
     .trim();
 }
@@ -66,5 +86,5 @@ export function normalizeAiCardValue(label: string, value: unknown) {
   if (!match) return value;
   const amount = Number(match[1]) * 10000;
   if (!Number.isFinite(amount)) return value;
-  return `¥${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(amount)}`;
+  return currency(amount);
 }

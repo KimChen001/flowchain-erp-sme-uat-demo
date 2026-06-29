@@ -35,6 +35,9 @@ type AiChatResponse = {
   message?: string;
   content?: string;
   cards?: AiChatCard[];
+  timingMs?: number;
+  modelMs?: number;
+  externalMs?: number;
 };
 
 const PAGE_LABELS: Record<string, string> = {
@@ -605,6 +608,7 @@ export default function FloatingAiAssistant({
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
+  const [slowRequest, setSlowRequest] = useState(false);
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -622,6 +626,15 @@ export default function FloatingAiAssistant({
     setInput("");
   }, [moduleId]);
 
+  useEffect(() => {
+    if (!asking) {
+      setSlowRequest(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSlowRequest(true), 1500);
+    return () => window.clearTimeout(timer);
+  }, [asking]);
+
   const currentContext = cleanActiveContext(activeContext);
   const quickPrompts = getContextualQuickPrompts({ moduleId, activeContext: currentContext });
   const contextLabel = currentContext
@@ -633,6 +646,7 @@ export default function FloatingAiAssistant({
     if (!message || asking) return;
 
     const context = cleanActiveContext(activeContext);
+    const requestStartedAt = performance.now();
     setAsking(true);
     setInput("");
     setMessages((current) => [...current, { role: "user", content: message }]);
@@ -650,6 +664,15 @@ export default function FloatingAiAssistant({
       const rawContent = response.message || response.content || "";
       const content = aiDisplayMessage(rawContent, Boolean(response.cards?.length));
       if (looksLikeRawJson(rawContent)) console.debug("AI assistant raw content suppressed", rawContent);
+      if (import.meta.env.DEV) {
+        console.debug("AI assistant request completed", {
+          elapsedMs: Math.round(performance.now() - requestStartedAt),
+          timingMs: response.timingMs,
+          modelMs: response.modelMs,
+          externalMs: response.externalMs,
+          cards: response.cards?.length || 0,
+        });
+      }
       setMessages((current) => [
         ...current,
         { role: "assistant", content, cards: response.cards },
@@ -721,7 +744,7 @@ export default function FloatingAiAssistant({
               <div className="flex justify-start">
                 <div className="rounded-2xl px-3 py-2 text-sm flex items-center gap-2" style={{ background: A.gray6, color: A.gray1 }}>
                   <Loader2 size={14} className="animate-spin" />
-                  正在回复
+                  {slowRequest ? "正在查询业务数据..." : "正在回复"}
                 </div>
               </div>
             )}
