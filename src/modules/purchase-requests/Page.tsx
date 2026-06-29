@@ -9,7 +9,7 @@ import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { OWNERS, SKU_CATALOG, SUPPLIER_LIST, purchaseOrders } from "../../data/demo-data";
 import type { PurchaseIntent, PurchaseOrder, PurchaseRequest, PurchaseRequestStatus, RfqRecord, SupplierRecommendationResult } from "../../types/scm";
-import { A, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard, Modal, SegmentedControl } from "../../components/ui";
+import { A, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard, Modal, SectionHeader } from "../../components/ui";
 import {
   DocumentActionBar,
   DocumentEvidencePanel,
@@ -23,6 +23,13 @@ import {
 } from "../../components/document/DocumentShell";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import type { ActiveContext } from "../ai-assistant/Panel";
+import {
+  defaultPurchaseRequestWorkbenchFilters,
+  filterPurchaseRequestsForWorkbench,
+  type PurchaseRequestWorkbenchFilters,
+} from "./filters";
+
+type PurchaseRequestViewMode = "list" | "detail";
 
 function prTimeline(pr: PurchaseRequest): TimelineStep[] {
   const rejected = pr.status === "已驳回" || pr.status === "已取消";
@@ -236,12 +243,12 @@ export default function PurchaseRequestsPage({
 }) {
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"全部" | PurchaseRequestStatus>("全部");
+  const [filters, setFilters] = useState<PurchaseRequestWorkbenchFilters>(defaultPurchaseRequestWorkbenchFilters);
   const [selectedId, setSelectedId] = useState("");
+  const [viewMode, setViewMode] = useState<PurchaseRequestViewMode>("list");
   const [supplierRecommendationResult, setSupplierRecommendationResult] = useState<SupplierRecommendationResult | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [creatingRfq, setCreatingRfq] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -263,8 +270,11 @@ export default function PurchaseRequestsPage({
     return () => { alive = false; };
   }, [intent?.createdAt]);
 
-  const filtered = filter === "全部" ? requests : requests.filter((item) => item.status === filter);
-  const selected = requests.find((item) => item.pr === selectedId) ?? requests[0];
+  const filtered = filterPurchaseRequestsForWorkbench(requests, filters);
+  const sourceOptions = Array.from(new Set(requests.map((item) => item.source || "manual"))).sort();
+  const statusOptions = ["全部", "草稿", "待审批", "已批准", "已驳回", "已转PO", "已取消"] as const;
+  const priorityOptions = ["全部", "高", "中", "低"] as const;
+  const selected = requests.find((item) => item.pr === selectedId) ?? filtered[0] ?? requests[0];
   const pending = requests.filter((item) => item.status === "待审批").length;
   const approved = requests.filter((item) => item.status === "已批准").length;
   const converted = requests.filter((item) => item.status === "已转PO").length;
@@ -291,7 +301,7 @@ export default function PurchaseRequestsPage({
       状态: item.status,
       申请原因: item.reason,
     })));
-    toast.success("CSV 已导出");
+    toast.success("导出文件已生成");
   };
 
   useEffect(() => {
@@ -312,7 +322,7 @@ export default function PurchaseRequestsPage({
   }, [selected?.pr, selected?.sourceSku, selected?.quantity, selected?.supplier]);
 
   useEffect(() => {
-    if (!detailOpen || !selected) {
+    if (viewMode !== "detail" || !selected) {
       onActiveContextChange?.(null);
       return;
     }
@@ -324,7 +334,7 @@ export default function PurchaseRequestsPage({
       view: "requests",
     });
     return () => onActiveContextChange?.(null);
-  }, [detailOpen, selected?.pr, selected?.sourceName, onActiveContextChange]);
+  }, [viewMode, selected?.pr, selected?.sourceName, onActiveContextChange]);
 
   async function updateRequestStatus(pr: string, status: PurchaseRequestStatus) {
     const updated = await apiJson<PurchaseRequest>(`/api/purchase-requests/${encodeURIComponent(pr)}/status`, {
@@ -372,8 +382,25 @@ export default function PurchaseRequestsPage({
     });
     setRequests((arr) => [created, ...arr]);
     setSelectedId(created.pr);
-    setFilter("全部");
+    setFilters(defaultPurchaseRequestWorkbenchFilters);
     return created;
+  }
+
+  function updateFilter<K extends keyof PurchaseRequestWorkbenchFilters>(key: K, value: PurchaseRequestWorkbenchFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function resetFilters() {
+    setFilters(defaultPurchaseRequestWorkbenchFilters);
+  }
+
+  function openDetail(pr: string) {
+    setSelectedId(pr);
+    setViewMode("detail");
+  }
+
+  function returnToList() {
+    setViewMode("list");
   }
 
   async function createRfqFromSelected() {
@@ -418,6 +445,111 @@ export default function PurchaseRequestsPage({
     }
   }
 
+  const detailContent = selected && (
+    <DocumentShell
+      title="采购申请"
+      documentNo={selected.pr}
+      moduleLabel="采购申请 / PR"
+      status={selected.status}
+      subtitle={`${selected.requester} → ${selected.buyer} · ${selected.sourceSku || "—"}`}
+    >
+      <DocumentHeader
+        fields={[
+          { label: "PR编号", value: selected.pr },
+          { label: "申请人", value: selected.requester },
+          { label: "采购负责人", value: selected.buyer },
+          { label: "需求日期", value: selected.requiredDate },
+          { label: "优先级", value: selected.priority, tone: selected.priority === "高" ? "danger" : selected.priority === "中" ? "warning" : "success" },
+          { label: "状态", value: selected.status, tone: statusTone(selected.status) },
+          { label: "供应商", value: selected.supplier || "—" },
+          { label: "来源", value: purchaseRequestSourceMeta(selected.source).label },
+          { label: "来源 SKU", value: selected.sourceSku || "—", helper: selected.sourceName },
+          { label: "数量", value: `${Number(selected.quantity || 0).toLocaleString()} ${selected.unit}` },
+          { label: "单价", value: fmt(selected.unitPrice || 0) },
+          { label: "金额", value: fmt(selected.amount || 0), tone: "info" },
+        ]}
+      />
+      <DocumentStatusTimeline steps={prTimeline(selected)} />
+      <DocumentLinesTable
+        rows={[{
+          id: selected.pr,
+          sku: selected.sourceSku || "—",
+          name: selected.sourceName || "采购申请物料",
+          quantity: selected.quantity,
+          unit: selected.unit,
+          unitPrice: selected.unitPrice,
+          amount: selected.amount,
+          supplier: selected.supplier,
+          reason: selected.reason,
+        }]}
+        columns={[
+          { key: "sku", label: "SKU", render: (line) => <span style={{ color: A.blue }}>{String(line.sku)}</span> },
+          { key: "name", label: "品名" },
+          { key: "quantity", label: "数量", align: "right", render: (line) => Number(line.quantity || 0).toLocaleString() },
+          { key: "unit", label: "单位" },
+          { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+          { key: "amount", label: "金额", align: "right", render: (line) => fmt(Number(line.amount || 0)) },
+          { key: "supplier", label: "建议供应商" },
+          { key: "reason", label: "备注" },
+        ]}
+      />
+      <DocumentTotals
+        totals={[
+          { label: "申请数量", value: `${Number(selected.quantity || 0).toLocaleString()} ${selected.unit}` },
+          { label: "申请金额", value: fmt(selected.amount || 0), tone: "info" },
+          { label: "推荐单价", value: fmt(selected.unitPrice || 0) },
+          { label: "后续 PO", value: selected.linkedPo || purchaseOrders.find((order) => order.sourceRequest === selected.pr)?.po || "—" },
+        ]}
+      />
+      <DocumentEvidencePanel
+        linkedDocuments={[
+          ...(selected.linkedPo ? [{ label: "PO / 采购订单", value: selected.linkedPo, moduleId: "purchasing", tone: "success" as const }] : []),
+          ...purchaseOrders.filter((order) => order.sourceRequest === selected.pr).slice(0, 2).map((order) => ({ label: "PO / 采购订单", value: order.po, moduleId: "purchasing", tone: statusTone(order.status) })),
+          ...(selected.source === "forecast" || selected.source === "mrp-release" ? [{ label: "预测与 MRP", value: selected.source, moduleId: "forecast", tone: "info" as const }] : []),
+          ...(selected.source === "inventory" ? [{ label: "库存补货证据", value: selected.sourceSku || selected.source, moduleId: "inventory", tone: "warning" as const }] : []),
+        ]}
+        provenance={selected.approvalSnapshot?.source || selected.source}
+        notes={selected.reason || selected.approvalSnapshot?.summary}
+        evidence={[
+          { label: "来源", value: purchaseRequestSourceMeta(selected.source).label },
+          { label: "审批快照", value: selected.approvalSnapshot?.createdAt ? new Date(selected.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—" },
+          { label: "推荐供应商", value: supplierRecommendationResult?.primary?.supplier || selected.supplier || "—" },
+          { label: "推荐评分", value: supplierRecommendationResult?.primary?.score || "—" },
+          { label: "RFQ / 计划证据", value: supplierRecommendationResult?.needsRfq ? "建议 RFQ" : selected.forecastBasis ? "已有计划证据" : "可直接采购", tone: supplierRecommendationResult?.needsRfq ? "warning" : "success" },
+          { label: "状态", value: selected.status, tone: statusTone(selected.status) },
+        ]}
+      />
+      <DocumentHistoryPanel
+        entityType="purchaseRequest"
+        entityId={selected.pr}
+        title="审批历史"
+        refreshKey={selected.lastAuditId || selected.auditTrailIds?.join(",") || selected.status}
+      />
+      <DocumentActionBar>
+        <button onClick={returnToList} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>返回列表</button>
+        {selected.status === "待审批" && <button onClick={() => approveRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>批准申请</button>}
+        {selected.status === "待审批" && <button onClick={() => rejectRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>}
+        {selected.status === "已批准" && <button onClick={() => convertRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>转采购订单</button>}
+        <button onClick={createRfqFromSelected} disabled={creatingRfq} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60" style={{ background: supplierRecommendationResult?.needsRfq ? A.orange : A.blue }}>发起 RFQ</button>
+        <button onClick={() => exportPurchaseRequestDetail(selected)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
+      </DocumentActionBar>
+    </DocumentShell>
+  );
+
+  if (viewMode === "detail") {
+    return (
+      <div className="space-y-5">
+        {selected ? detailContent : (
+          <Card className="p-8 text-center text-xs" style={{ color: A.gray2 }}>
+            未找到采购申请。
+            <button onClick={returnToList} className="ml-3 px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.blue }}>返回列表</button>
+          </Card>
+        )}
+        <NewPRModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={createManualRequest} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {intent?.sourceSku && (
@@ -430,7 +562,7 @@ export default function PurchaseRequestsPage({
               {selected ? ` · ${selected.pr}` : ""}
             </div>
           </div>
-          <button onClick={() => setFilter("全部")}
+          <button onClick={resetFilters}
             className="text-[11px] px-2.5 py-1 rounded-md font-medium"
             style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,113,227,0.18)" }}>
             查看全部
@@ -444,411 +576,77 @@ export default function PurchaseRequestsPage({
         <KpiCard label="已转 PO" value={String(converted)} sub="进入采购执行" positive icon={FileText} color={A.purple} />
       </div>
 
-      <div className="grid grid-cols-5 gap-3">
-        <Card className="col-span-3">
-          <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
-            <Filter size={13} style={{ color: A.gray2 }} />
-            <SegmentedControl
-              options={(["全部", "待审批", "已批准", "已驳回", "已转PO"] as const).map((s) => ({ label: s, value: s }))}
-              value={filter} onChange={(v) => setFilter(v as any)}
-            />
-            <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{filtered.length} 条</span>
-            <ContextualImportActions entityLabel="PR" compact />
-            <button onClick={exportCsv}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity"
-              style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出 CSV
-            </button>
-            <button onClick={() => setNewOpen(true)}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
-              style={{ background: A.blue }}>
-              <Plus size={11} /> 新建 PR
-            </button>
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <SectionHeader title="采购申请查询" />
+            <div className="text-xs mt-1" style={{ color: A.sub }}>按 PR、供应商、物料、申请人、采购负责人和需求日期查询申请记录</div>
           </div>
-          {filtered.length === 0 ? (
-            <div className="py-12 text-center text-xs" style={{ color: A.gray2 }}>
-              暂无采购申请。可在预测分析中生成预测补货申请。
-            </div>
-          ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                  {["PR 编号", "来源", "物料", "供应商", "数量", "金额", "状态"].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((item, idx) => {
-                  const isSelected = selected?.pr === item.pr;
-                  const sourceMeta = purchaseRequestSourceMeta(item.source);
-                  const SourceIcon = sourceMeta.icon;
-                  return (
-                    <tr key={item.pr} onClick={() => setSelectedId(item.pr)}
-                      className="cursor-pointer hover:bg-blue-50/40 transition-colors"
-                      style={{
-                        borderBottom: idx < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none",
-                        background: isSelected ? "rgba(0,113,227,0.06)" : "transparent",
-                      }}>
-                      <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>{item.pr}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
-                          style={{ background: sourceMeta.bg, color: sourceMeta.color }}>
-                          <SourceIcon size={10} />
-                          {sourceMeta.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium" style={{ color: A.label }}>{item.sourceSku || "—"}</div>
-                        <div className="text-[10px] mt-0.5 truncate max-w-28" style={{ color: A.gray2 }}>{item.sourceName}</div>
-                      </td>
-                      <td className="px-4 py-3" style={{ color: A.label }}>{item.supplier}</td>
-                      <td className="px-4 py-3 tabular-nums" style={{ color: A.sub }}>{Number(item.quantity || 0).toLocaleString()} {item.unit}</td>
-                      <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(item.amount)}</td>
-                      <td className="px-4 py-3"><PRStatusPill status={item.status} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </Card>
+          <div className="flex items-center gap-2">
+            <button onClick={() => toast.success(`已筛选 ${filtered.length} 条采购申请`)} className="h-8 px-3 rounded-lg text-xs font-medium text-white" style={{ background: A.blue }}>查询</button>
+            <button onClick={resetFilters} className="h-8 px-3 rounded-lg text-xs font-medium" style={{ background: A.gray6, color: A.label }}>重置</button>
+            <button onClick={exportCsv} className="h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5" style={{ background: "#f0f6ff", color: A.blue }}><FileSpreadsheet size={13} /> 导出当前结果</button>
+          </div>
+        </div>
+        <div className="grid grid-cols-5 gap-3">
+          <Field label="PR 编号"><input value={filters.prNumber} onChange={(event) => updateFilter("prNumber", event.target.value)} placeholder="PR-2026" style={inputStyle} /></Field>
+          <Field label="供应商"><input value={filters.supplier} onChange={(event) => updateFilter("supplier", event.target.value)} placeholder="供应商名称" style={inputStyle} /></Field>
+          <Field label="物料 / SKU"><input value={filters.skuOrItem} onChange={(event) => updateFilter("skuOrItem", event.target.value)} placeholder="SKU 或品名" style={inputStyle} /></Field>
+          <Field label="申请人"><input value={filters.requester} onChange={(event) => updateFilter("requester", event.target.value)} placeholder="Requester" style={inputStyle} /></Field>
+          <Field label="采购负责人"><input value={filters.buyer} onChange={(event) => updateFilter("buyer", event.target.value)} placeholder="Buyer" style={inputStyle} /></Field>
+          <Field label="状态"><select value={filters.status} onChange={(event) => updateFilter("status", event.target.value as PurchaseRequestWorkbenchFilters["status"])} style={inputStyle}>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></Field>
+          <Field label="优先级"><select value={filters.priority} onChange={(event) => updateFilter("priority", event.target.value as PurchaseRequestWorkbenchFilters["priority"])} style={inputStyle}>{priorityOptions.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></Field>
+          <Field label="来源"><select value={filters.source} onChange={(event) => updateFilter("source", event.target.value)} style={inputStyle}><option value="全部">全部</option>{sourceOptions.map((source) => <option key={source} value={source}>{purchaseRequestSourceMeta(source).label}</option>)}</select></Field>
+          <Field label="需求起始"><input value={filters.requiredFrom} onChange={(event) => updateFilter("requiredFrom", event.target.value)} placeholder="2026-06-01" style={inputStyle} /></Field>
+          <Field label="需求结束"><input value={filters.requiredTo} onChange={(event) => updateFilter("requiredTo", event.target.value)} placeholder="2026-06-30" style={inputStyle} /></Field>
+        </div>
+      </Card>
 
-        <Card className="col-span-2 p-5">
-          {selected ? (
-            <>
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>采购申请详情</div>
-                  <div className="text-base font-semibold tracking-tight" style={{ color: A.label }}>{selected.pr}</div>
-                </div>
-                <PRStatusPill status={selected.status} />
-              </div>
-
-              <div className="space-y-3 pb-4 mb-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {[
-                  { label: "物料", value: `${selected.sourceSku || "—"} ${selected.sourceName || ""}` },
-                  { label: "供应商", value: selected.supplier },
-                  { label: "申请 / 采购", value: `${selected.requester} / ${selected.buyer}` },
-                  { label: "需求日期", value: selected.requiredDate },
-                  { label: "建议数量", value: `${Number(selected.quantity || 0).toLocaleString()} ${selected.unit}` },
-                  { label: "预估金额", value: fmt(selected.amount) },
-                ].map((row) => (
-                  <div key={row.label} className="flex justify-between gap-3 text-xs">
-                    <span style={{ color: A.gray1 }}>{row.label}</span>
-                    <span className="font-medium text-right" style={{ color: A.label }}>{row.value}</span>
-                  </div>
+      <Card>
+        <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
+          <div>
+            <div className="text-sm font-semibold" style={{ color: A.label }}>采购申请列表</div>
+            <div className="text-[11px] mt-0.5" style={{ color: A.sub }}>共 {requests.length} 条，当前筛选 {filtered.length} 条</div>
+          </div>
+          <span className="text-xs ml-auto flex items-center gap-1.5" style={{ color: A.gray2 }}><Filter size={13} /> 当前结果</span>
+          <ContextualImportActions entityLabel="PR" compact />
+          <button onClick={() => setNewOpen(true)} className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity" style={{ background: A.blue }}><Plus size={11} /> 新建 PR</button>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="py-12 text-center text-xs" style={{ color: A.gray2 }}>暂无采购申请。可在预测分析中生成预测补货申请。</div>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                {["PR 编号", "来源", "物料", "供应商", "申请 / 采购", "需求日期", "数量", "金额", "优先级", "状态", "操作"].map((h) => (
+                  <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
                 ))}
-              </div>
-
-              <div className="rounded-xl p-3 mb-4" style={{
-                background: supplierRecommendationResult?.needsRfq ? "#fff8f0" : "#f0faf4",
-                border: `1px solid ${supplierRecommendationResult?.needsRfq ? "rgba(255,149,0,0.16)" : "rgba(52,199,89,0.12)"}`,
-              }}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: supplierRecommendationResult?.needsRfq ? A.orange : A.green }}>
-                    <ShieldCheck size={12} /> 供应商推荐
-                  </div>
-                  {supplierRecommendationResult?.primary ? (
-                    <span className="text-xs font-semibold tabular-nums" style={{ color: supplierRecommendationResult.primary.score >= 84 ? A.green : A.orange }}>
-                      {supplierRecommendationResult.primary.score}
-                    </span>
-                  ) : (
-                    <span className="text-[10px]" style={{ color: A.gray2 }}>加载中</span>
-                  )}
-                </div>
-                {supplierRecommendationResult?.primary ? (
-                  <>
-                    <div className="flex items-center justify-between gap-3 text-xs">
-                      <span className="font-semibold truncate" style={{ color: A.label }}>{supplierRecommendationResult.primary.supplier}</span>
-                      <span style={{ color: A.sub }}>
-                        ¥{Number(supplierRecommendationResult.primary.unitPrice || 0).toLocaleString()} · {supplierRecommendationResult.primary.leadTimeDays}天
-                      </span>
-                    </div>
-                    <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{supplierRecommendationResult.primary.note}</div>
-                    <div className="grid grid-cols-3 gap-2 mt-2 text-[10px]">
-                      <div><span style={{ color: A.gray2 }}>备选</span><div className="font-medium truncate" style={{ color: A.label }}>{supplierRecommendationResult.backup?.supplier || "—"}</div></div>
-                      <div><span style={{ color: A.gray2 }}>拆单</span><div className="font-medium" style={{ color: supplierRecommendationResult.split.length ? A.blue : A.gray1 }}>{supplierRecommendationResult.split.length ? `${supplierRecommendationResult.split.length} 家` : "无需"}</div></div>
-                      <div><span style={{ color: A.gray2 }}>RFQ</span><div className="font-medium" style={{ color: supplierRecommendationResult.needsRfq ? A.orange : A.green }}>{supplierRecommendationResult.needsRfq ? "建议" : "不需要"}</div></div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 mt-2 text-[10px]">
-                      <div>
-                        <span style={{ color: A.gray2 }}>合同</span>
-                        <div className="font-medium truncate" style={{ color: supplierRecommendationResult.primary.contractId ? A.purple : A.gray1 }}>
-                          {supplierRecommendationResult.primary.contractId
-                            ? `${supplierRecommendationResult.primary.contractId} · ${Math.round(Number(supplierRecommendationResult.primary.contractDiscount || 0) * 100)}%`
-                            : "无框架"}
-                        </div>
-                      </div>
-                      <div>
-                        <span style={{ color: A.gray2 }}>币种</span>
-                        <div className="font-medium" style={{ color: supplierRecommendationResult.primary.currency && supplierRecommendationResult.primary.currency !== "CNY" ? A.orange : A.label }}>
-                          {supplierRecommendationResult.primary.currency || "CNY"}{supplierRecommendationResult.primary.currency && supplierRecommendationResult.primary.currency !== "CNY" ? ` ×${Number(supplierRecommendationResult.primary.fxRate || 1).toFixed(2)}` : ""}
-                        </div>
-                      </div>
-                      <div>
-                        <span style={{ color: A.gray2 }}>产能</span>
-                        <div className="font-medium truncate" style={{ color: supplierRecommendationResult.primary.capacityStatus === "不足" ? A.red : supplierRecommendationResult.primary.capacityStatus === "紧张" ? A.orange : A.green }}>
-                          {supplierRecommendationResult.primary.capacityStatus || "可承诺"} · {Number(supplierRecommendationResult.primary.availableCapacity || supplierRecommendationResult.primary.capacity || 0).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                    {supplierRecommendationResult.needsRfq && (
-                      <div className="mt-2 text-[10px] leading-4" style={{ color: A.orange }}>{supplierRecommendationResult.rfqReason}</div>
-                    )}
-                    <button onClick={createRfqFromSelected} disabled={creatingRfq}
-                      className="mt-2 h-7 px-2.5 rounded-md text-[11px] font-semibold text-white inline-flex items-center gap-1.5 disabled:opacity-60"
-                      style={{ background: supplierRecommendationResult.needsRfq ? A.orange : A.blue }}>
-                      {creatingRfq ? <Loader2 size={11} className="animate-spin" /> : <FileSpreadsheet size={11} />}
-                      {supplierRecommendationResult.needsRfq ? "发起 RFQ" : "替代询价"}
-                    </button>
-                  </>
-                ) : (
-                  <div className="text-[10px] leading-4" style={{ color: A.sub }}>
-                    当前 SKU 缺少报价候选，建议先维护供应商报价或发起 RFQ。
-                    <div>
-                      <button onClick={createRfqFromSelected} disabled={creatingRfq}
-                        className="mt-2 h-7 px-2.5 rounded-md text-[11px] font-semibold text-white inline-flex items-center gap-1.5 disabled:opacity-60"
-                        style={{ background: A.orange }}>
-                        {creatingRfq ? <Loader2 size={11} className="animate-spin" /> : <FileSpreadsheet size={11} />}
-                        发起 RFQ
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {selected.forecastBasis && (
-                <div className="rounded-xl p-3 mb-4" style={{
-                  background: selected.source === "inventory" ? "#fff8f0" : selected.source === "mrp-release" ? "#f5f0ff" : "#f0f6ff",
-                  border: `1px solid ${selected.source === "inventory" ? "rgba(255,149,0,0.16)" : selected.source === "mrp-release" ? "rgba(175,82,222,0.14)" : "rgba(0,113,227,0.12)"}`,
-                }}>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold mb-2" style={{ color: selected.source === "inventory" ? A.orange : selected.source === "mrp-release" ? A.purple : A.blue }}>
-                    {selected.source === "inventory" ? <Package size={12} /> : selected.source === "mrp-release" ? <GitBranch size={12} /> : <Sparkles size={12} />}
-                    {selected.source === "inventory" ? "库存控制证据" : selected.source === "mrp-release" ? "MRP 释放证据" : "预测证据"}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    {(selected.source === "inventory" ? [
-                      ["可用库存", `${Number(selected.forecastBasis.projectedAvailable || 0).toLocaleString()} ${selected.unit}`],
-                      ["再订货点 ROP", `${Number(selected.forecastBasis.reorderPoint || 0).toLocaleString()} ${selected.unit}`],
-                      ["覆盖天数", `${selected.forecastBasis.daysCover ?? "—"} 天`],
-                      ["提前期 / MOQ", `${selected.forecastBasis.leadTimeDays ?? "—"} 天 / ${selected.forecastBasis.moq ?? "—"}`],
-                    ] : selected.source === "mrp-release" ? [
-                      ["计划入库", `${Number(selected.forecastBasis.plannedReceipt || 0).toLocaleString()} ${selected.unit}`],
-                      ["计划释放期", selected.forecastBasis.plannedReleasePeriod || "—"],
-                      ["最大净需求", `${Number(selected.forecastBasis.peakGap || 0).toLocaleString()} ${selected.unit}`],
-                      ["例外 / 服务水平", `${selected.forecastBasis.mrpException || "—"} / ${selected.forecastBasis.serviceLevel || "—"}%`],
-                    ] : [
-                      ["峰值缺口", `${Number(selected.forecastBasis.peakGap || 0).toLocaleString()} ${selected.unit}`],
-                      ["服务水平", `${selected.forecastBasis.serviceLevel || "—"}%`],
-                      ["安全系数", `${Math.round(Number(selected.forecastBasis.safetyFactor || 1) * 100)}%`],
-                      ["首个断货月", selected.forecastBasis.firstStockoutMonth || "—"],
-                    ]).map(([label, value]) => (
-                      <div key={label}>
-                        <div style={{ color: A.gray2 }}>{label}</div>
-                        <div className="font-medium mt-0.5" style={{ color: A.label }}>{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {selected.source === "mrp-release" && selected.forecastBasis.bomSourceSummary && (
-                    <div className="mt-2 rounded-lg p-2 text-[10px] leading-4" style={{ background: "rgba(175,82,222,0.08)", color: A.sub }}>
-                      <span className="font-semibold" style={{ color: A.purple }}>BOM 来源：</span>
-                      {selected.forecastBasis.bomSourceSummary}
-                    </div>
-                  )}
-                  <div className="mt-2 text-[10px] leading-4" style={{ color: A.sub }}>{selected.reason}</div>
-                </div>
-              )}
-
-              {selected.approvalSnapshot && (
-                <div className="rounded-xl p-3 mb-4" style={{ background: A.gray6, border: "1px solid rgba(0,0,0,0.05)" }}>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold mb-2" style={{ color: A.label }}>
-                    <FileCheck2 size={12} /> 审批快照
-                  </div>
-                  <div className="text-xs font-semibold leading-5" style={{ color: A.label }}>
-                    {selected.approvalSnapshot.summary || "已锁定本次申请依据"}
-                  </div>
-                  {selected.approvalSnapshot.explanation && (
-                    <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{selected.approvalSnapshot.explanation}</div>
-                  )}
-                  <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]">
-                    {[
-                      ["来源", selected.approvalSnapshot.source || selected.source],
-                      ["供应商", String((selected.approvalSnapshot.supplier as any)?.name || selected.supplier || "—")],
-                      ["评分", String((selected.approvalSnapshot.supplier as any)?.score || (selected.approvalSnapshot.supplier as any)?.grade || "—")],
-                      ["快照时间", selected.approvalSnapshot.createdAt ? new Date(selected.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—"],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <div style={{ color: A.gray2 }}>{label}</div>
-                        <div className="font-medium truncate" style={{ color: A.label }}>{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {Array.isArray((selected.approvalSnapshot.mrp as any)?.bomSources) && (selected.approvalSnapshot.mrp as any).bomSources.length > 0 && (
-                    <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
-                      <div className="text-[10px] font-semibold mb-1.5" style={{ color: A.purple }}>BOM 展开证据</div>
-                      <div className="space-y-1.5">
-                        {((selected.approvalSnapshot.mrp as any).bomSources as any[]).slice(0, 4).map((source, index) => (
-                          <div key={`${source.parent || index}-${source.top || index}`} className="flex items-center justify-between gap-3 text-[10px]">
-                            <span className="truncate" style={{ color: A.sub }}>
-                              L{source.level || 1} · {source.parentName || source.parent || "父项"}{source.topName ? ` / ${source.topName}` : ""}
-                            </span>
-                            <span className="font-semibold tabular-nums" style={{ color: A.label }}>
-                              {Number(source.demand || 0).toLocaleString()} {selected.unit}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {Array.isArray((selected.approvalSnapshot.mrp as any)?.schedule) && (selected.approvalSnapshot.mrp as any).schedule.length > 0 && (
-                    <div className="mt-3 pt-3" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
-                      <div className="text-[10px] font-semibold mb-1.5" style={{ color: A.label }}>MRP 分期证据</div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {((selected.approvalSnapshot.mrp as any).schedule as any[]).slice(0, 3).map((line) => (
-                          <div key={line.period} className="rounded-lg px-2 py-1.5" style={{ background: A.white }}>
-                            <div className="text-[9px]" style={{ color: A.gray2 }}>{line.period}</div>
-                            <div className="text-[10px] font-semibold" style={{ color: A.label }}>
-                              BOM {Number(line.dependentDemand || 0).toLocaleString()} / 入库 {Number(line.plannedReceipt || 0).toLocaleString()}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <DocumentHistoryPanel
-                entityType="purchaseRequest"
-                entityId={selected.pr}
-                title="审批历史"
-                refreshKey={selected.lastAuditId || selected.auditTrailIds?.join(",") || selected.status}
-              />
-
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => setDetailOpen(true)}
-                  className="h-8 px-3 rounded-lg text-xs font-semibold"
-                  style={{ background: "#f0f6ff", color: A.blue }}>
-                  查看详情
-                </button>
-                {selected.status === "待审批" && (
-                  <>
-                    <button onClick={() => approveRequest(selected.pr)}
-                      className="h-8 px-3 rounded-lg text-xs font-semibold text-white" style={{ background: A.blue }}>
-                      批准申请
-                    </button>
-                    <button onClick={() => rejectRequest(selected.pr)}
-                      className="h-8 px-3 rounded-lg text-xs font-semibold" style={{ background: "#fff1f0", color: A.red }}>
-                      驳回
-                    </button>
-                  </>
-                )}
-                {selected.status === "已批准" && (
-                  <button onClick={() => convertRequest(selected.pr)}
-                    className="h-8 px-3 rounded-lg text-xs font-semibold text-white" style={{ background: A.green }}>
-                    转采购订单
-                  </button>
-                )}
-                {selected.linkedPo && (
-                  <span className="h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center"
-                    style={{ background: "#f0faf4", color: A.green }}>
-                    已生成 {selected.linkedPo}
-                  </span>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="py-16 text-center text-xs" style={{ color: A.gray2 }}>选择一张采购申请查看详情</div>
-          )}
-        </Card>
-      </div>
-      <Modal open={detailOpen && Boolean(selected)} onClose={() => setDetailOpen(false)} width={920}
-        title="采购申请" subtitle="PR · ERP document form">
-        {selected && (
-          <DocumentShell
-            title="采购申请"
-            documentNo={selected.pr}
-            moduleLabel="采购申请 / PR"
-            status={selected.status}
-            subtitle={`${selected.requester} → ${selected.buyer} · ${selected.sourceSku || "—"}`}
-          >
-            <DocumentHeader
-              fields={[
-                { label: "PR编号", value: selected.pr },
-                { label: "申请人", value: selected.requester },
-                { label: "采购负责人", value: selected.buyer },
-                { label: "需求日期", value: selected.requiredDate },
-                { label: "优先级", value: selected.priority, tone: selected.priority === "高" ? "danger" : selected.priority === "中" ? "warning" : "success" },
-                { label: "状态", value: selected.status, tone: statusTone(selected.status) },
-                { label: "供应商", value: selected.supplier || "—" },
-                { label: "来源", value: purchaseRequestSourceMeta(selected.source).label },
-                { label: "来源 SKU", value: selected.sourceSku || "—", helper: selected.sourceName },
-                { label: "数量", value: `${Number(selected.quantity || 0).toLocaleString()} ${selected.unit}` },
-                { label: "单价", value: fmt(selected.unitPrice || 0) },
-                { label: "金额", value: fmt(selected.amount || 0), tone: "info" },
-              ]}
-            />
-            <DocumentStatusTimeline steps={prTimeline(selected)} />
-            <DocumentLinesTable
-              rows={[{
-                id: selected.pr,
-                sku: selected.sourceSku || "—",
-                name: selected.sourceName || "采购申请物料",
-                quantity: selected.quantity,
-                unit: selected.unit,
-                unitPrice: selected.unitPrice,
-                amount: selected.amount,
-                supplier: selected.supplier,
-                reason: selected.reason,
-              }]}
-              columns={[
-                { key: "sku", label: "SKU", render: (line) => <span style={{ color: A.blue }}>{String(line.sku)}</span> },
-                { key: "name", label: "品名" },
-                { key: "quantity", label: "数量", align: "right", render: (line) => Number(line.quantity || 0).toLocaleString() },
-                { key: "unit", label: "单位" },
-                { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
-                { key: "amount", label: "金额", align: "right", render: (line) => fmt(Number(line.amount || 0)) },
-                { key: "supplier", label: "建议供应商" },
-                { key: "reason", label: "备注" },
-              ]}
-            />
-            <DocumentTotals
-              totals={[
-                { label: "申请数量", value: `${Number(selected.quantity || 0).toLocaleString()} ${selected.unit}` },
-                { label: "申请金额", value: fmt(selected.amount || 0), tone: "info" },
-                { label: "推荐单价", value: fmt(selected.unitPrice || 0) },
-                { label: "后续 PO", value: selected.linkedPo || purchaseOrders.find((order) => order.sourceRequest === selected.pr)?.po || "—" },
-              ]}
-            />
-            <DocumentEvidencePanel
-              linkedDocuments={[
-                ...(selected.linkedPo ? [{ label: "PO / 采购订单", value: selected.linkedPo, moduleId: "purchasing", tone: "success" as const }] : []),
-                ...purchaseOrders.filter((order) => order.sourceRequest === selected.pr).slice(0, 2).map((order) => ({ label: "PO / 采购订单", value: order.po, moduleId: "purchasing", tone: statusTone(order.status) })),
-                ...(selected.source === "forecast" || selected.source === "mrp-release" ? [{ label: "预测与 MRP", value: selected.source, moduleId: "forecast", tone: "info" as const }] : []),
-                ...(selected.source === "inventory" ? [{ label: "库存补货证据", value: selected.sourceSku || selected.source, moduleId: "inventory", tone: "warning" as const }] : []),
-              ]}
-              provenance={selected.approvalSnapshot?.source || selected.source}
-              notes={selected.reason || selected.approvalSnapshot?.summary}
-              evidence={[
-                { label: "来源", value: purchaseRequestSourceMeta(selected.source).label },
-                { label: "审批快照", value: selected.approvalSnapshot?.createdAt ? new Date(selected.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—" },
-                { label: "推荐供应商", value: supplierRecommendationResult?.primary?.supplier || selected.supplier || "—" },
-                { label: "推荐评分", value: supplierRecommendationResult?.primary?.score || "—" },
-                { label: "RFQ / 计划证据", value: supplierRecommendationResult?.needsRfq ? "建议 RFQ" : selected.forecastBasis ? "已有计划证据" : "可直接采购", tone: supplierRecommendationResult?.needsRfq ? "warning" : "success" },
-                { label: "状态", value: selected.status, tone: statusTone(selected.status) },
-              ]}
-            />
-            <DocumentActionBar>
-              {selected.status === "待审批" && <button onClick={() => approveRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>批准申请</button>}
-              {selected.status === "待审批" && <button onClick={() => rejectRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>}
-              {selected.status === "已批准" && <button onClick={() => convertRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>转采购订单</button>}
-              <button onClick={() => exportPurchaseRequestDetail(selected)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
-              <button onClick={() => setDetailOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
-            </DocumentActionBar>
-          </DocumentShell>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((item, idx) => {
+                const sourceMeta = purchaseRequestSourceMeta(item.source);
+                const SourceIcon = sourceMeta.icon;
+                return (
+                  <tr key={item.pr} className="hover:bg-blue-50/40 transition-colors" style={{ borderBottom: idx < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                    <td className="px-4 py-3 font-medium"><button onClick={() => openDetail(item.pr)} className="hover:underline" style={{ color: A.blue }}>{item.pr}</button></td>
+                    <td className="px-4 py-3"><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: sourceMeta.bg, color: sourceMeta.color }}><SourceIcon size={10} />{sourceMeta.label}</span></td>
+                    <td className="px-4 py-3"><div className="font-medium" style={{ color: A.label }}>{item.sourceSku || "—"}</div><div className="text-[10px] mt-0.5 truncate max-w-36" style={{ color: A.gray2 }}>{item.sourceName}</div></td>
+                    <td className="px-4 py-3" style={{ color: A.label }}>{item.supplier}</td>
+                    <td className="px-4 py-3" style={{ color: A.sub }}>{item.requester} / {item.buyer}</td>
+                    <td className="px-4 py-3" style={{ color: A.sub }}>{item.requiredDate}</td>
+                    <td className="px-4 py-3 tabular-nums" style={{ color: A.sub }}>{Number(item.quantity || 0).toLocaleString()} {item.unit}</td>
+                    <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(item.amount)}</td>
+                    <td className="px-4 py-3" style={{ color: item.priority === "高" ? A.red : item.priority === "中" ? A.orange : A.green }}>{item.priority}</td>
+                    <td className="px-4 py-3"><PRStatusPill status={item.status} /></td>
+                    <td className="px-4 py-3"><button onClick={() => openDetail(item.pr)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
-      </Modal>
+      </Card>
       <NewPRModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={createManualRequest} />
     </div>
   );

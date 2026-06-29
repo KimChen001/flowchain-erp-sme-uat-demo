@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  AlertCircle, Camera, Calendar, Check, CheckCircle2, Clock, DollarSign, Eye, FileCheck2, FileSpreadsheet,
-  FileText, Filter, Hash, Lock, PackageCheck, Plus, Printer, Send, Sparkles, Trash2, Truck,
-  User, X, XCircle,
+  AlertCircle, CheckCircle2, FileSpreadsheet,
+  FileText, Filter, Plus, Sparkles, Truck,
 } from "lucide-react";
 import {
   Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -15,7 +14,7 @@ import { procurementTrend, purchaseOrders, receivingDocs, SUPPLIER_INVOICES } fr
 import type { POStatus, PurchaseOrder, ReceivingDoc, ReceivingDocLine } from "../../types/scm";
 import {
   A, AppleTooltip, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard,
-  Modal, SectionHeader, SegmentedControl,
+  SectionHeader,
 } from "../../components/ui";
 import {
   DocumentActionBar,
@@ -32,14 +31,17 @@ import ContextualImportActions from "../../components/import/ContextualImportAct
 import { NewPOModal } from "./components/NewPOModal";
 import { POStatusPill } from "./components/POStatusPill";
 import { TrackShipmentModal } from "./components/TrackShipmentModal";
-import { lineRemaining, lineStatusLabel, lineStatusStyle, poLinesOf, poTotals, toNumber } from "../../domain/purchasing/helpers";
+import { lineStatusLabel, poLinesOf, poTotals, toNumber } from "../../domain/purchasing/helpers";
 import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
 import { getPoLinkedDocuments } from "../../domain/procurement/document-links";
+import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   defaultPurchaseOrderWorkbenchFilters,
   filterPurchaseOrdersForWorkbench,
   type PurchaseOrderWorkbenchFilters,
 } from "./filters";
+
+type PurchaseOrderViewMode = "list" | "detail";
 
 function poTimeline(po: PurchaseOrder): TimelineStep[] {
   const cancelled = po.status === "已取消" || po.status === "已驳回";
@@ -94,14 +96,18 @@ function exportPoDetail(po: PurchaseOrder) {
   toast.success("采购订单详情 CSV 已导出");
 }
 
-export default function PurchasingOrdersPage() {
+export default function PurchasingOrdersPage({
+  onActiveContextChange,
+}: {
+  onActiveContextChange?: (context: ActiveContext | null) => void;
+}) {
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<PurchaseOrderWorkbenchFilters>(defaultPurchaseOrderWorkbenchFilters);
   const [selectedId, setSelectedId] = useState(purchaseOrders[0]?.po ?? "");
+  const [viewMode, setViewMode] = useState<PurchaseOrderViewMode>("list");
   const [newOpen, setNewOpen] = useState(false);
   const [trackOpen, setTrackOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -119,7 +125,7 @@ export default function PurchasingOrdersPage() {
   const filtered = filterPurchaseOrdersForWorkbench(orders, filters);
   const sourceOptions = Array.from(new Set(orders.map((order) => order.source || "manual"))).sort();
   const statusOptions = ["全部", "草稿", "待审批", "已审批", "已发出", "部分到货", "已完成", "已驳回", "已取消"] as const;
-  const selectedPO = filtered.find((o) => o.po === selectedId) ?? filtered[0] ?? null;
+  const selectedPO = orders.find((o) => o.po === selectedId) ?? filtered[0] ?? orders[0] ?? null;
   const selectedPOLines = poLinesOf(selectedPO);
   const selectedPOTotals = poTotals(selectedPO);
 
@@ -132,6 +138,21 @@ export default function PurchasingOrdersPage() {
       setSelectedId(filtered[0].po);
     }
   }, [filtered, selectedId]);
+
+  useEffect(() => {
+    if (viewMode !== "detail" || !selectedPO) {
+      onActiveContextChange?.(null);
+      return;
+    }
+    onActiveContextChange?.({
+      module: "procurement",
+      entityType: "purchase_order",
+      entityId: selectedPO.po,
+      entityLabel: `${selectedPO.po} · ${selectedPO.supplier}`,
+      view: "orders",
+    });
+    return () => onActiveContextChange?.(null);
+  }, [viewMode, selectedPO?.po, selectedPO?.supplier, onActiveContextChange]);
 
   const totalAmount   = orders.reduce((s, o) => s + o.amount, 0);
   const pendingApprov = orders.filter((o) => o.status === "待审批").length;
@@ -185,6 +206,13 @@ export default function PurchasingOrdersPage() {
   function resetFilters() {
     setFilters(defaultPurchaseOrderWorkbenchFilters);
   }
+  function openDetail(poId: string) {
+    setSelectedId(poId);
+    setViewMode("detail");
+  }
+  function returnToList() {
+    setViewMode("list");
+  }
   function exportCsv() {
     if (filtered.length === 0) {
       toast.warning("暂无可导出的数据");
@@ -211,6 +239,123 @@ export default function PurchasingOrdersPage() {
       };
     }));
     toast.success("导出文件已生成");
+  }
+
+  const detailContent = selectedPO && (
+    <DocumentShell
+      title="采购订单"
+      documentNo={selectedPO.po}
+      moduleLabel="采购"
+      status={selectedPO.status}
+      subtitle={`${selectedPO.supplier} · ETA ${selectedPO.eta}`}
+    >
+      <DocumentHeader
+        fields={[
+          { label: "PO编号", value: selectedPO.po },
+          { label: "供应商", value: selectedPO.supplier },
+          { label: "创建日期", value: selectedPO.created },
+          { label: "ETA", value: selectedPO.eta },
+          { label: "采购负责人", value: selectedPO.owner },
+          { label: "优先级", value: selectedPO.priority, tone: selectedPO.priority === "高" ? "danger" : selectedPO.priority === "中" ? "warning" : "success" },
+          { label: "状态", value: selectedPO.status, tone: statusTone(selectedPO.status) },
+          { label: "来源类型", value: selectedPO.source || "manual" },
+          { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
+          { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
+          { label: "来源 SKU", value: selectedPO.sourceSku || "—", helper: selectedPO.sourceName },
+          { label: "金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
+        ]}
+      />
+      <DocumentStatusTimeline steps={poTimeline(selectedPO)} />
+      <DocumentLinesTable
+        rows={selectedPOLines.length ? selectedPOLines : [{
+          poLineId: `${selectedPO.po}-SUMMARY`,
+          sku: selectedPO.sourceSku || "SUMMARY",
+          itemName: selectedPO.sourceName || "采购订单汇总行",
+          quantityOrdered: selectedPO.recommendedQty || selectedPO.items || 0,
+          quantityReceived: selectedPO.received || 0,
+          quantityAccepted: selectedPO.received || 0,
+          quantityRejected: 0,
+          unit: selectedPO.unit || "行",
+          unitPrice: selectedPO.unitPrice || selectedPO.amount,
+          currency: selectedPO.currency || "CNY",
+        }]}
+        columns={[
+          { key: "poLineId", label: "行号", render: (line) => <span style={{ color: A.blue }}>{String(line.poLineId)}</span> },
+          { key: "sku", label: "SKU" },
+          { key: "itemName", label: "品名" },
+          { key: "quantityOrdered", label: "订单数量", align: "right", render: (line) => Number(line.quantityOrdered || 0).toLocaleString() },
+          { key: "unit", label: "单位" },
+          { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+          { key: "quantityReceived", label: "已收货数量", align: "right", render: (line) => Number(line.quantityReceived || 0).toLocaleString() },
+          { key: "quantityRejected", label: "拒收数量", align: "right", render: (line) => Number(line.quantityRejected || 0).toLocaleString() },
+          { key: "warehouseId", label: "仓库", render: (line) => String(line.warehouseId || selectedPO.warehouseId || "MAIN") },
+          { key: "status", label: "状态", render: (line) => String(line.status || lineStatusLabel(line.status)) },
+        ]}
+      />
+      <DocumentTotals
+        totals={[
+          { label: "采购金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
+          { label: "订单数量", value: selectedPOTotals.totalOrderedQty.toLocaleString() },
+          { label: "已收货数量", value: selectedPOTotals.totalReceivedQty.toLocaleString(), tone: selectedPOTotals.totalReceivedQty ? "success" : "neutral" },
+          { label: "未收货数量", value: Math.max(0, selectedPOTotals.totalOrderedQty - selectedPOTotals.totalReceivedQty).toLocaleString(), tone: selectedPOTotals.totalOrderedQty > selectedPOTotals.totalReceivedQty ? "warning" : "success" },
+          { label: "收货进度", value: `${selectedPOTotals.totalOrderedQty ? Math.round((selectedPOTotals.totalReceivedQty / selectedPOTotals.totalOrderedQty) * 100) : 0}%` },
+        ]}
+        columns={5}
+      />
+      <DocumentEvidencePanel
+        linkedDocuments={getPoLinkedDocuments(selectedPO, SUPPLIER_INVOICES, receivingDocs)}
+        provenance={selectedPO.source || "manual"}
+        notes={selectedPO.reason || selectedPO.approvalSnapshot?.summary || "采购订单详情用于审批、收货和供应商协同复核。"}
+        evidence={[
+          { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
+          { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
+          { label: "审批快照", value: selectedPO.approvalSnapshot?.createdAt ? new Date(selectedPO.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—" },
+          { label: "关联 GRN", value: receivingDocs.filter((item) => item.po === selectedPO.po).length },
+          { label: "关联发票", value: SUPPLIER_INVOICES.filter((item) => item.relatedPo === selectedPO.po).length },
+          { label: "付款状态", value: selectedPO.paid ? "已付款" : "未付款", tone: selectedPO.paid ? "success" : "warning" },
+        ]}
+      />
+      <DocumentHistoryPanel
+        entityType="purchaseOrder"
+        entityId={selectedPO.po}
+        title="订单状态历史"
+        refreshKey={selectedPO.lastAuditId || selectedPO.auditTrailIds?.join(",") || selectedPO.status}
+      />
+      <DocumentActionBar>
+        <button onClick={returnToList} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>返回列表</button>
+        {selectedPO.status === "待审批" && <button onClick={() => approve(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>审批订单</button>}
+        {selectedPO.status === "待审批" && <button onClick={() => reject(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>}
+        {selectedPO.status === "已审批" && <button onClick={() => send(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>下发至供应商</button>}
+        {(selectedPO.status === "已发出" || selectedPO.status === "部分到货" || selectedPO.status === "已完成") && <button onClick={() => setTrackOpen(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>跟踪发货</button>}
+        {!["已完成", "已取消"].includes(selectedPO.status) && <button onClick={() => cancel(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>取消订单</button>}
+        <button onClick={() => toast("发票协同位于采购管理", { description: "请打开采购管理的发票协同视图查看关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票协同</button>
+        <button onClick={() => exportPoDetail(selectedPO)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
+      </DocumentActionBar>
+    </DocumentShell>
+  );
+
+  if (viewMode === "detail") {
+    return (
+      <div className="space-y-5">
+        {selectedPO ? detailContent : (
+          <Card className="p-8 text-center text-xs" style={{ color: A.gray2 }}>
+            未找到采购订单。
+            <button onClick={returnToList} className="ml-3 px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.blue }}>返回列表</button>
+          </Card>
+        )}
+        <NewPOModal open={newOpen} onClose={() => setNewOpen(false)}
+          onCreate={async (po) => {
+            const created = await apiJson<PurchaseOrder>("/api/purchase-orders", {
+              method: "POST",
+              body: JSON.stringify(po),
+            });
+            setOrders((arr) => [created, ...arr]);
+            setSelectedId(created.po);
+            return created;
+          }} />
+        <TrackShipmentModal open={trackOpen} onClose={() => setTrackOpen(false)} po={selectedPO} />
+      </div>
+    );
   }
 
   return (
@@ -359,296 +504,83 @@ export default function PurchasingOrdersPage() {
         </div>
       </Card>
 
-      {/* PO Table + Detail */}
-      <div className="grid grid-cols-5 gap-3">
-        <Card className="col-span-3">
-          <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
-            <div>
-              <div className="text-sm font-semibold" style={{ color: A.label }}>采购订单列表</div>
-              <div className="text-[11px] mt-0.5" style={{ color: A.sub }}>共 {orders.length} 条，当前筛选 {filtered.length} 条</div>
-            </div>
-            <span className="text-xs ml-auto flex items-center gap-1.5" style={{ color: A.gray2 }}>
-              <Filter size={13} /> 当前结果
-            </span>
-            <ContextualImportActions entityLabel="PO" compact />
-            <button onClick={() => setNewOpen(true)}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
-              style={{ background: A.blue }}>
-              <Plus size={11} /> 新建 PO
-            </button>
+      <Card>
+        <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
+          <div>
+            <div className="text-sm font-semibold" style={{ color: A.label }}>采购订单列表</div>
+            <div className="text-[11px] mt-0.5" style={{ color: A.sub }}>共 {orders.length} 条，当前筛选 {filtered.length} 条</div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                  {["PO 编号", "供应商", "来源", "金额", "项目", "到货进度", "ETA", "状态"].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((o, i) => {
-                  const totals = poTotals(o);
-                  const pct = totals.totalOrderedQty === 0 ? 0 : (totals.totalReceivedQty / totals.totalOrderedQty) * 100;
-                  const isSel = selectedPO?.po === o.po;
-                  return (
-                    <tr key={o.po} onClick={() => setSelectedId(o.po)}
-                      className="cursor-pointer transition-colors hover:bg-blue-50/40"
-                      style={{
-                        borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none",
-                        background: isSel ? "rgba(0,113,227,0.06)" : "transparent",
-                      }}>
-                      <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>{o.po}</td>
-                      <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{o.supplier}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
-                          style={{ background: o.source === "forecast" ? "#f0f6ff" : A.gray6, color: o.source === "forecast" ? A.blue : A.gray1 }}>
-                          {o.source === "forecast" ? <Sparkles size={10} /> : <FileText size={10} />}
-                          {o.source === "forecast" ? "预测" : "手工"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(o.amount)}</td>
-                      <td className="px-4 py-3" style={{ color: A.sub }}>{totals.lineCount}</td>
-                      <td className="px-4 py-3 w-28">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? A.green : pct > 0 ? A.teal : A.gray4 }} />
-                          </div>
-                          <span className="text-[10px] w-12 text-right" style={{ color: A.gray1 }}>{totals.totalReceivedQty}/{totals.totalOrderedQty}</span>
+          <span className="text-xs ml-auto flex items-center gap-1.5" style={{ color: A.gray2 }}>
+            <Filter size={13} /> 当前结果
+          </span>
+          <ContextualImportActions entityLabel="PO" compact />
+          <button onClick={() => setNewOpen(true)}
+            className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
+            style={{ background: A.blue }}>
+            <Plus size={11} /> 新建 PO
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
+                {["PO 编号", "供应商", "来源", "金额", "项目", "到货进度", "ETA", "状态", "操作"].map((h) => (
+                  <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((o, i) => {
+                const totals = poTotals(o);
+                const pct = totals.totalOrderedQty === 0 ? 0 : (totals.totalReceivedQty / totals.totalOrderedQty) * 100;
+                return (
+                  <tr key={o.po}
+                    className="transition-colors hover:bg-blue-50/40"
+                    style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                    <td className="px-4 py-3 font-medium">
+                      <button onClick={() => openDetail(o.po)} className="hover:underline" style={{ color: A.blue }}>{o.po}</button>
+                    </td>
+                    <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{o.supplier}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                        style={{ background: o.source === "forecast" ? "#f0f6ff" : A.gray6, color: o.source === "forecast" ? A.blue : A.gray1 }}>
+                        {o.source === "forecast" ? <Sparkles size={10} /> : <FileText size={10} />}
+                        {o.source === "forecast" ? "预测" : "手工"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{fmt(o.amount)}</td>
+                    <td className="px-4 py-3" style={{ color: A.sub }}>{totals.lineCount}</td>
+                    <td className="px-4 py-3 w-28">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? A.green : pct > 0 ? A.teal : A.gray4 }} />
                         </div>
-                      </td>
-                      <td className="px-4 py-3" style={{ color: A.sub }}>{o.eta}</td>
-                      <td className="px-4 py-3"><POStatusPill status={o.status} /></td>
-                    </tr>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-xs" style={{ color: A.gray2 }}>
-                      当前条件下暂无采购订单
+                        <span className="text-[10px] w-12 text-right" style={{ color: A.gray1 }}>{totals.totalReceivedQty}/{totals.totalOrderedQty}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3" style={{ color: A.sub }}>{o.eta}</td>
+                    <td className="px-4 py-3"><POStatusPill status={o.status} /></td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => openDetail(o.po)}
+                        className="px-2 py-1 text-[11px] font-medium rounded-md"
+                        style={{ background: "#f0f6ff", color: A.blue }}>
+                        查看详情
+                      </button>
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        {/* PO Detail */}
-        <Card className="col-span-2 p-5">
-          {!selectedPO ? (
-            <div className="py-16 text-center text-xs" style={{ color: A.gray2 }}>
-              暂无采购订单。可从采购申请批准后转为 PO，或手工新建订单。
-            </div>
-          ) : (
-            <>
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>采购订单详情</div>
-              <div className="text-base font-semibold tracking-tight" style={{ color: A.label }}>{selectedPO.po}</div>
-            </div>
-            <POStatusPill status={selectedPO.status} />
-          </div>
-
-          <div className="space-y-3 pb-4 mb-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-            {[
-              { icon: Truck,    label: "供应商", value: selectedPO.supplier },
-              { icon: User,     label: "负责人", value: selectedPO.owner    },
-              { icon: Calendar, label: "下单 / ETA", value: `${selectedPO.created} → ${selectedPO.eta}` },
-              { icon: Hash,     label: "明细行 / 数量", value: `${selectedPOTotals.lineCount} 行 / ${selectedPOTotals.totalOrderedQty.toLocaleString()} ${selectedPOLines[0]?.unit || ""}` },
-              { icon: PackageCheck, label: "已收 / 合格", value: `${selectedPOTotals.totalReceivedQty.toLocaleString()} / ${selectedPOTotals.totalAcceptedQty.toLocaleString()}` },
-              { icon: DollarSign, label: "订单金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount) },
-            ].map((row) => {
-              const Icon = row.icon;
-              return (
-                <div key={row.label} className="flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ background: A.gray6 }}>
-                    <Icon size={11} style={{ color: A.gray1 }} />
-                  </div>
-                  <span className="text-[11px] w-20" style={{ color: A.gray1 }}>{row.label}</span>
-                  <span className="text-xs font-medium ml-auto" style={{ color: A.label }}>{row.value}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mb-4 pb-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: A.gray2 }}>PO Lines</div>
-              <span className="text-[10px]" style={{ color: A.gray2 }}>
-                items = 明细行数 · 数量看 totalOrderedQty
-              </span>
-            </div>
-            <div className="space-y-2 max-h-72 overflow-auto pr-1">
-              {selectedPOLines.map((line) => {
-                const style = lineStatusStyle(line.status);
-                return (
-                  <div key={line.poLineId} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-[10px] font-semibold truncate" style={{ color: A.blue }}>{line.poLineId}</span>
-                      <span className="text-[10px] px-1.5 py-px rounded-full font-medium shrink-0" style={{ color: style.color, background: style.bg }}>
-                        {lineStatusLabel(line.status)}
-                      </span>
-                    </div>
-                    <div className="text-xs font-semibold truncate" style={{ color: A.label }}>
-                      {line.sku} · {line.itemName}
-                    </div>
-                    <div className="grid grid-cols-4 gap-1.5 mt-2">
-                      {[
-                        ["订购", line.quantityOrdered],
-                        ["已收", line.quantityReceived],
-                        ["合格", line.quantityAccepted],
-                        ["拒收", line.quantityRejected],
-                      ].map(([label, value]) => (
-                        <div key={label as string} className="rounded-lg px-2 py-1.5" style={{ background: A.white }}>
-                          <div className="text-[9px]" style={{ color: A.gray2 }}>{label}</div>
-                          <div className="text-[11px] font-semibold tabular-nums" style={{ color: A.label }}>
-                            {Number(value).toLocaleString()} {line.unit}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]" style={{ color: A.sub }}>
-                      <span>单价 {line.currency} {toNumber(line.unitPrice).toLocaleString()}</span>
-                      <span className="text-right">仓库 {line.warehouseId || "MAIN"}</span>
-                    </div>
-                  </div>
                 );
               })}
-              {selectedPOLines.length === 0 && (
-                <div className="rounded-xl p-4 text-center text-xs" style={{ background: A.gray6, color: A.gray2 }}>
-                  该订单暂无明细行，已保留原有头信息展示。
-                </div>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-12 text-center text-xs" style={{ color: A.gray2 }}>
+                    当前条件下暂无采购订单
+                  </td>
+                </tr>
               )}
-            </div>
-          </div>
-
-          {["forecast", "purchase-request", "rfq-award"].includes(selectedPO.source || "") && (
-            <div className="rounded-xl p-3 mb-4" style={{ background: "#f0f6ff", border: "1px solid rgba(0,113,227,0.12)" }}>
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold mb-2" style={{ color: A.blue }}>
-                <Sparkles size={12} /> {selectedPO.source === "rfq-award" ? "RFQ 授标依据" : selectedPO.source === "purchase-request" ? "采购申请依据" : "预测生成依据"}
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                {[
-                  ...(selectedPO.sourceRequest ? [["来源申请", selectedPO.sourceRequest]] : []),
-                  ...(selectedPO.sourceRfq ? [["来源 RFQ", selectedPO.sourceRfq]] : []),
-                  ["SKU", `${selectedPO.sourceSku || "—"} ${selectedPO.sourceName || ""}`],
-                  ["建议数量", `${Number(selectedPO.recommendedQty || 0).toLocaleString()} ${selectedPO.unit || ""}`],
-                  ["单价", selectedPO.unitPrice ? fmt(selectedPO.unitPrice) : "—"],
-                  ["原因", selectedPO.reason || "预测净缺口触发"],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <div style={{ color: A.gray2 }}>{label}</div>
-                    <div className="font-medium mt-0.5" style={{ color: A.label }}>{value}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {selectedPO.approvalSnapshot && (
-            <div className="rounded-xl p-3 mb-4" style={{ background: A.gray6, border: "1px solid rgba(0,0,0,0.05)" }}>
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold mb-2" style={{ color: A.label }}>
-                <FileCheck2 size={12} /> 继承审批快照
-              </div>
-              <div className="text-xs font-semibold leading-5" style={{ color: A.label }}>
-                {selectedPO.approvalSnapshot.summary || selectedPO.reason || "已继承采购申请审批依据"}
-              </div>
-              {selectedPO.approvalSnapshot.explanation && (
-                <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{selectedPO.approvalSnapshot.explanation}</div>
-              )}
-              <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]">
-                {[
-                  ["来源", selectedPO.approvalSnapshot.source || selectedPO.source || "—"],
-                  ["来源申请", selectedPO.sourceRequest || "—"],
-                  ["供应商", String((selectedPO.approvalSnapshot.supplier as any)?.name || selectedPO.supplier || "—")],
-                  ["快照时间", selectedPO.approvalSnapshot.createdAt ? new Date(selectedPO.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—"],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <div style={{ color: A.gray2 }}>{label}</div>
-                    <div className="font-medium truncate" style={{ color: A.label }}>{value}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <DocumentHistoryPanel
-            entityType="purchaseOrder"
-            entityId={selectedPO.po}
-            title="订单状态历史"
-            refreshKey={selectedPO.lastAuditId || selectedPO.auditTrailIds?.join(",") || selectedPO.status}
-          />
-
-          {/* Timeline */}
-          <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: A.gray2 }}>流程进度</div>
-          <div className="space-y-3">
-            {[
-              { step: "创建",     done: true,                                                  date: selectedPO.created },
-              { step: "审批",     done: !["草稿","待审批"].includes(selectedPO.status),         date: selectedPO.status === "待审批" ? "等待中" : "5月26日" },
-              { step: "下发",     done: !["草稿","待审批","已审批"].includes(selectedPO.status), date: ["已发出","部分到货","已完成"].includes(selectedPO.status) ? "5月26日" : "—" },
-              { step: "收货",     done: ["部分到货","已完成"].includes(selectedPO.status),       date: selectedPO.received > 0 ? "进行中" : "—" },
-              { step: "对账付款", done: selectedPO.paid,                                       date: selectedPO.paid ? "已完成" : "—" },
-            ].map((t, idx, arr) => (
-              <div key={t.step} className="flex items-start gap-3">
-                <div className="flex flex-col items-center">
-                  <div className="w-4 h-4 rounded-full flex items-center justify-center"
-                    style={{ background: t.done ? A.green : A.gray5, color: A.white }}>
-                    {t.done && <CheckCircle2 size={11} />}
-                  </div>
-                  {idx < arr.length - 1 && (
-                    <div className="w-px h-5 mt-1" style={{ background: t.done ? A.green : A.gray5 }} />
-                  )}
-                </div>
-                <div className="flex-1 -mt-0.5">
-                  <div className="text-xs font-medium" style={{ color: t.done ? A.label : A.gray1 }}>{t.step}</div>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{t.date}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-2 mt-5">
-            <button onClick={() => setDetailOpen(true)}
-              className="flex-1 text-xs py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-1.5"
-              style={{ background: A.gray6, color: A.blue }}>
-              <Eye size={12} /> 查看详情
-            </button>
-            {selectedPO.status === "待审批" && (
-              <>
-                <button onClick={() => approve(selectedPO.po)}
-                  className="flex-1 text-xs py-2 rounded-lg font-medium text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
-                  style={{ background: A.green }}>
-                  <Check size={12} /> 审批订单
-                </button>
-                <button onClick={() => reject(selectedPO.po)}
-                  className="flex-1 text-xs py-2 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>驳回</button>
-              </>
-            )}
-            {selectedPO.status === "已审批" && (
-              <button onClick={() => send(selectedPO.po)}
-                className="flex-1 text-xs py-2 rounded-lg font-medium text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5"
-                style={{ background: A.blue }}>
-                <Send size={12} /> 下发至供应商
-              </button>
-            )}
-            {(selectedPO.status === "已发出" || selectedPO.status === "部分到货" || selectedPO.status === "已完成") && (
-              <button onClick={() => setTrackOpen(true)}
-                className="flex-1 text-xs py-2 rounded-lg font-medium text-white hover:opacity-90 transition-opacity"
-                style={{ background: A.blue }}>跟踪发货</button>
-            )}
-            {!["已完成", "已取消"].includes(selectedPO.status) && (
-              <button onClick={() => cancel(selectedPO.po)}
-                className="text-xs px-3 py-2 rounded-lg font-medium hover:bg-red-50 transition-colors"
-                style={{ background: A.white, color: A.red, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
-                <Trash2 size={11} />
-              </button>
-            )}
-          </div>
-            </>
-          )}
-        </Card>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       <NewPOModal open={newOpen} onClose={() => setNewOpen(false)}
         onCreate={async (po) => {
@@ -660,91 +592,6 @@ export default function PurchasingOrdersPage() {
           setSelectedId(created.po);
           return created;
         }} />
-      <Modal open={detailOpen && Boolean(selectedPO)} onClose={() => setDetailOpen(false)} width={980}
-        title="采购订单" subtitle="PO · ERP document form">
-        {selectedPO && (
-          <DocumentShell
-            title="采购订单"
-            documentNo={selectedPO.po}
-            moduleLabel="采购"
-            status={selectedPO.status}
-            subtitle={`${selectedPO.supplier} · ETA ${selectedPO.eta}`}
-          >
-            <DocumentHeader
-              fields={[
-                { label: "PO编号", value: selectedPO.po },
-                { label: "供应商", value: selectedPO.supplier },
-                { label: "创建日期", value: selectedPO.created },
-                { label: "ETA", value: selectedPO.eta },
-                { label: "采购负责人", value: selectedPO.owner },
-                { label: "优先级", value: selectedPO.priority, tone: selectedPO.priority === "高" ? "danger" : selectedPO.priority === "中" ? "warning" : "success" },
-                { label: "状态", value: selectedPO.status, tone: statusTone(selectedPO.status) },
-                { label: "来源类型", value: selectedPO.source || "manual" },
-                { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
-                { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
-                { label: "来源 SKU", value: selectedPO.sourceSku || "—", helper: selectedPO.sourceName },
-                { label: "金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
-              ]}
-            />
-            <DocumentStatusTimeline steps={poTimeline(selectedPO)} />
-            <DocumentLinesTable
-              rows={selectedPOLines.length ? selectedPOLines : [{
-                poLineId: `${selectedPO.po}-SUMMARY`,
-                sku: selectedPO.sourceSku || "SUMMARY",
-                itemName: selectedPO.sourceName || "采购订单汇总行",
-                quantityOrdered: selectedPO.recommendedQty || selectedPO.items || 0,
-                quantityReceived: selectedPO.received || 0,
-                quantityAccepted: selectedPO.received || 0,
-                quantityRejected: 0,
-                unit: selectedPO.unit || "行",
-                unitPrice: selectedPO.unitPrice || selectedPO.amount,
-                currency: selectedPO.currency || "CNY",
-              }]}
-              columns={[
-                { key: "poLineId", label: "行号", render: (line) => <span style={{ color: A.blue }}>{String(line.poLineId)}</span> },
-                { key: "sku", label: "SKU" },
-                { key: "itemName", label: "品名" },
-                { key: "quantityOrdered", label: "订单数量", align: "right", render: (line) => Number(line.quantityOrdered || 0).toLocaleString() },
-                { key: "unit", label: "单位" },
-                { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
-                { key: "quantityReceived", label: "已收货数量", align: "right", render: (line) => Number(line.quantityReceived || 0).toLocaleString() },
-                { key: "quantityRejected", label: "拒收数量", align: "right", render: (line) => Number(line.quantityRejected || 0).toLocaleString() },
-                { key: "warehouseId", label: "仓库", render: (line) => String(line.warehouseId || selectedPO.warehouseId || "MAIN") },
-                { key: "status", label: "状态", render: (line) => String(line.status || lineStatusLabel(line.status)) },
-              ]}
-            />
-            <DocumentTotals
-              totals={[
-                { label: "采购金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
-                { label: "订单数量", value: selectedPOTotals.totalOrderedQty.toLocaleString() },
-                { label: "已收货数量", value: selectedPOTotals.totalReceivedQty.toLocaleString(), tone: selectedPOTotals.totalReceivedQty ? "success" : "neutral" },
-                { label: "未收货数量", value: Math.max(0, selectedPOTotals.totalOrderedQty - selectedPOTotals.totalReceivedQty).toLocaleString(), tone: selectedPOTotals.totalOrderedQty > selectedPOTotals.totalReceivedQty ? "warning" : "success" },
-                { label: "收货进度", value: `${selectedPOTotals.totalOrderedQty ? Math.round((selectedPOTotals.totalReceivedQty / selectedPOTotals.totalOrderedQty) * 100) : 0}%` },
-              ]}
-              columns={5}
-            />
-            <DocumentEvidencePanel
-              linkedDocuments={getPoLinkedDocuments(selectedPO, SUPPLIER_INVOICES, receivingDocs)}
-              provenance={selectedPO.source || "manual"}
-              notes={selectedPO.reason || selectedPO.approvalSnapshot?.summary || "采购订单详情用于审批、收货和供应商协同复核。"}
-              evidence={[
-                { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
-                { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
-                { label: "审批快照", value: selectedPO.approvalSnapshot?.createdAt ? new Date(selectedPO.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—" },
-                { label: "关联 GRN", value: receivingDocs.filter((item) => item.po === selectedPO.po).length },
-                { label: "关联发票", value: SUPPLIER_INVOICES.filter((item) => item.relatedPo === selectedPO.po).length },
-                { label: "付款状态", value: selectedPO.paid ? "已付款" : "未付款", tone: selectedPO.paid ? "success" : "warning" },
-              ]}
-            />
-            <DocumentActionBar>
-              <button onClick={() => setTrackOpen(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>打开收货</button>
-              <button onClick={() => toast("发票协同位于采购管理", { description: "请打开采购管理的发票协同视图查看关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票协同</button>
-              <button onClick={() => exportPoDetail(selectedPO)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
-              <button onClick={() => setDetailOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
-            </DocumentActionBar>
-          </DocumentShell>
-        )}
-      </Modal>
       <TrackShipmentModal open={trackOpen} onClose={() => setTrackOpen(false)} po={selectedPO} />
     </div>
   );

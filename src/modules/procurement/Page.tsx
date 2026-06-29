@@ -27,7 +27,7 @@ type ProcurementPanelProps = {
 
 export default function ProcurementPanel({ intent = null, onOpenRfq, view, onActiveContextChange }: ProcurementPanelProps) {
   if (view === "requests") return <PurchasingRequests intent={intent} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
-  if (view === "orders") return <PurchasingOrders />;
+  if (view === "orders") return <PurchasingOrders onActiveContextChange={onActiveContextChange} />;
   if (view === "rfq") return <PurchasingRFQ onActiveContextChange={onActiveContextChange} />;
   if (view === "contracts") return <ContractsPanel />;
   if (view === "invoices") return <SupplierInvoiceRegister mode="procurement" />;
@@ -71,7 +71,7 @@ function PurchasingPanel({
       {tab !== "overview" && <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as PurTab)} />}
       {tab === "overview" && <ProcurementOverview onOpenTab={setTab} onOpenDetailViews={() => setTab("requests")} />}
       {tab === "requests"  && <PurchasingRequests intent={intent} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />}
-      {tab === "orders"    && <PurchasingOrders />}
+      {tab === "orders"    && <PurchasingOrders onActiveContextChange={onActiveContextChange} />}
       {tab === "rfq"       && <PurchasingRFQ onActiveContextChange={onActiveContextChange} />}
       {tab === "contracts" && <ContractsPanel />}
       {tab === "receiving" && <ReceivingPanel />}

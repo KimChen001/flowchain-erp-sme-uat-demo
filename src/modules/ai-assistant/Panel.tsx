@@ -6,7 +6,7 @@ import { getContextualQuickPrompts } from "./prompts";
 
 export type ActiveContext = {
   module?: string;
-  entityType?: "supplier" | "item" | "rfq" | "purchase_request";
+  entityType?: "supplier" | "item" | "rfq" | "purchase_request" | "purchase_order";
   entityId?: string;
   entityLabel?: string;
   view?: string;
