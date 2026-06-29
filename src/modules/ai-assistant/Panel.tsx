@@ -3,7 +3,7 @@ import { Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { fmt } from "../../lib/format";
 import { A } from "../../components/ui";
-import { aiDisplayMessage, looksLikeRawJson, safeUnknownCardMessage, sanitizeAiMessage } from "./presentation";
+import { aiDisplayMessage, looksLikeRawJson, normalizeAiCardValue, safeUnknownCardMessage, sanitizeAiMessage } from "./presentation";
 import { getContextualQuickPrompts } from "./prompts";
 
 export type ActiveContext = {
@@ -64,7 +64,7 @@ function textValue(value: unknown) {
 
 function businessValue(label: string, value: unknown) {
   if (/金额|余额|应付|贷项|差异/.test(label) && typeof value === "number") return fmt(value);
-  return textValue(value);
+  return textValue(normalizeAiCardValue(label, value));
 }
 
 function fieldEntries(fields: [string, unknown][]) {

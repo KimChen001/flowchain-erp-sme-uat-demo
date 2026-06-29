@@ -122,7 +122,7 @@ export default function InventoryExceptionDocuments() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[1120px]">
+          <table className="w-full text-xs min-w-[1500px]">
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
                 {["单据编号", "类型", "SKU", "品名", "仓库 / 库位", "数量影响", "状态", "负责人", "关联流水", "下一步", "操作"].map((header) => (
@@ -135,22 +135,22 @@ export default function InventoryExceptionDocuments() {
                 const style = statusStyle(doc.status);
                 return (
                   <tr key={doc.id} className="hover:bg-blue-50/40 transition-colors" style={{ borderBottom: index < visible.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className="px-4 py-3 font-semibold tabular-nums" style={{ color: A.blue }}>{doc.id}</td>
-                    <td className="px-4 py-3"><Chip label={doc.type} color={typeColor(doc.type)} bg={`${typeColor(doc.type)}18`} /></td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.blue }}>{doc.sku}</td>
-                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.label }}>{doc.itemName}</td>
+                    <td className="px-4 py-3 font-semibold whitespace-nowrap tabular-nums" style={{ color: A.blue }}>{doc.id}</td>
+                    <td className="px-4 py-3 whitespace-nowrap"><Chip label={doc.type} color={typeColor(doc.type)} bg={`${typeColor(doc.type)}18`} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums" style={{ color: A.blue }}>{doc.sku}</td>
+                    <td className="px-4 py-3 max-w-[220px] truncate" style={{ color: A.label }}>{doc.itemName}</td>
                     <td className="px-4 py-3 min-w-[150px]" style={{ color: A.sub }}>
                       <div style={{ color: A.label }}>{doc.warehouse}</div>
                       <div className="text-[10px]">{doc.location}</div>
                     </td>
-                    <td className="px-4 py-3 font-semibold" style={{ color: doc.quantityImpact < 0 ? A.red : doc.quantityImpact > 0 ? A.green : A.gray2 }}>
+                    <td className="px-4 py-3 min-w-[88px] text-center whitespace-nowrap tabular-nums font-semibold" style={{ color: doc.quantityImpact < 0 ? A.red : doc.quantityImpact > 0 ? A.green : A.gray2 }}>
                       {doc.quantityImpact > 0 ? "+" : ""}{doc.quantityImpact.toLocaleString("zh-CN")} {doc.unit}
                     </td>
-                    <td className="px-4 py-3"><Chip label={doc.status} color={style.color} bg={style.bg} /></td>
-                    <td className="px-4 py-3" style={{ color: A.label }}>{doc.owner}</td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.indigo }}>{doc.linkedMovement || doc.linkedDocument}</td>
+                    <td className="px-4 py-3 whitespace-nowrap"><Chip label={doc.status} color={style.color} bg={style.bg} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.label }}>{doc.owner}</td>
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums" style={{ color: A.indigo }}>{doc.linkedMovement || doc.linkedDocument}</td>
                     <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.blue }}>{doc.nextAction}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap min-w-[160px]">
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => setSelected(doc)} className="px-2.5 py-1 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>详情</button>
                         <button onClick={() => updateStatus(doc, "已复核", "库存异常单据已标记复核")} className="px-2.5 py-1 rounded-md text-[11px] font-medium" style={{ background: "#f0faf4", color: A.green }}>复核</button>

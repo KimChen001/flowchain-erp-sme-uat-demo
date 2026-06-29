@@ -100,9 +100,11 @@ function supplierRowsForTab(rows: SupplierSrmRow[], tab: SrmTab) {
 
 export default function SrmPage({
   initialView = "overview",
+  focus,
   onActiveContextChange,
 }: {
   initialView?: SrmTab;
+  focus?: { entityType: string; entityId: string; at: number } | null;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [tab, setTab] = useState<SrmTab>(initialView);
@@ -129,6 +131,19 @@ export default function SrmPage({
   const riskOptions = useMemo(() => uniqueOptions(allRows.map((row) => row.supplier.riskStatus)), [allRows]);
   const certificationOptions = useMemo(() => uniqueOptions(allRows.map((row) => row.supplier.certificationStatus)), [allRows]);
   const statusOptions = useMemo(() => uniqueOptions(allRows.map((row) => row.supplier.status)), [allRows]);
+
+  useEffect(() => {
+    if (focus?.entityType !== "supplier" || !focus.entityId) return;
+    const normalized = focus.entityId.toLowerCase();
+    const row = allRows.find((item) =>
+      item.supplier.code.toLowerCase() === normalized ||
+      item.supplier.name.toLowerCase() === normalized ||
+      item.supplier.matchNames?.some((name) => name.toLowerCase() === normalized)
+    );
+    if (!row) return;
+    setTab("master");
+    setSelected(row);
+  }, [focus?.at, focus?.entityType, focus?.entityId, allRows]);
 
   function updateFilter<K extends keyof SrmSupplierWorkbenchFilters>(key: K, value: SrmSupplierWorkbenchFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));

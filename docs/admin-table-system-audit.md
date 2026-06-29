@@ -58,3 +58,45 @@ Workbench table = filter/search card + result count + full-width table + horizon
 - Keep existing table markup and local rendering behavior.
 - Do not convert to a large DataTable framework.
 - Do not change business actions, routing, API behavior, or backend persistence.
+
+## Table Layout Residue Pass
+
+The previous table polish improved many high-density screens, but screenshots from Inventory exposed remaining readability issues. This is a global table-system concern, not an inventory-only problem.
+
+Observed residue:
+
+- SKU values can split across lines, for example `SKU-` / `00744`.
+- GRN, PO, PR, RFQ, INV, and source document ids can split across lines, for example `GRN-202605-` / `0418`.
+- Status chips can split vertically, for example `异常` / `处理` or `待复` / `核`.
+- Owner/person names can wrap awkwardly.
+- Quantity columns such as 入库 / 出库 / 调整 can become too narrow.
+- Action buttons can stack or spread too loosely.
+- Horizontal scroll exists in many cards, but min-width and nowrap rules are still too weak in some tables.
+
+High-risk table groups to audit:
+
+1. Inventory: inventory transactions, inventory exception documents, lots, and serials.
+2. Receiving / GRN: GRN list, receiving exceptions, and supplier returns / SRN.
+3. Supplier Invoice: invoice collaboration table.
+4. Three-way Match: match list.
+5. SRM: supplier table, RFx participation, contracts, invoice and reconciliation tables where present.
+6. Master Data: items, suppliers, warehouses, tax codes, and payment terms.
+7. Finance Collaboration: payable, invoice, variance, credit memo, and settlement readiness tables.
+8. Reports / Imports / Data Management: data-heavy report and import review tables.
+9. Today Cockpit: recent documents, action queue, compact evidence lists.
+
+Standard rules:
+
+- Business IDs should never split across lines.
+- SKU should never split into `SKU-` and `00744`.
+- GRN, PO, PR, RFQ, and INV ids should stay one line.
+- Status chips should stay one-line pills.
+- Owner/person names should stay one line or truncate.
+- Quantity columns need enough minimum width.
+- Action columns need enough minimum width.
+- Wide tables should use horizontal scroll instead of compressing identifiers.
+- Long descriptions can truncate, but identifiers should not wrap.
+- Use `break-keep` for short Chinese labels and chips where useful.
+- Use `whitespace-nowrap` for IDs, dates, status, actions, owner, and source documents.
+- Use `tabular-nums` for quantity and amount values.
+- Keep amount format as full numbers, for example `¥140,000`, not `14万`.

@@ -1038,9 +1038,11 @@ function InventoryWarehouseMap() {
 type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins" | "exceptions";
 export default function InventoryPage({
   initialView = "overview",
+  focus,
   onActiveContextChange,
 }: {
   initialView?: InvTab;
+  focus?: { entityType: string; entityId: string; at: number } | null;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [tab, setTab] = useState<InvTab>(initialView);
@@ -1060,13 +1062,19 @@ export default function InventoryPage({
   }, [initialView]);
 
   useEffect(() => {
+    if ((focus?.entityType === "inventory_item" || focus?.entityType === "item") && focus.entityId) {
+      setTab("overview");
+    }
+  }, [focus?.at, focus?.entityType, focus?.entityId]);
+
+  useEffect(() => {
     if (tab !== "overview") onActiveContextChange?.(null);
   }, [tab, onActiveContextChange]);
 
   return (
     <div className="space-y-4">
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as InvTab)} />
-      {tab === "overview"  && <InventoryLanding onOpenTab={setTab} onActiveContextChange={onActiveContextChange} />}
+      {tab === "overview"  && <InventoryLanding focus={focus} onOpenTab={setTab} onActiveContextChange={onActiveContextChange} />}
       {tab === "lots"      && <InventoryLots />}
       {tab === "transfer"  && <InventoryTransfers />}
       {tab === "count"     && <InventoryCycleCount />}
@@ -1079,9 +1087,11 @@ export default function InventoryPage({
 }
 
 function InventoryLanding({
+  focus,
   onOpenTab,
   onActiveContextChange,
 }: {
+  focus?: { entityType: string; entityId: string; at: number } | null;
   onOpenTab: (tab: InvTab) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
@@ -1095,6 +1105,12 @@ function InventoryLanding({
   const selectedItem = inventoryItems.find((item) => item.sku === selectedSku) ?? null;
   const transferExceptions = TRANSFERS.filter((transfer) => ["在途", "待审批"].includes(transfer.status));
   const frozenCount = LOTS.filter((lot) => lot.status === "冻结").length;
+
+  useEffect(() => {
+    if ((focus?.entityType !== "inventory_item" && focus?.entityType !== "item") || !focus.entityId) return;
+    const match = inventoryItems.find((item) => item.sku === focus.entityId || item.name === focus.entityId);
+    if (match) setSelectedSku(match.sku);
+  }, [focus?.at, focus?.entityType, focus?.entityId]);
   const entries = [
     { tab: "movements" as const, title: "库存事务流水", desc: "查看采购入库、退货、调拨、调整和盘点形成的库存变化。", signal: `${INVENTORY_MOVEMENT_LEDGER.length} 条流水`, icon: History },
     { tab: "exceptions" as const, title: "库存异常单据", desc: "解释库存变化原因、证据链和关闭动作。", signal: `${exceptionDocs.length} 张异常单据`, icon: AlertTriangle },

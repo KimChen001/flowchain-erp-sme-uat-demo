@@ -31,10 +31,10 @@ export default function ProcurementPanel({ intent = null, onOpenRfq, view, onAct
   if (view === "orders") return <PurchasingOrders focus={focus} onActiveContextChange={onActiveContextChange} />;
   if (view === "rfq") return <PurchasingRFQ focus={focus} onActiveContextChange={onActiveContextChange} />;
   if (view === "contracts") return <ContractsPanel />;
-  if (view === "invoices") return <SupplierInvoiceRegister mode="procurement" />;
+  if (view === "invoices") return <SupplierInvoiceRegister mode="procurement" focus={focus} onActiveContextChange={onActiveContextChange} />;
   if (view === "match") return <ThreeWayMatchPanel />;
   if (view === "returns") return <PurchaseReturnsPanel />;
-  if (view === "receiving") return <ReceivingPanel />;
+  if (view === "receiving") return <ReceivingPanel focus={focus} />;
   if (view === "portal") return <SupplierPortalPanel />;
 
   return <PurchasingPanel intent={intent} focus={focus} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
@@ -77,8 +77,8 @@ function PurchasingPanel({
       {tab === "orders"    && <PurchasingOrders focus={focus} onActiveContextChange={onActiveContextChange} />}
       {tab === "rfq"       && <PurchasingRFQ focus={focus} onActiveContextChange={onActiveContextChange} />}
       {tab === "contracts" && <ContractsPanel />}
-      {tab === "receiving" && <ReceivingPanel />}
-      {tab === "invoices"  && <SupplierInvoiceRegister mode="procurement" />}
+      {tab === "receiving" && <ReceivingPanel focus={focus} />}
+      {tab === "invoices"  && <SupplierInvoiceRegister mode="procurement" focus={focus} onActiveContextChange={onActiveContextChange} />}
       {tab === "match"     && <ThreeWayMatchPanel />}
       {tab === "returns"   && <PurchaseReturnsPanel />}
       {tab === "portal"    && <SupplierPortalPanel />}

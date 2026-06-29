@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertOctagon, CheckCircle2, CreditCard, FileSpreadsheet, FileText, MoreHorizontal, Search, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Modal, Card, Chip, KpiCard, A } from "../../components/ui";
@@ -12,6 +12,7 @@ import { fmt } from "../../lib/format";
 import type { SupplierInvoice, SupplierInvoiceStatus } from "../../types/scm";
 import { matchStatusStyle } from "./shared";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
+import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   tableMinXlClass,
   tableScrollClass,
@@ -59,9 +60,11 @@ function invoiceTimeline(invoice: SupplierInvoice): TimelineStep[] {
 
 type SupplierInvoiceRegisterProps = {
   mode?: "procurement" | "finance";
+  focus?: { entityType: string; entityId: string; at: number } | null;
+  onActiveContextChange?: (context: ActiveContext | null) => void;
 };
 
-export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierInvoiceRegisterProps) {
+export default function SupplierInvoiceRegister({ mode = "finance", focus, onActiveContextChange }: SupplierInvoiceRegisterProps) {
   const [invoices, setInvoices] = useState<SupplierInvoice[]>(SUPPLIER_INVOICES);
   const [statusFilter, setStatusFilter] = useState("全部");
   const [varianceFilter, setVarianceFilter] = useState("全部");
@@ -197,6 +200,27 @@ export default function SupplierInvoiceRegister({ mode = "finance" }: SupplierIn
   const selectedSnapshot = selectedInvoice
     ? calculateInvoiceMatch(selectedInvoice, purchaseOrders, receivingDocs, invoices)
     : null;
+
+  useEffect(() => {
+    if (focus?.entityType !== "supplier_invoice" || !focus.entityId) return;
+    const invoice = invoices.find((item) => item.invoiceNumber === focus.entityId || item.id === focus.entityId);
+    if (invoice) setSelectedInvoice(invoice);
+  }, [focus?.at, focus?.entityType, focus?.entityId, invoices]);
+
+  useEffect(() => {
+    if (!selectedInvoice) {
+      onActiveContextChange?.(null);
+      return;
+    }
+    onActiveContextChange?.({
+      module: "procurement",
+      entityType: "supplier",
+      entityId: selectedInvoice.supplier,
+      entityLabel: selectedInvoice.supplier,
+      view: "invoices",
+    });
+    return () => onActiveContextChange?.(null);
+  }, [selectedInvoice?.invoiceNumber, selectedInvoice?.supplier, onActiveContextChange]);
 
   return (
     <div className="space-y-4">

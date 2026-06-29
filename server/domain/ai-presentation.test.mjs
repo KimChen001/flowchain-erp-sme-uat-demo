@@ -60,3 +60,47 @@ test('unknown card fallback stays business-safe', async () => {
   const { mod } = await loadPresentationModule()
   assert.equal(mod.safeUnknownCardMessage(), '暂不支持展示该结果类型。')
 })
+
+test('mixed text with JSON object line removes that line', async () => {
+  const { mod } = await loadPresentationModule()
+  assert.equal(
+    mod.sanitizeAiMessage('已找到相关记录。\n{"intent":"supplier_status","cards":[]}\n请查看下方结果。'),
+    '已找到相关记录。\n请查看下方结果。'
+  )
+})
+
+test('mixed text with cards debug line removes that line', async () => {
+  const { mod } = await loadPresentationModule()
+  assert.equal(
+    mod.sanitizeAiMessage('已找到 PO-2026-1287。\ncards: [{"type":"supplier_status"}]'),
+    '已找到 PO-2026-1287。'
+  )
+})
+
+test('fenced JSON payload is removed from display text', async () => {
+  const { mod } = await loadPresentationModule()
+  assert.equal(
+    mod.sanitizeAiMessage('已找到结果：\n```json\n{"cards":[]}\n```\n请查看卡片。'),
+    '已找到结果：\n请查看卡片。'
+  )
+})
+
+test('sanitization preserves document and item ids', async () => {
+  const { mod } = await loadPresentationModule()
+  const output = mod.sanitizeAiMessage('PO-2026-1287 PR-2026-2400 RFQ-26-0047 GRN-202605-0418 INV-SZ-260422 SKU-00412')
+  for (const id of ['PO-2026-1287', 'PR-2026-2400', 'RFQ-26-0047', 'GRN-202605-0418', 'INV-SZ-260422', 'SKU-00412']) {
+    assert.match(output, new RegExp(id))
+  }
+})
+
+test('amount-like strings convert when label is amount-related', async () => {
+  const { mod } = await loadPresentationModule()
+  assert.equal(mod.normalizeAiCardValue('订单金额', '14万'), '¥140,000')
+  assert.equal(mod.normalizeAiCardValue('发票金额', '¥14万'), '¥140,000')
+  assert.equal(mod.normalizeAiCardValue('差异金额', '1.4万'), '¥14,000')
+})
+
+test('non-amount labels do not convert Chinese text containing wan', async () => {
+  const { mod } = await loadPresentationModule()
+  assert.equal(mod.normalizeAiCardValue('说明', '库存涉及万向节备件'), '库存涉及万向节备件')
+})

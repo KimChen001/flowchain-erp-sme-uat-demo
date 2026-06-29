@@ -567,16 +567,16 @@ export default function FlowChainApp() {
 
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} />,
-    inventory:   <InventoryPanel initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
+    inventory:   <InventoryPanel initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
     forecast:    <ForecastPanel />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
     purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
     purchasing:  <ProcurementPanel view="orders" focus={searchFocus} />,
     rfq:         <ProcurementPanel view="rfq" focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
-    receiving:   <ReceivingPanel />,
+    receiving:   <ReceivingPanel focus={searchFocus} />,
     procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
-    srm: <SrmPage initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
-    "master-data": <MasterDataPage initialView={activeView as any} onActiveContextChange={setAiActiveContext} />,
+    srm: <SrmPage initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
+    "master-data": <MasterDataPage initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
     finance:     <FinanceWorkbench initialView={activeView as any} />,
     reports:     <ReportsPanel initialView={activeView as any} onNavigate={setActive} />,
     imports:     <ImportsPanel initialView={activeView as any} onNavigate={setActive} />,

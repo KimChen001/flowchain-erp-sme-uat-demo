@@ -119,11 +119,11 @@ export default function InventoryMovementLedger() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[1180px]">
+          <table className="w-full text-xs min-w-[1500px]">
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
                 {["单据号", "类型", "日期", "SKU", "品名", "仓库/库位", "来源单据", "入库", "出库", "调整", "状态", "负责人", "操作"].map((header) => (
-                  <th key={header} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{header}</th>
+                  <th key={header} className="text-left px-4 py-3 font-medium whitespace-nowrap break-keep" style={{ color: A.gray1 }}>{header}</th>
                 ))}
               </tr>
             </thead>
@@ -134,24 +134,24 @@ export default function InventoryMovementLedger() {
                 return (
                   <tr key={item.movementId} className="hover:bg-blue-50/40 transition-colors"
                     style={{ borderBottom: index < visibleMovements.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className="px-4 py-3 tabular-nums font-medium" style={{ color: A.blue }}>{item.movementId}</td>
-                    <td className="px-4 py-3"><Chip label={INVENTORY_MOVEMENT_TYPE_LABELS[item.movementType]} color={typeColor(item.movementType)} bg={`${typeColor(item.movementType)}18`} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums font-medium" style={{ color: A.blue }}>{item.movementId}</td>
+                    <td className="px-4 py-3 whitespace-nowrap"><Chip label={INVENTORY_MOVEMENT_TYPE_LABELS[item.movementType]} color={typeColor(item.movementType)} bg={`${typeColor(item.movementType)}18`} /></td>
                     <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.sub }}>{item.date}</td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.blue }}>{item.sku}</td>
-                    <td className="px-4 py-3 min-w-[150px]" style={{ color: A.label }}>{item.itemName}</td>
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums" style={{ color: A.blue }}>{item.sku}</td>
+                    <td className="px-4 py-3 min-w-[180px] max-w-[220px] truncate" style={{ color: A.label }}>{item.itemName}</td>
                     <td className="px-4 py-3 min-w-[150px]" style={{ color: A.sub }}>
                       <div style={{ color: A.label }}>{item.warehouse}</div>
                       <div className="text-[10px]">{item.location}</div>
                     </td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.indigo }}>{item.sourceDocument}</td>
-                    <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: item.quantityIn ? A.green : A.gray2 }}>{quantityText(item.quantityIn)}</td>
-                    <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: item.quantityOut ? A.orange : A.gray2 }}>{quantityText(item.quantityOut)}</td>
-                    <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: item.adjustmentQty < 0 ? A.red : item.adjustmentQty > 0 ? A.green : A.gray2 }}>
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums" style={{ color: A.indigo }}>{item.sourceDocument}</td>
+                    <td className="px-4 py-3 min-w-[64px] text-center whitespace-nowrap tabular-nums font-semibold" style={{ color: item.quantityIn ? A.green : A.gray2 }}>{quantityText(item.quantityIn)}</td>
+                    <td className="px-4 py-3 min-w-[64px] text-center whitespace-nowrap tabular-nums font-semibold" style={{ color: item.quantityOut ? A.orange : A.gray2 }}>{quantityText(item.quantityOut)}</td>
+                    <td className="px-4 py-3 min-w-[64px] text-center whitespace-nowrap tabular-nums font-semibold" style={{ color: item.adjustmentQty < 0 ? A.red : item.adjustmentQty > 0 ? A.green : A.gray2 }}>
                       {item.adjustmentQty ? item.adjustmentQty.toLocaleString("zh-CN") : "—"}
                     </td>
-                    <td className="px-4 py-3"><Chip label={item.status} color={tone.color} bg={tone.bg} /></td>
-                    <td className="px-4 py-3" style={{ color: A.label }}>{item.owner}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap"><Chip label={item.status} color={tone.color} bg={tone.bg} /></td>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.label }}>{item.owner}</td>
+                    <td className="px-4 py-3 whitespace-nowrap min-w-[140px]">
                       <button onClick={() => setSelected(item)}
                         className="px-2.5 py-1 rounded-md text-[11px] font-medium"
                         style={{ background: isInventoryMovementException(item) ? "#fff8f0" : A.gray6, color: isInventoryMovementException(item) ? A.orange : A.blue }}>

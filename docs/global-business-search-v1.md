@@ -98,6 +98,20 @@ If detail mode supports opening by id, the frontend can navigate directly to the
 
 If detail navigation is not supported yet, search navigates to the relevant module list or workbench and shows enough result context in the panel. Unsupported detail navigation should not be faked. The global route structure should stay stable.
 
+## Business Object Focus Navigation
+
+Global search should open or focus the actual business object where the destination module safely supports it:
+
+- PO, PR, and RFQ results open their existing procurement detail views.
+- Supplier results navigate to SRM and open the supplier detail when the supplier code/name can be resolved.
+- Item results navigate to Master Data and open the item detail when the SKU/name can be resolved.
+- Inventory item results navigate to Inventory and focus the matching SKU in the inventory overview when available.
+- Supplier invoice results navigate to invoice collaboration and open invoice detail when the invoice id/number can be resolved.
+- GRN results navigate to receiving and open the GRN detail when the GRN id can be resolved.
+- Warehouse and bin results navigate to the Master Data warehouse tab and filter by the selected id.
+
+Unsupported detail focus must gracefully fall back to module/list navigation. Search should not create fake links, broad route rewrites, or business mutations.
+
 ## Relationship With AI Assistant
 
 Global search is deterministic. The AI Assistant can later use the same resolver and index for entity grounding.

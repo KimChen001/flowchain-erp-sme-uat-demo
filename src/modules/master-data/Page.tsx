@@ -32,9 +32,11 @@ const fallbackMasterData: MasterDataSnapshot = {
 
 export default function MasterDataPage({
   initialView = "overview",
+  focus,
   onActiveContextChange,
 }: {
   initialView?: MasterDataTab;
+  focus?: { entityType: string; entityId: string; at: number } | null;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [tab, setTab] = useState<MasterDataTab>(initialView);
@@ -45,6 +47,35 @@ export default function MasterDataPage({
   useEffect(() => {
     if (initialView) setTab(initialView);
   }, [initialView]);
+
+  useEffect(() => {
+    if (!focus?.entityId) return;
+    const normalized = focus.entityId.toLowerCase();
+    if (focus.entityType === "item") {
+      const item = masterData.items.find((entry) =>
+        entry.sku.toLowerCase() === normalized ||
+        entry.name.toLowerCase() === normalized
+      );
+      if (!item) return;
+      setTab("items");
+      setDetail({ type: "items", item });
+      return;
+    }
+    if (focus.entityType === "supplier") {
+      const supplier = masterData.suppliers.find((entry) =>
+        entry.code.toLowerCase() === normalized ||
+        entry.name.toLowerCase() === normalized
+      );
+      if (!supplier) return;
+      setTab("suppliers");
+      setDetail({ type: "suppliers", item: supplier });
+      return;
+    }
+    if (focus.entityType === "warehouse" || focus.entityType === "bin") {
+      setTab("warehouses");
+      setSearch(focus.entityId);
+    }
+  }, [focus?.at, focus?.entityType, focus?.entityId, masterData]);
 
   useEffect(() => {
     let alive = true;

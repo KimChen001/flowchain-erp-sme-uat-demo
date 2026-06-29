@@ -146,7 +146,11 @@ const SUPPLIER_RETURNS: {
 
 // ─── Receiving · Master Wrapper ───────────────────────────────────────────────
 type RecvTab = "ops" | "asn" | "qc" | "exceptions" | "returns";
-export default function ReceivingPanel() {
+export default function ReceivingPanel({
+  focus,
+}: {
+  focus?: { entityType: string; entityId: string; at: number } | null;
+}) {
   const [tab, setTab] = useState<RecvTab>("ops");
   const tabs = [
     { id: "ops",        label: "收货操作", icon: PackageCheck, count: receivingDocs.length },
@@ -156,10 +160,14 @@ export default function ReceivingPanel() {
     { id: "returns",    label: "退货供应商", icon: Undo2,        count: SUPPLIER_RETURNS.length },
   ] as const;
 
+  useEffect(() => {
+    if (focus?.entityType === "receiving_doc" && focus.entityId) setTab("ops");
+  }, [focus?.at, focus?.entityType, focus?.entityId]);
+
   return (
     <div className="space-y-4">
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as RecvTab)} />
-      {tab === "ops"        && <ReceivingOps />}
+      {tab === "ops"        && <ReceivingOps focus={focus} />}
       {tab === "asn"        && <ReceivingASN />}
       {tab === "qc"         && <ReceivingQC />}
       {tab === "exceptions" && <ReceivingExceptions />}
@@ -419,7 +427,11 @@ function ReceivingReturns() {
   );
 }
 
-function ReceivingOps() {
+function ReceivingOps({
+  focus,
+}: {
+  focus?: { entityType: string; entityId: string; at: number } | null;
+}) {
   const [docs, setDocs] = useState<ReceivingDoc[]>(receivingDocs);
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [loading, setLoading] = useState(true);
@@ -452,6 +464,13 @@ function ReceivingOps() {
   const exceptions    = docs.filter((d) => d.status === "异常处理").length;
   const pending       = docs.filter((d) => d.status === "待收货").length;
   const selectedGrn = docs.find((item) => item.grn === selectedGrnId) ?? docs[0] ?? null;
+
+  useEffect(() => {
+    if (focus?.entityType !== "receiving_doc" || !focus.entityId) return;
+    if (!docs.some((item) => item.grn === focus.entityId)) return;
+    setSelectedGrnId(focus.entityId);
+    setShowGrnDetail(true);
+  }, [focus?.at, focus?.entityType, focus?.entityId, docs]);
 
   async function startReceive(grnId: string, poId: string, lines: ReceivingDocLine[]) {
     const po = orders.find((p) => p.po === poId);
@@ -630,7 +649,7 @@ function ReceivingOps() {
                   borderBottom: i < docs.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none",
                   background: selectedGrn?.grn === r.grn ? "rgba(0,113,227,0.06)" : "transparent",
                 }}>
-                <td className="px-4 py-3 font-medium" style={{ color: A.blue }}>
+                <td className="px-4 py-3 whitespace-nowrap font-medium tabular-nums" style={{ color: A.blue }}>
                   <div>{r.grn}</div>
                   {isPostedGrn(r) && (
                     <div className="text-[9px] font-normal truncate" style={{ color: A.gray2 }}>
@@ -638,12 +657,12 @@ function ReceivingOps() {
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3" style={{ color: A.indigo }}>{r.po}</td>
-                <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{r.supplier}</td>
-                <td className="px-4 py-3" style={{ color: A.sub }}>{r.arrived}</td>
-                <td className="px-4 py-3"><Chip label={r.dock} color={A.indigo} bg="#eef0ff" /></td>
-                <td className="px-4 py-3" style={{ color: A.label }}>{r.receiver}</td>
-                <td className="px-4 py-3 tabular-nums">
+                <td className="px-4 py-3 whitespace-nowrap tabular-nums" style={{ color: A.indigo }}>{r.po}</td>
+                <td className="px-4 py-3 max-w-[190px] truncate font-medium" style={{ color: A.label }}>{r.supplier}</td>
+                <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.sub }}>{r.arrived}</td>
+                <td className="px-4 py-3 whitespace-nowrap"><Chip label={r.dock} color={A.indigo} bg="#eef0ff" /></td>
+                <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.label }}>{r.receiver}</td>
+                <td className="px-4 py-3 min-w-[96px] text-center whitespace-nowrap tabular-nums">
                   <span style={{ color: A.green }}>{acceptedQty}</span>
                   <span style={{ color: A.gray3 }}> / </span>
                   <span style={{ color: rejectedQty > 0 ? A.red : A.gray3 }}>{rejectedQty}</span>
@@ -651,9 +670,9 @@ function ReceivingOps() {
                   <span style={{ color: A.label }}>{receivedQty}</span>
                   <div className="text-[9px]" style={{ color: A.gray2 }}>{lines.length} lines</div>
                 </td>
-                <td className="px-4 py-3" style={{ color: r.warehouse === "—" ? A.gray3 : A.label }}>{r.warehouse}</td>
-                <td className="px-4 py-3"><RecvStatusPill status={r.status} /></td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 whitespace-nowrap" style={{ color: r.warehouse === "—" ? A.gray3 : A.label }}>{r.warehouse}</td>
+                <td className="px-4 py-3 whitespace-nowrap"><RecvStatusPill status={r.status} /></td>
+                <td className="px-4 py-3 whitespace-nowrap min-w-[150px]">
                   <button onClick={(event) => { event.stopPropagation(); setSelectedGrnId(r.grn); setShowGrnDetail(true); }}
                     className="text-[11px] px-2 py-1 rounded-md font-medium hover:bg-gray-200 transition-colors mr-2"
                     style={{ background: A.gray6, color: A.label }}>
