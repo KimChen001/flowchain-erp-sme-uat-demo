@@ -9,7 +9,7 @@ export { A } from "./tokens";
 
 export function Chip({ label, color, bg }: { label: string; color: string; bg: string }) {
   return (
-    <span className="inline-flex w-fit items-center whitespace-nowrap break-keep px-2 py-0.5 rounded-full text-[11px] font-medium"
+    <span className="inline-flex w-fit items-center whitespace-nowrap break-keep px-2 py-0.5 rounded-full text-[12px] leading-[18px] font-semibold"
       style={{ color, background: bg }}>
       {label}
     </span>
@@ -317,14 +317,14 @@ export function Modal({ open, onClose, title, subtitle, width = 560, children, f
 export function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-[11px] font-medium" style={{ color: A.sub }}>{label}</label>
+      <label className="text-[13px] leading-5 font-semibold" style={{ color: A.sub }}>{label}</label>
       {children}
-      {hint && <p className="text-[10px]" style={{ color: A.gray2 }}>{hint}</p>}
+      {hint && <p className="text-[12px] leading-[18px]" style={{ color: A.gray2 }}>{hint}</p>}
     </div>
   );
 }
 
 export const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 10px", borderRadius: 8, fontSize: 13, color: A.label,
+  width: "100%", padding: "8px 10px", borderRadius: 8, fontSize: 14, lineHeight: "22px", color: A.label,
   background: A.white, border: `0.5px solid ${A.gray4}`, outline: "none",
 };

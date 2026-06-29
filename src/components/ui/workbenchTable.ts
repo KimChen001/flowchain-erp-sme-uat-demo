@@ -1,12 +1,13 @@
 export const tableScrollClass = "overflow-x-auto";
-export const tableBaseClass = "w-full text-xs";
-export const tableMinSmClass = "w-full min-w-[980px] text-xs";
-export const tableMinMdClass = "w-full min-w-[1180px] text-xs";
-export const tableMinLgClass = "w-full min-w-[1280px] text-xs";
-export const tableMinXlClass = "w-full min-w-[1480px] text-xs";
+export const tableBodyTextClass = "text-[14px] leading-[22px]";
+export const tableBaseClass = `w-full ${tableBodyTextClass}`;
+export const tableMinSmClass = `w-full min-w-[980px] ${tableBodyTextClass}`;
+export const tableMinMdClass = `w-full min-w-[1180px] ${tableBodyTextClass}`;
+export const tableMinLgClass = `w-full min-w-[1280px] ${tableBodyTextClass}`;
+export const tableMinXlClass = `w-full min-w-[1480px] ${tableBodyTextClass}`;
 
-export const thClass = "text-left px-4 py-3 font-medium whitespace-nowrap";
-export const thWideClass = "text-left px-5 py-3 font-medium whitespace-nowrap";
+export const thClass = "text-left px-4 py-3 text-[13px] leading-5 font-semibold whitespace-nowrap";
+export const thWideClass = "text-left px-5 py-3 text-[13px] leading-5 font-semibold whitespace-nowrap";
 export const tdClass = "px-4 py-3";
 export const tdWideClass = "px-5 py-3";
 export const tdNowrapClass = "px-4 py-3 whitespace-nowrap";
@@ -19,3 +20,4 @@ export const tdActionClass = "px-4 py-3 whitespace-nowrap min-w-[140px]";
 export const tdWideActionClass = "px-5 py-3 whitespace-nowrap min-w-[140px]";
 export const tdNameClass = "px-4 py-3 whitespace-nowrap";
 export const tdWideNameClass = "px-5 py-3 whitespace-nowrap";
+export const tableLinkClass = "text-[14px] leading-[22px] font-medium tabular-nums hover:underline rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200";

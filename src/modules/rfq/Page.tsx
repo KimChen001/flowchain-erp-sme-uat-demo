@@ -18,6 +18,7 @@ import {
 import {
   tableMinMdClass,
   tableScrollClass,
+  tableLinkClass,
   tdActionClass,
   tdIdClass,
   tdNameClass,
@@ -278,7 +279,7 @@ export default function PurchasingRFQPage({
                   <tr key={r.id}
                     className="hover:bg-blue-50/40 transition-colors"
                     style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className={tdIdClass}><button onClick={() => openDetail(r.id)} className="hover:underline" style={{ color: A.blue }}>{r.id}</button></td>
+                    <td className={tdIdClass}><button onClick={() => openDetail(r.id)} className={tableLinkClass} style={{ color: A.blue }}>{r.id}</button></td>
                     <td className={`${tdNameClass} max-w-[260px] font-medium`} style={{ color: A.label }}>
                       <div className="truncate">{r.title}</div>
                       {(r.sourceRequest || r.linkedPo) && (

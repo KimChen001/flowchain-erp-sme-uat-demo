@@ -221,8 +221,8 @@ export function TodayCockpitRecentDocuments({
         <div className="text-[11px]" style={{ color: A.sub }}>{documents.length} 条</div>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-[760px] w-full text-[12px]">
-          <thead style={{ background: "#fbfdff", color: A.sub }}>
+        <table className="min-w-[760px] w-full text-[14px] leading-[22px]">
+          <thead className="text-[13px] leading-5" style={{ background: "#fbfdff", color: A.sub }}>
             <tr>
               <th className="px-4 py-2 text-left font-semibold">类型</th>
               <th className="px-4 py-2 text-left font-semibold">单号</th>
@@ -236,7 +236,7 @@ export function TodayCockpitRecentDocuments({
             {documents.length ? documents.map((doc, index) => (
               <tr key={`${doc.type}-${doc.id}`} style={{ borderTop: index ? `1px solid ${A.border}` : "none" }}>
                 <td className="px-4 py-3"><Chip label={documentTypeLabel(doc.type)} color={A.blue} bg="#eef4ff" /></td>
-                <td className="px-4 py-3 font-semibold tabular-nums" style={{ color: A.blue }}>{doc.id}</td>
+                <td className="px-4 py-3 font-medium tabular-nums" style={{ color: A.blue }}>{doc.id}</td>
                 <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.label }}>{doc.status || "—"}</td>
                 <td className="px-4 py-3 max-w-[180px] truncate" style={{ color: A.sub }}>{doc.supplier || "—"}</td>
                 <td className="px-4 py-3 text-right tabular-nums" style={{ color: A.label }}>{doc.amount ? fmt(Number(doc.amount)) : "—"}</td>
@@ -244,7 +244,7 @@ export function TodayCockpitRecentDocuments({
               </tr>
             )) : (
               <tr>
-                <td className="px-4 py-5 text-[12px]" colSpan={6} style={{ color: A.sub }}>暂无近期单据</td>
+                <td className="px-4 py-5" colSpan={6} style={{ color: A.sub }}>暂无近期单据</td>
               </tr>
             )}
           </tbody>

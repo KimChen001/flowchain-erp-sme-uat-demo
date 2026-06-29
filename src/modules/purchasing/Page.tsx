@@ -43,6 +43,7 @@ import {
 import {
   tableMinLgClass,
   tableScrollClass,
+  tableLinkClass,
   tdActionClass,
   tdIdClass,
   tdNameClass,
@@ -560,7 +561,7 @@ export default function PurchasingOrdersPage({
                     className="transition-colors hover:bg-blue-50/40"
                     style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                     <td className={tdIdClass}>
-                      <button onClick={() => openDetail(o.po)} className="hover:underline" style={{ color: A.blue }}>{o.po}</button>
+                      <button onClick={() => openDetail(o.po)} className={tableLinkClass} style={{ color: A.blue }}>{o.po}</button>
                     </td>
                     <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{o.supplier}</td>
                     <td className={tdNowrapClass}>

@@ -31,6 +31,7 @@ import {
 import {
   tableMinLgClass,
   tableScrollClass,
+  tableLinkClass,
   tdActionClass,
   tdIdClass,
   tdNameClass,
@@ -652,7 +653,7 @@ export default function PurchaseRequestsPage({
                   const SourceIcon = sourceMeta.icon;
                   return (
                     <tr key={item.pr} className="hover:bg-blue-50/40 transition-colors" style={{ borderBottom: idx < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                      <td className={tdIdClass}><button onClick={() => openDetail(item.pr)} className="hover:underline" style={{ color: A.blue }}>{item.pr}</button></td>
+                      <td className={tdIdClass}><button onClick={() => openDetail(item.pr)} className={tableLinkClass} style={{ color: A.blue }}>{item.pr}</button></td>
                       <td className={tdNowrapClass}><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: sourceMeta.bg, color: sourceMeta.color }}><SourceIcon size={10} />{sourceMeta.label}</span></td>
                       <td className={`${tdNameClass} max-w-[240px]`}><div className="font-medium truncate" style={{ color: A.label }}>{item.sourceSku || "—"}</div><div className="text-[10px] mt-0.5 truncate" style={{ color: A.gray2 }}>{item.sourceName}</div></td>
                       <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{item.supplier}</td>
