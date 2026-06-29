@@ -1142,6 +1142,12 @@ function InventoryLanding({
   const topException = exceptionDocs.find((doc) => doc.status !== "已关闭") || exceptionDocs[0];
   const frozenLot = lots.find((lot) => lot.status === "冻结" || lot.status === "近效期");
   const selectedItem = items.find((item) => item.sku === selectedSku) ?? null;
+  const selectedMovements = selectedItem
+    ? INVENTORY_MOVEMENT_LEDGER.filter((movement) => movement.sku === selectedItem.sku).slice(0, 3)
+    : [];
+  const selectedExceptions = selectedItem
+    ? exceptionDocs.filter((doc) => doc.sku === selectedItem.sku).slice(0, 3)
+    : [];
   const transferExceptions = TRANSFERS.filter((transfer) => ["在途", "待审批"].includes(transfer.status));
   const frozenCount = lots.filter((lot) => lot.status === "冻结").length;
 
@@ -1194,6 +1200,56 @@ function InventoryLanding({
           </button>
         </div>
       </Card>
+
+      {selectedItem && (
+        <Card className="p-4" style={{ border: `1px solid ${A.blue}30` }}>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip label="当前 SKU 聚焦" color={A.blue} bg="#f0f6ff" />
+                <span className="text-sm font-semibold tabular-nums" style={{ color: A.label }}>{selectedItem.sku}</span>
+                <Chip label={selectedItem.status} color={selectedItem.status === "正常" ? A.green : A.orange} bg={selectedItem.status === "正常" ? "#f0faf4" : "#fff8f0"} />
+              </div>
+              <div className="mt-1 text-xs font-medium truncate" style={{ color: A.label }}>{selectedItem.name}</div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4" style={{ color: A.sub }}>
+                <span>当前 {selectedItem.qty.toLocaleString()}</span>
+                <span>安全库存 {selectedItem.min.toLocaleString()}</span>
+                <span>事务流水 {selectedMovements.length}</span>
+                <span>异常单据 {selectedExceptions.length}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {selectedMovements.map((movement) => (
+                  <span key={movement.movementId} className="rounded-md px-2 py-1 text-[10px] tabular-nums" style={{ background: A.gray6, color: A.blue }}>
+                    {movement.movementId}
+                  </span>
+                ))}
+                {selectedExceptions.map((doc) => (
+                  <span key={doc.id} className="rounded-md px-2 py-1 text-[10px] tabular-nums" style={{ background: "#fff8f0", color: A.orange }}>
+                    {doc.id}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button onClick={() => setSelectedSku("")}
+                className="h-8 px-3 rounded-lg text-xs font-medium"
+                style={{ background: A.gray6, color: A.label }}>
+                返回库存列表
+              </button>
+              <button onClick={() => onOpenTab("movements")}
+                className="h-8 px-3 rounded-lg text-xs font-medium"
+                style={{ background: "#f0f6ff", color: A.blue }}>
+                查看事务流水
+              </button>
+              <button onClick={() => onOpenTab("exceptions")}
+                className="h-8 px-3 rounded-lg text-xs font-medium"
+                style={{ background: "#fff8f0", color: A.orange }}>
+                查看异常单据
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-5 gap-3">
         <KpiCard label="风险 SKU" value={String(riskItems.length)} sub={topRisk?.sku || "稳定"} icon={Package} color={A.red} />

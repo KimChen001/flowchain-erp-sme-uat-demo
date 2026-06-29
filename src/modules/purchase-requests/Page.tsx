@@ -246,11 +246,13 @@ export default function PurchaseRequestsPage({
   intent,
   focus,
   onOpenRfq,
+  onNavigate,
   onActiveContextChange,
 }: {
   intent: PurchaseIntent | null;
   focus?: { entityType: string; entityId: string; at: number } | null;
   onOpenRfq?: () => void;
+  onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
@@ -527,6 +529,7 @@ export default function PurchaseRequestsPage({
           ...(selected.source === "forecast" || selected.source === "mrp-release" ? [{ label: "预测与 MRP", value: selected.source, moduleId: "forecast", tone: "info" as const }] : []),
           ...(selected.source === "inventory" ? [{ label: "库存补货证据", value: selected.sourceSku || selected.source, moduleId: "inventory", tone: "warning" as const }] : []),
         ]}
+        onNavigate={onNavigate}
         provenance={selected.approvalSnapshot?.source || selected.source}
         notes={selected.reason || selected.approvalSnapshot?.summary}
         evidence={[

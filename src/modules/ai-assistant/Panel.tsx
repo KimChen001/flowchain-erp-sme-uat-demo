@@ -611,6 +611,10 @@ export default function FloatingAiAssistant({
   const [slowRequest, setSlowRequest] = useState(false);
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const requestInFlightRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const requestSeqRef = useRef(0);
+  const abortReasonRef = useRef<"timeout" | "superseded" | "module-change" | null>(null);
 
   useEffect(() => {
     if (openSignal) setOpen(true);
@@ -622,9 +626,21 @@ export default function FloatingAiAssistant({
   }, [messages, open, asking]);
 
   useEffect(() => {
+    abortReasonRef.current = "module-change";
+    abortRef.current?.abort();
+    abortRef.current = null;
+    requestInFlightRef.current = false;
     setMessages([]);
     setInput("");
+    setAsking(false);
   }, [moduleId]);
+
+  useEffect(() => {
+    return () => {
+      abortReasonRef.current = "module-change";
+      abortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!asking) {
@@ -643,17 +659,31 @@ export default function FloatingAiAssistant({
 
   async function askAi(text: string) {
     const message = text.trim();
-    if (!message || asking) return;
+    if (!message || requestInFlightRef.current) return;
 
     const context = cleanActiveContext(activeContext);
     const requestStartedAt = performance.now();
+    const requestId = requestSeqRef.current + 1;
+    const controller = new AbortController();
+    let timeoutHit = false;
+    requestSeqRef.current = requestId;
+    requestInFlightRef.current = true;
+    abortReasonRef.current = null;
+    abortRef.current?.abort();
+    abortRef.current = controller;
     setAsking(true);
     setInput("");
     setMessages((current) => [...current, { role: "user", content: message }]);
+    const timeout = window.setTimeout(() => {
+      timeoutHit = true;
+      abortReasonRef.current = "timeout";
+      controller.abort();
+    }, 12000);
 
     try {
       const response = await apiJson<AiChatResponse>("/api/ai/chat", {
         method: "POST",
+        signal: controller.signal,
         body: JSON.stringify({
           moduleId,
           question: message,
@@ -673,21 +703,31 @@ export default function FloatingAiAssistant({
           cards: response.cards?.length || 0,
         });
       }
+      if (requestSeqRef.current !== requestId) return;
       setMessages((current) => [
         ...current,
         { role: "assistant", content, cards: response.cards },
       ]);
     } catch (error) {
-      console.error("AI assistant request failed", error);
+      if (requestSeqRef.current !== requestId || abortReasonRef.current === "module-change" || abortReasonRef.current === "superseded") return;
+      if (import.meta.env.DEV) console.warn("AI assistant request failed", error);
       setMessages((current) => [
         ...current,
         {
           role: "assistant",
-          content: "AI 助手暂时无法连接，请稍后再试。",
+          content: timeoutHit || abortReasonRef.current === "timeout"
+            ? "AI 助手响应超时，请稍后再试。"
+            : "AI 助手暂时无法连接，请稍后再试。",
         },
       ]);
     } finally {
-      setAsking(false);
+      window.clearTimeout(timeout);
+      if (requestSeqRef.current === requestId) {
+        requestInFlightRef.current = false;
+        abortRef.current = null;
+        abortReasonRef.current = null;
+        setAsking(false);
+      }
     }
   }
 
@@ -756,8 +796,9 @@ export default function FloatingAiAssistant({
                 <button
                   key={prompt}
                   onClick={() => askAi(prompt)}
+                  disabled={asking}
                   className="px-2.5 py-1 rounded-full text-[11px] font-medium hover:bg-slate-100"
-                  style={{ background: A.gray6, color: A.gray1 }}
+                  style={{ background: A.gray6, color: asking ? A.gray3 : A.gray1 }}
                 >
                   {prompt}
                 </button>
@@ -770,12 +811,13 @@ export default function FloatingAiAssistant({
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    askAi(input);
+                    if (!asking) askAi(input);
                   }
                 }}
+                disabled={asking}
                 rows={2}
                 placeholder="询问当前供应商、库存、采购或 RFQ 状态..."
-                className="min-h-10 flex-1 resize-none rounded-xl px-3 py-2 text-sm outline-none"
+                className="min-h-10 flex-1 resize-none rounded-xl px-3 py-2 text-sm outline-none disabled:cursor-not-allowed"
                 style={{ background: A.gray6, color: A.label, fontFamily: "inherit" }}
               />
               <button

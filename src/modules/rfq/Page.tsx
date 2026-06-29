@@ -30,9 +30,11 @@ type RfqViewMode = "list" | "detail";
 
 export default function PurchasingRFQPage({
   focus,
+  onNavigate,
   onActiveContextChange,
 }: {
   focus?: { entityType: string; entityId: string; at: number } | null;
+  onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [rfqs, setRfqs] = useState<RfqRecord[]>(RFQS);
@@ -177,6 +179,16 @@ export default function PurchasingRFQPage({
         refreshKey={selectedRfq.lastAuditId || selectedRfq.auditTrailIds?.join(",") || selectedRfq.status}
       />
       <div className="flex flex-wrap gap-2 mt-5">
+        {selectedRfq.sourceRequest && (
+          <button onClick={() => onNavigate?.("procurement:requests")} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: "#f0f6ff", color: A.blue }}>
+            查看来源 PR
+          </button>
+        )}
+        {selectedRfq.linkedPo && (
+          <button onClick={() => onNavigate?.("procurement:orders")} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: "#f0faf4", color: A.green }}>
+            查看关联 PO
+          </button>
+        )}
         {(selectedRfq.status === "比价中" || selectedRfq.status === "进行中") && (
           <button onClick={() => award(selectedRfq.id)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-white" style={{ background: A.blue }}>授标</button>
         )}

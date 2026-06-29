@@ -61,10 +61,11 @@ function invoiceTimeline(invoice: SupplierInvoice): TimelineStep[] {
 type SupplierInvoiceRegisterProps = {
   mode?: "procurement" | "finance";
   focus?: { entityType: string; entityId: string; at: number } | null;
+  onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 };
 
-export default function SupplierInvoiceRegister({ mode = "finance", focus, onActiveContextChange }: SupplierInvoiceRegisterProps) {
+export default function SupplierInvoiceRegister({ mode = "finance", focus, onNavigate, onActiveContextChange }: SupplierInvoiceRegisterProps) {
   const [invoices, setInvoices] = useState<SupplierInvoice[]>(SUPPLIER_INVOICES);
   const [statusFilter, setStatusFilter] = useState("全部");
   const [varianceFilter, setVarianceFilter] = useState("全部");
@@ -395,6 +396,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onAct
             />
             <DocumentEvidencePanel
               linkedDocuments={getInvoiceLinkedDocuments(selectedInvoice, purchaseOrders, receivingDocs)}
+              onNavigate={onNavigate}
               confidence={`${selectedInvoice.confidence || 0}%`}
               provenance={invoiceSourceLabel(selectedInvoice.source)}
               notes={selectedInvoice.notes || `${getInvoiceVarianceSummary(selectedInvoice)} 三单匹配用于比较 PO、GRN 与供应商发票的金额、数量与状态差异。`}

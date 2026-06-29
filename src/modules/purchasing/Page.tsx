@@ -108,9 +108,11 @@ function exportPoDetail(po: PurchaseOrder) {
 
 export default function PurchasingOrdersPage({
   focus,
+  onNavigate,
   onActiveContextChange,
 }: {
   focus?: { entityType: string; entityId: string; at: number } | null;
+  onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
@@ -323,6 +325,7 @@ export default function PurchasingOrdersPage({
       />
       <DocumentEvidencePanel
         linkedDocuments={getPoLinkedDocuments(selectedPO, SUPPLIER_INVOICES, receivingDocs)}
+        onNavigate={onNavigate}
         provenance={selectedPO.source || "manual"}
         notes={selectedPO.reason || selectedPO.approvalSnapshot?.summary || "采购订单详情用于审批、收货和供应商协同复核。"}
         evidence={[

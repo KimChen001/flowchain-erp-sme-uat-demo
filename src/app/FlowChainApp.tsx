@@ -417,6 +417,7 @@ export default function FlowChainApp() {
   const [searchError, setSearchError] = useState("");
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [searchFocus, setSearchFocus] = useState<GlobalSearchFocus | null>(null);
+  const [focusReturnActive, setFocusReturnActive] = useState("overview");
   const searchRef = useRef<HTMLFormElement | null>(null);
   const [unreadCount] = useState(3);
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
@@ -558,28 +559,47 @@ export default function FlowChainApp() {
     }
   }
 
+  function navigateTo(moduleId: string) {
+    setActive(moduleId);
+    setSearchFocus(null);
+  }
+
+  function clearFocus() {
+    setSearchFocus(null);
+  }
+
+  function returnFromFocus() {
+    setActive(focusReturnActive || "overview");
+    setSearchFocus(null);
+  }
+
   function openSearchResult(result: GlobalSearchResult) {
+    setFocusReturnActive(active);
     setActive(result.moduleId || "overview");
     setSearchFocus({ entityType: result.entityType, entityId: result.entityId, at: Date.now() });
     setSearchOpen(false);
     setActiveSearchIndex(-1);
   }
 
+  const focusEntityLabel = searchFocus
+    ? `${SEARCH_TYPE_LABELS[searchFocus.entityType] || searchFocus.entityType} · ${searchFocus.entityId}`
+    : "";
+
   const panels: Record<string, React.ReactNode> = {
-    overview:    <OverviewPanel onNavigate={setActive} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} />,
+    overview:    <OverviewPanel onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} />,
     inventory:   <InventoryPanel initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
     forecast:    <ForecastPanel />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
-    purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
-    purchasing:  <ProcurementPanel view="orders" focus={searchFocus} />,
-    rfq:         <ProcurementPanel view="rfq" focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
-    receiving:   <ReceivingPanel focus={searchFocus} />,
-    procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => setActive("procurement:rfq")} onActiveContextChange={setAiActiveContext} />,
+    purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => navigateTo("procurement:rfq")} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
+    purchasing:  <ProcurementPanel view="orders" focus={searchFocus} onNavigate={navigateTo} />,
+    rfq:         <ProcurementPanel view="rfq" focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
+    receiving:   <ReceivingPanel focus={searchFocus} onNavigate={navigateTo} />,
+    procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => navigateTo("procurement:rfq")} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     srm: <SrmPage initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
     "master-data": <MasterDataPage initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
     finance:     <FinanceWorkbench initialView={activeView as any} />,
-    reports:     <ReportsPanel initialView={activeView as any} onNavigate={setActive} />,
-    imports:     <ImportsPanel initialView={activeView as any} onNavigate={setActive} />,
+    reports:     <ReportsPanel initialView={activeView as any} onNavigate={navigateTo} />,
+    imports:     <ImportsPanel initialView={activeView as any} onNavigate={navigateTo} />,
   };
 
   function handleLogin(nextUser: DemoUser, token: string) {
@@ -639,7 +659,7 @@ export default function FlowChainApp() {
                   const isActive = activeModule === item.id;
                   return (
                     <div key={item.id} className="space-y-0.5">
-                      <button onClick={() => setActive(item.id)}
+                      <button onClick={() => navigateTo(item.id)}
                         className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-medium transition-colors duration-150"
                         style={isActive
                           ? { background: A.sidebarAccent, color: "#f8fafc" }
@@ -652,7 +672,7 @@ export default function FlowChainApp() {
                           {item.children.map((child) => {
                             const childActive = active === child.id || (active === item.id && child.id === item.id);
                             return (
-                              <button key={child.id} onClick={() => setActive(child.id)}
+                              <button key={child.id} onClick={() => navigateTo(child.id)}
                                 className="w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors"
                                 style={childActive
                                   ? { background: "rgba(37,99,235,0.16)", color: "#bfdbfe" }
@@ -881,6 +901,33 @@ export default function FlowChainApp() {
         <div className="flex-1 flex overflow-hidden">
           <main className="flex-1 overflow-auto p-6">
             <div id="module-export-scope" className={`mx-auto ${activeModule === "srm" ? "max-w-[1600px]" : "max-w-6xl"}`}>
+              {searchFocus && (
+                <div className="mb-4 rounded-xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                  style={{ background: "#f0f6ff", border: `1px solid ${A.border}` }}>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold" style={{ color: A.blue }}>当前聚焦</div>
+                    <div className="mt-1 truncate text-sm font-semibold tabular-nums" style={{ color: A.label }}>{focusEntityLabel}</div>
+                    <div className="mt-1 text-[11px]" style={{ color: A.sub }}>来自搜索或证据入口，可返回上一层或清除聚焦。</div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <button onClick={returnFromFocus}
+                      className="h-8 px-3 rounded-lg text-xs font-medium"
+                      style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(37,99,235,0.18)" }}>
+                      返回上一层
+                    </button>
+                    <button onClick={() => navigateTo(activeModule)}
+                      className="h-8 px-3 rounded-lg text-xs font-medium"
+                      style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(15,23,42,0.08)" }}>
+                      返回{activeModuleLabel}
+                    </button>
+                    <button onClick={clearFocus}
+                      className="h-8 px-3 rounded-lg text-xs font-medium"
+                      style={{ background: A.gray6, color: A.gray1 }}>
+                      清除聚焦
+                    </button>
+                  </div>
+                </div>
+              )}
               <PanelErrorBoundary key={active} moduleLabel={activeChildLabel || activeModuleLabel}>
                 {panels[activeModule] || panels[active] || panels.overview}
               </PanelErrorBoundary>

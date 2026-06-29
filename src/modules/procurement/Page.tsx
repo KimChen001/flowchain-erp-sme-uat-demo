@@ -22,32 +22,35 @@ type ProcurementPanelProps = {
   intent?: PurchaseIntent | null;
   onOpenRfq?: () => void;
   view?: PurTab;
+  onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
   focus?: { entityType: string; entityId: string; at: number } | null;
 };
 
-export default function ProcurementPanel({ intent = null, onOpenRfq, view, onActiveContextChange, focus }: ProcurementPanelProps) {
-  if (view === "requests") return <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
-  if (view === "orders") return <PurchasingOrders focus={focus} onActiveContextChange={onActiveContextChange} />;
-  if (view === "rfq") return <PurchasingRFQ focus={focus} onActiveContextChange={onActiveContextChange} />;
+export default function ProcurementPanel({ intent = null, onOpenRfq, view, onNavigate, onActiveContextChange, focus }: ProcurementPanelProps) {
+  if (view === "requests") return <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
+  if (view === "orders") return <PurchasingOrders focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
+  if (view === "rfq") return <PurchasingRFQ focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
   if (view === "contracts") return <ContractsPanel />;
-  if (view === "invoices") return <SupplierInvoiceRegister mode="procurement" focus={focus} onActiveContextChange={onActiveContextChange} />;
+  if (view === "invoices") return <SupplierInvoiceRegister mode="procurement" focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
   if (view === "match") return <ThreeWayMatchPanel />;
   if (view === "returns") return <PurchaseReturnsPanel />;
-  if (view === "receiving") return <ReceivingPanel focus={focus} />;
+  if (view === "receiving") return <ReceivingPanel focus={focus} onNavigate={onNavigate} />;
   if (view === "portal") return <SupplierPortalPanel />;
 
-  return <PurchasingPanel intent={intent} focus={focus} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />;
+  return <PurchasingPanel intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
 }
 
 function PurchasingPanel({
   intent,
   onOpenRfq,
+  onNavigate,
   onActiveContextChange,
   focus,
 }: {
   intent: PurchaseIntent | null;
   onOpenRfq?: () => void;
+  onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
   focus?: { entityType: string; entityId: string; at: number } | null;
 }) {
@@ -73,12 +76,12 @@ function PurchasingPanel({
     <div className="space-y-4">
       {tab !== "overview" && <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as PurTab)} />}
       {tab === "overview" && <ProcurementOverview onOpenTab={setTab} onOpenDetailViews={() => setTab("requests")} />}
-      {tab === "requests"  && <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onActiveContextChange={onActiveContextChange} />}
-      {tab === "orders"    && <PurchasingOrders focus={focus} onActiveContextChange={onActiveContextChange} />}
-      {tab === "rfq"       && <PurchasingRFQ focus={focus} onActiveContextChange={onActiveContextChange} />}
+      {tab === "requests"  && <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
+      {tab === "orders"    && <PurchasingOrders focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
+      {tab === "rfq"       && <PurchasingRFQ focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
       {tab === "contracts" && <ContractsPanel />}
-      {tab === "receiving" && <ReceivingPanel focus={focus} />}
-      {tab === "invoices"  && <SupplierInvoiceRegister mode="procurement" focus={focus} onActiveContextChange={onActiveContextChange} />}
+      {tab === "receiving" && <ReceivingPanel focus={focus} onNavigate={onNavigate} />}
+      {tab === "invoices"  && <SupplierInvoiceRegister mode="procurement" focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
       {tab === "match"     && <ThreeWayMatchPanel />}
       {tab === "returns"   && <PurchaseReturnsPanel />}
       {tab === "portal"    && <SupplierPortalPanel />}

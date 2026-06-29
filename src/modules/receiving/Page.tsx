@@ -148,8 +148,10 @@ const SUPPLIER_RETURNS: {
 type RecvTab = "ops" | "asn" | "qc" | "exceptions" | "returns";
 export default function ReceivingPanel({
   focus,
+  onNavigate,
 }: {
   focus?: { entityType: string; entityId: string; at: number } | null;
+  onNavigate?: (moduleId: string) => void;
 }) {
   const [tab, setTab] = useState<RecvTab>("ops");
   const tabs = [
@@ -167,7 +169,7 @@ export default function ReceivingPanel({
   return (
     <div className="space-y-4">
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as RecvTab)} />
-      {tab === "ops"        && <ReceivingOps focus={focus} />}
+      {tab === "ops"        && <ReceivingOps focus={focus} onNavigate={onNavigate} />}
       {tab === "asn"        && <ReceivingASN />}
       {tab === "qc"         && <ReceivingQC />}
       {tab === "exceptions" && <ReceivingExceptions />}
@@ -429,8 +431,10 @@ function ReceivingReturns() {
 
 function ReceivingOps({
   focus,
+  onNavigate,
 }: {
   focus?: { entityType: string; entityId: string; at: number } | null;
+  onNavigate?: (moduleId: string) => void;
 }) {
   const [docs, setDocs] = useState<ReceivingDoc[]>(receivingDocs);
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
@@ -938,6 +942,7 @@ function ReceivingOps({
               />
               <DocumentEvidencePanel
                 linkedDocuments={getGrnLinkedDocuments(selectedGrn, purchaseOrders, SUPPLIER_INVOICES)}
+                onNavigate={onNavigate}
                 provenance="GRN / API"
                 notes={selectedGrn.status === "异常处理" ? "异常收货需要进入采购退货、贷项通知或应付冲减流程，并会影响供应商发票匹配。" : "收货明细用于库存可用量、三单匹配和异常处理证据链。"}
                 evidence={[
