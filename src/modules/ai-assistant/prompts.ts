@@ -20,7 +20,7 @@ const MODULE_PROMPTS: Record<string, string[]> = {
   finance: ["查看待结算项", "解释差异原因", "下一步跟进"],
   reports: ["总结当前报表", "找出异常信号", "下一步建议"],
   imports: ["解释导入校验", "查看导入风险", "下一步建议"],
-  overview: GENERIC_PROMPTS,
+  overview: ["今天最需要处理什么？", "哪些采购单据有风险？", "哪些库存项目需要关注？"],
 };
 
 function exactlyThree(prompts: string[]) {

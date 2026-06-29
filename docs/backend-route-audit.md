@@ -9,6 +9,7 @@ FlowChain still runs a lightweight Node HTTP server through `server/routes/scm-l
 - `/api/health`: runtime health and API availability.
 - `/api/context`: active workbench context.
 - `/api/search`: global business search.
+- `/api/today-cockpit`: read-only overview aggregation for procurement and inventory workbench cards, evidence, and recommended next actions.
 - `/api/inventory/*`: inventory item, lot, serial, movement, exception, and summary reads.
 - `/api/procurement/*`: procurement document, link, follow-up, and summary reads.
 - `/api/master-data/*`: supplier, item, and master-data reads.
@@ -34,6 +35,7 @@ FlowChain still runs a lightweight Node HTTP server through `server/routes/scm-l
 ## Boundary Observations
 
 - Procurement read APIs are now separated from legacy write handlers.
+- Today Cockpit v2 reuses procurement and inventory read models and is covered by read-only mutation tests.
 - Existing AI chat and auth routes still write runtime events or user records; smoke tests against the shared local JSON file should account for that behavior.
 - Inventory read APIs already follow a pure domain model pattern and provided the template for procurement read APIs.
 - Search and AI still use their existing domain-specific assemblers. Procurement read-model evidence is now normalized for future reuse, but those consumers should be consolidated only after ranking, card shape, and intent tests are expanded.
