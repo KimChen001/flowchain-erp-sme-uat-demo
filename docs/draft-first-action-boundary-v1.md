@@ -1,0 +1,76 @@
+# Draft-first Action Boundary v1
+
+## Purpose
+
+Draft-first Action Boundary v1 defines how AI-assisted actions should appear before FlowChain adds any confirmed write behavior. AI can prepare reviewable drafts, but it cannot submit, send, post, close, or create business records autonomously.
+
+## Supported Draft Action Types
+
+- `purchase_request_draft`
+- `rfq_draft`
+- `po_followup_draft`
+- `inventory_exception_closure_draft`
+- `supplier_followup_draft`
+
+Each draft uses common fields:
+
+- `id`
+- `type`
+- `title`
+- `status`
+- `source`
+- `createdBy`
+- `createdAt`
+- `requiresConfirmation`
+- `originEvidence`
+- `payload`
+- `validation`
+- `auditTrail`
+
+The only current status is `preview`.
+
+## Preview-only API
+
+- `GET /api/action-drafts/schema`
+- `POST /api/action-drafts/preview`
+
+The preview endpoint validates a draft payload and returns a draft shape. It does not call `writeDb`, persist a draft, create a PR/RFQ/PO, close inventory exceptions, or send supplier messages.
+
+## Confirmation Boundary
+
+- A draft is not submitted.
+- A user must review the draft.
+- A user must confirm before any future write behavior.
+- Future confirmation actions must be explicit and type-specific.
+- Autonomous execution is not allowed.
+
+## Audit Boundary
+
+Future confirmed actions should record audit events that include:
+
+- actor and source;
+- draft type and confirmed action;
+- origin evidence;
+- before/after state where applicable.
+
+The boundary does not store secrets and does not store raw prompts by default.
+
+## Conceptual Mapping
+
+- Today Cockpit inventory risk -> `purchase_request_draft`
+- Today Cockpit procurement followup -> `supplier_followup_draft`
+- Three-way match exception -> `po_followup_draft`
+- Inventory exception -> `inventory_exception_closure_draft`
+- AI PR prompt -> `purchase_request_draft`
+- AI RFQ prompt -> `rfq_draft`
+
+## Non-goals
+
+- No real PR, RFQ, or PO creation.
+- No inventory mutation.
+- No receiving posting.
+- No supplier message sending.
+- No payment execution.
+- No database persistence.
+- No autonomous actions.
+- No external AI provider enablement.
