@@ -3,6 +3,7 @@ import { buildAiDraftPreparationResponse } from '../domain/ai-draft-preparation.
 import { buildAiChatStatusResponse, normalizeAiChatMessage } from '../domain/ai-chat-status.mjs'
 import { buildAiProcurementOperationalResponse } from '../domain/ai-procurement-operational-query.mjs'
 import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-query.mjs'
+import { buildAiSupplierOperationalResponse } from '../domain/ai-supplier-operational-query.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
 import {
@@ -394,6 +395,21 @@ export async function handleAiRoute(ctx) {
     const body = await readBody(req)
     body.question = normalizeAiChatMessage(body)
     if (!body.question) return send(res, 400, { error: 'question is required' })
+
+    const supplierOperationalQuery = buildAiSupplierOperationalResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs })
+    if (supplierOperationalQuery) {
+      const result = {
+        ...supplierOperationalQuery,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      event(db, 'ai_supplier_operational_query', `AI answered ${result.intent.name} via ${result.provider}`, result.intent.name)
+      await writeDb(db)
+      send(res, 200, result)
+      return true
+    }
 
     const statusQuery = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
     const deferredProcurementException = statusQuery?.intent?.name === 'procurement_exception_query' ? statusQuery : null

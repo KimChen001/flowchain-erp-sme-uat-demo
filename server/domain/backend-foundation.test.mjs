@@ -93,8 +93,11 @@ test('GET /api/ai/tools returns controlled AI tool registry', async () => {
 
   assert.ok(handled)
   assert.equal(route.response.status, 200)
-  assert.equal(route.response.payload.tools.length, 19)
+  assert.equal(route.response.payload.tools.length, 22)
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getSupplierStatus'))
+  assert.ok(route.response.payload.tools.some((tool) => tool.name === 'resolveSupplierEntity'))
+  assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getSupplierOperationalSummary'))
+  assert.ok(route.response.payload.tools.some((tool) => tool.name === 'compareSupplierOperations'))
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getPurchaseRequestStatus'))
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getReceivingExceptions'))
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getRfqSupplierResponses'))

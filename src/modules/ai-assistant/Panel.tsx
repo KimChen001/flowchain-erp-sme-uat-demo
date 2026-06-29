@@ -195,6 +195,101 @@ function AiResponseCard({ card }: { card: AiChatCard }) {
           ]} />
         </CardShell>
       );
+    case "supplier_operational_summary":
+      return (
+        <CardShell title={card.title || textValue(data.supplierName) || "供应商运营摘要"}>
+          <KeyValueGrid fields={[
+            ["供应商", data.supplierName || data.supplierId],
+            ["状态", data.status],
+            ["风险", data.risk],
+            ["评分", data.score],
+            ["开放 PO", data.openPoCount],
+            ["逾期 PO", data.overduePoCount],
+            ["发票差异", data.invoiceIssueCount],
+            ["有效合同", data.activeContractCount],
+            ["库存风险", data.inventoryRiskItemCount],
+            ["开放 RFQ", data.openRfqCount],
+            ["下一步", data.nextAction],
+          ]} />
+        </CardShell>
+      );
+    case "supplier_related_po_summary":
+      return (
+        <CardShell title={card.title || "供应商 PO"}>
+          <KeyValueGrid fields={[
+            ["总 PO", data.totalPoCount],
+            ["开放 PO", data.openPoCount],
+            ["逾期 PO", data.overduePoCount],
+            ["临期 PO", data.dueSoonPoCount],
+          ]} />
+          <MiniList items={compactProcurementList(arrayValue(data.topPurchaseOrders), "po")} limit={3} />
+        </CardShell>
+      );
+    case "supplier_invoice_summary":
+      return (
+        <CardShell title={card.title || "供应商发票"}>
+          <KeyValueGrid fields={[
+            ["发票数", data.invoiceCount],
+            ["差异数", data.invoiceVarianceCount],
+            ["待复核", data.pendingReviewCount],
+            ["贷项金额", data.creditMemoAmount],
+            ["对账状态", data.reconciliationStatus],
+          ]} />
+          <MiniList items={arrayValue(data.topIssues)} limit={3} />
+        </CardShell>
+      );
+    case "supplier_contract_summary":
+      return (
+        <CardShell title={card.title || "供应商合同"}>
+          <KeyValueGrid fields={[
+            ["有效合同", data.activeContractCount],
+            ["即将到期", data.expiringContractCount],
+            ["已到期", data.expiredContractCount],
+          ]} />
+          <MiniList items={arrayValue(data.topContracts)} limit={3} />
+        </CardShell>
+      );
+    case "supplier_inventory_risk_summary":
+      return (
+        <CardShell title={card.title || "供应商库存风险"}>
+          <KeyValueGrid fields={[
+            ["关联物料", data.relatedItemCount],
+            ["风险物料", data.inventoryRiskItemCount],
+          ]} />
+          <MiniList items={arrayValue(data.topRiskItems)} limit={3} />
+        </CardShell>
+      );
+    case "supplier_rfq_summary":
+      return (
+        <CardShell title={card.title || "供应商 RFQ"}>
+          <KeyValueGrid fields={[
+            ["总 RFQ", data.totalRfqCount],
+            ["开放 RFQ", data.openRfqCount],
+            ["待回复", data.pendingResponseCount],
+          ]} />
+          <MiniList items={arrayValue(data.topRfqs)} limit={3} />
+        </CardShell>
+      );
+    case "supplier_operational_comparison":
+      return (
+        <CardShell title={card.title || "供应商运营对比"}>
+          <MiniList
+            items={arrayValue(data.suppliers).map((supplier) => {
+              const row = typeof supplier === "object" && supplier ? supplier as Record<string, unknown> : {};
+              return {
+                title: bestText(row.supplierName, row.supplierId),
+                reason: [
+                  `开放 PO ${textValue(row.openPoCount)}`,
+                  `发票差异 ${textValue(row.invoiceIssueCount)}`,
+                  `库存风险 ${textValue(row.inventoryRiskItemCount)}`,
+                  row.nextAction,
+                ].filter(hasValue).join(" · "),
+              };
+            })}
+            limit={3}
+          />
+        </CardShell>
+      );
     case "inventory_status":
       return (
         <CardShell title={card.title || textValue(data.sku) || "库存状态"}>
