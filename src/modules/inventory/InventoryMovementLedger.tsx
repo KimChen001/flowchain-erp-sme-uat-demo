@@ -75,7 +75,7 @@ export default function InventoryMovementLedger() {
       return;
     }
     exportRowsToCsv("inventory-movement-ledger-export.csv", inventoryMovementExportRows(visibleMovements));
-    toast.success("导出文件已生成", { description: "库存事务流水 CSV" });
+    toast.success("导出文件已生成", { description: "库存事务流水已导出" });
   }
 
   return (

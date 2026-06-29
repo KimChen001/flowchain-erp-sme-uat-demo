@@ -573,7 +573,7 @@ function InventoryTransfers() {
           </button>
         </div>
         <div className={tableScrollClass}>
-        <table className={tableMinMdClass}>
+        <table className="w-full min-w-[1320px] text-xs">
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["调拨号", "源仓 → 目标仓", "SKU / 品名", "数量", "申请人", "承运商", "创建", "ETA", "状态", "操作"].map((h) => (
@@ -585,25 +585,25 @@ function InventoryTransfers() {
             {list.map((t, i) => (
               <tr key={t.id} className="hover:bg-blue-50/40 transition-colors"
                 style={{ borderBottom: i < list.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className="px-4 py-3 font-medium tabular-nums" style={{ color: A.indigo }}>{t.id}</td>
-                <td className="px-4 py-3" style={{ color: A.label }}>
-                  {t.from} <ArrowRight size={10} className="inline mx-1" style={{ color: A.gray2 }} /> <span style={{ color: A.blue }}>{t.to}</span>
+                <td className={tdIdClass} style={{ color: A.indigo }}>{t.id}</td>
+                <td className={`${tdNowrapClass} min-w-[180px]`} style={{ color: A.label }}>
+                  <span className="whitespace-nowrap">{t.from}</span> <ArrowRight size={10} className="inline mx-1" style={{ color: A.gray2 }} /> <span className="whitespace-nowrap" style={{ color: A.blue }}>{t.to}</span>
                 </td>
-                <td className="px-4 py-3" style={{ color: A.label }}>
-                  <span style={{ color: A.blue }}>{t.sku}</span> · {t.name}
+                <td className={`${tdNameClass} max-w-[260px]`} style={{ color: A.label }}>
+                  <span className="whitespace-nowrap" style={{ color: A.blue }}>{t.sku}</span> <span style={{ color: A.gray2 }}>·</span> <span className="truncate align-bottom inline-block max-w-[160px]">{t.name}</span>
                 </td>
-                <td className="px-4 py-3 tabular-nums font-medium" style={{ color: A.label }}>{t.qty.toLocaleString()}</td>
-                <td className="px-4 py-3" style={{ color: A.sub }}>{t.requester}</td>
-                <td className="px-4 py-3" style={{ color: A.sub }}>{t.carrier}</td>
-                <td className="px-4 py-3" style={{ color: A.gray1 }}>{t.created}</td>
-                <td className="px-4 py-3" style={{ color: A.gray1 }}>{t.eta}</td>
-                <td className="px-4 py-3"><Chip label={t.status} color={statusColor(t.status)} bg={`${statusColor(t.status)}18`} /></td>
-                <td className="px-4 py-3">
+                <td className={tdNumericClass} style={{ color: A.label }}>{t.qty.toLocaleString()}</td>
+                <td className={`${tdNameClass} max-w-[120px] truncate`} style={{ color: A.sub }}>{t.requester}</td>
+                <td className={`${tdNameClass} max-w-[150px] truncate`} style={{ color: A.sub }}>{t.carrier}</td>
+                <td className={tdNowrapClass} style={{ color: A.gray1 }}>{t.created}</td>
+                <td className={tdNowrapClass} style={{ color: A.gray1 }}>{t.eta}</td>
+                <td className={tdNowrapClass}><Chip label={t.status} color={statusColor(t.status)} bg={`${statusColor(t.status)}18`} /></td>
+                <td className={`${tdActionClass} min-w-[150px]`}>
                   {t.status === "待审批" && (
-                    <button onClick={() => approve(t.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>批准</button>
+                    <button onClick={() => approve(t.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white whitespace-nowrap" style={{ background: A.blue }}>批准</button>
                   )}
                   {(t.status === "在途" || t.status === "已发出") && (
-                    <button onClick={() => receive(t.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white" style={{ background: A.green }}>签收</button>
+                    <button onClick={() => receive(t.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white whitespace-nowrap" style={{ background: A.green }}>签收</button>
                   )}
                   {t.status === "已签收" && (
                     <span className="text-[11px]" style={{ color: A.gray2 }}>—</span>

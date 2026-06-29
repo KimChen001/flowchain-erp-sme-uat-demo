@@ -52,3 +52,8 @@ End-user AI output should be plain business language plus structured cards.
 - AI message text should normalize amount-context shorthand such as `金额14.2万`, `发票金额1.4万`, and `差异金额0.86万` to full currency display.
 - Do not convert non-amount business words that contain `万`, such as `万向节`.
 - Customer-facing AI copy should use FlowChain workbench language and avoid broad product claims that are not supported by the current screen.
+
+## Export And Inventory Tables
+
+- Customer-facing export labels and toasts should describe the business result, such as `导出文件已生成` or `库存事务流水已导出`; CSV can remain an implementation detail.
+- Inventory transfer tables should follow the same nowrap/readability rules as movement and exception tables: IDs, SKUs, dates, status chips, quantities, and action buttons stay on one line, while item names and long owner/carrier values truncate.
