@@ -10,6 +10,7 @@ import { handlePurchaseOrdersRoute } from './purchase-orders.routes.mjs'
 import { handlePurchaseRequestsRoute } from './purchase-requests.routes.mjs'
 import { handleReceivingRoute } from './receiving.routes.mjs'
 import { handleRfqsRoute } from './rfqs.routes.mjs'
+import { handleInventoryRoute } from './inventory.routes.mjs'
 import { handleInventoryMovementsRoute } from './inventory-movements.routes.mjs'
 import { handleSupplierPerformanceRoute } from './supplier-performance.routes.mjs'
 import { handleSupplierRecommendationsRoute } from './supplier-recommendations.routes.mjs'
@@ -974,6 +975,7 @@ export function createScmServer() {
     if (await handleSopRoute(routeContext)) return
     if (await handleContextRoute(routeContext)) return
     if (await handleSearchRoute(routeContext)) return
+    if (await handleInventoryRoute(routeContext)) return
     if (await handleMasterDataRoute(routeContext)) return
     if (await handleMarketRoute(routeContext)) return
     if (await handleAiRoute(routeContext)) return

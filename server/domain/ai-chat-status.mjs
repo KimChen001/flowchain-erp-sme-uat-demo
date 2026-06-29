@@ -7,6 +7,7 @@ import {
   activeContextEvidence,
   resolveContextualEntityId,
 } from './ai-active-context.mjs'
+import { buildInventoryItems, buildInventoryMovements } from './inventory-read.mjs'
 
 export const aiChatStatusCapabilityCatalog = Object.freeze([
   {
@@ -150,10 +151,17 @@ function itemQuantity(item = {}) {
 }
 
 function rawItemFor(db = {}, item = {}) {
-  return asArray(db.products).find((product) =>
+  const raw = asArray(db.products).find((product) =>
     [product.id, product.itemId, product.sku, product.code, product.name, product.itemName]
       .some((value) => value && [item.id, item.sku, item.name].some((candidate) => normalizedText(value) === normalizedText(candidate)))
   ) || {}
+  const hasQuantityField = ['availableQuantity', 'onHandQuantity', 'onHandQty', 'stockOnHand', 'stock', 'quantityAvailable', 'currentStock']
+    .some((key) => raw[key] !== undefined && raw[key] !== null && raw[key] !== '')
+  if (!hasQuantityField) return raw
+  return buildInventoryItems(db).find((product) =>
+    [product.sku, product.itemName]
+      .some((value) => value && [item.id, item.sku, item.name].some((candidate) => normalizedText(value) === normalizedText(candidate)))
+  ) || raw
 }
 
 function quantityForItem(db = {}, item = {}) {
@@ -167,8 +175,8 @@ function purchaseRequestsFor(db = {}, options = {}) {
 }
 
 function inventoryMovementsFor(db = {}, options = {}) {
-  if (typeof options.ensureInventoryMovements === 'function') return asArray(options.ensureInventoryMovements(db))
-  return asArray(db.inventoryMovements)
+  if (typeof options.ensureInventoryMovements === 'function') return buildInventoryMovements({ ...db, inventoryMovements: options.ensureInventoryMovements(db) })
+  return buildInventoryMovements(db)
 }
 
 function movementItemMatches(movement = {}, item = {}) {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, ClipboardList, FileSpreadsheet, Inbox, PackageMinus, PackagePlus, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { A, Card, Chip, inputStyle, KpiCard, Modal, SectionHeader } from "../../components/ui";
@@ -16,6 +16,7 @@ import {
 import { exportRowsToCsv } from "../../lib/data-export";
 import type { InventoryMovement, InventoryMovementStatus, InventoryMovementType } from "../../types/scm";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
+import { fetchInventoryMovements } from "./api";
 
 function statusTone(status: InventoryMovementStatus) {
   if (status === "已确认" || status === "已关闭") return { color: A.green, bg: "#f0faf4" };
@@ -42,19 +43,30 @@ function quantityText(value: number) {
 }
 
 export default function InventoryMovementLedger() {
+  const [movements, setMovements] = useState<InventoryMovement[]>(INVENTORY_MOVEMENT_LEDGER);
   const [typeFilter, setTypeFilter] = useState<"全部" | InventoryMovementType>("全部");
   const [statusFilter, setStatusFilter] = useState<"全部" | InventoryMovementStatus>("全部");
   const [warehouseFilter, setWarehouseFilter] = useState("全部");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<InventoryMovement | null>(null);
 
-  const warehouses = useMemo(() => ["全部", ...Array.from(new Set(INVENTORY_MOVEMENT_LEDGER.map((item) => item.warehouse)))], []);
-  const visibleMovements = useMemo(() => filterInventoryMovements(INVENTORY_MOVEMENT_LEDGER, {
+  useEffect(() => {
+    let alive = true;
+    fetchInventoryMovements(INVENTORY_MOVEMENT_LEDGER).then((rows) => {
+      if (alive) setMovements(rows);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const warehouses = useMemo(() => ["全部", ...Array.from(new Set(movements.map((item) => item.warehouse)))], [movements]);
+  const visibleMovements = useMemo(() => filterInventoryMovements(movements, {
     type: typeFilter,
     status: statusFilter,
     warehouse: warehouseFilter,
     search,
-  }), [search, statusFilter, typeFilter, warehouseFilter]);
+  }), [movements, search, statusFilter, typeFilter, warehouseFilter]);
   const summary = inventoryMovementSummary(visibleMovements);
 
   function exportLedger() {

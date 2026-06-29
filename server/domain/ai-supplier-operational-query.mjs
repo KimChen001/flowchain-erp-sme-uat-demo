@@ -3,6 +3,7 @@ import {
   activeContextEvidence,
   activeContextEntity,
 } from './ai-active-context.mjs'
+import { buildInventoryItems } from './inventory-read.mjs'
 
 export const aiSupplierOperationalCapabilityCatalog = Object.freeze([
   {
@@ -470,7 +471,7 @@ function itemMatchesSupplier(item = {}, supplier = {}) {
 
 function itemsFor(db = {}, supplier = {}) {
   const masterItems = listMasterItems(db)
-  const rawProducts = asArray(db.products)
+  const rawProducts = buildInventoryItems(db)
   const merged = new Map()
   rawProducts.forEach((item) => merged.set(cleanText(item.id || item.sku || item.name), item))
   masterItems.forEach((item) => {

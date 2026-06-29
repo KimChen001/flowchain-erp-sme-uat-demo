@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, FileSpreadsheet, LockKeyhole, Search, Shuffle, SlidersHorizontal, XCircle } from "lucide-react";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
@@ -20,6 +20,7 @@ import {
   type InventoryExceptionDocumentType,
 } from "../../domain/inventory/exceptions";
 import { exportRowsToCsv } from "../../lib/data-export";
+import { fetchInventoryExceptions } from "./api";
 
 function statusStyle(status: InventoryExceptionDocumentStatus) {
   if (status === "已关闭" || status === "已复核") return { color: A.green, bg: "#f0faf4" };
@@ -50,6 +51,16 @@ export default function InventoryExceptionDocuments() {
   const [warehouseFilter, setWarehouseFilter] = useState("全部");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<InventoryExceptionDocument | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchInventoryExceptions(buildInventoryExceptionDocuments()).then((rows) => {
+      if (alive) setDocuments(rows);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const warehouses = useMemo(() => ["全部", ...Array.from(new Set(documents.map((doc) => doc.warehouse)))], [documents]);
   const visible = useMemo(() => {

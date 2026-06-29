@@ -3,6 +3,7 @@ import {
   listMasterSuppliers,
   listMasterWarehouses,
 } from './master-data.mjs'
+import { buildInventoryItems } from './inventory-read.mjs'
 
 const TYPE_ALIASES = {
   purchase_request: ['pr', '采购申请', '申请'],
@@ -342,19 +343,19 @@ function inventoryStatus(item) {
 }
 
 function inventoryResults(db) {
-  return asArray(db.products)
-    .filter((item) => item.currentStock !== undefined || item.safetyStock !== undefined || item.stockoutRisk !== undefined)
+  return buildInventoryItems(db)
+    .filter((item) => item.availableQuantity !== undefined || item.safetyStock !== undefined || item.riskLevel)
     .map((item) => {
-      const sku = item.sku || item.id
-      const currentStock = Number(item.currentStock ?? item.available ?? item.stock ?? 0)
-      const safetyStock = Number(item.safetyStock ?? item.minStock ?? item.min ?? 0)
-      const status = inventoryStatus(item)
-      const warehouse = item.defaultWarehouseId || item.warehouseId || item.warehouse
+      const sku = item.sku
+      const currentStock = Number(item.availableQuantity || 0)
+      const safetyStock = Number(item.safetyStock || 0)
+      const status = item.status || item.riskLevel
+      const warehouse = item.defaultWarehouseId
       return makeResult({
         type: 'inventory_item',
         label: sku,
         subtitle: compact([
-          item.name,
+          item.itemName,
           status,
           warehouse,
           `可用 ${numberText(currentStock)}${text(item.unit)}`,
@@ -363,21 +364,20 @@ function inventoryResults(db) {
         status,
         moduleId: 'inventory',
         entityId: sku,
-        entityLabel: item.name || sku,
+        entityLabel: item.itemName || sku,
         fields: {
           sku,
-          itemId: item.id,
-          itemName: item.name,
+          itemName: item.itemName,
           category: item.category,
           warehouse,
-          supplier: item.supplier || item.preferredSupplierId,
+          supplier: item.supplier,
           currentStock,
           safetyStock,
-          risk: status,
+          risk: item.riskLevel || status,
           aliases: '库存 低库存 缺货 补货 安全库存 stock inventory reorder shortage',
         },
         evidence: [
-          evidence('品名', item.name),
+          evidence('品名', item.itemName),
           evidence('可用库存', `${numberText(currentStock)}${text(item.unit)}`),
           evidence('安全库存', safetyStock > 0 ? `${numberText(safetyStock)}${text(item.unit)}` : ''),
           evidence('状态', status),

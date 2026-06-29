@@ -23,6 +23,13 @@ import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
 import { buildInventoryExceptionDocuments } from "../../domain/inventory/exceptions";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
+  fetchInventoryItems,
+  fetchInventoryLots,
+  fetchInventorySerials,
+  fetchInventorySummary,
+  type InventoryStockItem,
+} from "./api";
+import {
   tableMinLgClass,
   tableMinMdClass,
   tableMinSmClass,
@@ -82,11 +89,11 @@ function exportCsv(filename: string, rows: Record<string, unknown>[]) {
   toast.success("导出文件已生成");
 }
 
-function InventoryOverview() {
+function InventoryOverview({ items }: { items: InventoryStockItem[] }) {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("全部");
   const [generatedRequests, setGeneratedRequests] = useState<Record<string, string>>({});
-  const plannedItems = inventoryItems.map((item) => ({ ...item, plan: inventoryPlan(item) }));
+  const plannedItems = items.map((item) => ({ ...item, plan: inventoryPlan(item) }));
   const filtered = plannedItems.filter((i) => {
     const matchSearch = i.name.includes(search) || i.sku.includes(search);
     const matchStatus = filterStatus === "全部" || i.status === filterStatus;
@@ -95,7 +102,7 @@ function InventoryOverview() {
   const shortageItems = plannedItems.filter((i) => i.plan.suggestedQty > 0);
   const highPriority = shortageItems.filter((i) => i.plan.priority === "高").length;
   const replenishmentAmount = shortageItems.reduce((sum, item) => sum + item.plan.amount, 0);
-  const avgTurnover = inventoryItems.reduce((sum, item) => sum + item.turnover, 0) / inventoryItems.length;
+  const avgTurnover = items.reduce((sum, item) => sum + item.turnover, 0) / Math.max(items.length, 1);
   const weightedCoverage = plannedItems.reduce((sum, item) => sum + item.plan.daysCover * Math.max(item.plan.monthlyDemand, 1), 0) /
     plannedItems.reduce((sum, item) => sum + Math.max(item.plan.monthlyDemand, 1), 0);
 
@@ -152,7 +159,7 @@ function InventoryOverview() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="SKU 总数" value={String(inventoryItems.length)} sub="库存控制台" icon={Package} color={A.blue} />
+        <KpiCard label="SKU 总数" value={String(items.length)} sub="库存控制台" icon={Package} color={A.blue} />
         <KpiCard label="需补货 SKU" value={String(shortageItems.length)} sub={`${highPriority} 个高优先级`} delta="按 ROP 计算" positive={false} icon={XCircle} color={A.red} />
         <KpiCard label="建议 PR 金额" value={fmt(replenishmentAmount)} sub="MOQ/批量修正后" icon={ClipboardCheck} color={A.orange} />
         <KpiCard label="加权覆盖天数" value={`${weightedCoverage.toFixed(0)}天`} sub={`周转 ${avgTurnover.toFixed(1)}x`} positive icon={Activity} color={A.green} />
@@ -321,11 +328,17 @@ function InventoryOverview() {
 // ─── Inventory · Lots & Serials ────────────────────────────────────────────────
 
 
-function InventoryLots() {
+function InventoryLots({
+  lots = LOTS,
+  serials = SERIALS,
+}: {
+  lots?: typeof LOTS;
+  serials?: typeof SERIALS;
+}) {
   const [tab, setTab] = useState<"lot" | "sn">("lot");
   const [filter, setFilter] = useState<"全部" | "可用" | "冻结" | "近效期" | "已分配">("全部");
-  const lots = filter === "全部" ? LOTS : LOTS.filter((l) => l.status === filter);
-  const serials = filter === "全部" || filter === "近效期" ? SERIALS : SERIALS.filter((s) => s.status === filter);
+  const visibleLots = filter === "全部" ? lots : lots.filter((l) => l.status === filter);
+  const visibleSerials = filter === "全部" || filter === "近效期" ? serials : serials.filter((s) => s.status === filter);
 
   function pillColor(s: string) {
     return s === "可用" || s === "在库" ? A.green
@@ -342,7 +355,7 @@ function InventoryLots() {
 
   function exportLotsCsv() {
     if (tab === "lot") {
-      exportCsv("inventory-lots-export.csv", lots.map((lot) => ({
+      exportCsv("inventory-lots-export.csv", visibleLots.map((lot) => ({
         "批次号": lot.lot,
         "SKU": lot.sku,
         "品名": lot.name,
@@ -356,7 +369,7 @@ function InventoryLots() {
       })));
       return;
     }
-    exportCsv("inventory-serials-export.csv", serials.map((serial) => ({
+    exportCsv("inventory-serials-export.csv", visibleSerials.map((serial) => ({
       "序列号": serial.sn,
       "SKU": serial.sku,
       "所属批次": serial.lot,
@@ -369,10 +382,10 @@ function InventoryLots() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="活跃批次"   value={String(LOTS.length)}  sub="跨 5 个库区"                icon={Layers}      color={A.blue}   />
-        <KpiCard label="序列号库存" value={SERIALS.length + " 件"} sub="高值件全程追溯"             icon={Hash}        color={A.purple} />
-        <KpiCard label="近效期批次" value="1"                    sub="≤ 90 天到期" delta="预警"     positive={false} icon={Clock}       color={A.orange} />
-        <KpiCard label="冻结批次"   value="1"                    sub="质量复检中"                  icon={ShieldCheck} color={A.red}    />
+        <KpiCard label="活跃批次"   value={String(lots.length)}  sub="跨库区追溯"                icon={Layers}      color={A.blue}   />
+        <KpiCard label="序列号库存" value={serials.length + " 件"} sub="高值件全程追溯"             icon={Hash}        color={A.purple} />
+        <KpiCard label="近效期批次" value={String(lots.filter((lot) => lot.status === "近效期").length)} sub="≤ 90 天到期" delta="预警" positive={false} icon={Clock} color={A.orange} />
+        <KpiCard label="冻结批次"   value={String(lots.filter((lot) => lot.status === "冻结").length)} sub="质量复检中" icon={ShieldCheck} color={A.red} />
       </div>
 
       <Card>
@@ -383,7 +396,7 @@ function InventoryLots() {
           <SegmentedControl
             options={["全部", "可用", "冻结", "近效期"].map((s) => ({ label: s, value: s }))}
             value={filter} onChange={(v) => setFilter(v as any)} />
-          <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{tab === "lot" ? lots.length : serials.length} 条</span>
+          <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{tab === "lot" ? visibleLots.length : visibleSerials.length} 条</span>
           <button onClick={exportLotsCsv}
             className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
             <FileSpreadsheet size={11} /> 导出当前结果
@@ -402,9 +415,9 @@ function InventoryLots() {
                 </tr>
               </thead>
               <tbody>
-                {lots.map((l, i) => (
+                {visibleLots.map((l, i) => (
                   <tr key={l.lot} className="hover:bg-blue-50/40 transition-colors"
-                    style={{ borderBottom: i < lots.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                    style={{ borderBottom: i < visibleLots.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                     <td className={tdIdClass} style={{ color: A.indigo }}>{l.lot}</td>
                     <td className={tdNowrapClass} style={{ color: A.blue }}>{l.sku}</td>
                     <td className={`${tdNameClass} max-w-[220px] truncate font-medium`} style={{ color: A.label }}>{l.name}</td>
@@ -435,9 +448,9 @@ function InventoryLots() {
                 </tr>
               </thead>
               <tbody>
-                {serials.map((s, i) => (
+                {visibleSerials.map((s, i) => (
                   <tr key={s.sn} className="hover:bg-blue-50/40 transition-colors"
-                    style={{ borderBottom: i < serials.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                    style={{ borderBottom: i < visibleSerials.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                     <td className={tdIdClass} style={{ color: A.purple }}>{s.sn}</td>
                     <td className={tdNowrapClass} style={{ color: A.blue }}>{s.sku}</td>
                     <td className={tdNowrapClass} style={{ color: A.indigo }}>{s.lot}</td>
@@ -459,7 +472,7 @@ function InventoryLots() {
       <Card className="p-5">
         <SectionHeader title="近效期预警 (FEFO 策略)" />
         <div className="space-y-2">
-          {LOTS.filter((l) => l.expiry !== "—").map((l) => {
+          {lots.filter((l) => l.expiry !== "—").map((l) => {
             const isWarn = l.status === "近效期";
             return (
               <div key={l.lot} className="flex items-center gap-3 p-3 rounded-xl"
@@ -1046,15 +1059,37 @@ export default function InventoryPage({
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [tab, setTab] = useState<InvTab>(initialView);
+  const [stockItems, setStockItems] = useState<InventoryStockItem[]>(inventoryItems);
+  const [lots, setLots] = useState<typeof LOTS>(LOTS);
+  const [serials, setSerials] = useState<typeof SERIALS>(SERIALS);
+  const [summary, setSummary] = useState<{ itemCount?: number; movementCount?: number; exceptionCount?: number; lotCount?: number; serialCount?: number }>({});
   const exceptionCount = useMemo(() => buildInventoryExceptionDocuments().length, []);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      fetchInventoryItems(inventoryItems),
+      fetchInventoryLots(LOTS),
+      fetchInventorySerials(SERIALS),
+      fetchInventorySummary(),
+    ]).then(([items, lotRows, serialRows, summarySnapshot]) => {
+      if (!alive) return;
+      setStockItems(items);
+      setLots(lotRows);
+      setSerials(serialRows);
+      setSummary(summarySnapshot);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const tabs = [
-    { id: "overview",  label: "库存总览",  icon: Package,         count: "8,412" },
-    { id: "lots",      label: "批次/序列号", icon: Layers,          count: LOTS.length },
+    { id: "overview",  label: "库存总览",  icon: Package,         count: summary.itemCount || stockItems.length },
+    { id: "lots",      label: "批次/序列号", icon: Layers,          count: summary.lotCount || lots.length },
     { id: "transfer",  label: "库间调拨",    icon: ArrowLeftRight,  count: TRANSFERS.length },
     { id: "count",     label: "循环盘点",    icon: ClipboardCheck,  count: COUNT_PLANS.length },
     { id: "abcxyz",    label: "ABC/XYZ 分类", icon: Boxes,           count: "10" },
-    { id: "movements", label: "事务流水",    icon: History,         count: INVENTORY_MOVEMENT_LEDGER.length },
-    { id: "exceptions", label: "库存异常单据", icon: AlertTriangle,   count: exceptionCount },
+    { id: "movements", label: "事务流水",    icon: History,         count: summary.movementCount || INVENTORY_MOVEMENT_LEDGER.length },
+    { id: "exceptions", label: "库存异常单据", icon: AlertTriangle,   count: summary.exceptionCount || exceptionCount },
     { id: "bins",      label: "库位地图",    icon: Grid3x3,         count: "60" },
   ] as const;
   useEffect(() => {
@@ -1074,8 +1109,8 @@ export default function InventoryPage({
   return (
     <div className="space-y-4">
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as InvTab)} />
-      {tab === "overview"  && <InventoryLanding focus={focus} onOpenTab={setTab} onActiveContextChange={onActiveContextChange} />}
-      {tab === "lots"      && <InventoryLots />}
+      {tab === "overview"  && <InventoryLanding items={stockItems} lots={lots} focus={focus} onOpenTab={setTab} onActiveContextChange={onActiveContextChange} />}
+      {tab === "lots"      && <InventoryLots lots={lots} serials={serials} />}
       {tab === "transfer"  && <InventoryTransfers />}
       {tab === "count"     && <InventoryCycleCount />}
       {tab === "abcxyz"    && <InventoryABCXYZ />}
@@ -1087,30 +1122,34 @@ export default function InventoryPage({
 }
 
 function InventoryLanding({
+  items,
+  lots,
   focus,
   onOpenTab,
   onActiveContextChange,
 }: {
+  items: InventoryStockItem[];
+  lots: typeof LOTS;
   focus?: { entityType: string; entityId: string; at: number } | null;
   onOpenTab: (tab: InvTab) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [selectedSku, setSelectedSku] = useState("");
-  const plannedItems = inventoryItems.map((item) => ({ ...item, plan: inventoryPlan(item) }));
+  const plannedItems = items.map((item) => ({ ...item, plan: inventoryPlan(item) }));
   const riskItems = plannedItems.filter((item) => item.status !== "正常" || item.plan.suggestedQty > 0);
   const exceptionDocs = buildInventoryExceptionDocuments();
   const topRisk = riskItems[0];
   const topException = exceptionDocs.find((doc) => doc.status !== "已关闭") || exceptionDocs[0];
-  const frozenLot = LOTS.find((lot) => lot.status === "冻结" || lot.status === "近效期");
-  const selectedItem = inventoryItems.find((item) => item.sku === selectedSku) ?? null;
+  const frozenLot = lots.find((lot) => lot.status === "冻结" || lot.status === "近效期");
+  const selectedItem = items.find((item) => item.sku === selectedSku) ?? null;
   const transferExceptions = TRANSFERS.filter((transfer) => ["在途", "待审批"].includes(transfer.status));
-  const frozenCount = LOTS.filter((lot) => lot.status === "冻结").length;
+  const frozenCount = lots.filter((lot) => lot.status === "冻结").length;
 
   useEffect(() => {
     if ((focus?.entityType !== "inventory_item" && focus?.entityType !== "item") || !focus.entityId) return;
-    const match = inventoryItems.find((item) => item.sku === focus.entityId || item.name === focus.entityId);
+    const match = items.find((item) => item.sku === focus.entityId || item.name === focus.entityId);
     if (match) setSelectedSku(match.sku);
-  }, [focus?.at, focus?.entityType, focus?.entityId]);
+  }, [focus?.at, focus?.entityType, focus?.entityId, items]);
   const entries = [
     { tab: "movements" as const, title: "库存事务流水", desc: "查看采购入库、退货、调拨、调整和盘点形成的库存变化。", signal: `${INVENTORY_MOVEMENT_LEDGER.length} 条流水`, icon: History },
     { tab: "exceptions" as const, title: "库存异常单据", desc: "解释库存变化原因、证据链和关闭动作。", signal: `${exceptionDocs.length} 张异常单据`, icon: AlertTriangle },

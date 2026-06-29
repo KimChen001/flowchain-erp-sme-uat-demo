@@ -34,6 +34,12 @@ The audit is not customer-visible, does not require immediate deletion of fronte
 | Data Management / Imports | Embedded import configs, supported statuses, supported reasons, templates, and validation options in `src/modules/imports/Page.tsx`. | No import REST endpoints found. Backend JSON repository exists but should not be written by frontend import migration in this phase. | Low: AI Chat should not infer business truth from import fixtures. | Low. | Frontend import tooling appears local/read-oriented in current audit. | defer | medium | Document import schemas separately before any write path; do not connect imports to runtime JSON yet. |
 | AI Assistant | Frontend quick prompts and UI state are embedded; business answers come from backend `/api/ai/chat`. | Strong backend-first coverage: `/api/ai/tools`, `/api/ai/chat`, active-context, status, RFQ/procurement operational query, confidence, draft preparation, provider adapter skeleton. | Primary dependency: backend cards/evidence are the business answer source. | High: active context is passed to backend and should align with backend IDs. | Chat endpoint returns answers and review-only draft preparation; it should not submit/approve/convert/send/post. | ready | low | Keep AI Chat backend-first; align activeContext IDs as modules migrate to APIs. |
 
+## Inventory Read API Foundation V1 Update
+
+Inventory now has a read-only backend read model and REST surface for items, item detail, lots, serials, movements, exceptions, and summary. The Inventory frontend has an API client and uses API-first snapshots where safe while preserving local read models for resilience and backend parity gaps.
+
+Global Search reuses the inventory item read model. AI inventory status and supplier inventory risk summaries reuse the same read model for read-only evidence without changing card schemas. Current remaining local read models include static lot/serial views, transfer and cycle-count views, bin map, and fallback ledger/exception rows when runtime movement collections are empty. Future work remains database persistence, write APIs, receiving stock posting consolidation, durable transaction generation from real GRN posting, persisted lots/serials, and broader AI inventory evidence consolidation.
+
 ## Module-Level Details
 
 ### Module: Today Cockpit / Overview
