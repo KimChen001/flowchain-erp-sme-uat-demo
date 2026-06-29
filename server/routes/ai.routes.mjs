@@ -4,6 +4,7 @@ import { buildAiChatStatusResponse, normalizeAiChatMessage } from '../domain/ai-
 import { buildAiProcurementOperationalResponse } from '../domain/ai-procurement-operational-query.mjs'
 import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-query.mjs'
 import { buildAiSupplierOperationalResponse } from '../domain/ai-supplier-operational-query.mjs'
+import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
 import {
@@ -288,7 +289,8 @@ function logAiTiming({ startedAt, branchStartedAt, branch, body, result }) {
   if (!shouldLogAiTiming()) return
   const intent = result?.intent?.name || result?.provider || branch
   const cards = Array.isArray(result?.cards) ? result.cards.length : 0
-  console.log(`[ai-chat] intent=${intent} module=${body.moduleId || 'unknown'} elapsedMs=${Date.now() - startedAt} branchMs=${Date.now() - branchStartedAt} cards=${cards}`)
+  const providerMarker = result?.providerStatus ? ` provider=${result.providerStatus}` : ''
+  console.log(`[ai-chat] intent=${intent} module=${body.moduleId || 'unknown'} elapsedMs=${Date.now() - startedAt} branchMs=${Date.now() - branchStartedAt} cards=${cards}${providerMarker}`)
 }
 
 async function callOpenAI({ moduleId, question, activeInsight }, db, ctx) {
@@ -395,6 +397,25 @@ async function callConfiguredAi(body, db, ctx) {
   }
   if (provider === 'doubao' || provider === 'ark') return callDoubao(body, db, ctx)
   return callOpenAI(body, db, ctx)
+}
+
+function providerDisabledResponse({ startedAt, branchStartedAt, body }) {
+  const message = '我暂时没有找到可以直接回答这个问题的业务规则。当前环境未启用外部 AI Provider，因此不会调用外部模型。'
+  return {
+    provider: 'local',
+    providerStatus: 'blocked',
+    mode: 'deterministic',
+    status: 'blocked',
+    intent: { name: 'provider_disabled', confidence: 1, slots: {} },
+    message,
+    content: message,
+    cards: [],
+    evidence: [],
+    usedWeb: false,
+    timingMs: Date.now() - startedAt,
+    externalMs: 0,
+    modelMs: Date.now() - branchStartedAt,
+  }
 }
 
 export async function handleAiRoute(ctx) {
@@ -533,7 +554,36 @@ export async function handleAiRoute(ctx) {
       return send(res, 200, result)
     }
 
-    const hasMarketAnswer = Boolean(marketPriceReply(body.question, db))
+    const priceAnswer = marketPriceReply(body.question, db)
+    if (priceAnswer) {
+      branchStartedAt = Date.now()
+      const result = {
+        provider: 'market-data',
+        content: priceAnswer,
+        message: priceAnswer,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      result.confidence = aiConfidence(body, db, result, ctx)
+      event(db, 'ai_chat', `AI answered ${body.moduleId || 'unknown'} question via ${result.provider}`, body.moduleId || 'ai')
+      await writeDb(db)
+      logAiTiming({ startedAt, branchStartedAt, branch: 'market_data', body, result })
+      return send(res, 200, result)
+    }
+
+    const providerSafety = getAiProviderSafetyState()
+    if (!providerSafety.enabled) {
+      branchStartedAt = Date.now()
+      const result = providerDisabledResponse({ startedAt, branchStartedAt, body })
+      event(db, 'ai_chat_provider_blocked', `AI provider fallback blocked for ${body.moduleId || 'unknown'}`, body.moduleId || 'ai')
+      await writeDb(db)
+      logAiTiming({ startedAt, branchStartedAt, branch: 'provider_disabled', body, result })
+      return send(res, 200, result)
+    }
+
+    const hasMarketAnswer = Boolean(priceAnswer)
     const useWeb = !hasMarketAnswer && (body.useWeb === true || (body.useWeb !== false && shouldFetchExternalSignals(body.question)))
     let externalMs = 0
     if (useWeb) {
