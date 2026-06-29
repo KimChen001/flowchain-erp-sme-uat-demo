@@ -36,7 +36,7 @@ FlowChain still runs a lightweight Node HTTP server through `server/routes/scm-l
 - Procurement read APIs are now separated from legacy write handlers.
 - Existing AI chat and auth routes still write runtime events or user records; smoke tests against the shared local JSON file should account for that behavior.
 - Inventory read APIs already follow a pure domain model pattern and provided the template for procurement read APIs.
-- Search and AI still use their existing domain-specific assemblers. They should be consolidated only after ranking, card shape, and intent tests are expanded.
+- Search and AI still use their existing domain-specific assemblers. Procurement read-model evidence is now normalized for future reuse, but those consumers should be consolidated only after ranking, card shape, and intent tests are expanded.
 
 ## Backend Risk Register
 

@@ -5,6 +5,8 @@ import {
   buildProcurementSummary,
   filterProcurementRows,
   getProcurementDocument,
+  isProcurementDocumentType,
+  normalizeProcurementDocumentType,
 } from '../domain/procurement-read-model.mjs'
 
 function query(url) {
@@ -21,12 +23,21 @@ export async function handleProcurementReadRoute(ctx) {
   const { req, res, url, db, send } = ctx
 
   if (req.method === 'GET' && url.pathname === '/api/procurement/documents') {
-    send(res, 200, { documents: filterProcurementRows(buildProcurementDocuments(db), query(url)) })
+    const filters = query(url)
+    if (filters.type && !normalizeProcurementDocumentType(filters.type)) {
+      send(res, 200, { documents: [] })
+      return true
+    }
+    send(res, 200, { documents: filterProcurementRows(buildProcurementDocuments(db), filters) })
     return true
   }
 
   const documentMatch = url.pathname.match(/^\/api\/procurement\/documents\/([^/]+)\/([^/]+)$/)
   if (req.method === 'GET' && documentMatch) {
+    if (!isProcurementDocumentType(documentMatch[1])) {
+      send(res, 400, { error: 'Invalid procurement document type' })
+      return true
+    }
     const document = getProcurementDocument(db, documentMatch[1], documentMatch[2])
     if (!document) {
       send(res, 404, { error: 'Procurement document not found' })

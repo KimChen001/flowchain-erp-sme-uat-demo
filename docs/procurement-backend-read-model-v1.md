@@ -18,12 +18,30 @@ Read endpoints:
 
 ## Document Families
 
-- `purchase_request`: PR status, requester, buyer, supplier, item, quantity, full numeric amount, required date, linked RFQ, linked PO.
+The stable `documentType` values are:
+
+- `pr`: PR status, requester, buyer, supplier, item, quantity, full numeric amount, required date, linked RFQ, linked PO.
 - `rfq`: RFQ status, supplier response counts, due date, awarded supplier, source PR, linked PO.
-- `purchase_order`: PO status, supplier, source PR/RFQ, expected date, amount, ordered and received quantity, receiving status, linked GRNs.
-- `receiving_doc`: GRN status, PO, supplier, accepted and rejected quantity, warehouse, linked invoices.
-- `supplier_invoice`: invoice status, related PO/GRN, invoice amount, match status, variance amount.
-- `three_way_match`: derived PO/GRN/invoice view for variance follow-up.
+- `po`: PO status, supplier, source PR/RFQ, expected date, amount, ordered and received quantity, receiving status, linked GRNs.
+- `grn`: GRN status, PO, supplier, accepted and rejected quantity, warehouse, linked invoices.
+- `invoice`: invoice status, related PO/GRN, invoice amount, match status, variance amount.
+- `threeWayMatch`: derived PO/GRN/invoice view for variance follow-up.
+
+The model accepts safe route aliases such as `purchase-request`, `purchase-order`, `receiving`, `supplier-invoice`, and `3wm`. Unknown detail types return a clean `400`.
+
+## Response Shape
+
+Document rows expose stable fields where available:
+
+- `type`: legacy family label for compatibility.
+- `documentType`: canonical type for route lookup and future reuse.
+- `id`, `label`, `title`, `status`.
+- `supplierId`, `supplierName`, `itemId`, `sku`, `amount`, `currency` where present or safely derived.
+- `createdAt`, `updatedAt`, `dueDate` when present in source data.
+- `relatedDocuments`: compact canonical document references.
+- `evidence`: compact evidence items with type, id, label, status, supplier, amount, currency, and API route.
+
+Missing optional data remains empty, `null`, or omitted. The read model does not fabricate unsupported accounting values.
 
 ## API Semantics
 
@@ -32,7 +50,26 @@ Read endpoints:
 - Amount fields remain numbers. UI surfaces should format them with full currency display.
 - Missing optional source arrays produce empty read-model sections rather than errors.
 - Query filtering supports `q`, `type`, `status`, `supplier`, and `limit` where relevant.
+- Route responses use stable top-level wrappers: `documents`, `document`, `links`, `followups`, and `summary`.
+
+## Three-Way Match
+
+Three-way match rows expose:
+
+- related IDs: `prId`, `rfqId`, `poId`, `grnId`, `invoiceId`, `supplierId`.
+- amount fields: `poAmount`, `invoiceAmount`, `varianceAmount`, `varianceRate`, and `currency`.
+- `receivedQuantity` when receiving data is available.
+- `receivedAmount: null` unless a real receiving amount exists in source data.
+- `matchStatus`, `blockingReason`, and `exceptionReason` for read-only review context.
+
+No GL, posting, payment, tax, or accounting behavior is introduced.
+
+## Links, Followups, And Summary
+
+- Links use canonical `sourceType`, `sourceId`, `targetType`, `targetId`, and `relationship`; `relation` is retained as a compatibility alias.
+- Followups use stable deterministic IDs, canonical document references, severity from `high`, `medium`, or `low`, `status`, `dueDate`, and evidence.
+- Summary counts align with the mixed document list and include open PR, active RFQ, open PO, pending receiving, invoice exception, three-way match exception, total open amount, currency, and urgent followup counts.
 
 ## Reuse Notes
 
-Global search and deterministic AI already have procurement-specific logic. This pass did not swap their ranking or intent internals to avoid changing user-visible behavior. The read model is now available for a later low-risk consolidation once route coverage and ranking expectations are pinned down.
+Global Search and deterministic AI already have procurement-specific mapping logic. This pass documents the boundary but does not swap their ranking, card shape, or intent internals. The procurement read model is now the canonical future evidence source once those consumers have contract tests for ordering and presentation.
