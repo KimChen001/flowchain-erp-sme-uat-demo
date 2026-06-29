@@ -71,7 +71,7 @@ function exportPurchaseRequestDetail(pr: PurchaseRequest) {
     供应商: pr.supplier,
   }];
   exportRowsToCsv(`purchase-request-detail-${pr.pr}.csv`, [...headerRows, ...lineRows]);
-  toast.success("采购申请详情 CSV 已导出");
+  toast.success("采购申请详情已导出");
 }
 
 function PRStatusPill({ status }: { status: string }) {
@@ -531,7 +531,7 @@ export default function PurchaseRequestsPage({
         {selected.status === "待审批" && <button onClick={() => rejectRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>}
         {selected.status === "已批准" && <button onClick={() => convertRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>转采购订单</button>}
         <button onClick={createRfqFromSelected} disabled={creatingRfq} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60" style={{ background: supplierRecommendationResult?.needsRfq ? A.orange : A.blue }}>发起 RFQ</button>
-        <button onClick={() => exportPurchaseRequestDetail(selected)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
+        <button onClick={() => exportPurchaseRequestDetail(selected)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
       </DocumentActionBar>
     </DocumentShell>
   );

@@ -160,7 +160,7 @@ export default function PurchasingRFQPage({
         {(selectedRfq.status === "比价中" || selectedRfq.status === "进行中") && (
           <button onClick={() => award(selectedRfq.id)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-white" style={{ background: A.blue }}>授标</button>
         )}
-        <button onClick={exportCsv} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出当前结果</button>
+        <button onClick={exportCsv} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
       </div>
     </Card>
   );

@@ -93,7 +93,7 @@ function exportPoDetail(po: PurchaseOrder) {
     状态: line.status || "",
   }));
   exportRowsToCsv(`purchase-order-detail-${po.po}.csv`, [...headerRows, ...lineRows]);
-  toast.success("采购订单详情 CSV 已导出");
+  toast.success("采购订单详情已导出");
 }
 
 export default function PurchasingOrdersPage({
@@ -329,7 +329,7 @@ export default function PurchasingOrdersPage({
         {(selectedPO.status === "已发出" || selectedPO.status === "部分到货" || selectedPO.status === "已完成") && <button onClick={() => setTrackOpen(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>跟踪发货</button>}
         {!["已完成", "已取消"].includes(selectedPO.status) && <button onClick={() => cancel(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>取消订单</button>}
         <button onClick={() => toast("发票协同位于采购管理", { description: "请打开采购管理的发票协同视图查看关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票协同</button>
-        <button onClick={() => exportPoDetail(selectedPO)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出 CSV</button>
+        <button onClick={() => exportPoDetail(selectedPO)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
       </DocumentActionBar>
     </DocumentShell>
   );
@@ -387,7 +387,7 @@ export default function PurchasingOrdersPage({
                   ) : pending.map((q) => (
                     <div key={q.po} className="rounded-xl p-3" style={{ background: A.gray6 }}>
                       <div className="flex items-center justify-between mb-1.5">
-                        <button onClick={() => setSelectedId(q.po)}
+                        <button onClick={() => openDetail(q.po)}
                           className="text-xs font-semibold hover:underline" style={{ color: A.blue }}>{q.po}</button>
                         <span className="text-[10px] px-1.5 py-px rounded-full font-medium"
                           style={{ background: "#fff8f0", color: A.orange }}>优先级 {q.priority}</span>
