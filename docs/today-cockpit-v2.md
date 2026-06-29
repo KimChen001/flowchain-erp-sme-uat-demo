@@ -39,12 +39,17 @@ The frontend treats these as evidence references and navigates to existing workb
 
 ## Frontend Contract
 
-The overview page consumes `GET /api/today-cockpit` through `src/modules/overview/todayCockpit.ts`. The v2 panel renders:
+The overview page consumes `GET /api/today-cockpit` through `src/modules/overview/todayCockpit.ts` and delegates rendering to `src/modules/overview/TodayCockpitPanel.tsx`. `Page.tsx` owns only the fetch lifecycle and passes loading, error, payload, and navigation props into the panel.
+
+The v2 panel keeps the cockpit UI split into focused rendering boundaries:
 
 - KPI cards with severity chips and full currency formatting.
-- Procurement follow-ups sourced from the backend read model.
-- Inventory risk cards with SKU, warehouse, available quantity, reorder point, safety stock, and next action.
-- Recent procurement documents with canonical document type labels.
-- Deterministic recommended next actions.
+- `TodayCockpitSummaryCards` for KPI cards with severity chips and full currency formatting.
+- `TodayCockpitFollowups` for procurement follow-ups sourced from the backend read model.
+- `TodayCockpitInventoryRisks` for SKU, warehouse, available quantity, reorder point, safety stock, and next action.
+- `TodayCockpitRecentDocuments` for canonical document labels in a horizontally scrollable wide table.
+- `TodayCockpitRecommendedActions` for deterministic next actions.
+
+Loading, unavailable, empty, and partial states use concise user-facing text. The panel does not expose raw error objects, stack traces, `undefined`, or `null` values.
 
 The existing overview workbench remains in place below the v2 panel for compatibility.
