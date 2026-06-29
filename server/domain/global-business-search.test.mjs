@@ -87,6 +87,10 @@ function createDb() {
         category: 'Components',
         supplier: 'ABC Components',
         defaultWarehouseId: 'WH-EXPLICIT',
+        currentStock: 12,
+        safetyStock: 50,
+        unit: 'pcs',
+        stockoutRisk: '低库存',
       },
     ],
     suppliers: [
@@ -136,6 +140,12 @@ test('exact RFQ id matches', () => {
   assert.equal(first.entityId, 'RFQ-26-0042')
 })
 
+test('exact core document ids stay first', () => {
+  assert.equal(searchGlobalBusinessRecords('PO-2026-001', createDb())[0].type, 'purchase_order')
+  assert.equal(searchGlobalBusinessRecords('PR-1001', createDb())[0].type, 'purchase_request')
+  assert.equal(searchGlobalBusinessRecords('RFQ-26-0042', createDb())[0].type, 'rfq')
+})
+
 test('supplier name matches supplier and related records', () => {
   const results = searchGlobalBusinessRecords('ABC Components', createDb())
   const types = new Set(results.map((item) => item.type))
@@ -147,9 +157,25 @@ test('supplier name matches supplier and related records', () => {
 test('SKU and item name match item and operational records', () => {
   const skuResults = searchGlobalBusinessRecords('A100', createDb())
   assert.ok(skuResults.some((item) => item.type === 'item'))
+  assert.ok(skuResults.some((item) => item.type === 'inventory_item'))
   assert.ok(skuResults.some((item) => item.type === 'purchase_request'))
   const nameResults = searchGlobalBusinessRecords('Motor A100', createDb())
   assert.ok(nameResults.some((item) => item.entityLabel === 'Motor A100' || item.subtitle.includes('Motor A100')))
+})
+
+test('low-stock inventory query returns inventory records', () => {
+  const results = searchGlobalBusinessRecords('低库存', createDb())
+  const inventory = results.find((item) => item.type === 'inventory_item')
+  assert.ok(inventory)
+  assert.equal(inventory.entityId, 'A100')
+  assert.match(inventory.subtitle, /安全库存 50pcs/)
+})
+
+test('amount subtitles use full currency formatting', () => {
+  const [po] = searchGlobalBusinessRecords('PO-2026-001', createDb())
+  assert.equal(po.type, 'purchase_order')
+  assert.match(po.subtitle, /¥128,000/)
+  assert.doesNotMatch(po.subtitle, /万/)
 })
 
 test('invoice number matches supplier invoice', () => {

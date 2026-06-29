@@ -3,6 +3,7 @@ import { Building2, Clock, FileSpreadsheet, Filter, TrendingUp } from "lucide-re
 import { toast } from "sonner";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
+import { fmt } from "../../lib/format";
 import { RFQS } from "../../data/demo-data";
 import type { RfqRecord } from "../../types/scm";
 import { A, Card, Chip, DocumentHistoryPanel, Field, inputStyle, KpiCard, SectionHeader } from "../../components/ui";
@@ -202,7 +203,7 @@ export default function PurchasingRFQPage({
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="活动询价" value={String(rfqs.length)} sub={loading ? "加载中" : "近 30 天"} delta="+2" positive icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="参与供应商" value={String(rfqs.reduce((a, b) => a + b.suppliers, 0))} sub="累计邀请" icon={Building2} color={A.purple} />
-        <KpiCard label="本月节省" value={`¥${(totalSavings / 1e4).toFixed(1)}万`} sub="vs 目录价" delta="+18%" positive icon={TrendingUp} color={A.green} />
+        <KpiCard label="本月节省" value={fmt(totalSavings)} sub="vs 目录价" delta="+18%" positive icon={TrendingUp} color={A.green} />
         <KpiCard label="平均周期" value="4.8 天" sub="发出 → 授标" delta="-1.2d" positive icon={Clock} color={A.teal} />
       </div>
 

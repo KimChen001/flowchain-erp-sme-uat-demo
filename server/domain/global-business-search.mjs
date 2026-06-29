@@ -29,9 +29,16 @@ function lower(value) {
   return text(value).toLowerCase()
 }
 
+function numberText(value) {
+  const amount = Number(value || 0)
+  return Number.isFinite(amount)
+    ? amount.toLocaleString('en-US', { maximumFractionDigits: 2 })
+    : '0'
+}
+
 function money(value) {
   const amount = Number(value || 0)
-  return Number.isFinite(amount) && amount > 0 ? `¥${amount.toLocaleString()}` : ''
+  return Number.isFinite(amount) && amount > 0 ? `¥${numberText(amount)}` : ''
 }
 
 function compact(values) {
@@ -325,6 +332,60 @@ function itemResults(db) {
   }))
 }
 
+function inventoryStatus(item) {
+  const currentStock = Number(item.currentStock ?? item.available ?? item.stock ?? 0)
+  const safetyStock = Number(item.safetyStock ?? item.minStock ?? item.min ?? 0)
+  const explicit = text(item.stockoutRisk || item.inventoryStatus || item.risk)
+  if (explicit) return explicit
+  if (Number.isFinite(safetyStock) && safetyStock > 0 && currentStock <= safetyStock) return '低库存'
+  return text(item.status)
+}
+
+function inventoryResults(db) {
+  return asArray(db.products)
+    .filter((item) => item.currentStock !== undefined || item.safetyStock !== undefined || item.stockoutRisk !== undefined)
+    .map((item) => {
+      const sku = item.sku || item.id
+      const currentStock = Number(item.currentStock ?? item.available ?? item.stock ?? 0)
+      const safetyStock = Number(item.safetyStock ?? item.minStock ?? item.min ?? 0)
+      const status = inventoryStatus(item)
+      const warehouse = item.defaultWarehouseId || item.warehouseId || item.warehouse
+      return makeResult({
+        type: 'inventory_item',
+        label: sku,
+        subtitle: compact([
+          item.name,
+          status,
+          warehouse,
+          `可用 ${numberText(currentStock)}${text(item.unit)}`,
+          safetyStock > 0 ? `安全库存 ${numberText(safetyStock)}${text(item.unit)}` : '',
+        ]).join(' · '),
+        status,
+        moduleId: 'inventory',
+        entityId: sku,
+        entityLabel: item.name || sku,
+        fields: {
+          sku,
+          itemId: item.id,
+          itemName: item.name,
+          category: item.category,
+          warehouse,
+          supplier: item.supplier || item.preferredSupplierId,
+          currentStock,
+          safetyStock,
+          risk: status,
+          aliases: '库存 低库存 缺货 补货 安全库存 stock inventory reorder shortage',
+        },
+        evidence: [
+          evidence('品名', item.name),
+          evidence('可用库存', `${numberText(currentStock)}${text(item.unit)}`),
+          evidence('安全库存', safetyStock > 0 ? `${numberText(safetyStock)}${text(item.unit)}` : ''),
+          evidence('状态', status),
+        ],
+      })
+    })
+}
+
 function warehouseResults(db) {
   return listMasterWarehouses(db).map((item) => makeResult({
     type: item.type === 'bin' ? 'bin' : 'warehouse',
@@ -359,6 +420,7 @@ export function buildGlobalBusinessSearchIndex(contextOrData = {}) {
     ...supplierInvoiceResults(db),
     ...supplierResults(db),
     ...itemResults(db),
+    ...inventoryResults(db),
     ...warehouseResults(db),
   ]
 }

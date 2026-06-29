@@ -5,6 +5,7 @@ import { Card, Chip, KpiCard, A } from "../../components/ui";
 import { PAYABLES, SUPPLIER_INVOICES } from "../../data/demo-data";
 import { invoiceToPayable, isInvoicePayableReady } from "../../domain/procurement/invoice-matching";
 import { exportRowsToCsv } from "../../lib/data-export";
+import { fmt } from "../../lib/format";
 
 export default function PayablesPanel() {
   const invoicePayables = SUPPLIER_INVOICES.filter(isInvoicePayableReady).map(invoiceToPayable);
@@ -40,9 +41,9 @@ export default function PayablesPanel() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="应付总额"   value={`¥${(totalDue / 1e4).toFixed(0)}万`}    sub="来自已审批/过账发票"                icon={Wallet}      color={A.blue} />
-        <KpiCard label="逾期金额"   value={`¥${(overdue / 1e4).toFixed(1)}万`}     sub={`${payables.filter(p => p.status === "逾期").length} 笔逾期`} icon={AlertOctagon} color={A.red} />
-        <KpiCard label="7 天到期"   value="¥146万"                                  sub="3 笔"                              icon={Clock}       color={A.orange} />
+        <KpiCard label="应付总额"   value={fmt(totalDue)}                            sub="来自已审批/过账发票"                icon={Wallet}      color={A.blue} />
+        <KpiCard label="逾期金额"   value={fmt(overdue)}                             sub={`${payables.filter(p => p.status === "逾期").length} 笔逾期`} icon={AlertOctagon} color={A.red} />
+        <KpiCard label="7 天到期"   value={fmt(1460000)}                             sub="3 笔"                              icon={Clock}       color={A.orange} />
         <KpiCard label="DPO"        value="48.2 天"                                 sub="应付账款周转天数" delta="+2.1d"    icon={CreditCard}  color={A.purple} />
       </div>
 

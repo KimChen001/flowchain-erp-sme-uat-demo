@@ -373,7 +373,7 @@ function ReceivingReturns() {
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="退货工单" value={String(returns.length)}                              sub="近 30 天"           icon={Undo2}        color={A.orange} />
-        <KpiCard label="退货金额" value={`¥${(totalAmt / 1e4).toFixed(1)}万`}                 sub="累计"               icon={DollarSign}    color={A.red} />
+        <KpiCard label="退货金额" value={fmt(totalAmt)}                                      sub="累计"               icon={DollarSign}    color={A.red} />
         <KpiCard label="在途"     value={String(returns.filter(r => r.status === "已发出").length)} sub="待供应商确认" icon={Truck}        color={A.blue} />
         <KpiCard label="已结案"   value={String(returns.filter(r => r.status === "已结案").length)} sub="完成"           icon={CheckCircle2} color={A.green} />
       </div>
@@ -516,7 +516,7 @@ function ReceivingOps() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="今日已入库" value={String(todayReceived)} sub="¥482 万 入库价值" delta="+18%" positive icon={PackageCheck} color={A.green}  />
+        <KpiCard label="今日已入库" value={String(todayReceived)} sub={`${fmt(4820000)} 入库价值`} delta="+18%" positive icon={PackageCheck} color={A.green}  />
         <KpiCard label="待收货"     value={String(pending)}      sub="未来 24 小时"      delta="6 个 Dock" positive icon={Truck}        color={A.blue}   />
         <KpiCard label="质检中"     value={String(inQC)}         sub="平均 1.8 小时"     delta="-0.4h"      positive icon={ScanLine}     color={A.orange} />
         <KpiCard label="异常处理"   value={String(exceptions)}   sub="本月累计 12 起"    delta="+1 vs 昨日" positive={false} icon={AlertCircle} color={A.red}    />

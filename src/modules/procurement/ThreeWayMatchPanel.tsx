@@ -107,9 +107,9 @@ export default function ThreeWayMatchPanel() {
                   <td className={tdWideNowrapClass} style={{ color: A.sub }}>{q.grn}</td>
                   <td className={tdWideNowrapClass} style={{ color: A.sub }}>{q.invoiceNumber}</td>
                   <td className={`${tdWideNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{q.supplier}</td>
-                  <td className={tdWideNumericClass} style={{ color: A.label }}>¥{(q.poAmt / 1e4).toFixed(1)}万</td>
-                  <td className={tdWideNumericClass} style={{ color: A.label }}>¥{(q.grnAmt / 1e4).toFixed(1)}万</td>
-                  <td className={tdWideNumericClass} style={{ color: A.label }}>¥{(q.invAmt / 1e4).toFixed(1)}万</td>
+                  <td className={tdWideNumericClass} style={{ color: A.label }}>{fmt(q.poAmt)}</td>
+                  <td className={tdWideNumericClass} style={{ color: A.label }}>{fmt(q.grnAmt)}</td>
+                  <td className={tdWideNumericClass} style={{ color: A.label }}>{fmt(q.invAmt)}</td>
                   <td className={`${tdWideNowrapClass} font-medium`} style={{ color: q.varianceType === "无差异" ? A.green : A.red }}>{q.varianceType}</td>
                   <td className={`${tdWideNumericClass} font-medium`} style={{ color: q.varianceAmount === 0 ? A.green : A.red }}>{q.varianceAmount === 0 ? "—" : fmt(q.varianceAmount)}</td>
                   <td className={tdWideNowrapClass}>

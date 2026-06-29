@@ -5,6 +5,7 @@ import { Card, Chip, KpiCard, A } from "../../components/ui";
 import { PORTAL_SUPPLIERS } from "../../data/demo-data";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
+import { fmt } from "../../lib/format";
 import type { SupplierPerformance } from "./shared";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 
@@ -112,7 +113,7 @@ export default function SupplierPortalPanel() {
                   <div className="text-[10px]" style={{ color: A.gray2 }}>拒收率 {Number(s.rejectRate || 0).toFixed(1)}%</div>
                 </td>
                 <td className="px-5 py-3" style={{ color: A.label }}>{s.po}</td>
-                <td className="px-5 py-3 font-medium" style={{ color: A.blue }}>¥{(s.spend / 1e4).toFixed(0)}万</td>
+                <td className="px-5 py-3 font-medium" style={{ color: A.blue }}>{fmt(s.spend)}</td>
                 <td className="px-5 py-3">
                   <Chip label={s.flag}
                     color={s.flag === "战略" ? A.purple : s.flag === "核心" ? A.blue : s.flag === "备选" ? A.gray1 : A.red}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Toaster, toast } from "sonner";
 import {
   AlertTriangle,
@@ -14,6 +14,7 @@ import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
 import { apiJson } from "../lib/api-client";
 import { fmt } from "../lib/format";
 import { A, Card, Field, inputStyle, Modal } from "../components/ui";
+import { typography } from "../components/ui/typography";
 import type {
   DemoUser,
   PurchaseIntent,
@@ -205,6 +206,34 @@ const SEARCH_TYPE_LABELS: Record<string, string> = {
   bin: "库位",
 };
 
+const SEARCH_GROUP_LABELS: Record<string, string> = {
+  purchase_request: "采购申请",
+  rfq: "RFQ / 寻源",
+  purchase_order: "采购订单",
+  receiving_doc: "收货单",
+  supplier_invoice: "供应商发票",
+  supplier: "供应商",
+  item: "物料",
+  inventory_item: "库存",
+  warehouse: "仓库 / 库位",
+};
+
+const SEARCH_GROUP_ORDER = [
+  "purchase_order",
+  "purchase_request",
+  "rfq",
+  "supplier_invoice",
+  "receiving_doc",
+  "supplier",
+  "item",
+  "inventory_item",
+  "warehouse",
+];
+
+function searchGroupKey(type: string) {
+  return type === "bin" ? "warehouse" : type;
+}
+
 function splitActive(active: string) {
   const [moduleId, viewId] = active.split(":");
   return { moduleId, viewId };
@@ -385,6 +414,7 @@ export default function FlowChainApp() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [searchFocus, setSearchFocus] = useState<GlobalSearchFocus | null>(null);
   const searchRef = useRef<HTMLFormElement | null>(null);
   const [unreadCount] = useState(3);
@@ -459,6 +489,25 @@ export default function FlowChainApp() {
   const activeModuleLabel = PAGE_LABELS[activeModule] || activeModule;
   const activeNavItem = navItems.find((item) => item.id === activeModule);
   const activeChildLabel = activeNavItem?.children?.find((item) => item.id === active)?.label;
+  const searchGroups = useMemo(() => {
+    const grouped = new Map<string, GlobalSearchResult[]>();
+    searchResults.forEach((result) => {
+      const key = searchGroupKey(result.type);
+      grouped.set(key, [...(grouped.get(key) || []), result]);
+    });
+    return Array.from(grouped.entries())
+      .sort(([left], [right]) => {
+        const leftIndex = SEARCH_GROUP_ORDER.indexOf(left);
+        const rightIndex = SEARCH_GROUP_ORDER.indexOf(right);
+        return (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex);
+      })
+      .map(([type, results]) => ({
+        type,
+        label: SEARCH_GROUP_LABELS[type] || type,
+        results,
+      }));
+  }, [searchResults]);
+  const visibleSearchResults = useMemo(() => searchGroups.flatMap((group) => group.results), [searchGroups]);
 
   useEffect(() => {
     setAiActiveContext((current) => {
@@ -470,6 +519,10 @@ export default function FlowChainApp() {
       return null;
     });
   }, [activeModule]);
+
+  useEffect(() => {
+    setActiveSearchIndex(visibleSearchResults.length ? 0 : -1);
+  }, [visibleSearchResults.length]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -486,6 +539,7 @@ export default function FlowChainApp() {
     if (!trimmed) {
       setSearchResults([]);
       setSearchOpen(false);
+      setActiveSearchIndex(-1);
       return;
     }
     setSearchLoading(true);
@@ -493,6 +547,7 @@ export default function FlowChainApp() {
     try {
       const payload = await apiJson<{ query: string; results: GlobalSearchResult[]; total: number }>(`/api/search?q=${encodeURIComponent(trimmed)}`);
       setSearchResults(payload.results);
+      setActiveSearchIndex(payload.results.length ? 0 : -1);
     } catch (error) {
       setSearchResults([]);
       setSearchError(error instanceof Error ? error.message : "搜索暂不可用");
@@ -505,6 +560,7 @@ export default function FlowChainApp() {
     setActive(result.moduleId || "overview");
     setSearchFocus({ entityType: result.entityType, entityId: result.entityId, at: Date.now() });
     setSearchOpen(false);
+    setActiveSearchIndex(-1);
   }
 
   const panels: Record<string, React.ReactNode> = {
@@ -662,7 +718,25 @@ export default function FlowChainApp() {
                   }}
                   onFocus={() => { if (searchQuery.trim()) setSearchOpen(true); }}
                   onKeyDown={(event) => {
-                    if (event.key === "Escape") setSearchOpen(false);
+                    if (event.key === "Escape") {
+                      setSearchOpen(false);
+                      return;
+                    }
+                    if (!searchOpen || visibleSearchResults.length === 0) return;
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setActiveSearchIndex((current) => (current + 1 + visibleSearchResults.length) % visibleSearchResults.length);
+                      return;
+                    }
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setActiveSearchIndex((current) => (current - 1 + visibleSearchResults.length) % visibleSearchResults.length);
+                      return;
+                    }
+                    if (event.key === "Enter" && activeSearchIndex >= 0) {
+                      event.preventDefault();
+                      openSearchResult(visibleSearchResults[activeSearchIndex]);
+                    }
                   }}
                   placeholder="搜索业务记录"
                   className="w-full bg-transparent outline-none text-xs"
@@ -695,28 +769,52 @@ export default function FlowChainApp() {
                     {!searchLoading && !searchError && searchResults.length === 0 && (
                       <div className="px-4 py-6 text-xs" style={{ color: A.gray2 }}>未找到匹配的业务记录</div>
                     )}
-                    {!searchLoading && !searchError && searchResults.map((result) => (
-                      <button key={result.id} type="button" onClick={() => openSearchResult(result)}
-                        className="w-full text-left px-3 py-3 hover:bg-blue-50/50 transition-colors"
-                        style={{ borderBottom: `1px solid ${A.border}` }}>
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: "#eef4ff", color: A.blue }}>
-                                {SEARCH_TYPE_LABELS[result.type] || result.type}
-                              </span>
-                              <span className="text-xs font-semibold truncate" style={{ color: A.label }}>{result.label}</span>
-                            </div>
-                            <div className="text-[11px] mt-1 truncate" style={{ color: A.sub }}>{result.subtitle || result.entityLabel}</div>
+                    {!searchLoading && !searchError && searchGroups.length > 0 && (() => {
+                      let rowIndex = -1;
+                      return searchGroups.map((group) => (
+                        <div key={group.type}>
+                          <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-normal" style={{ color: A.gray2 }}>
+                            {group.label}
                           </div>
-                          {result.status && (
-                            <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: A.gray6, color: A.gray1 }}>
-                              {result.status}
-                            </span>
-                          )}
+                          {group.results.map((result) => {
+                            rowIndex += 1;
+                            const activeResult = rowIndex === activeSearchIndex;
+                            const hint = result.evidence?.[0]
+                              ? `${result.evidence[0].label}: ${result.evidence[0].value}`
+                              : result.matchedFields.slice(0, 2).join(" / ");
+                            return (
+                              <button key={result.id} type="button" onClick={() => openSearchResult(result)}
+                                aria-selected={activeResult}
+                                className="w-full text-left px-3 py-3 transition-colors"
+                                style={{
+                                  borderBottom: `1px solid ${A.border}`,
+                                  background: activeResult ? "#eef4ff" : "transparent",
+                                }}>
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: activeResult ? A.white : "#eef4ff", color: A.blue }}>
+                                        {SEARCH_TYPE_LABELS[result.type] || result.type}
+                                      </span>
+                                      <span className={`${typography.searchResultTitle} truncate`} style={{ color: A.label }}>{result.label}</span>
+                                    </div>
+                                    <div className={`${typography.searchResultMeta} mt-1 truncate`} style={{ color: A.sub }}>{result.subtitle || result.entityLabel}</div>
+                                    {hint && (
+                                      <div className={`${typography.searchResultMeta} mt-1 truncate`} style={{ color: A.gray2 }}>{hint}</div>
+                                    )}
+                                  </div>
+                                  {result.status && (
+                                    <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: A.gray6, color: A.gray1 }}>
+                                      {result.status}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
-                      </button>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 </div>
               )}

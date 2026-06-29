@@ -383,7 +383,7 @@ export default function PurchasingOrdersPage({
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="本月 PO 总额" value={fmt(totalAmount)} sub={loading ? "加载中" : `${orders.length} 张订单`} delta="+12.4%" positive={false} icon={FileText}  color={A.blue}   />
         <KpiCard label="待审批" value={String(pendingApprov)}  sub="平均等待 2.4 小时"   delta="+1 vs 昨日" positive={false} icon={AlertCircle} color={A.orange} />
-        <KpiCard label="在途订单" value={String(inTransit)}     sub="未来 7 天到货"        delta="¥624 万"     positive icon={Truck}        color={A.teal}   />
+        <KpiCard label="在途订单" value={String(inTransit)}     sub="未来 7 天到货"        delta={fmt(6240000)} positive icon={Truck}        color={A.teal}   />
         <KpiCard label="本月完成率" value="84.6%" sub="按时交付 / 已完成"     delta="+3.2pts"     positive icon={CheckCircle2} color={A.green}  />
       </div>
 

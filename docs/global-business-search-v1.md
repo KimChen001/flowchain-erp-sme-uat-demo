@@ -44,6 +44,18 @@ V1 is deterministic:
 - No mutation.
 - No permission system expansion.
 
+## V1 Polish Scope
+
+This pass keeps the resolver deterministic and focuses on workbench quality:
+
+- Group topbar results by business type so users can scan PO, PR, RFQ, supplier, item, inventory, warehouse, and invoice matches separately.
+- Support keyboard navigation in the topbar search results with ArrowUp, ArrowDown, Enter, and Escape.
+- Keep exact PO, PR, and RFQ ids ranked first.
+- Render transaction amounts as full comma-formatted currency, for example `¥140,000`, instead of shorthand units such as `¥14万`.
+- Add inventory/low-stock search when products expose server-side inventory fields such as current stock, safety stock, unit, and stockout risk.
+- Route suppliers to the supplier workbench and items to master data or inventory list views. Detail-only navigation remains a follow-up where the destination module does not safely support direct ids yet.
+- Leave the AI Assistant as a future consumer of the deterministic resolver. No separate customer-visible AI search card is added in this polish pass.
+
 ## Searchable Entities
 
 V1 supports these entity types when the data is available from server-side sources:
@@ -90,6 +102,8 @@ If detail navigation is not supported yet, search navigates to the relevant modu
 Global search is deterministic. The AI Assistant can later use the same resolver and index for entity grounding.
 
 The future LLM role is to convert natural language into intent, entities, and slots. Backend search and indexing should remain the source of truth for business object resolution.
+
+V1 polish deliberately skips a separate AI global search card. The AI Assistant can reuse the resolver once intent grounding has a stable contract and can present entity matches without adding new provider calls or customer-visible fallback wording.
 
 ## Non-goals
 
