@@ -21,7 +21,7 @@ export default function ContractsPanel() {
       消耗进度百分比: Math.round(contract.consumed * 100),
       状态: contract.status,
     })));
-    toast.success("CSV 已导出");
+    toast.success("导出文件已生成");
   };
 
   return (
@@ -39,7 +39,7 @@ export default function ContractsPanel() {
           <button onClick={exportCsv}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
             style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={13} /> 导出 CSV
+            <FileSpreadsheet size={13} /> 导出当前结果
           </button>
         </div>
         <table className="w-full text-xs">

@@ -247,7 +247,7 @@ export default function PurchaseReturnsPanel() {
             <button onClick={exportList}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg"
               style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={13} /> 导出 CSV
+              <FileSpreadsheet size={13} /> 导出当前结果
             </button>
           </div>
         </div>
@@ -312,7 +312,7 @@ export default function PurchaseReturnsPanel() {
           <button onClick={exportCreditMemos}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg"
             style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={13} /> 导出 CSV
+            <FileSpreadsheet size={13} /> 导出当前结果
           </button>
         </div>
         <div className="overflow-x-auto">

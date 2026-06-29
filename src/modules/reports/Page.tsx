@@ -107,7 +107,7 @@ function exportReport(filename: string, rows: ReportRows) {
     return;
   }
   exportRowsToCsv(filename, rows);
-  toast.success("CSV 已导出");
+  toast.success("导出文件已生成");
 }
 
 function badgeStyle(kind: SourceKind) {
@@ -1001,7 +1001,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
                     disabled={!canExport}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all disabled:cursor-not-allowed"
                     style={{ background: canExport ? A.white : A.gray5, color: canExport ? A.blue : A.gray2, boxShadow: canExport ? "0 0 0 0.5px rgba(0,0,0,0.08)" : "none" }}>
-                    <FileSpreadsheet size={13} /> 导出 CSV
+                    <FileSpreadsheet size={13} /> 导出当前结果
                   </button>
                   {onNavigate && report.sourceModule && (
                     <button

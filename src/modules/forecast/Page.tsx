@@ -101,7 +101,7 @@ function exportCsv(filename: string, rows: Record<string, unknown>[]) {
     return;
   }
   exportRowsToCsv(filename, rows);
-  toast.success("CSV 已导出");
+  toast.success("导出文件已生成");
 }
 
 // Apple-style card with clean shadow
@@ -942,7 +942,7 @@ export default function ForecastPanel() {
                 <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0" style={{ borderTop: `2px dashed ${A.orange}` }} /><span style={{ color: A.gray1 }}>预测 (未来)</span></span>
                 <button onClick={exportForecastResultCsv}
                   className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-                  <FileSpreadsheet size={11} /> 导出 CSV
+                  <FileSpreadsheet size={11} /> 导出当前结果
                 </button>
               </div>
             } />
@@ -1092,7 +1092,7 @@ export default function ForecastPanel() {
           <SectionHeader title="模型对比 (Champion / Challenger)"
             right={<button onClick={exportBenchmarkCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出 CSV
+              <FileSpreadsheet size={11} /> 导出当前结果
             </button>} />
           <div className="space-y-2">
             {benchmark.map((b, i) => {
@@ -1304,7 +1304,7 @@ export default function ForecastPanel() {
           right={<div className="flex items-center gap-2">
             <button onClick={exportMrpExceptionsCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出 CSV
+              <FileSpreadsheet size={11} /> 导出当前结果
             </button>
             <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
               style={{ background: mrpExceptions.length ? "#fff8f0" : "#f0faf4", color: mrpExceptions.length ? A.orange : A.green }}>
@@ -1358,7 +1358,7 @@ export default function ForecastPanel() {
             <button onClick={exportMrpPlannedOrdersCsv}
               className="h-10 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5"
               style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={13} /> 导出 CSV
+              <FileSpreadsheet size={13} /> 导出当前结果
             </button>
             <button onClick={releaseMrpAsPr} disabled={generatingRequest || !currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0 || Boolean(lastGeneratedRequest)}
               className="h-10 px-3 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed"
@@ -1474,7 +1474,7 @@ export default function ForecastPanel() {
             <button onClick={exportReconciliationCsv}
               className="text-xs px-3 py-2 rounded-xl font-medium flex items-center gap-1.5 transition-opacity hover:opacity-90"
               style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={12} /> 导出 CSV
+              <FileSpreadsheet size={12} /> 导出当前结果
             </button>
             <button onClick={saveForecastPlan} disabled={savingPlan}
               className="text-xs px-4 py-2 rounded-xl font-medium text-white flex items-center gap-1.5 transition-opacity hover:opacity-90"
@@ -1522,7 +1522,7 @@ export default function ForecastPanel() {
           right={<div className="flex items-center gap-2">
             <button onClick={exportSavedPlansCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出 CSV
+              <FileSpreadsheet size={11} /> 导出当前结果
             </button>
             <span className="text-[10px]" style={{ color: A.gray2 }}>{savedPlans.length} 条计划记录</span>
           </div>} />
@@ -1643,11 +1643,11 @@ function _ForecastLegacy_Unused() {
           </thead>
           <tbody>
             {[
-              { name: "控制器主板 V3.2",  qty: 12,  consume: 48,  days: 7,  suggest: 60,  when: "立即",   cost: "¥72万", urgency: "不足" },
-              { name: "伺服电机 750W",     qty: 34,  consume: 120, days: 8,  suggest: 150, when: "立即",   cost: "¥45万", urgency: "不足" },
-              { name: "铝合金型材 6063",   qty: 148, consume: 620, days: 7,  suggest: 800, when: "48h 内", cost: "¥28万", urgency: "不足" },
-              { name: "液压油缸 50mm",     qty: 67,  consume: 140, days: 14, suggest: 120, when: "本周内", cost: "¥31万", urgency: "预警" },
-              { name: "密封垫片 φ80",      qty: 520, consume: 900, days: 17, suggest: 600, when: "本周内", cost: "¥9万",  urgency: "预警" },
+              { name: "控制器主板 V3.2",  qty: 12,  consume: 48,  days: 7,  suggest: 60,  when: "立即",   cost: fmt(720000), urgency: "不足" },
+              { name: "伺服电机 750W",     qty: 34,  consume: 120, days: 8,  suggest: 150, when: "立即",   cost: fmt(450000), urgency: "不足" },
+              { name: "铝合金型材 6063",   qty: 148, consume: 620, days: 7,  suggest: 800, when: "48h 内", cost: fmt(280000), urgency: "不足" },
+              { name: "液压油缸 50mm",     qty: 67,  consume: 140, days: 14, suggest: 120, when: "本周内", cost: fmt(310000), urgency: "预警" },
+              { name: "密封垫片 φ80",      qty: 520, consume: 900, days: 17, suggest: 600, when: "本周内", cost: fmt(90000),  urgency: "预警" },
             ].map((row, i) => (
               <tr key={row.name} className="hover:bg-blue-50/40 transition-colors"
                 style={{ borderBottom: i < 4 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>

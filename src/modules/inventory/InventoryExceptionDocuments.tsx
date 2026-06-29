@@ -76,7 +76,7 @@ export default function InventoryExceptionDocuments() {
       return;
     }
     exportRowsToCsv("inventory-exception-documents-export.csv", inventoryExceptionExportRows(visible));
-    toast.success("CSV 已导出", { description: "库存异常单据" });
+    toast.success("导出文件已生成", { description: "库存异常单据" });
   }
 
   return (
@@ -117,7 +117,7 @@ export default function InventoryExceptionDocuments() {
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索单据 / SKU / 流水" className="pl-8" style={inputStyle} />
           </div>
           <button onClick={exportCsv} className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90" style={{ background: A.gray6, color: A.blue }}>
-            <FileSpreadsheet size={13} /> 导出 CSV
+            <FileSpreadsheet size={13} /> 导出当前结果
           </button>
         </div>
 

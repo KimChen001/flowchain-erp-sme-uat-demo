@@ -49,6 +49,7 @@ V1 is deterministic:
 This pass keeps the resolver deterministic and focuses on workbench quality:
 
 - Group topbar results by business type so users can scan PO, PR, RFQ, supplier, item, inventory, warehouse, and invoice matches separately.
+- Cap each result group in the dropdown so search stays compact; hidden matches should direct users to the relevant module list.
 - Support keyboard navigation in the topbar search results with ArrowUp, ArrowDown, Enter, and Escape.
 - Keep exact PO, PR, and RFQ ids ranked first.
 - Render transaction amounts as full comma-formatted currency, for example `¥140,000`, instead of shorthand units such as `¥14万`.

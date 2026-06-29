@@ -106,5 +106,5 @@ export function exportMasterDataCsv(
 
   const current = configs[tab];
   exportRowsToCsv(current.filename, current.rows);
-  toast.success("CSV 已导出");
+  toast.success("导出文件已生成");
 }

@@ -46,7 +46,7 @@ function CreditMemoOffsetPanel() {
         贷项价税合计: tax.grossAmount,
       };
     }));
-    toast.success("CSV 已导出", { description: "贷项冲减视图" });
+    toast.success("导出文件已生成", { description: "贷项冲减视图" });
   }
 
   return (
@@ -61,7 +61,7 @@ function CreditMemoOffsetPanel() {
         <button onClick={exportCsv}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
           style={{ background: A.gray6, color: A.blue }}>
-          <FileSpreadsheet size={13} /> 导出 CSV
+          <FileSpreadsheet size={13} /> 导出当前结果
         </button>
       </div>
       <div className="overflow-x-auto">

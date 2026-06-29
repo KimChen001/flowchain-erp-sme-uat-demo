@@ -171,7 +171,7 @@ export function NewPOModal({ open, onClose, onCreate }: {
         <div className="mt-4 rounded-xl p-3 flex gap-3" style={{ background: "#fff8f0" }}>
           <AlertCircle size={14} style={{ color: A.orange }} className="shrink-0 mt-0.5" />
           <div className="text-[11px]" style={{ color: A.label }}>
-            订单金额超过 ¥150 万，需财务总监会签且附 ≥ 2 家比价记录。
+            订单金额超过 {fmt(1500000)}，需财务总监会签且附 ≥ 2 家比价记录。
             <span style={{ color: A.orange }}>提交后将进入二级审批流。</span>
           </div>
         </div>

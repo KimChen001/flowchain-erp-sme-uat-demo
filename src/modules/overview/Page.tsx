@@ -748,7 +748,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
 
   function exportEvidence(detail: EvidenceDetail) {
     exportRowsToCsv(`cockpit-evidence-${safeFilenamePart(detail.object)}.csv`, evidenceRowsForExport(detail));
-    toast.success("证据 CSV 已导出");
+    toast.success("证据文件已生成");
   }
 
   return (
@@ -955,7 +955,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
             <button onClick={() => exportEvidence(selectedEvidence)}
               className="text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5"
               style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
-              <FileSpreadsheet size={13} /> 导出证据 CSV
+              <FileSpreadsheet size={13} /> 导出证据
             </button>
             <button onClick={() => setSelectedEvidence(null)}
               className="text-xs px-3 py-1.5 rounded-lg font-medium"

@@ -30,7 +30,7 @@ export default function SupplierPortalPanel() {
       战略分级: supplier.flag,
       最近问题: supplier.lastIssue || "",
     })));
-    toast.success("CSV 已导出");
+    toast.success("导出文件已生成");
   };
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function SupplierPortalPanel() {
               <button onClick={exportCsv}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
                 style={{ background: A.gray6, color: A.blue }}>
-                <FileSpreadsheet size={13} /> 导出 CSV
+                <FileSpreadsheet size={13} /> 导出当前结果
               </button>
             </div>
           </div>

@@ -23,7 +23,7 @@ export default function SettlementPreparation() {
       负责人: row.owner,
       下一步: row.nextStep,
     })));
-    toast.success("CSV 已导出", { description: "结算准备清单" });
+    toast.success("导出文件已生成", { description: "结算准备清单" });
   }
 
   return (
@@ -38,7 +38,7 @@ export default function SettlementPreparation() {
         <button onClick={exportCsv}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
           style={{ background: A.gray6, color: A.blue }}>
-          <FileSpreadsheet size={13} /> 导出 CSV
+          <FileSpreadsheet size={13} /> 导出当前结果
         </button>
       </div>
       <div className="overflow-x-auto">

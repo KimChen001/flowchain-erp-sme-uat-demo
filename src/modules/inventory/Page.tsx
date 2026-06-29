@@ -79,7 +79,7 @@ function exportCsv(filename: string, rows: Record<string, unknown>[]) {
     return;
   }
   exportRowsToCsv(filename, rows);
-  toast.success("CSV 已导出");
+  toast.success("导出文件已生成");
 }
 
 function InventoryOverview() {

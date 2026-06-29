@@ -229,6 +229,7 @@ const SEARCH_GROUP_ORDER = [
   "inventory_item",
   "warehouse",
 ];
+const SEARCH_GROUP_VISIBLE_LIMIT = 5;
 
 function searchGroupKey(type: string) {
   return type === "bin" ? "warehouse" : type;
@@ -504,7 +505,8 @@ export default function FlowChainApp() {
       .map(([type, results]) => ({
         type,
         label: SEARCH_GROUP_LABELS[type] || type,
-        results,
+        results: results.slice(0, SEARCH_GROUP_VISIBLE_LIMIT),
+        hiddenCount: Math.max(0, results.length - SEARCH_GROUP_VISIBLE_LIMIT),
       }));
   }, [searchResults]);
   const visibleSearchResults = useMemo(() => searchGroups.flatMap((group) => group.results), [searchGroups]);
@@ -812,6 +814,11 @@ export default function FlowChainApp() {
                               </button>
                             );
                           })}
+                          {group.hiddenCount > 0 && (
+                            <div className={`${typography.searchResultMeta} px-3 py-2`} style={{ color: A.gray2, borderBottom: `1px solid ${A.border}` }}>
+                              还有 {group.hiddenCount} 条，请进入对应模块查看
+                            </div>
+                          )}
                         </div>
                       ));
                     })()}

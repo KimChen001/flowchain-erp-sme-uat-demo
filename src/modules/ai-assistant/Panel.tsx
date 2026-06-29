@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
+import { fmt } from "../../lib/format";
 import { A } from "../../components/ui";
+import { aiDisplayMessage, looksLikeRawJson, safeUnknownCardMessage, sanitizeAiMessage } from "./presentation";
 import { getContextualQuickPrompts } from "./prompts";
 
 export type ActiveContext = {
@@ -55,7 +57,14 @@ function hasValue(value: unknown) {
 function textValue(value: unknown) {
   if (typeof value === "boolean") return value ? "是" : "否";
   if (typeof value === "number") return Number.isFinite(value) ? value.toLocaleString() : "";
+  if (typeof value === "object") return "";
+  if (typeof value === "string") return sanitizeAiMessage(value);
   return String(value ?? "");
+}
+
+function businessValue(label: string, value: unknown) {
+  if (/金额|余额|应付|贷项|差异/.test(label) && typeof value === "number") return fmt(value);
+  return textValue(value);
 }
 
 function fieldEntries(fields: [string, unknown][]) {
@@ -152,7 +161,7 @@ function KeyValueGrid({ fields }: { fields: [string, unknown][] }) {
       {entries.map(([label, value]) => (
         <div key={label} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
           <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
-          <div className="text-[11px] font-medium truncate" style={{ color: A.label }}>{textValue(value)}</div>
+          <div className="text-[11px] font-medium truncate" style={{ color: A.label }}>{businessValue(label, value)}</div>
         </div>
       ))}
     </div>
@@ -553,8 +562,8 @@ function AiResponseCard({ card }: { card: AiChatCard }) {
     default:
       if (!card.type && !card.title) return null;
       return (
-        <CardShell title={card.title || "结构化信息"}>
-          <div className="text-[11px]" style={{ color: A.gray1 }}>{card.type || "response_card"}</div>
+        <CardShell title={sanitizeAiMessage(card.title || "") || "结构化信息"}>
+          <div className="text-[11px]" style={{ color: A.gray1 }}>{safeUnknownCardMessage()}</div>
         </CardShell>
       );
   }
@@ -638,7 +647,9 @@ export default function FloatingAiAssistant({
           ...(context ? { activeContext: context } : {}),
         }),
       });
-      const content = response.message || response.content || "已收到请求，但当前没有可展示的回复。";
+      const rawContent = response.message || response.content || "";
+      const content = aiDisplayMessage(rawContent, Boolean(response.cards?.length));
+      if (looksLikeRawJson(rawContent)) console.debug("AI assistant raw content suppressed", rawContent);
       setMessages((current) => [
         ...current,
         { role: "assistant", content, cards: response.cards },

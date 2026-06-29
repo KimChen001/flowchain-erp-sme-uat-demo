@@ -34,3 +34,15 @@ Use `fmt`, `formatCurrencyAmount`, or `formatNumberAmount` from `src/lib/format.
 - `¥12,345.67`
 
 Do not render transaction amounts as `¥14万` or `¥0.14亿`.
+
+## AI Assistant Presentation Rules
+
+End-user AI output should be plain business language plus structured cards.
+
+- Do not show raw JSON, raw arrays, code fences, or markdown headings such as `###`.
+- Do not show provider, model, tool, schema, intent, `cards`, or `evidence` debug metadata.
+- Preserve business identifiers such as PO, PR, RFQ, supplier, SKU, amounts, and dates.
+- Render structured data through UI cards with readable labels and values.
+- Evidence should appear as compact label/value rows, not raw payloads.
+- Recommended actions should use readable labels and safe internal links.
+- Unknown structured card types should show `暂不支持展示该结果类型。` instead of dumping the raw card payload.
