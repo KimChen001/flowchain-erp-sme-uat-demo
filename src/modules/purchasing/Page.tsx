@@ -35,6 +35,11 @@ import { TrackShipmentModal } from "./components/TrackShipmentModal";
 import { lineRemaining, lineStatusLabel, lineStatusStyle, poLinesOf, poTotals, toNumber } from "../../domain/purchasing/helpers";
 import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
 import { getPoLinkedDocuments } from "../../domain/procurement/document-links";
+import {
+  defaultPurchaseOrderWorkbenchFilters,
+  filterPurchaseOrdersForWorkbench,
+  type PurchaseOrderWorkbenchFilters,
+} from "./filters";
 
 function poTimeline(po: PurchaseOrder): TimelineStep[] {
   const cancelled = po.status === "已取消" || po.status === "已驳回";
@@ -92,7 +97,7 @@ function exportPoDetail(po: PurchaseOrder) {
 export default function PurchasingOrdersPage() {
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"全部" | POStatus>("全部");
+  const [filters, setFilters] = useState<PurchaseOrderWorkbenchFilters>(defaultPurchaseOrderWorkbenchFilters);
   const [selectedId, setSelectedId] = useState(purchaseOrders[0]?.po ?? "");
   const [newOpen, setNewOpen] = useState(false);
   const [trackOpen, setTrackOpen] = useState(false);
@@ -111,10 +116,22 @@ export default function PurchasingOrdersPage() {
     return () => { alive = false; };
   }, []);
 
-  const selectedPO = orders.find((o) => o.po === selectedId) ?? orders[0] ?? null;
+  const filtered = filterPurchaseOrdersForWorkbench(orders, filters);
+  const sourceOptions = Array.from(new Set(orders.map((order) => order.source || "manual"))).sort();
+  const statusOptions = ["全部", "草稿", "待审批", "已审批", "已发出", "部分到货", "已完成", "已驳回", "已取消"] as const;
+  const selectedPO = filtered.find((o) => o.po === selectedId) ?? filtered[0] ?? null;
   const selectedPOLines = poLinesOf(selectedPO);
   const selectedPOTotals = poTotals(selectedPO);
-  const filtered = filter === "全部" ? orders : orders.filter((o) => o.status === filter);
+
+  useEffect(() => {
+    if (!filtered.length) {
+      if (selectedId) setSelectedId("");
+      return;
+    }
+    if (!filtered.some((order) => order.po === selectedId)) {
+      setSelectedId(filtered[0].po);
+    }
+  }, [filtered, selectedId]);
 
   const totalAmount   = orders.reduce((s, o) => s + o.amount, 0);
   const pendingApprov = orders.filter((o) => o.status === "待审批").length;
@@ -162,6 +179,12 @@ export default function PurchasingOrdersPage() {
       toast.error("采购订单下发失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     }
   }
+  function updateFilter<K extends keyof PurchaseOrderWorkbenchFilters>(key: K, value: PurchaseOrderWorkbenchFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+  function resetFilters() {
+    setFilters(defaultPurchaseOrderWorkbenchFilters);
+  }
   function exportCsv() {
     if (filtered.length === 0) {
       toast.warning("暂无可导出的数据");
@@ -187,7 +210,7 @@ export default function PurchasingOrdersPage() {
         收货进度百分比: Number(progress.toFixed(1)),
       };
     }));
-    toast.success("CSV 已导出");
+    toast.success("导出文件已生成");
   }
 
   return (
@@ -267,22 +290,87 @@ export default function PurchasingOrdersPage() {
         </Card>
       </div>
 
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <SectionHeader title="采购订单查询" />
+            <div className="text-xs mt-1" style={{ color: A.sub }}>
+              按 PO、供应商、物料、状态和 ETA 查询采购执行记录
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => toast.success(`已筛选 ${filtered.length} 条采购订单`)}
+              className="h-8 px-3 rounded-lg text-xs font-medium text-white"
+              style={{ background: A.blue }}>
+              查询
+            </button>
+            <button onClick={resetFilters}
+              className="h-8 px-3 rounded-lg text-xs font-medium"
+              style={{ background: A.gray6, color: A.label }}>
+              重置
+            </button>
+            <button onClick={exportCsv}
+              className="h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5"
+              style={{ background: "#f0f6ff", color: A.blue }}>
+              <FileSpreadsheet size={13} /> 导出当前结果
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          <Field label="PO 编号">
+            <input value={filters.poNumber} onChange={(event) => updateFilter("poNumber", event.target.value)}
+              placeholder="PO-2026-1287" style={inputStyle} />
+          </Field>
+          <Field label="供应商">
+            <input value={filters.supplier} onChange={(event) => updateFilter("supplier", event.target.value)}
+              placeholder="供应商名称" style={inputStyle} />
+          </Field>
+          <Field label="物料 / SKU">
+            <input value={filters.skuOrItem} onChange={(event) => updateFilter("skuOrItem", event.target.value)}
+              placeholder="SKU 或品名" style={inputStyle} />
+          </Field>
+          <Field label="状态">
+            <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value as PurchaseOrderWorkbenchFilters["status"])}
+              style={inputStyle}>
+              {statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </Field>
+          <Field label="来源">
+            <select value={filters.source} onChange={(event) => updateFilter("source", event.target.value)}
+              style={inputStyle}>
+              <option value="全部">全部</option>
+              {sourceOptions.map((source) => (
+                <option key={source} value={source}>{source === "forecast" ? "预测" : source === "manual" ? "手工" : source}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="负责人">
+            <input value={filters.owner} onChange={(event) => updateFilter("owner", event.target.value)}
+              placeholder="采购负责人" style={inputStyle} />
+          </Field>
+          <Field label="ETA 起始">
+            <input value={filters.etaFrom} onChange={(event) => updateFilter("etaFrom", event.target.value)}
+              placeholder="2026-06-01" style={inputStyle} />
+          </Field>
+          <Field label="ETA 结束">
+            <input value={filters.etaTo} onChange={(event) => updateFilter("etaTo", event.target.value)}
+              placeholder="2026-06-30" style={inputStyle} />
+          </Field>
+        </div>
+      </Card>
+
       {/* PO Table + Detail */}
       <div className="grid grid-cols-5 gap-3">
         <Card className="col-span-3">
           <div className="flex items-center gap-3 px-5 py-3.5" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
-            <Filter size={13} style={{ color: A.gray2 }} />
-            <SegmentedControl
-              options={(["全部", "待审批", "已审批", "已发出", "部分到货", "已完成"] as const).map((s) => ({ label: s, value: s }))}
-              value={filter} onChange={(v) => setFilter(v as any)}
-            />
-            <span className="text-xs ml-auto" style={{ color: A.gray2 }}>{filtered.length} 条</span>
+            <div>
+              <div className="text-sm font-semibold" style={{ color: A.label }}>采购订单列表</div>
+              <div className="text-[11px] mt-0.5" style={{ color: A.sub }}>共 {orders.length} 条，当前筛选 {filtered.length} 条</div>
+            </div>
+            <span className="text-xs ml-auto flex items-center gap-1.5" style={{ color: A.gray2 }}>
+              <Filter size={13} /> 当前结果
+            </span>
             <ContextualImportActions entityLabel="PO" compact />
-            <button onClick={exportCsv}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity"
-              style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出 CSV
-            </button>
             <button onClick={() => setNewOpen(true)}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
               style={{ background: A.blue }}>
@@ -334,6 +422,13 @@ export default function PurchasingOrdersPage() {
                     </tr>
                   );
                 })}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center text-xs" style={{ color: A.gray2 }}>
+                      当前条件下暂无采购订单
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
