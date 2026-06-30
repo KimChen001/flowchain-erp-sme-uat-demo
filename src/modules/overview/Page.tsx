@@ -157,7 +157,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
     })),
     ...(topRiskSku ? [{
       priority: "高" as const,
-      title: "释放 MRP 计划订单",
+      title: "审阅 MRP 计划订单",
       object: topRiskSku.sku,
       evidence: `覆盖 ${topRiskSku.plan.daysCover} 天 · 建议 ${topRiskSku.plan.suggestedQty.toLocaleString()} ${topRiskSku.plan.unit} · ${fmt(topRiskSku.plan.amount)}`,
       module: "预测与 MRP",
@@ -267,7 +267,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       evidenceUsed: topRiskSku ? `覆盖 ${topRiskSku.plan.daysCover} 天 · ROP ${topRiskSku.plan.reorderPoint} · 建议 ${topRiskSku.plan.suggestedQty.toLocaleString()} ${topRiskSku.plan.unit}` : "库存覆盖、ROP、MRP 例外",
       confidence: "88% · 高",
       riskWarning: topRiskSku && topRiskSku.plan.daysCover <= topRiskSku.plan.leadTimeDays ? "覆盖天数低于采购提前期，存在断供风险。" : "当前建议为滚动复核，不会自动创建单据。",
-      suggestedAction: topRiskSku && !topRiskSku.plan.needsSourcing ? "生成补货 PR" : "打开预测与 MRP",
+      suggestedAction: topRiskSku && !topRiskSku.plan.needsSourcing ? "预览补货 PR 草稿" : "打开预测与 MRP",
       module: "预测与 MRP",
       moduleId: "forecast",
       detail: inventoryDecisionDetail,

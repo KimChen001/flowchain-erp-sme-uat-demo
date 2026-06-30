@@ -120,6 +120,23 @@ The following areas are considered stable enough for the next planning step:
 - AI Assistant placement
 - Customer-visible wording guardrails
 
+## Alpha Readiness Classification
+
+R66 post-planning audit classifies the visible system as follows for controlled Alpha:
+
+- Core Alpha ready: Today Cockpit guided flow, Procurement workbench, PR/RFQ/PO/GRN read and recovery paths, Inventory SKU focus, ActionDraft preview/review shell, AI Assistant deterministic guidance.
+- Optional guided Alpha: Forecast / MRP planning review and draft preview only. It is useful for guided demand/MRP evidence review, but it is not production MRP or autonomous release.
+- Observation-only: Master Data, SRM, Finance Collaboration, Reports Center, and Data Management / Imports. These are useful for context, exports, and evidence review, but should not anchor the first Alpha task.
+- Excluded from Alpha: full auth/RBAC, production multi-tenant permission infrastructure, final ActionDraft confirmation, autonomous AI business mutations, GL/payment/tax filing, bank/tax integrations, and production MRP release.
+
+Known Alpha guardrails:
+
+- Preview flows must remain non-mutating.
+- Legacy mutation routes must remain blocked in database mode.
+- JSON mode remains the default; database mode remains opt-in.
+- Forecast/MRP release actions must remain ActionDraft preview only.
+- User-facing copy should say preview, review, or draft when final business execution is not implemented.
+
 ## Known Limitations
 
 - No production backend persistence yet.
