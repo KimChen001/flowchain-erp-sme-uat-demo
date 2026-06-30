@@ -14,6 +14,7 @@
 - [Architecture overview](architecture-overview-v1.md)
 - [Repository boundary](repository-boundary-v1.md)
 - [JSON adapter contract tests](json-adapter-contract-tests-v1.md)
+- [Persistence mode and adapter registry](persistence-mode-and-adapter-registry-v1.md)
 - [Database entity model v2](database-entity-model-v2.md)
 - [Database entity model v1](database-entity-model-v1.md)
 - [Aliyun backend deployment roadmap](aliyun-backend-deployment-roadmap.md)

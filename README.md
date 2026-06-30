@@ -111,6 +111,7 @@ Start here:
 - [Backend route map](docs/backend-route-map-v1.md)
 - [Repository boundary](docs/repository-boundary-v1.md)
 - [JSON adapter contract tests](docs/json-adapter-contract-tests-v1.md)
+- [Persistence mode and adapter registry](docs/persistence-mode-and-adapter-registry-v1.md)
 - [Roadmap](docs/roadmap-v1.md)
 - [UAT limitations](docs/uat-limitations-v1.md)
 - [AI safety and draft-first explainer](docs/ai-safety-and-draft-first-explainer-v1.md)
