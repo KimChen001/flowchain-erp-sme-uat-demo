@@ -49,16 +49,49 @@ const MRP_SOURCE_METADATA = Object.freeze({
   persistence: 'read-only-generated-plan',
 })
 
-function roundUpToBatch(value, moq, batchMultiple) {
+export function roundUpToBatch(value, moq, batchMultiple) {
   if (value <= 0) return 0
-  return Math.ceil(Math.max(value, moq) / batchMultiple) * batchMultiple
+  const safeMoq = Math.max(0, Number(moq) || 0)
+  const safeMultiple = Math.max(1, Number(batchMultiple) || 1)
+  return Math.ceil(Math.max(value, safeMoq) / safeMultiple) * safeMultiple
 }
 
-function futureMonthLabels(periods = 6) {
+export function futureMonthLabels(periods = 6) {
   return Array.from({ length: periods }, (_, index) => {
     const total = 2026 * 12 + 5 + index
     return `${String(Math.floor(total / 12)).slice(-2)}/${(total % 12) + 1}月`
   })
+}
+
+export function calculateNetRequirement({
+  projectedAvailable = 0,
+  scheduledReceipt = 0,
+  grossRequirement = 0,
+  safetyStock = 0,
+} = {}) {
+  const availableBeforePlanning = Number(projectedAvailable || 0) + Number(scheduledReceipt || 0) - Number(grossRequirement || 0)
+  const netRequirement = Math.max(0, Number(safetyStock || 0) - availableBeforePlanning)
+  return { availableBeforePlanning, netRequirement }
+}
+
+export function plannedReleasePeriodFor(periodIndex, leadTimePeriods, labels = []) {
+  const releaseIndex = Number(periodIndex || 0) - Number(leadTimePeriods || 1)
+  return releaseIndex >= 0 ? labels[releaseIndex] : '立即释放'
+}
+
+export function classifyMrpException({
+  plannedReceipt = 0,
+  periodIndex = 0,
+  leadTimePeriods = 1,
+  availableBeforePlanning = 0,
+  safetyStock = 0,
+  monthlyDemand = 0,
+} = {}) {
+  const releaseIndex = Number(periodIndex || 0) - Number(leadTimePeriods || 1)
+  if (plannedReceipt > 0 && releaseIndex < 0) return '加急'
+  if (plannedReceipt > 0) return '释放'
+  if (availableBeforePlanning > Number(safetyStock || 0) + Number(monthlyDemand || 0) * 1.5) return '推迟/取消'
+  return '正常'
 }
 
 function createBomBucket(periods) {
@@ -192,18 +225,22 @@ export function buildMrpPlan(db, options = {}) {
       const dependentDemand = Number(bomBucket?.total?.[index] ?? profile.bomDemand?.[index] ?? 0)
       const grossRequirement = independentDemand + dependentDemand
       const scheduledReceipt = Number(profile.inbound?.[index] || 0)
-      const availableBeforePlanning = projected + scheduledReceipt - grossRequirement
-      const netRequirement = Math.max(0, safetyStock - availableBeforePlanning)
+      const { availableBeforePlanning, netRequirement } = calculateNetRequirement({
+        projectedAvailable: projected,
+        scheduledReceipt,
+        grossRequirement,
+        safetyStock,
+      })
       const plannedReceipt = roundUpToBatch(netRequirement, Number(profile.moq || 1), Number(profile.batchMultiple || 1))
-      const releaseIndex = index - Number(profile.leadTimePeriods || 1)
-      const plannedReleasePeriod = releaseIndex >= 0 ? labels[releaseIndex] : '立即释放'
-      const exception = plannedReceipt > 0 && releaseIndex < 0
-        ? '加急'
-        : plannedReceipt > 0
-          ? '释放'
-          : availableBeforePlanning > safetyStock + monthlyDemand * 1.5
-            ? '推迟/取消'
-            : '正常'
+      const plannedReleasePeriod = plannedReleasePeriodFor(index, Number(profile.leadTimePeriods || 1), labels)
+      const exception = classifyMrpException({
+        plannedReceipt,
+        periodIndex: index,
+        leadTimePeriods: Number(profile.leadTimePeriods || 1),
+        availableBeforePlanning,
+        safetyStock,
+        monthlyDemand,
+      })
 
       projected = availableBeforePlanning + plannedReceipt
       if (firstShortagePeriod === null && plannedReceipt > 0) firstShortagePeriod = labels[index]
