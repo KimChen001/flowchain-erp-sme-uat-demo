@@ -100,13 +100,16 @@ DATABASE_URL=postgresql://...
 - validates `DATABASE_URL` only when database mode is explicitly selected;
 - returns a clean config error if database mode is selected without `DATABASE_URL`;
 - does not enable legacy write routes;
-- still depends on future DB adapters before runtime persistence can move from JSON read fallback to DB reads/writes.
+- uses the Round 26 partial database registry for ActionDraft and AuditLog;
+- keeps master data, procurement read, and inventory read on JSON fallback until their DB adapters exist.
 
 ## Prisma Client Loading
 
 `server/persistence/prisma-client.mjs` dynamically imports `@prisma/client` only after `validateDatabasePersistenceConfig` succeeds.
 
 This prevents default JSON mode from connecting to, generating for, or requiring a database.
+
+Round 26 DB repository adapters still create no connection during registry creation. They validate configuration and resolve the Prisma client only when a DB-backed method is invoked.
 
 ## Relation to Route Mutation Guard
 
@@ -115,6 +118,8 @@ Round 24 remains active:
 - read-only and preview-only routes can continue in database mode;
 - legacy mutation routes are blocked in database mode until migrated;
 - no procurement/inventory JSON write route is allowed while claiming database persistence mode.
+
+`POST /api/action-drafts/preview` remains non-mutating in database mode. It does not call `persistDraft`.
 
 ## Test Strategy
 
@@ -134,7 +139,8 @@ This round does not:
 - run migrations;
 - create a live database;
 - migrate JSON data;
-- persist ActionDraft/AuditLog through DB adapters;
+- auto-persist ActionDraft previews;
+- confirm ActionDrafts or create business documents from them;
 - implement procurement, receiving, inventory, finance, payment, or tax write workflows;
 - remove JSON mode;
 - require `DATABASE_URL` for normal test/build;

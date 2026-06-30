@@ -1,4 +1,7 @@
 export const GENERIC_INTERNAL_ERROR = 'Internal server error'
+export const SAFE_OPERATIONAL_ERROR_CODES = new Set([
+  'FLOWCHAIN_DATABASE_CONFIG_MISSING',
+])
 
 const SECRET_PATTERNS = [
   /Bearer\s+[A-Za-z0-9._~+/=-]+/gi,
@@ -22,6 +25,12 @@ export function sendInternalServerError(res, send, error, options = {}) {
   const logger = options.logger || console
   if (typeof logger.warn === 'function') {
     logger.warn(`[server-error] ${sanitizeErrorSummary(error)}`)
+  }
+  if (SAFE_OPERATIONAL_ERROR_CODES.has(error?.code)) {
+    return send(res, error.status || 500, {
+      error: error.message,
+      code: error.code,
+    })
   }
   return send(res, 500, { error: GENERIC_INTERNAL_ERROR })
 }

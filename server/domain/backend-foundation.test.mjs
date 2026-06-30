@@ -88,9 +88,9 @@ test('server route context injects repository registry for repository-compatible
   const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
 
   assert.match(source, /import \{[^}]*createRepositoryRegistry[^}]*\} from '\.\.\/repositories\/adapter-registry\.mjs'/)
-  assert.match(source, /const repositories = persistenceMode === 'database'[\s\S]*createJsonRepositoryRegistry\(\{ db \}\)[\s\S]*createRepositoryRegistry\(\{ db, env: process\.env \}\)/)
+  assert.match(source, /const repositories = createRepositoryRegistry\(\{ db, env: process\.env \}\)/)
   assert.match(source, /routeContext = \{[\s\S]*repositories,[\s\S]*\}/)
-  assert.ok(source.indexOf('const repositories = persistenceMode') < source.indexOf('const routeContext = {'))
+  assert.ok(source.indexOf('const repositories = createRepositoryRegistry') < source.indexOf('const routeContext = {'))
 })
 
 test('global server errors are sanitized before returning 500 responses', () => {
@@ -152,6 +152,38 @@ test('database mode blocks legacy writes while allowing health and preview route
       delete process.env.FLOWCHAIN_PERSISTENCE_MODE
     } else {
       process.env.FLOWCHAIN_PERSISTENCE_MODE = previous
+    }
+    await closeServer(server)
+  }
+})
+
+test('database mode returns clean config error when DB audit adapter is invoked without DATABASE_URL', async () => {
+  const previousMode = process.env.FLOWCHAIN_PERSISTENCE_MODE
+  const previousDatabaseUrl = process.env.DATABASE_URL
+  process.env.FLOWCHAIN_PERSISTENCE_MODE = 'database'
+  delete process.env.DATABASE_URL
+  const server = createScmServer()
+
+  try {
+    const port = await listen(server)
+    const audit = await requestJson(port, 'GET', '/api/audit-log')
+
+    assert.equal(audit.status, 500)
+    assert.deepEqual(audit.payload, {
+      error: 'DATABASE_URL is required when FLOWCHAIN_PERSISTENCE_MODE=database.',
+      code: 'FLOWCHAIN_DATABASE_CONFIG_MISSING',
+    })
+    assert.doesNotMatch(JSON.stringify(audit.payload), /postgres:\/\/|sk-/)
+  } finally {
+    if (previousMode === undefined) {
+      delete process.env.FLOWCHAIN_PERSISTENCE_MODE
+    } else {
+      process.env.FLOWCHAIN_PERSISTENCE_MODE = previousMode
+    }
+    if (previousDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL
+    } else {
+      process.env.DATABASE_URL = previousDatabaseUrl
     }
     await closeServer(server)
   }

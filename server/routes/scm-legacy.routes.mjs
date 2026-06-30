@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { ProxyAgent } from 'undici'
 import { loadEnv } from '../config/env.mjs'
 import { createJsonDb } from '../repositories/json-db.mjs'
-import { createJsonRepositoryRegistry, createRepositoryRegistry, getPersistenceMode } from '../repositories/adapter-registry.mjs'
+import { createRepositoryRegistry, getPersistenceMode } from '../repositories/adapter-registry.mjs'
 import { contentTypeFor, readBody, send, sendText } from '../utils/http.mjs'
 import { sendInternalServerError } from '../utils/safe-errors.mjs'
 import {
@@ -960,9 +960,7 @@ export function createScmServer() {
       return send(res, 201, plan)
     }
 
-    const repositories = persistenceMode === 'database'
-      ? createJsonRepositoryRegistry({ db })
-      : createRepositoryRegistry({ db, env: process.env })
+    const repositories = createRepositoryRegistry({ db, env: process.env })
     const routeWriteDb = persistenceMode === 'database' ? undefined : writeDb
     const routeContext = {
       req, res, url, db, send, readBody, writeDb: routeWriteDb, event, todayLabel,

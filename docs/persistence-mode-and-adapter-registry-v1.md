@@ -9,7 +9,7 @@ The helper `getPersistenceMode(env)` reads `FLOWCHAIN_PERSISTENCE_MODE`.
 Supported values:
 
 - `json`: default and current runtime behavior.
-- `database`: opt-in database-readiness mode. Real DB adapters are not implemented yet; Round 24 blocks legacy JSON write routes and allows read/preview routes with JSON read fallback until DB adapters exist.
+- `database`: opt-in database-readiness mode. Round 26 adds DB adapters for ActionDraft and AuditLog while master data, procurement read, and inventory read remain JSON read fallback until their DB adapters exist.
 
 Rules:
 
@@ -22,7 +22,7 @@ Rules:
 
 `createRepositoryRegistry({ db, env })` returns the JSON registry unless `FLOWCHAIN_PERSISTENCE_MODE=database` is explicitly selected.
 
-The main route context uses the JSON registry by default. In Round 24, explicit database mode uses JSON read fallback for allowed read/preview routes and blocks un-migrated legacy mutation routes before they can call `writeDb`.
+The main route context uses the JSON registry by default. In database mode, the registry is now partial: migrated repositories use DB adapters, and un-migrated read repositories use JSON fallback. Un-migrated legacy mutation routes are blocked before they can call `writeDb`.
 
 Current JSON registry groups:
 
@@ -35,15 +35,20 @@ Current JSON registry groups:
 
 The JSON registry delegates to current domain read models and small repository helpers. It does not migrate routes yet and does not duplicate core business logic.
 
-## Database placeholder
+## Partial Database Registry
 
-`FLOWCHAIN_PERSISTENCE_MODE=database` currently throws a safe not-implemented error:
+`FLOWCHAIN_PERSISTENCE_MODE=database` no longer selects a pure placeholder registry.
 
-```text
-Database persistence adapter is not implemented yet. Use FLOWCHAIN_PERSISTENCE_MODE=json.
-```
+Current database-mode mapping:
 
-This error is only reachable when `createRepositoryRegistry` is called directly with database mode explicitly selected. The main server route path does not use the placeholder for read/preview routes in database mode; it uses JSON read fallback plus the Round 24 mutation guard until real DB adapters are added.
+- `actionDrafts`: DB adapter
+- `auditLog`: DB adapter
+- `masterData`: JSON read fallback
+- `procurementRead`: JSON read fallback
+- `inventoryRead`: JSON read fallback
+- `aiConversation`: future adapter placeholder
+
+The DB adapters validate `DATABASE_URL` only when their database-backed methods are invoked. JSON mode still ignores missing database configuration.
 
 ## Relation to contract tests
 
@@ -53,19 +58,20 @@ The Round 16 JSON adapter contract tests remain the behavioral baseline. Future 
 
 Round 22 wires the registry into the main server `routeContext` after the JSON database snapshot is loaded. Repository-compatible routes now receive `ctx.repositories` during normal request handling.
 
-The first repository-compatible route groups are:
+Repository-compatible route groups are:
 
 - Master Data;
 - Procurement read;
 - Inventory read;
-- Action Draft preview.
+- Action Draft preview;
+- Audit Log.
 
 Each route group still keeps a local JSON fallback for isolated handler tests and compatibility, but injected repositories take priority.
 
 ## Non-goals
 
-- Round 17 did not add Prisma or Drizzle. Round 25 later adds a Prisma scaffold, but this registry still does not expose real database adapters.
-- No database connection.
+- Round 17 did not add Prisma or Drizzle. Round 25 later adds a Prisma scaffold, and Round 26 starts the partial database registry for ActionDraft and AuditLog only.
+- No database connection during registry creation.
 - No migrations.
 - No broad route migration.
 - No public API response shape changes.

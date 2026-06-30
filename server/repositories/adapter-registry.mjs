@@ -3,6 +3,8 @@ import { createJsonInventoryReadRepository } from './json-inventory-read-reposit
 import { createJsonProcurementReadRepository } from './json-procurement-read-repository.mjs'
 import { createJsonActionDraftRepository } from './json-action-draft-repository.mjs'
 import { createAuditLogRepository } from './audit-log-repository.mjs'
+import { createDbActionDraftRepository } from './db-action-draft-repository.mjs'
+import { createDbAuditLogRepository } from './db-audit-log-repository.mjs'
 
 export const PERSISTENCE_MODES = Object.freeze({
   json: 'json',
@@ -40,12 +42,20 @@ export function createJsonRepositoryRegistry({ db = {} } = {}) {
   }
 }
 
-export function createDatabaseRepositoryRegistry() {
-  throw new Error('Database persistence adapter is not implemented yet. Use FLOWCHAIN_PERSISTENCE_MODE=json.')
+export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, prisma } = {}) {
+  return {
+    mode: PERSISTENCE_MODES.database,
+    masterData: createJsonMasterDataRepository(db),
+    inventoryRead: createJsonInventoryReadRepository(db),
+    procurementRead: createJsonProcurementReadRepository(db),
+    actionDrafts: createDbActionDraftRepository({ db, env, prisma }),
+    auditLog: createDbAuditLogRepository({ env, prisma }),
+    aiConversation: createAiConversationRepository(),
+  }
 }
 
 export function createRepositoryRegistry({ db = {}, env = process.env } = {}) {
   const mode = getPersistenceMode(env)
-  if (mode === PERSISTENCE_MODES.database) return createDatabaseRepositoryRegistry()
+  if (mode === PERSISTENCE_MODES.database) return createDatabaseRepositoryRegistry({ db, env })
   return createJsonRepositoryRegistry({ db })
 }

@@ -20,6 +20,7 @@
 - [Server error and health safety](server-error-health-safety-v1.md)
 - [Route mutation classification](route-mutation-classification-v1.md)
 - [ORM decision and persistence scaffold](orm-decision-and-persistence-scaffold-v1.md)
+- [ActionDraft and AuditLog DB adapter](action-draft-audit-db-adapter-v1.md)
 - [ActionDraft and AuditLog repository adapter](action-draft-audit-repository-adapter-v1.md)
 - [Master Data repository adapter](master-data-repository-adapter-v1.md)
 - [Procurement and Inventory read repository adapters](procurement-inventory-read-repository-adapters-v1.md)
