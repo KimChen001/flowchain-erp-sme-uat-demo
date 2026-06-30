@@ -602,6 +602,18 @@ export default function FlowChainApp() {
     }
   }
 
+  async function saveActionDraftReview(draft: ActionDraftPreview) {
+    const response = await apiJson<{ draft: ActionDraftPreview; persisted: boolean; createsBusinessDocument: boolean; requiresConfirmation: boolean }>("/api/action-drafts/save", {
+      method: "POST",
+      body: JSON.stringify({ draft }),
+    });
+    if (response.createsBusinessDocument) {
+      throw new Error("保存边界异常：接口声明会创建业务单据。");
+    }
+    setDraftPreview(response.draft);
+    toast.success("草稿已保存", { description: "仅保存 ActionDraft，不会创建业务单据。" });
+  }
+
   function clearFocus() {
     setSearchFocus(null);
   }
@@ -973,6 +985,7 @@ export default function FlowChainApp() {
         draft={draftPreview}
         onClose={() => setDraftShellOpen(false)}
         onCancelPreview={() => { setDraftPreview(null); setDraftError(""); setDraftShellOpen(false); }}
+        onSaveDraft={saveActionDraftReview}
         onNavigate={navigateTo}
       />
     </div>

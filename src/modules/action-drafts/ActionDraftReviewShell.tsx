@@ -1,6 +1,7 @@
-import { Copy } from "lucide-react";
+import { Copy, RotateCcw, Save, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { A, Chip, Modal, RecoveryActions } from "../../components/ui";
-import { evidenceModuleId, normalizeEvidenceLinks, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
+import { navigationIntentFromEvidenceLink, normalizeEvidenceLinks, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
 
 export type ActionDraftPreviewRequest = {
   type: string;
@@ -16,6 +17,7 @@ export type ActionDraftPreview = {
   title: string;
   status: string;
   source: string;
+  updatedAt?: string;
   requiresConfirmation: boolean;
   originEvidence?: Record<string, unknown>[];
   payload?: Record<string, unknown>;
@@ -100,6 +102,19 @@ function copyTextForDraft(draft: ActionDraftPreview | null) {
   return `${draft.title}\nType: ${draft.type}\nStatus: ${draft.status}\n${payload}${warnings}`.trim();
 }
 
+function isEditableScalar(value: unknown) {
+  return ["string", "number", "boolean"].includes(typeof value) || value === null || value === undefined;
+}
+
+function editValue(raw: string, original: unknown) {
+  if (typeof original === "number") {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : original;
+  }
+  if (typeof original === "boolean") return raw === "true";
+  return raw;
+}
+
 export function ActionDraftReviewShell({
   open,
   loading = false,
@@ -107,6 +122,7 @@ export function ActionDraftReviewShell({
   draft,
   onClose,
   onCancelPreview,
+  onSaveDraft,
   onNavigate,
 }: {
   open: boolean;
@@ -115,14 +131,59 @@ export function ActionDraftReviewShell({
   draft: ActionDraftPreview | null;
   onClose: () => void;
   onCancelPreview: () => void;
+  onSaveDraft?: (draft: ActionDraftPreview) => Promise<void>;
   onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 }) {
-  const validation = draft?.validation;
-  const evidence = normalizeEvidenceLinks(draft?.originEvidence || [], { source: "actionDraft" }).slice(0, 6);
-  const audit = draft?.auditTrail?.[0];
+  const [workingDraft, setWorkingDraft] = useState<ActionDraftPreview | null>(draft);
+  const [saveStatus, setSaveStatus] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const activeDraft = workingDraft || draft;
+  const validation = activeDraft?.validation;
+  const evidence = normalizeEvidenceLinks(activeDraft?.originEvidence || [], { source: "actionDraft" }).slice(0, 6);
+  const audit = activeDraft?.auditTrail?.[0];
+  const payloadEntries = useMemo(() => Object.entries(activeDraft?.payload || {}), [activeDraft?.payload]);
+
+  useEffect(() => {
+    setWorkingDraft(draft);
+    setSaveStatus("");
+    setSaveError("");
+  }, [draft?.id, draft?.updatedAt, open]);
+
+  function updatePayloadField(key: string, value: string, original: unknown) {
+    setWorkingDraft((current) => current ? ({
+      ...current,
+      payload: {
+        ...(current.payload || {}),
+        [key]: editValue(value, original),
+      },
+    }) : current);
+    setSaveStatus("草稿有未保存的审阅修改");
+    setSaveError("");
+  }
+
+  function resetDraft() {
+    setWorkingDraft(draft);
+    setSaveStatus("已重置为预览生成的草稿");
+    setSaveError("");
+  }
+
+  async function saveDraft() {
+    if (!activeDraft || !onSaveDraft) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await onSaveDraft(activeDraft);
+      setSaveStatus("草稿已保存，仍需人工确认后才能进入业务执行。");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "草稿保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function copyDraft() {
-    const content = copyTextForDraft(draft);
+    const content = copyTextForDraft(activeDraft);
     if (!content || !navigator?.clipboard) return;
     await navigator.clipboard.writeText(content);
   }
@@ -131,8 +192,8 @@ export function ActionDraftReviewShell({
     <Modal
       open={open}
       onClose={onClose}
-      title={draft?.title || "动作草稿预览"}
-      subtitle="仅供审阅，不会创建、提交、发送或过账任何业务记录"
+      title={activeDraft?.title || "动作草稿预览"}
+      subtitle="审阅工作区：可编辑和保存草稿，但不会创建、提交、发送或过账任何业务记录"
       width={860}
       footer={(
         <>
@@ -142,8 +203,14 @@ export function ActionDraftReviewShell({
               { key: "cancel", label: "取消草稿", onClick: onCancelPreview, kind: "clear", tone: "subtle" },
             ]}
           />
-          <button type="button" onClick={copyDraft} disabled={!draft} className="h-8 rounded-lg px-3 text-xs font-medium disabled:cursor-not-allowed" style={{ background: A.white, color: draft ? A.blue : A.gray2 }}>
+          <button type="button" onClick={resetDraft} disabled={!activeDraft || saving} className="h-8 rounded-lg px-3 text-xs font-medium disabled:cursor-not-allowed" style={{ background: A.white, color: activeDraft ? A.gray1 : A.gray2 }}>
+            <RotateCcw size={12} className="mr-1 inline" />重置修改
+          </button>
+          <button type="button" onClick={copyDraft} disabled={!activeDraft} className="h-8 rounded-lg px-3 text-xs font-medium disabled:cursor-not-allowed" style={{ background: A.white, color: activeDraft ? A.blue : A.gray2 }}>
             <Copy size={12} className="mr-1 inline" />复制草稿内容
+          </button>
+          <button type="button" onClick={saveDraft} disabled={!activeDraft || !onSaveDraft || saving} className="h-8 rounded-lg px-3 text-xs font-medium disabled:cursor-not-allowed" style={{ background: activeDraft && onSaveDraft ? A.blue : A.gray4, color: A.white }}>
+            <Save size={12} className="mr-1 inline" />{saving ? "保存中" : "保存草稿"}
           </button>
           <button type="button" disabled className="h-8 rounded-lg px-3 text-xs font-medium text-white disabled:cursor-not-allowed" style={{ background: A.gray3 }}>
             确认提交
@@ -155,34 +222,59 @@ export function ActionDraftReviewShell({
         <div className="rounded-lg border px-4 py-5 text-[12px]" style={{ borderColor: A.border, color: A.sub }}>正在生成草稿预览...</div>
       ) : error ? (
         <div className="rounded-lg border px-4 py-5 text-[12px] leading-5" style={{ borderColor: "#ffd6d6", background: "#fff1f0", color: A.red }}>{error}</div>
-      ) : draft ? (
+      ) : activeDraft ? (
         <div className="space-y-4">
+          <section className="rounded-lg px-3 py-3 text-[12px] leading-5" style={{ background: "#f0f6ff", color: A.blue, border: `0.5px solid ${A.blue}30` }}>
+            <div className="flex items-start gap-2">
+              <ShieldCheck size={15} className="mt-0.5 shrink-0" />
+              <div>
+                <div className="font-semibold">预览 / 保存边界</div>
+                <div className="mt-1" style={{ color: A.sub }}>
+                  当前工作区只允许审阅、复制、编辑简单字段和保存 ActionDraft 壳；不会创建 PR、RFQ、PO、GRN 或库存事务，最终确认仍未实现。
+                </div>
+              </div>
+            </div>
+            {(saveStatus || saveError) && (
+              <div className="mt-2 text-[11px]" style={{ color: saveError ? A.red : A.green }}>{saveError || saveStatus}</div>
+            )}
+          </section>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
               <div className="text-[10px]" style={{ color: A.gray2 }}>类型</div>
-              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{draft.type}</div>
+              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{activeDraft.type}</div>
             </div>
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
               <div className="text-[10px]" style={{ color: A.gray2 }}>状态</div>
-              <div className="mt-1"><Chip label={draft.status || "preview"} color={A.blue} bg="#eef4ff" /></div>
+              <div className="mt-1"><Chip label={activeDraft.status || "preview"} color={A.blue} bg="#eef4ff" /></div>
             </div>
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
               <div className="text-[10px]" style={{ color: A.gray2 }}>来源</div>
-              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{draft.source || "preview"}</div>
+              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{activeDraft.source || "preview"}</div>
             </div>
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
               <div className="text-[10px]" style={{ color: A.gray2 }}>确认边界</div>
-              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.orange }}>{draft.requiresConfirmation ? "需要人工确认" : "仅预览"}</div>
+              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.orange }}>{activeDraft.requiresConfirmation ? "需要人工确认" : "仅预览"}</div>
             </div>
           </div>
 
           <section>
-            <div className="mb-2 text-[12px] font-semibold" style={{ color: A.label }}>业务内容</div>
+            <div className="mb-2 text-[12px] font-semibold" style={{ color: A.label }}>业务内容（简单字段可审阅编辑）</div>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              {Object.entries(draft.payload || {}).length ? Object.entries(draft.payload || {}).map(([key, value]) => (
+              {payloadEntries.length ? payloadEntries.map(([key, value]) => (
                 <div key={key} className="rounded-lg border px-3 py-2" style={{ borderColor: A.border }}>
                   <div className="text-[10px]" style={{ color: A.gray2 }}>{payloadLabel(key)}</div>
-                  <div className="mt-1 text-[12px] font-semibold leading-5" style={{ color: A.label }}>{businessValue(value)}</div>
+                  {isEditableScalar(value) ? (
+                    typeof value === "boolean" ? (
+                      <select value={String(value)} onChange={(event) => updatePayloadField(key, event.target.value, value)} className="mt-1 w-full rounded-md border px-2 py-1 text-[12px] font-semibold outline-none" style={{ borderColor: A.border, color: A.label, background: A.white }}>
+                        <option value="true">是</option>
+                        <option value="false">否</option>
+                      </select>
+                    ) : (
+                      <input value={value === undefined || value === null ? "" : String(value)} onChange={(event) => updatePayloadField(key, event.target.value, value)} className="mt-1 w-full rounded-md border px-2 py-1 text-[12px] font-semibold outline-none" style={{ borderColor: A.border, color: A.label, background: A.white }} />
+                    )
+                  ) : (
+                    <div className="mt-1 text-[12px] font-semibold leading-5" style={{ color: A.label }}>{businessValue(value)}</div>
+                  )}
                 </div>
               )) : (
                 <div className="rounded-lg border px-3 py-3 text-[12px]" style={{ borderColor: A.border, color: A.sub }}>暂无可展示字段</div>
@@ -194,11 +286,11 @@ export function ActionDraftReviewShell({
             <div className="mb-2 text-[12px] font-semibold" style={{ color: A.label }}>来源证据</div>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
               {evidence.length ? evidence.map((link, index) => {
-                const moduleId = evidenceModuleId(link);
+                const intent = navigationIntentFromEvidenceLink(link, { source: "actionDraft" });
                 return (
                   <div key={`${link.entityType}-${link.entityId}-${index}`} className="rounded-lg border px-3 py-2" style={{ borderColor: A.border }}>
-                    {link.clickable && moduleId && onNavigate ? (
-                      <button type="button" onClick={() => onNavigate(moduleId, link.focusTarget || null)} className="text-left text-[12px] font-semibold hover:underline" style={{ color: A.blue }}>
+                    {intent && onNavigate ? (
+                      <button type="button" onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)} className="text-left text-[12px] font-semibold hover:underline" style={{ color: A.blue }}>
                         {[link.entityType, link.entityId].filter(Boolean).join(" · ")}
                       </button>
                     ) : (
