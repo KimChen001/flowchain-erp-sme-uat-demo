@@ -33,8 +33,12 @@ The only current status is `preview`.
 
 - `GET /api/action-drafts/schema`
 - `POST /api/action-drafts/preview`
+- `POST /api/action-drafts`
+- `POST /api/action-drafts/save`
 
 The preview endpoint validates a draft payload and returns a draft shape. It does not call `writeDb`, persist a draft, create a PR/RFQ/PO, close inventory exceptions, or send supplier messages.
+
+The save endpoints persist only the ActionDraft shell in database mode. JSON mode returns a demo-safe `501`. Saving a draft does not create a PR/RFQ/PO, close inventory exceptions, send supplier messages, or confirm the draft.
 
 `purchase_request_draft` now has a specialized preview helper for inventory-driven PR suggestions. It still returns preview-only draft data and does not create a real PR.
 
@@ -58,7 +62,7 @@ Safe controls:
 - cancel local preview;
 - copy draft content.
 
-The confirm button is visible but disabled. Real confirmation, save, submit, send, post, or close behavior remains future work.
+The confirm button is visible but disabled. Real confirmation, submit, send, post, or close behavior remains future work.
 
 ## Confirmation Boundary
 
@@ -95,6 +99,6 @@ The boundary does not store secrets and does not store raw prompts by default.
 - No receiving posting.
 - No supplier message sending.
 - No payment execution.
-- No database persistence.
+- No business-document persistence from drafts.
 - No autonomous actions.
 - No external AI provider enablement.

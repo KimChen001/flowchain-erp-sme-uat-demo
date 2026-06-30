@@ -78,6 +78,15 @@ Round 28 also adds `npm run db:seed:dry-run`, which builds a deterministic Maste
 
 Round 32 adds `npm run db:seed:master-data` and `npm run test:db:master-data`. The seed command defaults to dry-run and only applies through the explicit script `--apply` path with `DATABASE_URL_TEST`. The parity command skips cleanly when `DATABASE_URL_TEST` is absent.
 
+## ActionDraft Persistence
+
+Round 33 adds explicit ActionDraft shell persistence:
+
+- `POST /api/action-drafts/preview` remains non-mutating and does not call `persistDraft`.
+- `POST /api/action-drafts` and `POST /api/action-drafts/save` call `persistDraft` only when the database adapter is active.
+- JSON mode returns a demo-safe `501`.
+- Saving a draft does not create PR/RFQ/PO records, send supplier messages, confirm drafts, or mutate inventory.
+
 ## Relation to contract tests
 
 The Round 16 JSON adapter contract tests remain the behavioral baseline. Future database adapters should satisfy the same contract categories before route behavior is migrated behind the registry.

@@ -1,6 +1,7 @@
 export const ROUTE_CLASSES = Object.freeze({
   readOnly: 'read-only',
   previewOnly: 'preview-only',
+  controlledPersistence: 'controlled-persistence',
   legacyMutation: 'legacy-mutation',
   diagnostics: 'diagnostics',
   static: 'static',
@@ -30,6 +31,7 @@ const routeDefinitions = [
 
   { method: 'GET', pattern: /^\/api\/action-drafts\/schema$/, group: 'action-drafts', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-json-read-fallback' },
   { method: 'POST', pattern: /^\/api\/action-drafts\/preview$/, group: 'action-drafts', classification: ROUTE_CLASSES.previewOnly, writesJson: false, databaseMode: 'allowed-json-read-fallback' },
+  { method: 'POST', pattern: /^\/api\/action-drafts(?:\/save)?$/, group: 'action-drafts', classification: ROUTE_CLASSES.controlledPersistence, writesJson: false, databaseMode: 'allowed-db-persistence' },
   { method: 'GET', pattern: /^\/api\/audit-log$/, group: 'audit-log', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed' },
 
   { method: 'GET', pattern: /^\/api\/mrp-plan$/, group: 'planning', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed' },

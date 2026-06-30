@@ -1,6 +1,6 @@
 # DB Readiness Review v1
 
-Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter. Round 31 adds the DB adapter parity harness. Round 32 makes the Master Data seed path executable and adds a Master Data DB parity command.
+Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter. Round 31 adds the DB adapter parity harness. Round 32 makes the Master Data seed path executable and adds a Master Data DB parity command. Round 33 adds explicit ActionDraft shell persistence.
 
 ## Current Status
 
@@ -96,6 +96,15 @@ Round 31 verifies:
 - Master Data, Procurement Read, Inventory Read, ActionDraft preview, and AuditLog expose compatible public shapes.
 - Procurement and Inventory read adapters do not expose write-style methods.
 - ActionDraft preview remains non-mutating.
+
+## ActionDraft Persistence
+
+Round 33 adds explicit ActionDraft save endpoints:
+
+- `POST /api/action-drafts`
+- `POST /api/action-drafts/save`
+
+They persist only the ActionDraft shell in database mode. JSON mode returns a stable `501`. Preview remains non-mutating, and confirmation remains future work.
 
 ## Remaining Gaps
 

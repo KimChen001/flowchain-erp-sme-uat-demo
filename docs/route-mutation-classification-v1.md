@@ -6,6 +6,7 @@ Round 24 classifies API route behavior and adds a database-mode guard for un-mig
 
 - `read-only`: returns current read-model or demo state and should not write business records.
 - `preview-only`: prepares reviewable draft output and must not create business records.
+- `controlled-persistence`: explicit persistence of a safe shell record that does not create business records.
 - `legacy-mutation`: existing manual/demo workflow write route that mutates JSON-backed demo data.
 - `future-mutation`: reserved for a future draft-confirm write workflow.
 - `diagnostics`: health, preflight, or operational status.
@@ -73,6 +74,7 @@ Database mode uses migrated DB read adapters where available and JSON read fallb
 |---|---|---|---|---|---|---|
 | `GET` | `/api/action-drafts/schema` | read-only | No | Allowed | Allowed with JSON read fallback | Draft schema. |
 | `POST` | `/api/action-drafts/preview` | preview-only | No | Allowed | Allowed with JSON read fallback | Does not create PR/RFQ/PO or send supplier messages. |
+| `POST` | `/api/action-drafts` / `/api/action-drafts/save` | controlled-persistence | No JSON write | Demo-safe 501 | Allowed with DB persistence | Saves ActionDraft shell only; does not confirm or create business documents. |
 
 ### Planning / Market / Forecast
 

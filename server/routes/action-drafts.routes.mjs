@@ -24,5 +24,29 @@ export async function handleActionDraftsRoute(ctx) {
     return true
   }
 
+  if (req.method === 'POST' && (url.pathname === '/api/action-drafts' || url.pathname === '/api/action-drafts/save')) {
+    const body = await readBody(req)
+    const draft = body?.draft || body
+    if (typeof repository.persistDraft !== 'function') {
+      send(res, 501, { error: 'Action draft persistence is only available in database mode.' })
+      return true
+    }
+    try {
+      const saved = await repository.persistDraft(draft)
+      send(res, 201, {
+        draft: saved,
+        persisted: true,
+        createsBusinessDocument: false,
+        requiresConfirmation: true,
+      })
+    } catch (error) {
+      send(res, error?.status || 500, {
+        error: error?.message || 'Action draft persistence failed.',
+        code: error?.code || 'ACTION_DRAFT_PERSISTENCE_FAILED',
+      })
+    }
+    return true
+  }
+
   return false
 }
