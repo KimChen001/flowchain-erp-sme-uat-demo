@@ -1,45 +1,21 @@
-import { actionDraftSchema, buildActionDraftSuggestion } from '../domain/action-draft-boundary.mjs'
-import { buildPurchaseRequestDraftPreview } from '../domain/purchase-request-draft-preview.mjs'
-import { buildRfqDraftPreview, buildSupplierFollowupDraftPreview } from '../domain/rfq-and-supplier-followup-draft-preview.mjs'
+import { createJsonActionDraftRepository } from '../repositories/json-action-draft-repository.mjs'
+
+function actionDraftRepository(ctx) {
+  return ctx.repositories?.actionDrafts || createJsonActionDraftRepository(ctx.db)
+}
 
 export async function handleActionDraftsRoute(ctx) {
   const { req, res, url, send, readBody } = ctx
+  const repository = actionDraftRepository(ctx)
 
   if (req.method === 'GET' && url.pathname === '/api/action-drafts/schema') {
-    send(res, 200, { schema: actionDraftSchema() })
+    send(res, 200, { schema: repository.getSchema() })
     return true
   }
 
   if (req.method === 'POST' && url.pathname === '/api/action-drafts/preview') {
     const body = await readBody(req)
-    if (body?.type === 'purchase_request_draft') {
-      const result = buildPurchaseRequestDraftPreview(body, { db: ctx.db })
-      if (!result.ok) {
-        send(res, 400, result)
-        return true
-      }
-      send(res, 200, { draft: result.draft, previewOnly: true })
-      return true
-    }
-    if (body?.type === 'rfq_draft') {
-      const result = buildRfqDraftPreview(body, { db: ctx.db })
-      if (!result.ok) {
-        send(res, 400, result)
-        return true
-      }
-      send(res, 200, { draft: result.draft, previewOnly: true })
-      return true
-    }
-    if (body?.type === 'supplier_followup_draft') {
-      const result = buildSupplierFollowupDraftPreview(body, { db: ctx.db })
-      if (!result.ok) {
-        send(res, 400, result)
-        return true
-      }
-      send(res, 200, { draft: result.draft, previewOnly: true })
-      return true
-    }
-    const result = buildActionDraftSuggestion(body)
+    const result = repository.previewDraft(body)
     if (!result.ok) {
       send(res, 400, result)
       return true

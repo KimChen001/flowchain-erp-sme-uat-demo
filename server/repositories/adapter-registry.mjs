@@ -26,10 +26,8 @@ import {
   getProcurementDocument,
   normalizeProcurementDocumentType,
 } from '../domain/procurement-read-model.mjs'
-import { actionDraftSchema, buildActionDraftSuggestion, validateActionDraftPayload } from '../domain/action-draft-boundary.mjs'
-import { buildPurchaseRequestDraftPreview } from '../domain/purchase-request-draft-preview.mjs'
-import { buildRfqDraftPreview, buildSupplierFollowupDraftPreview } from '../domain/rfq-and-supplier-followup-draft-preview.mjs'
-import { listAuditEvents, recordAuditEvent } from './audit-log-repository.mjs'
+import { createJsonActionDraftRepository } from './json-action-draft-repository.mjs'
+import { createAuditLogRepository } from './audit-log-repository.mjs'
 
 export const PERSISTENCE_MODES = Object.freeze({
   json: 'json',
@@ -84,28 +82,6 @@ function createProcurementReadRepository(db = {}) {
   }
 }
 
-function createActionDraftRepository(db = {}) {
-  return {
-    getSchema: () => actionDraftSchema(),
-    validateDraft: ({ type = '', payload = {} } = {}) => validateActionDraftPayload(type, payload),
-    previewDraft: (request = {}, options = {}) => {
-      if (request.type === 'purchase_request_draft') return buildPurchaseRequestDraftPreview(request, { db, ...options })
-      if (request.type === 'rfq_draft') return buildRfqDraftPreview(request, { db, ...options })
-      if (request.type === 'supplier_followup_draft') return buildSupplierFollowupDraftPreview(request, { db, ...options })
-      return buildActionDraftSuggestion(request, options)
-    },
-  }
-}
-
-function createAuditLogRepository(db = {}) {
-  return {
-    listAuditEntries: () => listAuditEvents(db),
-    recordAuditEntry: (entry = {}, options = {}) => recordAuditEvent(db, entry, options),
-    listAuditEvents: () => listAuditEvents(db),
-    recordAuditEvent: (entry = {}, options = {}) => recordAuditEvent(db, entry, options),
-  }
-}
-
 function createAiConversationRepository() {
   return {
     implemented: false,
@@ -120,7 +96,7 @@ export function createJsonRepositoryRegistry({ db = {} } = {}) {
     masterData: createMasterDataRepository(db),
     inventoryRead: createInventoryReadRepository(db),
     procurementRead: createProcurementReadRepository(db),
-    actionDrafts: createActionDraftRepository(db),
+    actionDrafts: createJsonActionDraftRepository(db),
     auditLog: createAuditLogRepository(db),
     aiConversation: createAiConversationRepository(),
   }
