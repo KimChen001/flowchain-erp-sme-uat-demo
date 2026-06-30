@@ -24,8 +24,19 @@ test('Planning workbench exposes five distinct canonical subviews', () => {
     assert.match(forecast, new RegExp(component))
   }
 
-  assert.match(app, /<ForecastPanel initialView=\{activeView as any\} onReviewActionDraft=\{openActionDraftReview\}/)
+  assert.match(app, /<ForecastPanel initialView=\{activeView as any\} onNavigate=\{navigateTo\} onReviewActionDraft=\{openActionDraftReview\}/)
   assert.match(forecast, /data-planning-view=\{activePlanningView\}/)
+})
+
+test('Planning Cockpit CTAs use internal navigation clickthroughs', () => {
+  const forecast = readSource('src', 'modules', 'forecast', 'Page.tsx')
+  const cockpitSection = forecast.slice(forecast.indexOf('const PlanningCockpitView'), forecast.indexOf('if (activePlanningView === "demand")'))
+
+  assert.match(cockpitSection, /target: "forecast:demand"/)
+  assert.match(cockpitSection, /target: "forecast:mrp"/)
+  assert.match(cockpitSection, /target: "forecast:replenishment"/)
+  assert.match(cockpitSection, /onClick=\{\(\) => onNavigate\?\.\(item\.target\)\}/)
+  assert.doesNotMatch(cockpitSection, /href=/)
 })
 
 test('Demand Forecast stays focused on forecast quality rather than release CTA', () => {
