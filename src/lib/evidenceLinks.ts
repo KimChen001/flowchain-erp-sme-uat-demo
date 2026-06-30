@@ -237,3 +237,60 @@ export function navigationIntentFromGlobalSearchResult(result: EvidenceLike, opt
     entityLabel: result && typeof result === "object" ? text(result.entityLabel || result.label) : "",
   });
 }
+
+const ACTION_VIEW_ALIASES: Record<string, string> = {
+  "purchase-orders": "orders",
+  "purchase-requests": "requests",
+  rfqs: "rfq",
+  items: "overview",
+  item: "overview",
+  suppliers: "master",
+  supplier: "master",
+};
+
+const ACTION_FOCUS_PARAMS: Array<{ key: string; entityType: string }> = [
+  { key: "poId", entityType: "purchase_order" },
+  { key: "prId", entityType: "purchase_request" },
+  { key: "rfqId", entityType: "rfq" },
+  { key: "receivingId", entityType: "receiving_doc" },
+  { key: "itemId", entityType: "inventory_item" },
+  { key: "sku", entityType: "inventory_item" },
+  { key: "supplierId", entityType: "supplier" },
+];
+
+function actionView(moduleId: string, view = "") {
+  const normalized = text(view);
+  if (!normalized) return "";
+  const alias = ACTION_VIEW_ALIASES[normalized] || normalized;
+  if (moduleId === "inventory" && alias === "overview") return "";
+  return alias;
+}
+
+function actionFocus(params: URLSearchParams) {
+  for (const param of ACTION_FOCUS_PARAMS) {
+    const entityId = text(params.get(param.key));
+    if (entityId) return { entityType: param.entityType, entityId };
+  }
+  return undefined;
+}
+
+export function navigationIntentFromInternalTarget(target: unknown, options: {
+  source?: string;
+} = {}): CanonicalNavigationIntent | null {
+  const value = text(target);
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return null;
+  let url: URL;
+  try {
+    url = new URL(value, "https://flowchain.local");
+  } catch {
+    return null;
+  }
+  if (url.origin !== "https://flowchain.local") return null;
+  const [pathModule = "overview"] = url.pathname.replace(/^\/+/, "").split("/");
+  const baseModule = pathModule === "receiving" ? "procurement" : pathModule || "overview";
+  const view = pathModule === "receiving" ? "receiving" : actionView(baseModule, url.searchParams.get("view") || "");
+  return navigationIntentFromModule(navigationActiveId(baseModule, view), {
+    focusTarget: actionFocus(url.searchParams),
+    source: options.source,
+  });
+}

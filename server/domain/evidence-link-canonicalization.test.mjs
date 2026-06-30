@@ -49,8 +49,13 @@ test('navigation intent helper preserves module view and API-route focus targets
   assert.match(source, /export function navigationActiveId\(moduleId = "overview", viewId\?: string\)/)
   assert.match(source, /export function navigationIntentFromEvidenceLink/)
   assert.match(source, /export function navigationIntentFromGlobalSearchResult/)
+  assert.match(source, /export function navigationIntentFromInternalTarget/)
   assert.match(source, /if \(link\.moduleId\) return link\.moduleId/)
   assert.match(source, /navigationIntentFromModule\(moduleId, \{/)
+  assert.match(source, /"purchase-orders": "orders"/)
+  assert.match(source, /rfqs: "rfq"/)
+  assert.match(source, /\{ key: "poId", entityType: "purchase_order" \}/)
+  assert.match(source, /\{ key: "itemId", entityType: "inventory_item" \}/)
 })
 
 test('AI and Today Cockpit render evidence through canonical links', () => {
@@ -60,6 +65,8 @@ test('AI and Today Cockpit render evidence through canonical links', () => {
   assert.match(ai, /normalizeEvidenceLinks\(evidence, \{ source: "ai" \}\)/)
   assert.match(ai, /navigationIntentFromEvidenceLink\(link, \{ source: "ai" \}\)/)
   assert.match(ai, /link\.clickable && intent && onNavigate/)
+  assert.match(ai, /navigationIntentFromInternalTarget\(action\.target, \{ source: "aiAction" \}\)/)
+  assert.doesNotMatch(ai, /href=\{safeInternalTarget/)
   assert.match(ai, /textValue\(title\)/)
   assert.match(cockpit, /normalizeTodayCockpitTarget\(card\)/)
   assert.match(cockpit, /normalizeTodayCockpitTarget\(doc\)/)

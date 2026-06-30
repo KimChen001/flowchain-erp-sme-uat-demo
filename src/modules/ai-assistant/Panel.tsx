@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, MessageCircle, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import {
+  navigationIntentFromInternalTarget,
   navigationIntentFromEvidenceLink,
   normalizeEvidenceLinks,
   type CanonicalFocusTarget,
@@ -89,11 +90,6 @@ function normalizeFieldPairs(fields: AiChatCard["fields"]) {
     return Object.entries(fields);
   }
   return [];
-}
-
-function safeInternalTarget(target: unknown) {
-  const value = String(target || "").trim();
-  return value.startsWith("/") && !value.startsWith("//") ? value : "";
 }
 
 function bestText(...values: unknown[]) {
@@ -628,15 +624,26 @@ function AiResponseCard({
       return (
         <CardShell title="建议操作">
           <div className="flex flex-wrap gap-1.5">
-            {actions.slice(0, 3).map((action) => action.kind === "deep_link" && safeInternalTarget(action.target) ? (
-              <a key={`${action.label}-${action.target}`} href={safeInternalTarget(action.target)} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>
-                {action.label || "打开"}
-              </a>
-            ) : (
-              <span key={`${action.label}-${action.kind}`} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: A.gray6, color: A.gray1 }}>
-                {action.label || action.kind}
-              </span>
-            ))}
+            {actions.slice(0, 3).map((action) => {
+              const intent = action.kind === "deep_link"
+                ? navigationIntentFromInternalTarget(action.target, { source: "aiAction" })
+                : null;
+              return intent && onNavigate ? (
+                <button
+                  key={`${action.label}-${action.target}`}
+                  type="button"
+                  onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)}
+                  className="rounded-full px-2.5 py-1 text-[11px] font-medium hover:underline"
+                  style={{ background: A.gray6, color: A.blue }}
+                >
+                  {action.label || "打开"}
+                </button>
+              ) : (
+                <span key={`${action.label}-${action.kind}`} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: A.gray6, color: A.gray1 }}>
+                  {action.label || action.kind}
+                </span>
+              );
+            })}
           </div>
         </CardShell>
       );
