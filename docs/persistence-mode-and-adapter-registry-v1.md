@@ -9,7 +9,7 @@ The helper `getPersistenceMode(env)` reads `FLOWCHAIN_PERSISTENCE_MODE`.
 Supported values:
 
 - `json`: default and current runtime behavior.
-- `database`: future placeholder only.
+- `database`: opt-in database-readiness mode. Real DB adapters are not implemented yet; Round 24 blocks legacy JSON write routes and allows read/preview routes with JSON read fallback until DB adapters exist.
 
 Rules:
 
@@ -21,6 +21,8 @@ Rules:
 ## Adapter registry shape
 
 `createRepositoryRegistry({ db, env })` returns the JSON registry unless `FLOWCHAIN_PERSISTENCE_MODE=database` is explicitly selected.
+
+The main route context uses the JSON registry by default. In Round 24, explicit database mode uses JSON read fallback for allowed read/preview routes and blocks un-migrated legacy mutation routes before they can call `writeDb`.
 
 Current JSON registry groups:
 
@@ -41,7 +43,7 @@ The JSON registry delegates to current domain read models and small repository h
 Database persistence adapter is not implemented yet. Use FLOWCHAIN_PERSISTENCE_MODE=json.
 ```
 
-This error is only reachable when database mode is explicitly selected. Default JSON mode does not throw.
+This error is only reachable when `createRepositoryRegistry` is called directly with database mode explicitly selected. The main server route path does not use the placeholder for read/preview routes in database mode; it uses JSON read fallback plus the Round 24 mutation guard until real DB adapters are added.
 
 ## Relation to contract tests
 

@@ -5,9 +5,13 @@ import { fileURLToPath } from 'node:url'
 import { ProxyAgent } from 'undici'
 import { loadEnv } from '../config/env.mjs'
 import { createJsonDb } from '../repositories/json-db.mjs'
-import { createRepositoryRegistry, getPersistenceMode } from '../repositories/adapter-registry.mjs'
+import { createJsonRepositoryRegistry, createRepositoryRegistry, getPersistenceMode } from '../repositories/adapter-registry.mjs'
 import { contentTypeFor, readBody, send, sendText } from '../utils/http.mjs'
 import { sendInternalServerError } from '../utils/safe-errors.mjs'
+import {
+  isDatabaseModeWriteBlocked,
+  sendDatabaseModeMutationBlocked,
+} from '../domain/route-classification.mjs'
 import { handlePurchaseOrdersRoute } from './purchase-orders.routes.mjs'
 import { handlePurchaseRequestsRoute } from './purchase-requests.routes.mjs'
 import { handleReceivingRoute } from './receiving.routes.mjs'
@@ -875,6 +879,10 @@ export function createScmServer() {
       })
     }
 
+    if (isDatabaseModeWriteBlocked({ persistenceMode, method: req.method, pathname: url.pathname })) {
+      return sendDatabaseModeMutationBlocked(res, send)
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/auth/login') {
       const body = await readBody(req)
       let profile
@@ -952,9 +960,12 @@ export function createScmServer() {
       return send(res, 201, plan)
     }
 
-    const repositories = createRepositoryRegistry({ db, env: process.env })
+    const repositories = persistenceMode === 'database'
+      ? createJsonRepositoryRegistry({ db })
+      : createRepositoryRegistry({ db, env: process.env })
+    const routeWriteDb = persistenceMode === 'database' ? undefined : writeDb
     const routeContext = {
-      req, res, url, db, send, readBody, writeDb, event, todayLabel,
+      req, res, url, db, send, readBody, writeDb: routeWriteDb, event, todayLabel,
       repositories,
       ensurePurchaseRequests, systemRequestSources, nextSequenceId,
       purchaseRequestStatuses, priorities, recordWorkflowCreation,

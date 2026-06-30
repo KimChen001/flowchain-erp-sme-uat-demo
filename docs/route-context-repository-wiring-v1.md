@@ -4,10 +4,12 @@ Round 22 wires the repository adapter registry into the main server route contex
 
 ## What Changed
 
-`server/routes/scm-legacy.routes.mjs` now imports and creates the repository registry after the request database snapshot is loaded:
+`server/routes/scm-legacy.routes.mjs` now imports and creates the repository registry after the request database snapshot is loaded and after the Round 24 database-mode mutation guard runs:
 
 ```js
-const repositories = createRepositoryRegistry({ db, env: process.env })
+const repositories = persistenceMode === 'database'
+  ? createJsonRepositoryRegistry({ db })
+  : createRepositoryRegistry({ db, env: process.env })
 ```
 
 The registry is passed through `routeContext.repositories`, so repository-compatible routes can use injected adapters instead of constructing local fallback JSON repositories.
@@ -35,15 +37,15 @@ Default behavior remains JSON/demo-data-backed:
 
 ## Database Placeholder Behavior
 
-`FLOWCHAIN_PERSISTENCE_MODE=database` still reaches the existing safe placeholder:
+The low-level registry helper still keeps a safe database placeholder:
 
 ```text
 Database persistence adapter is not implemented yet. Use FLOWCHAIN_PERSISTENCE_MODE=json.
 ```
 
-That placeholder is only selected when database mode is explicitly requested. It is intentionally not a real database adapter and does not connect to a database.
+That placeholder is only selected when `createRepositoryRegistry` is called directly with database mode. The main server route path now uses JSON read fallback for allowed read/preview routes in database mode and blocks legacy mutation routes before `writeDb`.
 
-R23 should sanitize global error responses before any database scaffold is added. R24 should block legacy mutation routes in database mode before real DB adapters are introduced.
+R23 sanitized global error responses before database scaffolding. R24 blocks legacy mutation routes in database mode before real DB adapters are introduced.
 
 ## Testing Strategy
 
@@ -51,6 +53,7 @@ R22 adds a lightweight server factory wiring test that verifies:
 
 - `createRepositoryRegistry` is imported by the main server route module;
 - the registry is created from `{ db, env: process.env }`;
+- explicit database mode uses JSON read fallback until DB adapters exist;
 - `repositories` is added to `routeContext`;
 - registry creation occurs before route dispatch.
 
@@ -72,5 +75,5 @@ This round does not:
 - change API response shapes;
 - remove JSON fallback repositories;
 - migrate legacy mutation routes;
-- block mutation routes yet;
+- implement database adapters;
 - mutate `data/scm-demo.json`.

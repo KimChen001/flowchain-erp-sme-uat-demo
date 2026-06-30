@@ -118,6 +118,7 @@ These routes remain for compatibility/manual demo workflow surfaces. They are no
 ## Safety Notes
 
 - Default persistence is JSON/demo data.
+- See [Route mutation classification](route-mutation-classification-v1.md) for the complete database-mode v1 guard. In explicit database mode, read-only and preview-only routes remain available while legacy mutation routes are blocked until migrated.
 - External AI provider access is disabled by default.
 - Action drafts are preview-only.
 - No full finance/GL/payment/tax execution exists.

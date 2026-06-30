@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import http from 'node:http'
 import path from 'node:path'
 import { createScmServer } from '../routes/scm-legacy.routes.mjs'
 import { handleAiRoute } from '../routes/ai.routes.mjs'
@@ -9,11 +10,53 @@ import { normalizeAuditEvent } from './audit-foundation.mjs'
 import { getAiToolRegistry } from './ai-tool-registry.mjs'
 import { listAuditEvents, recordAuditEvent } from '../repositories/audit-log-repository.mjs'
 import { GENERIC_INTERNAL_ERROR, sanitizeErrorSummary, sendInternalServerError } from '../utils/safe-errors.mjs'
+import { databaseModeMutationBlockedPayload } from './route-classification.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 
 function readSource(...parts) {
   return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8')
+}
+
+async function listen(server) {
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
+  })
+  return server.address().port
+}
+
+async function closeServer(server) {
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+}
+
+async function requestJson(port, method, pathname, body) {
+  const raw = body === undefined ? '' : JSON.stringify(body)
+  return await new Promise((resolve, reject) => {
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port,
+      method,
+      path: pathname,
+      headers: raw ? {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(raw),
+      } : {},
+    }, (res) => {
+      const chunks = []
+      res.on('data', (chunk) => chunks.push(chunk))
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8')
+        resolve({
+          status: res.statusCode,
+          payload: text ? JSON.parse(text) : null,
+        })
+      })
+    })
+    req.on('error', reject)
+    if (raw) req.write(raw)
+    req.end()
+  })
 }
 
 function createRouteContext(method, pathname, options = {}) {
@@ -45,9 +88,9 @@ test('server route context injects repository registry for repository-compatible
   const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
 
   assert.match(source, /import \{[^}]*createRepositoryRegistry[^}]*\} from '\.\.\/repositories\/adapter-registry\.mjs'/)
-  assert.match(source, /const repositories = createRepositoryRegistry\(\{ db, env: process\.env \}\)/)
+  assert.match(source, /const repositories = persistenceMode === 'database'[\s\S]*createJsonRepositoryRegistry\(\{ db \}\)[\s\S]*createRepositoryRegistry\(\{ db, env: process\.env \}\)/)
   assert.match(source, /routeContext = \{[\s\S]*repositories,[\s\S]*\}/)
-  assert.ok(source.indexOf('const repositories = createRepositoryRegistry') < source.indexOf('const routeContext = {'))
+  assert.ok(source.indexOf('const repositories = persistenceMode') < source.indexOf('const routeContext = {'))
 })
 
 test('global server errors are sanitized before returning 500 responses', () => {
@@ -75,6 +118,43 @@ test('server health response omits provider keys models and proxy diagnostics by
   assert.doesNotMatch(healthBlock, /OPENAI_API_KEY|ARK_API_KEY|DOUBAO_API_KEY|OPENAI_MODEL|ARK_MODEL|DOUBAO_MODEL/)
   assert.doesNotMatch(healthBlock, /openai:|doubao:|provider:|model:|proxy:/)
   assert.match(source, /sendInternalServerError\(res, send, error\)/)
+})
+
+test('database mode guard is before legacy auth and forecast writes', () => {
+  const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
+
+  assert.ok(source.indexOf('isDatabaseModeWriteBlocked') < source.indexOf("url.pathname === '/api/auth/login'"))
+  assert.ok(source.indexOf('isDatabaseModeWriteBlocked') < source.indexOf("url.pathname === '/api/forecast-plans'"))
+  assert.deepEqual(databaseModeMutationBlockedPayload(), {
+    error: 'This mutation is not available in database persistence mode yet.',
+  })
+})
+
+test('database mode blocks legacy writes while allowing health and preview routes', async () => {
+  const previous = process.env.FLOWCHAIN_PERSISTENCE_MODE
+  process.env.FLOWCHAIN_PERSISTENCE_MODE = 'database'
+  const server = createScmServer()
+
+  try {
+    const port = await listen(server)
+    const health = await requestJson(port, 'GET', '/api/health')
+    const blocked = await requestJson(port, 'POST', '/api/purchase-requests', { sourceSku: 'SKU-DB-GUARD' })
+    const preview = await requestJson(port, 'POST', '/api/action-drafts/preview', { type: 'unsupported_draft', payload: {} })
+
+    assert.equal(health.status, 200)
+    assert.equal(health.payload.persistenceMode, 'database')
+    assert.equal(blocked.status, 501)
+    assert.deepEqual(blocked.payload, databaseModeMutationBlockedPayload())
+    assert.equal(preview.status, 400)
+    assert.notDeepEqual(preview.payload, databaseModeMutationBlockedPayload())
+  } finally {
+    if (previous === undefined) {
+      delete process.env.FLOWCHAIN_PERSISTENCE_MODE
+    } else {
+      process.env.FLOWCHAIN_PERSISTENCE_MODE = previous
+    }
+    await closeServer(server)
+  }
 })
 
 test('safe error summaries redact secrets and stay bounded for logs', () => {
