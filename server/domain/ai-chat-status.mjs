@@ -37,7 +37,7 @@ export const aiChatStatusCapabilityCatalog = Object.freeze([
 ])
 
 const supplierIntentPattern = /供应商|supplier|SUP-[A-Z0-9-]+/i
-const inventoryIntentPattern = /库存|inventory|stock|shortage|缺货|断货|补货|仓库|warehouse|SKU|item|物料/i
+const inventoryIntentPattern = /库存|inventory|stock|shortage|缺货|断货|补货|仓库|warehouse|SKU|item|物料|movement history|movements?|事务流水|库存流水/i
 const procurementIntentPattern = /采购.*(?:异常|问题|待处理|状态)|procurement|purchase\s+(?:order|orders|issues|exceptions)|po\s+(?:status|pending|overdue)|order\s+(?:status|pending|overdue)|overdue|逾期|异常|问题|待处理|pending\s+(?:procurement|pr|po)|pr\s+(?:status|pending)|grn|receiving/i
 
 function asArray(value) {
@@ -397,7 +397,9 @@ function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
       riskReason,
       recentMovementCount: movements.length,
     }
+    const inventoryEvidenceId = item.sku || item.id
     const evidence = [
+      { type: 'inventory_item', id: inventoryEvidenceId, label: item.name, summary: 'Matched inventory item for SKU focus.' },
       { type: 'item_master', id: item.id, summary: 'Matched item from Master Data.' },
       warehouse
         ? { type: 'warehouse_reference', id: warehouse.id, summary: `Warehouse source type is ${warehouse.sourceType}.` }
@@ -417,8 +419,8 @@ function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
         { type: 'inventory_status', title: item.sku || item.name, data },
         evidenceCard(evidence),
         recommendedActions([
-          { label: 'View item master', kind: 'deep_link', target: `/inventory?view=item&itemId=${encodeURIComponent(item.id)}` },
-          { label: 'Review inventory movements', kind: 'deep_link', target: `/inventory?view=movements&itemId=${encodeURIComponent(item.id)}` },
+          { label: 'Open inventory SKU', kind: 'deep_link', target: `/inventory?sku=${encodeURIComponent(inventoryEvidenceId)}` },
+          { label: 'Review inventory movements', kind: 'deep_link', target: `/inventory?view=movements&sku=${encodeURIComponent(inventoryEvidenceId)}` },
           { label: 'Review procurement options', kind: 'deep_link', target: `/procurement?view=options&itemId=${encodeURIComponent(item.id)}` },
         ]),
       ],

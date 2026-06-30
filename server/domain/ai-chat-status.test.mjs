@@ -246,8 +246,12 @@ test('item-specific inventory query returns missing quantity evidence when balan
   assert.equal(route.response.payload.cards[0].data.availableQuantity, null)
   assert.equal(route.response.payload.cards[0].data.riskLevel, 'unknown')
   assert.equal(route.response.payload.cards[0].data.riskReason, 'Current data does not expose a safe stock balance.')
+  assert.ok(route.response.payload.evidence.some((item) => item.type === 'inventory_item' && item.id === 'A100'))
   assert.ok(route.response.payload.evidence.some((item) => item.type === 'missing_quantity_evidence'))
   assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'))
+  const actions = route.response.payload.cards.find((card) => card.type === 'recommended_actions').actions
+  assert.ok(actions.some((action) => action.target === '/inventory?sku=A100'))
+  assert.ok(actions.some((action) => action.target === '/inventory?view=movements&sku=A100'))
   assert.deepEqual(businessSnapshot(db), before)
 })
 
@@ -323,6 +327,33 @@ test('general inventory risk query returns inventory risk summary', () => {
   assert.equal(response.cards[0].type, 'inventory_risk_summary')
   assert.equal(response.cards[0].data.riskItemCount, 1)
   assert.ok(response.cards.some((card) => card.type === 'evidence'))
+})
+
+test('inventory AI UAT prompts return deterministic evidence actions and stay read-only', async () => {
+  const db = createDb()
+  const before = businessSnapshot(db)
+  const prompts = [
+    ['A100 库存怎么样？', 'inventory_status'],
+    ['A100 movement history', 'inventory_status'],
+    ['今天库存有什么风险？', 'inventory_risk_summary', 'inventory_status'],
+    ['inventory exceptions', 'inventory_risk_summary', 'inventory_status'],
+  ]
+
+  for (const [message, ...cardTypes] of prompts) {
+    const route = createRouteContext({ message }, db)
+    await handleAiRoute(route.ctx)
+
+    assert.equal(route.response.status, 200, message)
+    assert.equal(route.response.payload.intent.name, 'inventory_status_query', message)
+    assert.ok(cardTypes.includes(route.response.payload.cards[0].type), message)
+    assert.equal(route.response.payload.usedWeb, false, message)
+    assert.notEqual(route.response.payload.provider, 'openai', message)
+    assert.notEqual(route.response.payload.provider, 'doubao', message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'evidence'), message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'), message)
+  }
+
+  assert.deepEqual(businessSnapshot(db), before)
 })
 
 test('procurement exception query returns ranked exception summary and actions', async () => {
