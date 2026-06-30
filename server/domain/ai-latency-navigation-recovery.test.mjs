@@ -18,8 +18,11 @@ test('AI assistant UI has duplicate request guard, abort, and timeout fallback',
   assert.match(aiPanelSource, /setTimeout\(\(\) =>/)
   assert.match(aiPanelSource, /AI 助手响应超时，可能是本地 API 服务未响应。可以重试，或先查看 Today Cockpit。/)
   assert.match(aiPanelSource, /retryPrompt/)
+  assert.match(aiPanelSource, /retryPrompt: timeoutHit \|\| abortReasonRef\.current === "timeout" \? message : undefined/)
+  assert.match(aiPanelSource, /askAi\(message\.retryPrompt \|\| ""\)/)
   assert.match(aiPanelSource, /重试/)
   assert.match(aiPanelSource, /disabled=\{asking\}/)
+  assert.match(aiPanelSource, /Check npm run api, npm run dev, \/api\/health, and current HEAD/)
 })
 
 test('global focus recovery renders return and clear focus controls', () => {

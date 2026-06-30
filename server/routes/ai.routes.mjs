@@ -287,6 +287,24 @@ function shouldLogAiTiming() {
   return process.env.NODE_ENV !== 'production'
 }
 
+function hasRepositoryBackedAiReadContext(repositories = {}) {
+  return [repositories.procurementRead, repositories.inventoryRead, repositories.masterData, repositories.auditLog].some((repository) => {
+    const marker = String(repository?.adapter || repository?.mode || '')
+    return marker === 'database' || marker.startsWith('db-')
+  })
+}
+
+function shouldRunInventoryStatusBeforeReadContext(body = {}, statusFastPath = null) {
+  if (statusFastPath?.intent?.name !== 'inventory_status_query') return false
+  const moduleId = String(body.moduleId || body.activeContext?.module || '')
+  const question = String(body.question || '')
+  if (/\bpo\b|invoice|contract|rfq|发票|合同|询价/i.test(question)) return moduleId === 'inventory'
+  return moduleId === 'inventory' ||
+    moduleId === 'overview' ||
+    moduleId === 'today-cockpit' ||
+    /库存|缺货|断货|补货|仓库|物料|sku|item|inventory|stock|shortage/i.test(question)
+}
+
 function safeAuditText(value = '', fallback = 'ai') {
   const text = String(value || fallback)
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
@@ -524,18 +542,61 @@ export async function handleAiRoute(ctx) {
     }
 
     branchStartedAt = Date.now()
-    const planningFastPath = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
-    if (planningFastPath?.intent?.name === 'planning_status_query') {
+    const repositoryBackedReadContext = hasRepositoryBackedAiReadContext(repositories)
+    if (!repositoryBackedReadContext) {
+      const cockpitFastPath = buildAiCockpitFastPathResponse(db, body, { cache: {} })
+      if (cockpitFastPath) {
+        const result = {
+          ...cockpitFastPath,
+          fastPath: 'pre_read_context',
+          usedWeb: false,
+          timingMs: Date.now() - startedAt,
+          externalMs: 0,
+          modelMs: 0,
+        }
+        void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_cockpit_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name, persist: false })
+        logAiTiming({ startedAt, branchStartedAt, branch: 'cockpit_fast_path_pre_read_context', body, result })
+        send(res, 200, result)
+        return true
+      }
+    }
+
+    branchStartedAt = Date.now()
+    const statusFastPath = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
+    if (
+      (!repositoryBackedReadContext && shouldRunInventoryStatusBeforeReadContext(body, statusFastPath)) ||
+      statusFastPath?.intent?.name === 'planning_status_query'
+    ) {
       const result = {
-        ...planningFastPath,
+        ...statusFastPath,
         fastPath: 'pre_read_context',
         usedWeb: false,
         timingMs: Date.now() - startedAt,
         externalMs: 0,
         modelMs: 0,
       }
-      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_planning_status_fast_path', summary: `AI answered ${result.intent.name} before evidence reuse`, entity: result.intent.name })
-      logAiTiming({ startedAt, branchStartedAt, branch: 'planning_status_fast_path', body, result })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_status_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'status_fast_path_pre_read_context', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
+    const draftFastPath = buildAiDraftPreparationResponse(db, body, {
+      authorization: req.headers.authorization || '',
+    })
+    if (draftFastPath) {
+      const result = {
+        ...draftFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      const missingCount = result.cards.find((card) => card.type === 'missing_fields')?.fields?.length || 0
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_draft_prepared', summary: `AI prepared ${result.intent.name} before read-context build with ${missingCount} missing fields`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'draft_preparation_fast_path', body, result })
       send(res, 200, result)
       return true
     }

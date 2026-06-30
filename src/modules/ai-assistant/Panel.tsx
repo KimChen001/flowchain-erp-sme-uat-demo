@@ -841,6 +841,8 @@ export default function FloatingAiAssistant({
           elapsedMs: Math.round(performance.now() - requestStartedAt),
           timeout: timeoutHit || abortReasonRef.current === "timeout",
           name: error instanceof Error ? error.name : "unknown",
+          healthCheck: "/api/health",
+          devHint: "Check npm run api, npm run dev, /api/health, and current HEAD with git rev-parse --short HEAD.",
         });
       }
       setMessages((current) => [
