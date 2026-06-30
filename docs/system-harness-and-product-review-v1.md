@@ -84,6 +84,17 @@ Covered by route-handler tests:
 
 Checks include status, stable top-level fields, no mutation, clean invalid input behavior, and sanitized payloads.
 
+### DB Adapter Parity Harness
+
+Covered by `server/domain/db-adapter-parity-harness.test.mjs`:
+
+- database-mode registry selects all migrated DB adapters;
+- JSON-mode registry remains database-free;
+- Master Data, Procurement Read, and Inventory Read DB rows keep public shape parity with JSON adapters;
+- ActionDraft preview remains preview-only and non-mutating;
+- AuditLog records keep compatible public keys and redact sensitive metadata;
+- read adapters do not expose write-style methods.
+
 ### Docs Consistency Harness
 
 Docs reviewed for consistency with:

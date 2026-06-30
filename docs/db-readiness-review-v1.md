@@ -1,6 +1,6 @@
 # DB Readiness Review v1
 
-Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter.
+Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter. Round 31 adds the DB adapter parity harness.
 
 ## Current Status
 
@@ -10,6 +10,7 @@ Round 28 adds the first explicit database test and seed harness while keeping JS
 - DB adapter coverage currently includes ActionDraft, AuditLog, Master Data, Procurement Read, and Inventory Read.
 - JSON mode remains the default source of truth for normal demo runtime.
 - Legacy mutation routes remain blocked in database mode by the route mutation guard.
+- The parity harness verifies migrated DB adapter selection, JSON-mode independence, public read shapes, and no write methods on read adapters.
 
 ## Test DB Harness
 
@@ -75,6 +76,17 @@ Round 30 adds lean Prisma read models and a DB repository for:
 - InventoryException
 
 The adapter is read-only. It maps Prisma rows into the existing inventory read model shape for items, lots, serials, movements, exceptions, and summary. It does not post receiving, adjust stock, or create inventory movements.
+
+## Adapter Integration Review
+
+Round 31 verifies:
+
+- JSON mode selects JSON repositories without requiring database configuration.
+- Database mode selects DB adapters for ActionDraft, AuditLog, Master Data, Procurement Read, and Inventory Read.
+- Missing `DATABASE_URL` in database mode fails cleanly when DB methods are invoked.
+- Master Data, Procurement Read, Inventory Read, ActionDraft preview, and AuditLog expose compatible public shapes.
+- Procurement and Inventory read adapters do not expose write-style methods.
+- ActionDraft preview remains non-mutating.
 
 ## Remaining Gaps
 

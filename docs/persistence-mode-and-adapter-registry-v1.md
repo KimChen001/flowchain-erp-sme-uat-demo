@@ -54,6 +54,17 @@ The Procurement Read DB adapter is read-only. It supports the same public read c
 
 The Inventory Read DB adapter is read-only. It supports the same public read categories as the JSON repository: items, lots, serials, movements, exceptions, summary, and item lookup aliases.
 
+## Parity Harness
+
+Round 31 adds a mocked DB adapter parity harness. It checks:
+
+- database-mode registry selection for all migrated adapters;
+- JSON-mode registry behavior without database configuration;
+- public row shape parity for Master Data, Procurement Read, and Inventory Read;
+- preview-only parity for ActionDraft;
+- AuditLog shape compatibility and redaction;
+- no write-style methods on read adapters.
+
 ## Test DB Harness
 
 Round 28 adds an explicit test database harness for future adapter parity work. It is not part of the default runtime path.
