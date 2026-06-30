@@ -17,6 +17,7 @@
 - [Persistence mode and adapter registry](persistence-mode-and-adapter-registry-v1.md)
 - [Full repository risk scan](full-repo-risk-scan-v1.md)
 - [RouteContext repository wiring](route-context-repository-wiring-v1.md)
+- [Server error and health safety](server-error-health-safety-v1.md)
 - [ActionDraft and AuditLog repository adapter](action-draft-audit-repository-adapter-v1.md)
 - [Master Data repository adapter](master-data-repository-adapter-v1.md)
 - [Procurement and Inventory read repository adapters](procurement-inventory-read-repository-adapters-v1.md)

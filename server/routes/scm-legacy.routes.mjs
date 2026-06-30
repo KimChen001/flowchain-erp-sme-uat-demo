@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url'
 import { ProxyAgent } from 'undici'
 import { loadEnv } from '../config/env.mjs'
 import { createJsonDb } from '../repositories/json-db.mjs'
-import { createRepositoryRegistry } from '../repositories/adapter-registry.mjs'
+import { createRepositoryRegistry, getPersistenceMode } from '../repositories/adapter-registry.mjs'
 import { contentTypeFor, readBody, send, sendText } from '../utils/http.mjs'
+import { sendInternalServerError } from '../utils/safe-errors.mjs'
 import { handlePurchaseOrdersRoute } from './purchase-orders.routes.mjs'
 import { handlePurchaseRequestsRoute } from './purchase-requests.routes.mjs'
 import { handleReceivingRoute } from './receiving.routes.mjs'
@@ -860,26 +861,17 @@ export function createScmServer() {
 
     const url = new URL(req.url || '/', `http://localhost:${port}`)
     const db = await readDb()
-    const repositories = createRepositoryRegistry({ db, env: process.env })
+    const persistenceMode = getPersistenceMode(process.env)
 
     if (req.method === 'GET' && url.pathname === '/api/health') {
       return send(res, 200, {
         ok: true,
+        persistenceMode,
+        timestamp: new Date().toISOString(),
         purchaseOrders: db.purchaseOrders.length,
         purchaseRequests: ensurePurchaseRequests(db).length,
         inventoryMovements: ensureInventoryMovements(db).length,
         receivingDocs: db.receivingDocs.length,
-        openai: Boolean(process.env.OPENAI_API_KEY),
-        doubao: Boolean(process.env.ARK_API_KEY || process.env.DOUBAO_API_KEY),
-        provider: process.env.AI_PROVIDER || 'openai',
-        model: (process.env.AI_PROVIDER || 'openai').toLowerCase() === 'doubao'
-          ? (process.env.ARK_MODEL || process.env.DOUBAO_MODEL || 'doubao-seed-2-0-lite-260215')
-          : (process.env.OPENAI_MODEL || 'gpt-5-mini'),
-        proxy: {
-          openai: Boolean(openaiDispatcher),
-          doubao: Boolean(arkDispatcher),
-          web: Boolean(webDispatcher),
-        },
       })
     }
 
@@ -960,6 +952,7 @@ export function createScmServer() {
       return send(res, 201, plan)
     }
 
+    const repositories = createRepositoryRegistry({ db, env: process.env })
     const routeContext = {
       req, res, url, db, send, readBody, writeDb, event, todayLabel,
       repositories,
@@ -1004,7 +997,7 @@ export function createScmServer() {
       res.end()
       return
     }
-    return send(res, 500, { error: error.message })
+    return sendInternalServerError(res, send, error)
   }
   })
 }

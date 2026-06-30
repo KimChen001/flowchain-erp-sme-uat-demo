@@ -8,6 +8,7 @@ import { handleContextRoute } from '../routes/context.routes.mjs'
 import { normalizeAuditEvent } from './audit-foundation.mjs'
 import { getAiToolRegistry } from './ai-tool-registry.mjs'
 import { listAuditEvents, recordAuditEvent } from '../repositories/audit-log-repository.mjs'
+import { GENERIC_INTERNAL_ERROR, sanitizeErrorSummary, sendInternalServerError } from '../utils/safe-errors.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 
@@ -43,10 +44,45 @@ test('server factory imports with backend foundation routes', () => {
 test('server route context injects repository registry for repository-compatible routes', () => {
   const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
 
-  assert.match(source, /import \{ createRepositoryRegistry \} from '\.\.\/repositories\/adapter-registry\.mjs'/)
+  assert.match(source, /import \{[^}]*createRepositoryRegistry[^}]*\} from '\.\.\/repositories\/adapter-registry\.mjs'/)
   assert.match(source, /const repositories = createRepositoryRegistry\(\{ db, env: process\.env \}\)/)
   assert.match(source, /routeContext = \{[\s\S]*repositories,[\s\S]*\}/)
   assert.ok(source.indexOf('const repositories = createRepositoryRegistry') < source.indexOf('const routeContext = {'))
+})
+
+test('global server errors are sanitized before returning 500 responses', () => {
+  let response = null
+  const warnings = []
+  const raw = new Error('database exploded with DATABASE_URL=postgres://user:secret@localhost/db and sk-test-secret')
+
+  sendInternalServerError({}, (_res, status, payload) => {
+    response = { status, payload }
+  }, raw, { logger: { warn(message) { warnings.push(message) } } })
+
+  assert.equal(response.status, 500)
+  assert.deepEqual(response.payload, { error: GENERIC_INTERNAL_ERROR })
+  assert.doesNotMatch(JSON.stringify(response.payload), /database exploded|DATABASE_URL|postgres:\/\/|sk-test-secret/)
+  assert.equal(warnings.length, 1)
+  assert.doesNotMatch(warnings[0], /postgres:\/\/|sk-test-secret/)
+})
+
+test('server health response omits provider keys models and proxy diagnostics by default', () => {
+  const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
+  const healthBlock = source.slice(source.indexOf("url.pathname === '/api/health'"), source.indexOf("if (req.method === 'POST' && url.pathname === '/api/auth/login'"))
+
+  assert.match(healthBlock, /persistenceMode/)
+  assert.match(healthBlock, /timestamp/)
+  assert.doesNotMatch(healthBlock, /OPENAI_API_KEY|ARK_API_KEY|DOUBAO_API_KEY|OPENAI_MODEL|ARK_MODEL|DOUBAO_MODEL/)
+  assert.doesNotMatch(healthBlock, /openai:|doubao:|provider:|model:|proxy:/)
+  assert.match(source, /sendInternalServerError\(res, send, error\)/)
+})
+
+test('safe error summaries redact secrets and stay bounded for logs', () => {
+  const summary = sanitizeErrorSummary(new Error('Bearer abc.def.ghi failed with OPENAI_API_KEY=sk-realish and DATABASE_URL=postgres://user:pass@db/app'))
+
+  assert.ok(summary.length <= 240)
+  assert.doesNotMatch(summary, /abc\.def\.ghi|sk-realish|postgres:\/\/user:pass/)
+  assert.match(summary, /\[redacted\]/)
 })
 
 test('GET /api/me returns current user, tenant, and permissions context', async () => {
