@@ -1,7 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createDatabaseRepositoryRegistry } from '../repositories/adapter-registry.mjs'
+import { createDbAuditLogRepository } from '../repositories/db-audit-log-repository.mjs'
 import { handleActionDraftsRoute } from '../routes/action-drafts.routes.mjs'
+import { handleAuditLogRoute } from '../routes/audit-log.routes.mjs'
 import { handleAiRoute } from '../routes/ai.routes.mjs'
 import {
   legacyMutationBlockedAuditEntry,
@@ -91,6 +93,25 @@ function createAiRoute({ repositories } = {}) {
       openaiDispatcher: { dispatch() { throw new Error('provider should not be reached') } },
       arkDispatcher: { dispatch() { throw new Error('ark should not be reached') } },
       aiMaxTokens: 120,
+    },
+    get response() {
+      return response
+    },
+  }
+}
+
+function createAuditRoute({ method = 'GET', path = '/api/audit-log', repositories, db = createDb() } = {}) {
+  let response = null
+  return {
+    ctx: {
+      req: { method },
+      res: {},
+      url: new URL(path, 'http://localhost'),
+      db,
+      repositories,
+      send(_res, status, payload) {
+        response = { status, payload }
+      },
     },
     get response() {
       return response
@@ -220,4 +241,121 @@ test('read-only AI answer survives DB audit adapter failure', async () => {
   assert.equal(route.response.payload.intent.name, 'supplier_status_query')
   assert.ok(route.response.payload.cards.length > 0)
   assert.doesNotMatch(JSON.stringify(route.response.payload), /FLOWCHAIN_DATABASE_CONFIG_MISSING|DATABASE_URL|Bearer/)
+})
+
+test('audit log read route uses injected repository filters without mutating JSON data', async () => {
+  const db = createDb()
+  const before = JSON.stringify(db)
+  const calls = []
+  const repositories = {
+    auditLog: {
+      listAuditEntries: async (filters) => {
+        calls.push(filters)
+        return [{ id: 'AUD-ROUTE-1', entityType: filters.entityType, entityId: filters.entityId }]
+      },
+    },
+  }
+  const route = createAuditRoute({
+    db,
+    repositories,
+    path: '/api/audit-log?entityType=actionDraft&entityId=DRAFT-AUDIT-1&limit=5',
+  })
+
+  assert.equal(await handleAuditLogRoute(route.ctx), true)
+  assert.equal(route.response.status, 200)
+  assert.deepEqual(calls, [{ entityType: 'actionDraft', entityId: 'DRAFT-AUDIT-1', limit: 5 }])
+  assert.deepEqual(route.response.payload, [{ id: 'AUD-ROUTE-1', entityType: 'actionDraft', entityId: 'DRAFT-AUDIT-1' }])
+  assert.equal(JSON.stringify(db), before)
+})
+
+test('database audit adapter backs read and write methods with sanitized records', async () => {
+  const findCalls = []
+  const createCalls = []
+  const repositories = createDatabaseRepositoryRegistry({
+    db: createDb(),
+    env: {
+      FLOWCHAIN_PERSISTENCE_MODE: 'database',
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/flowchain',
+    },
+    prisma: {
+      auditLog: {
+        findMany: async (args) => {
+          findCalls.push(args)
+          return [{
+            id: 'AUD-DB-1',
+            tenantId: 'tenant-flowchain-sme',
+            source: 'system',
+            module: 'action-drafts',
+            action: 'draft_saved',
+            entityType: 'actionDraft',
+            entityId: 'DRAFT-AUDIT-1',
+            actorId: null,
+            summary: 'Read from DB audit table',
+            metadata: { metadata: { safe: true } },
+            createdAt: new Date('2026-06-30T00:00:00.000Z'),
+          }]
+        },
+        create: async ({ data }) => {
+          createCalls.push(data)
+          return { ...data, createdAt: data.createdAt || new Date('2026-06-30T00:00:00.000Z') }
+        },
+      },
+    },
+  })
+  const route = createAuditRoute({
+    repositories,
+    path: '/api/audit-log?entityType=actionDraft&entityId=DRAFT-AUDIT-1&limit=2',
+  })
+
+  assert.equal(await handleAuditLogRoute(route.ctx), true)
+  assert.equal(route.response.status, 200)
+  assert.equal(route.response.payload[0].id, 'AUD-DB-1')
+  assert.deepEqual(findCalls[0].where, {
+    tenantId: 'tenant-flowchain-sme',
+    entityType: 'actionDraft',
+    entityId: 'DRAFT-AUDIT-1',
+  })
+  assert.deepEqual(findCalls[0].orderBy, { createdAt: 'desc' })
+  assert.equal(findCalls[0].take, 2)
+
+  const record = await repositories.auditLog.recordAuditEntry({
+    module: 'action-drafts',
+    action: 'draft_saved',
+    entity: { type: 'actionDraft', id: 'DRAFT-AUDIT-1' },
+    summary: 'Saved with token Bearer secret.token and DATABASE_URL=postgresql://user:pass@db/app',
+    metadata: { token: 'Bearer secret.token', nested: { apiKey: 'sk-secret' } },
+  })
+  const payload = JSON.stringify({ record, createCalls })
+  assert.equal(createCalls.length, 1)
+  assert.equal(createCalls[0].entityType, 'actionDraft')
+  assert.doesNotMatch(payload, /Bearer secret|sk-secret|postgresql:\/\/user:pass|DATABASE_URL=/)
+})
+
+test('database audit adapter missing config fails cleanly and best-effort AI audit does not throw', async () => {
+  const repository = createDbAuditLogRepository({
+    env: { FLOWCHAIN_PERSISTENCE_MODE: 'database' },
+  })
+
+  await assert.rejects(
+    () => repository.listAuditEntries({ entityType: 'actionDraft' }),
+    (error) => error.code === 'FLOWCHAIN_DATABASE_CONFIG_MISSING' && !/postgresql:\/\/|password|stack/i.test(error.message),
+  )
+  await assert.rejects(
+    () => repository.recordAuditEntry({ action: 'draft_saved', entity: { type: 'actionDraft', id: 'DRAFT-AUDIT-1' } }),
+    (error) => error.code === 'FLOWCHAIN_DATABASE_CONFIG_MISSING' && !/postgresql:\/\/|password|stack/i.test(error.message),
+  )
+
+  const bestEffort = await repository.recordAiEventBestEffort({
+    action: 'ai_chat_status_query',
+    entity: { type: 'ai', id: 'supplier_status_query' },
+    summary: 'Should not throw',
+  })
+  assert.deepEqual(bestEffort, { ok: false, errorCode: 'FLOWCHAIN_DATABASE_CONFIG_MISSING' })
+})
+
+test('audit log route is read-only and does not expose route-level audit creation', async () => {
+  const route = createAuditRoute({ method: 'POST', path: '/api/audit-log', repositories: {} })
+
+  assert.equal(await handleAuditLogRoute(route.ctx), false)
+  assert.equal(route.response, null)
 })
