@@ -95,6 +95,14 @@ Covered by `server/domain/db-adapter-parity-harness.test.mjs`:
 - AuditLog records keep compatible public keys and redact sensitive metadata;
 - read adapters do not expose write-style methods.
 
+### Test DB Seed Harness
+
+Covered by `server/domain/master-data-db-parity.test.mjs`:
+
+- Master Data seed rows are deterministic and non-mutating;
+- explicit apply mode uses upserts against a safe test DB environment;
+- Master Data DB parity skips cleanly without `DATABASE_URL_TEST`.
+
 ### Docs Consistency Harness
 
 Docs reviewed for consistency with:

@@ -1,6 +1,6 @@
 # DB Readiness Review v1
 
-Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter. Round 31 adds the DB adapter parity harness.
+Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter. Round 31 adds the DB adapter parity harness. Round 32 makes the Master Data seed path executable and adds a Master Data DB parity command.
 
 ## Current Status
 
@@ -49,6 +49,15 @@ npm run db:seed:dry-run
 
 The command reads the committed demo JSON as source input, returns a deterministic plan, and does not mutate `data/scm-demo.json`. Apply mode is intentionally not implemented in this round.
 
+Round 32 adds:
+
+```bash
+npm run db:seed:master-data
+npm run test:db:master-data
+```
+
+`db:seed:master-data` defaults to dry-run and reports row counts for Tenant, PaymentTerm, TaxCode, Supplier, Warehouse, and Item. Apply mode is available only through the script with `--apply` and requires a safe `DATABASE_URL_TEST` path. `test:db:master-data` skips cleanly without `DATABASE_URL_TEST`.
+
 ## Procurement Read DB Adapter
 
 Round 29 adds lean Prisma read models and a DB repository for:
@@ -90,7 +99,6 @@ Round 31 verifies:
 
 ## Remaining Gaps
 
-- Master Data executable test DB seed and parity check.
 - ActionDraft persistence end-to-end.
 - AuditLog persistence end-to-end.
 - Procurement and inventory live DB parity datasets.

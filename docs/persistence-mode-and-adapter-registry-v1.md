@@ -76,6 +76,8 @@ Round 28 adds an explicit test database harness for future adapter parity work. 
 
 Round 28 also adds `npm run db:seed:dry-run`, which builds a deterministic Master Data seed plan without writing to a database or mutating `data/scm-demo.json`.
 
+Round 32 adds `npm run db:seed:master-data` and `npm run test:db:master-data`. The seed command defaults to dry-run and only applies through the explicit script `--apply` path with `DATABASE_URL_TEST`. The parity command skips cleanly when `DATABASE_URL_TEST` is absent.
+
 ## Relation to contract tests
 
 The Round 16 JSON adapter contract tests remain the behavioral baseline. Future database adapters should satisfy the same contract categories before route behavior is migrated behind the registry.
