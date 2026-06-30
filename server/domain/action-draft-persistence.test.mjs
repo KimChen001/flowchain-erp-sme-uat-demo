@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createDatabaseRepositoryRegistry, createRepositoryRegistry } from '../repositories/adapter-registry.mjs'
+import { createDbActionDraftRepository } from '../repositories/db-action-draft-repository.mjs'
 import { handleActionDraftsRoute } from '../routes/action-drafts.routes.mjs'
 import { DATABASE_CONFIG_ERROR } from '../persistence/persistence-config.mjs'
 
@@ -156,4 +157,96 @@ test('database mode save route returns clean config error without DATABASE_URL',
     code: 'FLOWCHAIN_DATABASE_CONFIG_MISSING',
   })
   assert.doesNotMatch(JSON.stringify(route.response.payload), /stack|postgres|password/)
+})
+
+test('database mode save route rejects unsupported draft type before writing', async () => {
+  const writes = []
+  const db = createDb()
+  const before = clone(db)
+  const repositories = createDatabaseRepositoryRegistry({
+    db,
+    env: {
+      FLOWCHAIN_PERSISTENCE_MODE: 'database',
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/flowchain',
+    },
+    prisma: {
+      actionDraft: {
+        create: async ({ data }) => {
+          writes.push(data)
+          return data
+        },
+      },
+    },
+  })
+  const route = createRouteContext({
+    db,
+    repositories,
+    body: { draft: { ...draft(), type: 'real_purchase_order_create' } },
+  })
+
+  assert.equal(await handleActionDraftsRoute(route.ctx), true)
+  assert.equal(route.response.status, 400)
+  assert.equal(route.response.payload.code, 'FLOWCHAIN_ACTION_DRAFT_UNSUPPORTED_TYPE')
+  assert.equal(writes.length, 0)
+  assert.equal(route.wrote, false)
+  assert.deepEqual(db, before)
+})
+
+test('database action draft repository can read saved draft shell and keeps confirm blocked', async () => {
+  const db = createDb()
+  const before = clone(db)
+  const repository = createDbActionDraftRepository({
+    db,
+    env: {
+      FLOWCHAIN_PERSISTENCE_MODE: 'database',
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/flowchain',
+    },
+    prisma: {
+      actionDraft: {
+        findFirst: async ({ where, include }) => {
+          assert.deepEqual(where, { id: 'DRAFT-SAVE-1', tenantId: 'tenant-flowchain-sme' })
+          assert.deepEqual(include, { validations: true, auditTrail: true })
+          return {
+            ...draft(),
+            createdAt: new Date('2026-06-30T00:00:00.000Z'),
+            updatedAt: new Date('2026-06-30T00:00:00.000Z'),
+            previewOnly: true,
+            validations: [{ id: 'DRAFT-SAVE-1-VAL', ok: true, missingFields: [], warnings: [], errors: [] }],
+            auditTrail: [{ id: 'DRAFT-SAVE-1-AUD', action: 'ai_draft_prepared', summary: 'Prepared draft' }],
+          }
+        },
+      },
+    },
+  })
+
+  const saved = await repository.getDraft('DRAFT-SAVE-1')
+  assert.equal(saved.id, 'DRAFT-SAVE-1')
+  assert.equal(saved.type, 'purchase_request_draft')
+  assert.equal(saved.previewOnly, true)
+  assert.equal(saved.requiresConfirmation, true)
+  await assert.rejects(
+    () => repository.confirmDraft('DRAFT-SAVE-1'),
+    (error) => error.status === 501 && error.code === 'FLOWCHAIN_ACTION_DRAFT_CONFIRM_NOT_IMPLEMENTED',
+  )
+  assert.deepEqual(db, before)
+})
+
+test('action draft route exposes schema preview and save only, not route-level get or confirm', async () => {
+  const db = createDb()
+  const repositories = createRepositoryRegistry({ db, env: {} })
+  const getRoute = createRouteContext({
+    method: 'GET',
+    pathname: '/api/action-drafts/DRAFT-SAVE-1',
+    db,
+    repositories,
+  })
+  const confirmRoute = createRouteContext({
+    method: 'POST',
+    pathname: '/api/action-drafts/DRAFT-SAVE-1/confirm',
+    db,
+    repositories,
+  })
+
+  assert.equal(await handleActionDraftsRoute(getRoute.ctx), false)
+  assert.equal(await handleActionDraftsRoute(confirmRoute.ctx), false)
 })

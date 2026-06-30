@@ -120,6 +120,13 @@ export function createDbActionDraftRepository({ db = {}, env = process.env, pris
     previewDraft: (request = {}, options = {}) => previewRepository.previewDraft(request, options),
     persistDraft: async (draft = {}) => {
       const client = await resolvePrisma({ env, prisma })
+      const type = text(draft.type).toLowerCase()
+      if (!supportedTypes.has(type)) {
+        const error = new Error(`Unsupported draft type: ${text(draft.type, 'missing')}`)
+        error.code = 'FLOWCHAIN_ACTION_DRAFT_UNSUPPORTED_TYPE'
+        error.status = 400
+        throw error
+      }
       if (!draft?.id) {
         const error = new Error('Action draft id is required before persistence.')
         error.code = 'FLOWCHAIN_ACTION_DRAFT_ID_REQUIRED'
