@@ -11,6 +11,7 @@ function readSource(...parts) {
 
 test('inventory replenishment opens draft preview instead of creating purchase requests', () => {
   const app = readSource('src', 'app', 'FlowChainApp.tsx')
+  const inventory = readSource('src', 'modules', 'inventory', 'Page.tsx')
 
   assert.match(app, /function ReplenishmentRequestModal/)
   assert.match(app, /onPreviewDraft/)
@@ -22,6 +23,23 @@ test('inventory replenishment opens draft preview instead of creating purchase r
   assert.doesNotMatch(app, /inventoryPurchaseRequestPayload/)
   assert.doesNotMatch(app, /提交采购申请/)
   assert.doesNotMatch(app, /生成补货采购申请/)
+
+  assert.match(app, /<InventoryPanel[^>]+onReviewActionDraft=\{openActionDraftReview\}/)
+  assert.match(inventory, /onReviewActionDraft/)
+  assert.match(inventory, /function inventoryDraftRequest/)
+  assert.match(inventory, /purchase_request_draft/)
+  assert.match(inventory, /rfq_draft/)
+  assert.match(inventory, /预览 PR 草稿/)
+  assert.match(inventory, /预览 RFQ 草稿/)
+  assert.match(inventory, /查看批次\/序列号/)
+  assert.match(inventory, /返回库存列表/)
+  assert.match(inventory, /查看事务流水/)
+  assert.match(inventory, /查看异常单据/)
+  assert.match(inventory, /inventoryReadFallbackScopes/)
+  assert.match(inventory, /演示数据回落/)
+  assert.doesNotMatch(inventory, /\/api\/purchase-requests/)
+  assert.doesNotMatch(inventory, /inventoryPurchaseRequestPayload/)
+  assert.doesNotMatch(inventory, /apiJson<PurchaseRequest>/)
 })
 
 test('Today Cockpit maps reviewable actions to supported draft previews with fallback copy', () => {

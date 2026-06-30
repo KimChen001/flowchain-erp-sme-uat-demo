@@ -6,12 +6,9 @@ import {
   ClipboardCheck, Clock, FileSpreadsheet, Grid3x3, Hash, History, Inbox, Layers,
   Loader2, Package, Plus, Search, ShieldCheck, Truck, X, XCircle,
 } from "lucide-react";
-import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { inventoryPlan } from "../../domain/inventory/planning";
-import { inventoryPurchaseRequestPayload } from "../../domain/inventory/purchase-request";
-import type { PurchaseRequest } from "../../types/scm";
 import {
   COUNT_PLANS, INVENTORY_MOVEMENT_LEDGER, inventoryItems, LOTS, SERIALS, SKU_CATALOG, supplierData, TRANSFERS, VARIANCES,
 } from "../../data/demo-data";
@@ -22,11 +19,13 @@ import InventoryMovementLedger from "./InventoryMovementLedger";
 import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
 import { buildInventoryExceptionDocuments } from "../../domain/inventory/exceptions";
 import type { ActiveContext } from "../ai-assistant/Panel";
+import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import {
   fetchInventoryItems,
   fetchInventoryLots,
   fetchInventorySerials,
   fetchInventorySummary,
+  inventoryReadFallbackScopes,
   type InventoryStockItem,
 } from "./api";
 import {
@@ -89,10 +88,48 @@ function exportCsv(filename: string, rows: Record<string, unknown>[]) {
   toast.success("导出文件已生成");
 }
 
-function InventoryOverview({ items }: { items: InventoryStockItem[] }) {
+function inventoryDraftRequest(item: InventoryStockItem & { plan: ReturnType<typeof inventoryPlan> }): ActionDraftPreviewRequest {
+  const draftType = item.plan.needsSourcing ? "rfq_draft" : "purchase_request_draft";
+  const reason = `库存低于再订货点：可用 ${item.plan.projectedAvailable}${item.plan.unit}，ROP ${item.plan.reorderPoint}${item.plan.unit}，覆盖 ${item.plan.daysCover} 天。策略 ${item.plan.policy}。`;
+  return {
+    type: draftType,
+    title: `${item.sku} ${item.plan.needsSourcing ? "RFQ 草稿预览" : "补货 PR 草稿预览"}`,
+    source: "inventory_replenishment",
+    originEvidence: [
+      {
+        type: "inventory_item",
+        id: item.sku,
+        label: item.name,
+        status: item.status,
+        summary: reason,
+      },
+    ],
+    payload: {
+      itemIdOrSku: item.sku,
+      quantity: item.plan.suggestedQty,
+      unit: item.plan.unit,
+      requestedDeliveryDate: `${item.plan.leadTimeDays}天内`,
+      reason,
+      supplierIdOrName: item.plan.needsSourcing ? "" : item.plan.supplier,
+      supplierSuggestion: item.plan.needsSourcing ? undefined : { supplierName: item.plan.supplier },
+      severity: item.plan.priority,
+      availableQuantity: item.plan.projectedAvailable,
+      reorderPoint: item.plan.reorderPoint,
+      safetyStock: item.min,
+    },
+  };
+}
+
+function InventoryOverview({
+  items,
+  onReviewActionDraft,
+}: {
+  items: InventoryStockItem[];
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
+}) {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("全部");
-  const [generatedRequests, setGeneratedRequests] = useState<Record<string, string>>({});
+  const [previewedRequests, setPreviewedRequests] = useState<Record<string, string>>({});
   const plannedItems = items.map((item) => ({ ...item, plan: inventoryPlan(item) }));
   const filtered = plannedItems.filter((i) => {
     const matchSearch = i.name.includes(search) || i.sku.includes(search);
@@ -106,29 +143,23 @@ function InventoryOverview({ items }: { items: InventoryStockItem[] }) {
   const weightedCoverage = plannedItems.reduce((sum, item) => sum + item.plan.daysCover * Math.max(item.plan.monthlyDemand, 1), 0) /
     plannedItems.reduce((sum, item) => sum + Math.max(item.plan.monthlyDemand, 1), 0);
 
-  async function createInventoryRequest(item: typeof plannedItems[number]) {
+  function previewInventoryDraft(item: typeof plannedItems[number]) {
     if (item.plan.suggestedQty <= 0) {
-      toast("当前无需生成 PR", { description: `${item.sku} 仍高于再订货点，建议继续监控。` });
+      toast("当前无需补货草稿", { description: `${item.sku} 仍高于再订货点，建议继续监控。` });
       return;
     }
-    if (item.plan.needsSourcing) {
-      toast("请先补齐供应商与报价", { description: `${item.sku} 已低于 ROP，但缺少有效供应商或单价，建议先发起 RFQ。` });
+    const draftLabel = item.plan.needsSourcing ? "RFQ 草稿" : "PR 草稿";
+    if (previewedRequests[item.sku]) {
+      toast(`已预览 ${draftLabel}`, { description: `${item.sku} 的补货动作已进入草稿审阅。` });
       return;
     }
-    if (generatedRequests[item.sku]) {
-      toast("已生成库存 PR", { description: `${generatedRequests[item.sku]} 已在采购申请队列中。` });
+    if (!onReviewActionDraft) {
+      toast.warning("草稿预览暂不可用", { description: "请从总览或 AI 建议中打开补货草稿审阅。" });
       return;
     }
-    try {
-      const created = await apiJson<PurchaseRequest>("/api/purchase-requests", {
-        method: "POST",
-        body: JSON.stringify(inventoryPurchaseRequestPayload(item)),
-      });
-      setGeneratedRequests((current) => ({ ...current, [item.sku]: created.pr }));
-      toast.success(`${created.pr} 已生成`, { description: `${item.sku} · ${item.plan.suggestedQty.toLocaleString()} ${item.plan.unit}` });
-    } catch (error) {
-      toast.error("库存 PR 生成失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
-    }
+    onReviewActionDraft(inventoryDraftRequest(item));
+    setPreviewedRequests((current) => ({ ...current, [item.sku]: draftLabel }));
+    toast.success(`已打开${draftLabel}预览`, { description: `${item.sku} · ${item.plan.suggestedQty.toLocaleString()} ${item.plan.unit}` });
   }
 
   function exportStockCsv() {
@@ -152,7 +183,7 @@ function InventoryOverview({ items }: { items: InventoryStockItem[] }) {
       "状态": item.status,
       "是否需要询价": item.plan.needsSourcing ? "是" : "否",
       "建议PR金额": item.plan.amount,
-      "已生成PR": generatedRequests[item.sku] || "",
+      "草稿预览": previewedRequests[item.sku] || "",
     })));
   }
 
@@ -189,11 +220,11 @@ function InventoryOverview({ items }: { items: InventoryStockItem[] }) {
                 <div className="text-[10px] mt-2 leading-relaxed" style={{ color: A.sub }}>
                   {item.plan.supplier} · 评分 {score.score} · {item.plan.policy}
                 </div>
-                <button onClick={() => createInventoryRequest(item)}
+                <button onClick={() => previewInventoryDraft(item)}
                   className="mt-3 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium text-white flex items-center justify-center gap-1.5"
-                  style={{ background: generatedRequests[item.sku] ? A.green : A.blue }}>
+                  style={{ background: previewedRequests[item.sku] ? A.green : A.blue }}>
                   <ClipboardCheck size={11} />
-                  {generatedRequests[item.sku] ? generatedRequests[item.sku] : item.plan.action}
+                  {previewedRequests[item.sku] ? `已预览 ${previewedRequests[item.sku]}` : item.plan.needsSourcing ? "预览 RFQ 草稿" : "预览 PR 草稿"}
                 </button>
               </div>
             );
@@ -304,14 +335,14 @@ function InventoryOverview({ items }: { items: InventoryStockItem[] }) {
                     <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{item.plan.supplier}</td>
                     <td className={tdNowrapClass}><StatusPill status={item.status} /></td>
                     <td className={tdActionClass}>
-                      <button onClick={() => createInventoryRequest(item)}
+                      <button onClick={() => previewInventoryDraft(item)}
                         disabled={item.plan.suggestedQty <= 0}
                         className="text-[11px] px-2 py-1 rounded-md font-medium"
                         style={{
-                          background: item.plan.suggestedQty > 0 ? (generatedRequests[item.sku] ? "#f0faf4" : item.plan.needsSourcing ? "#fff8f0" : A.gray6) : A.gray6,
-                          color: item.plan.suggestedQty > 0 ? (generatedRequests[item.sku] ? A.green : item.plan.needsSourcing ? A.orange : A.label) : A.gray2,
+                          background: item.plan.suggestedQty > 0 ? (previewedRequests[item.sku] ? "#f0faf4" : item.plan.needsSourcing ? "#fff8f0" : A.gray6) : A.gray6,
+                          color: item.plan.suggestedQty > 0 ? (previewedRequests[item.sku] ? A.green : item.plan.needsSourcing ? A.orange : A.label) : A.gray2,
                         }}>
-                        {generatedRequests[item.sku] ? generatedRequests[item.sku] : item.plan.suggestedQty > 0 ? item.plan.needsSourcing ? "补报价" : "生成 PR" : "监控"}
+                        {previewedRequests[item.sku] ? previewedRequests[item.sku] : item.plan.suggestedQty > 0 ? item.plan.needsSourcing ? "预览 RFQ" : "预览 PR" : "监控"}
                       </button>
                     </td>
                   </tr>
@@ -1053,16 +1084,19 @@ export default function InventoryPage({
   initialView = "overview",
   focus,
   onActiveContextChange,
+  onReviewActionDraft,
 }: {
   initialView?: InvTab;
   focus?: { entityType: string; entityId: string; at: number } | null;
   onActiveContextChange?: (context: ActiveContext | null) => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const [tab, setTab] = useState<InvTab>(initialView);
   const [stockItems, setStockItems] = useState<InventoryStockItem[]>(inventoryItems);
   const [lots, setLots] = useState<typeof LOTS>(LOTS);
   const [serials, setSerials] = useState<typeof SERIALS>(SERIALS);
   const [summary, setSummary] = useState<{ itemCount?: number; movementCount?: number; exceptionCount?: number; lotCount?: number; serialCount?: number }>({});
+  const [fallbackScopes, setFallbackScopes] = useState<string[]>([]);
   const exceptionCount = useMemo(() => buildInventoryExceptionDocuments().length, []);
   useEffect(() => {
     let alive = true;
@@ -1077,6 +1111,7 @@ export default function InventoryPage({
       setLots(lotRows);
       setSerials(serialRows);
       setSummary(summarySnapshot);
+      setFallbackScopes(inventoryReadFallbackScopes());
     });
     return () => {
       alive = false;
@@ -1109,7 +1144,12 @@ export default function InventoryPage({
   return (
     <div className="space-y-4">
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as InvTab)} />
-      {tab === "overview"  && <InventoryLanding items={stockItems} lots={lots} focus={focus} onOpenTab={setTab} onActiveContextChange={onActiveContextChange} />}
+      {fallbackScopes.length > 0 && (
+        <div className="rounded-lg px-3 py-2 text-[11px] leading-5" style={{ background: "#fff8f0", color: A.orange, border: "0.5px solid rgba(255,149,0,0.25)" }}>
+          当前库存读模型有 {fallbackScopes.length} 个端点使用演示数据回落，页面操作仍保持预览优先。
+        </div>
+      )}
+      {tab === "overview"  && <InventoryLanding items={stockItems} lots={lots} focus={focus} onOpenTab={setTab} onActiveContextChange={onActiveContextChange} onReviewActionDraft={onReviewActionDraft} />}
       {tab === "lots"      && <InventoryLots lots={lots} serials={serials} />}
       {tab === "transfer"  && <InventoryTransfers />}
       {tab === "count"     && <InventoryCycleCount />}
@@ -1127,12 +1167,14 @@ function InventoryLanding({
   focus,
   onOpenTab,
   onActiveContextChange,
+  onReviewActionDraft,
 }: {
   items: InventoryStockItem[];
   lots: typeof LOTS;
   focus?: { entityType: string; entityId: string; at: number } | null;
   onOpenTab: (tab: InvTab) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const [selectedSku, setSelectedSku] = useState("");
   const plannedItems = items.map((item) => ({ ...item, plan: inventoryPlan(item) }));
@@ -1147,6 +1189,9 @@ function InventoryLanding({
     : [];
   const selectedExceptions = selectedItem
     ? exceptionDocs.filter((doc) => doc.sku === selectedItem.sku).slice(0, 3)
+    : [];
+  const selectedLots = selectedItem
+    ? lots.filter((lot) => lot.sku === selectedItem.sku).slice(0, 3)
     : [];
   const transferExceptions = TRANSFERS.filter((transfer) => ["在途", "待审批"].includes(transfer.status));
   const frozenCount = lots.filter((lot) => lot.status === "冻结").length;
@@ -1211,11 +1256,12 @@ function InventoryLanding({
                 <Chip label={selectedItem.status} color={selectedItem.status === "正常" ? A.green : A.orange} bg={selectedItem.status === "正常" ? "#f0faf4" : "#fff8f0"} />
               </div>
               <div className="mt-1 text-xs font-medium truncate" style={{ color: A.label }}>{selectedItem.name}</div>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4" style={{ color: A.sub }}>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-5" style={{ color: A.sub }}>
                 <span>当前 {selectedItem.qty.toLocaleString()}</span>
                 <span>安全库存 {selectedItem.min.toLocaleString()}</span>
                 <span>事务流水 {selectedMovements.length}</span>
                 <span>异常单据 {selectedExceptions.length}</span>
+                <span>批次 {selectedLots.length}</span>
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedMovements.map((movement) => (
@@ -1228,6 +1274,11 @@ function InventoryLanding({
                     {doc.id}
                   </span>
                 ))}
+                {selectedLots.map((lot) => (
+                  <span key={lot.lot} className="rounded-md px-2 py-1 text-[10px] tabular-nums" style={{ background: "#f0faf4", color: A.green }}>
+                    {lot.lot}
+                  </span>
+                ))}
               </div>
             </div>
             <RecoveryActions
@@ -1236,6 +1287,7 @@ function InventoryLanding({
                 { key: "list", label: "返回库存列表", onClick: () => setSelectedSku(""), kind: "list" },
                 { key: "movements", label: "查看事务流水", onClick: () => onOpenTab("movements"), kind: "module", tone: "primary" },
                 { key: "exceptions", label: "查看异常单据", onClick: () => onOpenTab("exceptions"), kind: "module", tone: "warning" },
+                ...(selectedLots.length ? [{ key: "lots", label: "查看批次/序列号", onClick: () => onOpenTab("lots"), kind: "module" as const, tone: "primary" as const }] : []),
               ]}
             />
           </div>
@@ -1329,6 +1381,7 @@ function InventoryLanding({
           </button>
         ))}
       </div>
+      <InventoryOverview items={items} onReviewActionDraft={onReviewActionDraft} />
     </div>
   );
 }

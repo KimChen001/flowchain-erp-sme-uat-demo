@@ -66,6 +66,17 @@ type ApiInventorySummary = {
   serialCount?: number;
 };
 
+const fallbackScopes = new Set<string>();
+
+export function inventoryReadFallbackScopes() {
+  return Array.from(fallbackScopes);
+}
+
+function markSource(scope: string, usedFallback: boolean) {
+  if (usedFallback) fallbackScopes.add(scope);
+  else fallbackScopes.delete(scope);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object";
 }
@@ -96,11 +107,14 @@ async function readArray<T>(url: string, key: string, fallback?: T[], useFallbac
     const rows = arrayPayload<T>(await apiJson<unknown>(url), key);
     if (rows.length === 0 && fallback?.length && useFallbackWhenEmpty) {
       warnFallback(url, new Error("Empty inventory read model"));
+      markSource(url, true);
       return fallback;
     }
+    markSource(url, false);
     return rows;
   } catch (error) {
     warnFallback(url, error);
+    markSource(url, Boolean(fallback?.length));
     return fallback ?? [];
   }
 }
@@ -225,8 +239,11 @@ function normalizeExceptions(apiRows: Partial<InventoryExceptionDocument>[], fal
 }
 
 export async function fetchInventoryItems(fallback: InventoryStockItem[] = []): Promise<InventoryStockItem[]> {
-  const rows = await readArray<ApiInventoryItem>("/api/inventory/items", "items", undefined, false);
-  return rows.length ? normalizeInventoryItems(rows, fallback) : fallback;
+  const rows = await readArray<ApiInventoryItem>("/api/inventory/items", "items", fallback as unknown as ApiInventoryItem[], false);
+  if (rows === (fallback as unknown as ApiInventoryItem[])) return fallback;
+  if (rows.length) return normalizeInventoryItems(rows, fallback);
+  markSource("/api/inventory/items", Boolean(fallback.length));
+  return fallback;
 }
 
 export async function fetchInventoryItem(sku: string): Promise<ApiInventoryItem | null> {
@@ -241,13 +258,19 @@ export async function fetchInventoryItem(sku: string): Promise<ApiInventoryItem 
 }
 
 export async function fetchInventoryLots(fallback: typeof import("../../data/demo-data").LOTS = []) {
-  const rows = await readArray<ApiInventoryLot>("/api/inventory/lots", "lots", undefined);
-  return rows.length ? normalizeLots(rows, fallback) : fallback;
+  const rows = await readArray<ApiInventoryLot>("/api/inventory/lots", "lots", fallback as unknown as ApiInventoryLot[]);
+  if (rows === (fallback as unknown as ApiInventoryLot[])) return fallback;
+  if (rows.length) return normalizeLots(rows, fallback);
+  markSource("/api/inventory/lots", Boolean(fallback.length));
+  return fallback;
 }
 
 export async function fetchInventorySerials(fallback: typeof import("../../data/demo-data").SERIALS = []) {
-  const rows = await readArray<ApiInventorySerial>("/api/inventory/serials", "serials", undefined);
-  return rows.length ? normalizeSerials(rows, fallback) : fallback;
+  const rows = await readArray<ApiInventorySerial>("/api/inventory/serials", "serials", fallback as unknown as ApiInventorySerial[]);
+  if (rows === (fallback as unknown as ApiInventorySerial[])) return fallback;
+  if (rows.length) return normalizeSerials(rows, fallback);
+  markSource("/api/inventory/serials", Boolean(fallback.length));
+  return fallback;
 }
 
 export async function fetchInventoryMovements(fallback: InventoryMovement[] = []): Promise<InventoryMovement[]> {
@@ -264,9 +287,11 @@ export async function fetchInventorySummary(fallback?: ApiInventorySummary): Pro
   try {
     const payload = await apiJson<unknown>("/api/inventory/summary");
     if (!isRecord(payload) || !isRecord(payload.summary)) throw new Error("Invalid inventory summary response");
+    markSource("/api/inventory/summary", false);
     return payload.summary as ApiInventorySummary;
   } catch (error) {
     warnFallback("/api/inventory/summary", error);
+    markSource("/api/inventory/summary", true);
     return fallback ?? {};
   }
 }
