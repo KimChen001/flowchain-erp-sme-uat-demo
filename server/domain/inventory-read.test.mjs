@@ -97,7 +97,7 @@ function createDb() {
   }
 }
 
-function createRouteContext(method, pathname, db) {
+function createRouteContext(method, pathname, db, repositories) {
   let response = null
   return {
     ctx: {
@@ -105,6 +105,7 @@ function createRouteContext(method, pathname, db) {
       res: {},
       url: new URL(pathname, 'http://localhost'),
       db,
+      repositories,
       send(_res, status, payload) {
         response = { status, payload }
       },
@@ -257,4 +258,77 @@ test('inventory collection routes return arrays and summary', async () => {
   const summaryRoute = createRouteContext('GET', '/api/inventory/summary', createDb())
   assert.equal(await handleInventoryRoute(summaryRoute.ctx), true)
   assert.equal(summaryRoute.response.payload.summary.itemCount, 2)
+})
+
+test('inventory route supports async repository contracts for all read endpoints', async () => {
+  const calls = []
+  const repositories = {
+    inventoryRead: {
+      listItems: async (filters) => {
+        calls.push(['listItems', filters])
+        return [{ sku: 'ASYNC-1', itemName: 'Async Item' }]
+      },
+      getItem: async (idOrSku) => {
+        calls.push(['getItem', idOrSku])
+        return idOrSku === 'ASYNC-1' ? { sku: 'ASYNC-1', itemName: 'Async Item' } : null
+      },
+      listLots: async (filters) => {
+        calls.push(['listLots', filters])
+        return [{ lotId: 'LOT-ASYNC-1', sku: 'ASYNC-1' }]
+      },
+      listSerials: async (filters) => {
+        calls.push(['listSerials', filters])
+        return [{ serialId: 'SN-ASYNC-1', sku: 'ASYNC-1' }]
+      },
+      listMovements: async (filters) => {
+        calls.push(['listMovements', filters])
+        return [{ movementId: 'IM-ASYNC-1', sku: 'ASYNC-1' }]
+      },
+      listExceptions: async (filters) => {
+        calls.push(['listExceptions', filters])
+        return [{ id: 'IEX-ASYNC-1', sku: 'ASYNC-1' }]
+      },
+      getSummary: async () => {
+        calls.push(['getSummary'])
+        return { itemCount: 1, movementCount: 1, exceptionCount: 1 }
+      },
+    },
+  }
+
+  for (const [path, key] of [
+    ['/api/inventory/items?q=ASYNC', 'items'],
+    ['/api/inventory/lots?warehouse=WH-ASYNC', 'lots'],
+    ['/api/inventory/serials', 'serials'],
+    ['/api/inventory/movements', 'movements'],
+    ['/api/inventory/exceptions', 'exceptions'],
+  ]) {
+    const route = createRouteContext('GET', path, createDb(), repositories)
+    assert.equal(await handleInventoryRoute(route.ctx), true)
+    assert.equal(route.response.status, 200)
+    assert.ok(Array.isArray(route.response.payload[key]))
+  }
+
+  const detailRoute = createRouteContext('GET', '/api/inventory/items/ASYNC-1', createDb(), repositories)
+  assert.equal(await handleInventoryRoute(detailRoute.ctx), true)
+  assert.equal(detailRoute.response.status, 200)
+  assert.equal(detailRoute.response.payload.item.sku, 'ASYNC-1')
+
+  const missingRoute = createRouteContext('GET', '/api/inventory/items/MISSING', createDb(), repositories)
+  assert.equal(await handleInventoryRoute(missingRoute.ctx), true)
+  assert.equal(missingRoute.response.status, 404)
+
+  const summaryRoute = createRouteContext('GET', '/api/inventory/summary', createDb(), repositories)
+  assert.equal(await handleInventoryRoute(summaryRoute.ctx), true)
+  assert.equal(summaryRoute.response.payload.summary.itemCount, 1)
+
+  assert.deepEqual(calls.map(([name]) => name), [
+    'listItems',
+    'listLots',
+    'listSerials',
+    'listMovements',
+    'listExceptions',
+    'getItem',
+    'getItem',
+    'getSummary',
+  ])
 })
