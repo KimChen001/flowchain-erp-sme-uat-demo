@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
+import { evidenceModuleId, normalizeEvidenceLinks, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
 import { fmt } from "../../lib/format";
 import { A } from "../../components/ui";
 import { aiDisplayMessage, looksLikeRawJson, normalizeAiCardValue, safeUnknownCardMessage, sanitizeAiMessage } from "./presentation";
@@ -27,7 +28,7 @@ type AiChatCard = {
   data?: Record<string, unknown>;
   fields?: { name?: string; reason?: string }[] | Record<string, unknown> | null;
   actions?: { label?: string; kind?: string; target?: string }[];
-  evidence?: { type?: string; id?: string; summary?: string }[];
+  evidence?: { type?: string; id?: string; label?: string; status?: string; route?: string; summary?: string }[];
   matches?: Record<string, unknown>[];
 };
 
@@ -191,7 +192,50 @@ function MiniList({ items, limit = 2 }: { items: unknown[]; limit?: number }) {
   );
 }
 
-function AiResponseCard({ card }: { card: AiChatCard }) {
+function EvidenceList({
+  evidence = [],
+  onNavigate,
+}: {
+  evidence?: AiChatCard["evidence"];
+  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+}) {
+  const links = normalizeEvidenceLinks(evidence, { source: "ai" }).slice(0, 3);
+  if (!links.length) return null;
+  return (
+    <div className="space-y-1">
+      {links.map((link, index) => {
+        const moduleId = evidenceModuleId(link);
+        const title = [link.entityType !== "unknown" ? link.entityType : "", link.entityId].filter(Boolean).join(" · ") || link.label;
+        const detail = link.status || link.label;
+        return (
+          <div key={`${title}-${index}`} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
+            {link.clickable && moduleId && onNavigate ? (
+              <button
+                type="button"
+                onClick={() => onNavigate(moduleId, link.focusTarget || null)}
+                className="max-w-full text-left text-[11px] font-medium truncate hover:underline"
+                style={{ color: A.blue }}
+              >
+                {textValue(title)}
+              </button>
+            ) : (
+              <div className="text-[11px] font-medium truncate" style={{ color: A.label }}>{textValue(title)}</div>
+            )}
+            {hasValue(detail) && <div className="text-[10px] truncate" style={{ color: A.gray2 }}>{textValue(detail)}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AiResponseCard({
+  card,
+  onNavigate,
+}: {
+  card: AiChatCard;
+  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+}) {
   const data = card.data || {};
   switch (card.type) {
     case "supplier_status":
@@ -545,7 +589,7 @@ function AiResponseCard({ card }: { card: AiChatCard }) {
       if (!card.evidence?.length) return null;
       return (
         <CardShell title="依据">
-          <MiniList items={card.evidence.map((item) => ({ title: [item.type, item.id].filter(Boolean).join(" · "), reason: item.summary }))} limit={3} />
+          <EvidenceList evidence={card.evidence} onNavigate={onNavigate} />
         </CardShell>
       );
     case "empty_state":
@@ -572,13 +616,19 @@ function AiResponseCard({ card }: { card: AiChatCard }) {
   }
 }
 
-function AiResponseCards({ cards = [] }: { cards?: AiChatCard[] }) {
+function AiResponseCards({
+  cards = [],
+  onNavigate,
+}: {
+  cards?: AiChatCard[];
+  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+}) {
   const visibleCards = cards.filter((card) => card.type);
   if (!visibleCards.length) return null;
   return (
     <div className="mt-2 space-y-2">
       {visibleCards.map((card, index) => (
-        <AiResponseCard key={`${card.type}-${index}`} card={card} />
+        <AiResponseCard key={`${card.type}-${index}`} card={card} onNavigate={onNavigate} />
       ))}
     </div>
   );
@@ -600,10 +650,12 @@ export default function FloatingAiAssistant({
   moduleId,
   activeContext,
   openSignal,
+  onNavigate,
 }: {
   moduleId: string;
   activeContext?: ActiveContext | null;
   openSignal?: number;
+  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -776,7 +828,7 @@ export default function FloatingAiAssistant({
                   }}
                 >
                   <div className="whitespace-pre-wrap">{message.content}</div>
-                  {message.role === "assistant" && <AiResponseCards cards={message.cards} />}
+                  {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={onNavigate} />}
                 </div>
               </div>
             ))}

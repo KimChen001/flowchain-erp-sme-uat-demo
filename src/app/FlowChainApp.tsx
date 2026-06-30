@@ -12,6 +12,7 @@ import {
 import { navGroups, navItems } from "./routes";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
 import { apiJson } from "../lib/api-client";
+import { evidenceModuleId, normalizeGlobalSearchResult, type CanonicalFocusTarget } from "../lib/evidenceLinks";
 import { fmt } from "../lib/format";
 import { A, Card, Field, inputStyle, Modal } from "../components/ui";
 import { typography } from "../components/ui/typography";
@@ -190,6 +191,8 @@ type GlobalSearchResult = {
 type GlobalSearchFocus = {
   entityType: string;
   entityId: string;
+  entityLabel?: string;
+  source?: string;
   at: number;
 };
 
@@ -559,9 +562,9 @@ export default function FlowChainApp() {
     }
   }
 
-  function navigateTo(moduleId: string) {
+  function navigateTo(moduleId: string, focusTarget?: CanonicalFocusTarget | null) {
     setActive(moduleId);
-    setSearchFocus(null);
+    setSearchFocus(focusTarget ? { ...focusTarget, source: "evidence", at: Date.now() } : null);
   }
 
   function clearFocus() {
@@ -574,15 +577,19 @@ export default function FlowChainApp() {
   }
 
   function openSearchResult(result: GlobalSearchResult) {
+    const link = normalizeGlobalSearchResult(result);
+    const moduleId = evidenceModuleId(link) || result.moduleId || "overview";
     setFocusReturnActive(active);
-    setActive(result.moduleId || "overview");
-    setSearchFocus({ entityType: result.entityType, entityId: result.entityId, at: Date.now() });
+    setActive(moduleId);
+    setSearchFocus(link?.focusTarget
+      ? { ...link.focusTarget, entityLabel: link.label, source: "globalSearch", at: Date.now() }
+      : { entityType: result.entityType, entityId: result.entityId, entityLabel: result.entityLabel, source: "globalSearch", at: Date.now() });
     setSearchOpen(false);
     setActiveSearchIndex(-1);
   }
 
   const focusEntityLabel = searchFocus
-    ? `${SEARCH_TYPE_LABELS[searchFocus.entityType] || searchFocus.entityType} · ${searchFocus.entityId}`
+    ? `${SEARCH_TYPE_LABELS[searchFocus.entityType] || searchFocus.entityType} · ${searchFocus.entityLabel || searchFocus.entityId}`
     : "";
 
   const panels: Record<string, React.ReactNode> = {
@@ -935,7 +942,7 @@ export default function FlowChainApp() {
           </main>
         </div>
       </div>
-      <AiPanel moduleId={activeModule} activeContext={aiActiveContext} openSignal={aiOpenSignal} />
+      <AiPanel moduleId={activeModule} activeContext={aiActiveContext} openSignal={aiOpenSignal} onNavigate={navigateTo} />
     </div>
   );
 }

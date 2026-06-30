@@ -1,5 +1,6 @@
 import { Sparkles } from "lucide-react";
 import { A, Card, Chip } from "../../components/ui";
+import { evidenceModuleId, normalizeTodayCockpitTarget, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
 import { fmt } from "../../lib/format";
 import type {
   TodayCockpitAction,
@@ -14,7 +15,7 @@ type TodayCockpitPanelProps = {
   cockpit: TodayCockpitResponse | null;
   loading: boolean;
   error?: boolean;
-  onNavigate: (moduleId: string) => void;
+  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 };
 
 function cockpitSeverityStyle(severity: TodayCockpitSeverity) {
@@ -78,7 +79,7 @@ export function TodayCockpitSummaryCards({
   onNavigate,
 }: {
   cards: TodayCockpitCard[];
-  onNavigate: (moduleId: string) => void;
+  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 }) {
   if (!cards.length) {
     return (
@@ -92,11 +93,13 @@ export function TodayCockpitSummaryCards({
     <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => {
         const style = cockpitSeverityStyle(card.severity);
+        const link = normalizeTodayCockpitTarget(card);
+        const moduleId = evidenceModuleId(link) || cockpitTargetModule(card.target, card.module);
         return (
           <button
             key={card.id}
             type="button"
-            onClick={() => onNavigate(cockpitTargetModule(card.target, card.module))}
+            onClick={() => onNavigate(moduleId, link?.focusTarget || null)}
             className="min-h-[118px] rounded-lg border p-3 text-left transition-colors hover:bg-slate-50"
             style={{ borderColor: A.border, background: A.white }}
           >
@@ -124,7 +127,7 @@ export function TodayCockpitActionList({
 }: {
   title: string;
   items: TodayCockpitAction[];
-  onNavigate: (moduleId: string) => void;
+  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
   className?: string;
 }) {
   return (
@@ -133,11 +136,13 @@ export function TodayCockpitActionList({
       <div className="mt-3 space-y-3">
         {items.length ? items.map((item) => {
           const style = cockpitSeverityStyle(item.priority);
+          const link = normalizeTodayCockpitTarget(item);
+          const moduleId = evidenceModuleId(link) || cockpitTargetModule(item.target, item.module);
           return (
             <button
               key={item.id}
               type="button"
-              onClick={() => onNavigate(cockpitTargetModule(item.target, item.module))}
+              onClick={() => onNavigate(moduleId, link?.focusTarget || null)}
               className="w-full rounded-md border px-3 py-2 text-left hover:bg-slate-50"
               style={{ borderColor: A.border }}
             >
@@ -162,7 +167,7 @@ export function TodayCockpitFollowups({
   onNavigate,
 }: {
   items: TodayCockpitAction[];
-  onNavigate: (moduleId: string) => void;
+  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 }) {
   return <TodayCockpitActionList title="优先跟进" items={items} onNavigate={onNavigate} />;
 }
@@ -172,7 +177,7 @@ export function TodayCockpitInventoryRisks({
   onNavigate,
 }: {
   items: TodayCockpitInventoryRisk[];
-  onNavigate: (moduleId: string) => void;
+  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 }) {
   return (
     <div className="rounded-lg border p-4" style={{ borderColor: A.border, background: A.white }}>
@@ -180,11 +185,13 @@ export function TodayCockpitInventoryRisks({
       <div className="mt-3 space-y-3">
         {items.length ? items.map((item) => {
           const style = cockpitSeverityStyle(item.severity);
+          const link = normalizeTodayCockpitTarget(item);
+          const moduleId = evidenceModuleId(link) || cockpitTargetModule(item.target, "inventory");
           return (
             <button
               key={item.id}
               type="button"
-              onClick={() => onNavigate(cockpitTargetModule(item.target, "inventory"))}
+              onClick={() => onNavigate(moduleId, link?.focusTarget || null)}
               className="w-full rounded-md border px-3 py-2 text-left hover:bg-slate-50"
               style={{ borderColor: A.border }}
             >
@@ -211,8 +218,10 @@ export function TodayCockpitInventoryRisks({
 
 export function TodayCockpitRecentDocuments({
   documents,
+  onNavigate,
 }: {
   documents: TodayCockpitDocument[];
+  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border xl:col-span-3" style={{ borderColor: A.border }}>
@@ -236,7 +245,17 @@ export function TodayCockpitRecentDocuments({
             {documents.length ? documents.map((doc, index) => (
               <tr key={`${doc.type}-${doc.id}`} style={{ borderTop: index ? `1px solid ${A.border}` : "none" }}>
                 <td className="px-4 py-3"><Chip label={documentTypeLabel(doc.type)} color={A.blue} bg="#eef4ff" /></td>
-                <td className="px-4 py-3 font-medium tabular-nums" style={{ color: A.blue }}>{doc.id}</td>
+                <td className="px-4 py-3 font-medium tabular-nums" style={{ color: A.blue }}>
+                  {(() => {
+                    const link = normalizeTodayCockpitTarget(doc);
+                    const moduleId = evidenceModuleId(link);
+                    return link?.clickable && moduleId ? (
+                      <button type="button" onClick={() => onNavigate(moduleId, link.focusTarget || null)} className="font-medium tabular-nums hover:underline">
+                        {doc.id}
+                      </button>
+                    ) : doc.id;
+                  })()}
+                </td>
                 <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.label }}>{doc.status || "—"}</td>
                 <td className="px-4 py-3 max-w-[180px] truncate" style={{ color: A.sub }}>{doc.supplier || "—"}</td>
                 <td className="px-4 py-3 text-right tabular-nums" style={{ color: A.label }}>{doc.amount ? fmt(Number(doc.amount)) : "—"}</td>
@@ -259,7 +278,7 @@ export function TodayCockpitRecommendedActions({
   onNavigate,
 }: {
   items: TodayCockpitAction[];
-  onNavigate: (moduleId: string) => void;
+  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 }) {
   return <TodayCockpitActionList title="建议动作" items={items} onNavigate={onNavigate} className="xl:col-span-2" />;
 }
@@ -281,7 +300,8 @@ export function TodayCockpitPanel({ cockpit, loading, error = false, onNavigate 
     title: item.title,
     reason: item.summary || item.message || item.status,
     nextAction: item.dueDate ? `截止 ${item.dueDate}` : item.supplierName || "等待复核",
-    target: { module: procurementModuleForDocument(item.documentType) },
+    evidence: item.evidence ? [item.evidence] : [],
+    target: { module: procurementModuleForDocument(item.documentType), documentType: item.documentType, entityId: item.documentId },
   }));
   const inventoryRisks = cockpit.inventoryRisks.slice(0, 4);
   const documents = cockpit.recentDocuments.slice(0, 6);
@@ -318,7 +338,7 @@ export function TodayCockpitPanel({ cockpit, loading, error = false, onNavigate 
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <TodayCockpitRecentDocuments documents={documents} />
+        <TodayCockpitRecentDocuments documents={documents} onNavigate={onNavigate} />
         <TodayCockpitRecommendedActions items={actions} onNavigate={onNavigate} />
       </div>
     </Card>
