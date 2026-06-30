@@ -73,7 +73,12 @@ function addBomDemand(target, sku, periodIndex, quantity, source, periods) {
   if (!target.has(sku)) target.set(sku, createBomBucket(periods))
   const bucket = target.get(sku)
   bucket.total[periodIndex] += quantity
-  bucket.sourcesByPeriod[periodIndex].push({ ...source, demand: quantity })
+  bucket.sourcesByPeriod[periodIndex].push({
+    ...source,
+    demand: quantity,
+    quantityContribution: quantity,
+    requirementPeriodIndex: periodIndex,
+  })
 
   const parentKey = `${source.parent}|${source.top}`
   const previous = bucket.parents.get(parentKey) || {
@@ -82,10 +87,15 @@ function addBomDemand(target, sku, periodIndex, quantity, source, periods) {
     top: source.top,
     topName: source.topName,
     level: source.level,
+    qtyPer: source.qtyPer,
+    scrapPct: source.scrapPct,
+    leadTimeOffset: source.leadTimeOffset,
+    sourcePeriods: [],
     demand: 0,
   }
   previous.demand += quantity
   previous.level = Math.min(previous.level, source.level)
+  if (!previous.sourcePeriods.includes(periodIndex)) previous.sourcePeriods.push(periodIndex)
   bucket.parents.set(parentKey, previous)
 }
 
@@ -114,6 +124,7 @@ function explodeBomChildren(parentSku, demandByPeriod, output, periods, trail = 
         qtyPer: Number(child.qty || 0),
         scrapPct: Number(child.scrapPct || 0),
         leadTimeOffset: Number(child.leadTimeOffset || 0),
+        sourcePeriodIndex: periodIndex,
       }, periods)
     })
 

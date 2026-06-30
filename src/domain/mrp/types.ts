@@ -17,9 +17,12 @@ export type MrpDemandSource = {
   topName?: string;
   level?: number;
   demand: number;
+  quantityContribution?: number;
   qtyPer?: number;
   scrapPct?: number;
   leadTimeOffset?: number;
+  sourcePeriodIndex?: number;
+  requirementPeriodIndex?: number;
 };
 
 export type MrpBomSource = {
@@ -29,6 +32,10 @@ export type MrpBomSource = {
   topName?: string;
   level?: number;
   demand: number;
+  qtyPer?: number;
+  scrapPct?: number;
+  leadTimeOffset?: number;
+  sourcePeriods?: number[];
 };
 
 export type MrpScheduleLine = {
