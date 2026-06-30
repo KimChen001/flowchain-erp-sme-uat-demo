@@ -50,6 +50,17 @@ Current database-mode mapping:
 
 The DB adapters validate `DATABASE_URL` only when their database-backed methods are invoked. JSON mode still ignores missing database configuration.
 
+## Test DB Harness
+
+Round 28 adds an explicit test database harness for future adapter parity work. It is not part of the default runtime path.
+
+- `npm run test:db` validates the harness and skips cleanly when `DATABASE_URL_TEST` is missing.
+- `DATABASE_URL_TEST` is mapped to database mode only inside the helper environment.
+- Production-like test database URLs are refused unless `FLOWCHAIN_ALLOW_PRODUCTION_TEST_DB=true` is explicitly set.
+- `npm test`, `npm run typecheck`, and `npm run build` still do not require any database URL.
+
+Round 28 also adds `npm run db:seed:dry-run`, which builds a deterministic Master Data seed plan without writing to a database or mutating `data/scm-demo.json`.
+
 ## Relation to contract tests
 
 The Round 16 JSON adapter contract tests remain the behavioral baseline. Future database adapters should satisfy the same contract categories before route behavior is migrated behind the registry.

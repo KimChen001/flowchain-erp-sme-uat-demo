@@ -33,8 +33,10 @@ Drizzle remains a reasonable alternative for a lean SQL-first service, but this 
 - `npm run db:push`
 - `npm run db:migrate`
 - `npm run db:studio`
+- `npm run test:db`
+- `npm run db:seed:dry-run`
 
-These scripts are explicit operator commands. They are not run by normal test/build, and they do not run migrations automatically.
+These scripts are explicit operator commands. They are not run by normal test/build, and they do not run migrations automatically. `test:db` skips cleanly without `DATABASE_URL_TEST`; `db:seed:dry-run` only prints a seed plan.
 
 ## Initial Schema Scope
 
@@ -130,6 +132,14 @@ R25 tests verify:
 - explicit database mode without `DATABASE_URL` throws a clean config error;
 - Prisma client dynamic import happens only after config validation;
 - the schema includes only the initial low-risk models.
+
+Round 28 adds a separate DB harness test path:
+
+- default validation remains database-free;
+- missing `DATABASE_URL_TEST` is a clean skip condition;
+- production-like test database URLs are refused by default;
+- Master Data seed planning is deterministic and non-mutating;
+- seed apply mode is intentionally not implemented yet.
 
 ## Non-Goals
 

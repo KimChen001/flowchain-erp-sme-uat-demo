@@ -20,6 +20,7 @@
 - [Server error and health safety](server-error-health-safety-v1.md)
 - [Route mutation classification](route-mutation-classification-v1.md)
 - [ORM decision and persistence scaffold](orm-decision-and-persistence-scaffold-v1.md)
+- [DB readiness review](db-readiness-review-v1.md)
 - [ActionDraft and AuditLog DB adapter](action-draft-audit-db-adapter-v1.md)
 - [Master Data DB adapter](master-data-db-adapter-v1.md)
 - [Master Data seed mapping](master-data-seed-mapping-v1.md)
