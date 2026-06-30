@@ -1,13 +1,4 @@
 import {
-  findMasterItem,
-  findMasterSupplier,
-  listMasterItems,
-  listMasterSuppliers,
-  listMasterWarehouses,
-  listPaymentTerms,
-  listTaxCodes,
-} from '../domain/master-data.mjs'
-import {
   buildInventoryExceptions,
   buildInventoryItems,
   buildInventoryLots,
@@ -26,6 +17,7 @@ import {
   getProcurementDocument,
   normalizeProcurementDocumentType,
 } from '../domain/procurement-read-model.mjs'
+import { createJsonMasterDataRepository } from './json-master-data-repository.mjs'
 import { createJsonActionDraftRepository } from './json-action-draft-repository.mjs'
 import { createAuditLogRepository } from './audit-log-repository.mjs'
 
@@ -43,18 +35,6 @@ export function getPersistenceMode(env = process.env) {
   if (!requested) return PERSISTENCE_MODES.json
   if (requested === PERSISTENCE_MODES.database) return PERSISTENCE_MODES.database
   return PERSISTENCE_MODES.json
-}
-
-function createMasterDataRepository(db = {}) {
-  return {
-    listItems: () => listMasterItems(db),
-    getItem: (idOrSku) => findMasterItem(db, idOrSku),
-    listSuppliers: () => listMasterSuppliers(db),
-    getSupplier: (idOrName) => findMasterSupplier(db, idOrName),
-    listWarehouses: () => listMasterWarehouses(db),
-    listPaymentTerms: () => listPaymentTerms(db),
-    listTaxCodes: () => listTaxCodes(db),
-  }
 }
 
 function createInventoryReadRepository(db = {}) {
@@ -93,7 +73,7 @@ function createAiConversationRepository() {
 export function createJsonRepositoryRegistry({ db = {} } = {}) {
   return {
     mode: PERSISTENCE_MODES.json,
-    masterData: createMasterDataRepository(db),
+    masterData: createJsonMasterDataRepository(db),
     inventoryRead: createInventoryReadRepository(db),
     procurementRead: createProcurementReadRepository(db),
     actionDrafts: createJsonActionDraftRepository(db),

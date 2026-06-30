@@ -113,6 +113,7 @@ Start here:
 - [JSON adapter contract tests](docs/json-adapter-contract-tests-v1.md)
 - [Persistence mode and adapter registry](docs/persistence-mode-and-adapter-registry-v1.md)
 - [ActionDraft and AuditLog repository adapter](docs/action-draft-audit-repository-adapter-v1.md)
+- [Master Data repository adapter](docs/master-data-repository-adapter-v1.md)
 - [Roadmap](docs/roadmap-v1.md)
 - [UAT limitations](docs/uat-limitations-v1.md)
 - [AI safety and draft-first explainer](docs/ai-safety-and-draft-first-explainer-v1.md)
