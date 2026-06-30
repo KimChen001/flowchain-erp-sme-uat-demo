@@ -13,6 +13,7 @@ Deploy FlowChain backend APIs on Aliyun with managed persistence, controlled sec
 
 ## Phase 2: Persistence
 
+- Use `docs/database-entity-model-v2.md` as the current persistence preparation reference.
 - Introduce a repository interface for read and write commands.
 - Add database migrations for supplier, item, PR, RFQ, PO, GRN, invoice, inventory movement, audit, and AI event tables.
 - Backfill from current JSON seed data into managed database tables.

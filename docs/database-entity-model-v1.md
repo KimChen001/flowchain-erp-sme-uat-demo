@@ -1,5 +1,7 @@
 # Database Entity Model v1
 
+Version note: see `docs/database-entity-model-v2.md` for the expanded persistence preparation model, repository boundary, JSON mapping, migration sequence, ORM comparison, and Aliyun RDS/PolarDB notes.
+
 ## Core Entities
 
 - `supplier`: supplier profile, status, risk, category, ownership.
