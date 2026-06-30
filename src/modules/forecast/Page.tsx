@@ -16,6 +16,7 @@ import type { PurchaseRequest } from "../../types/scm";
 import { forecastData, FORECAST_SKUS, supplierData } from "../../data/demo-data";
 import {
   METHOD_LABEL,
+  applyForecastScenario,
   demandDiagnostics,
   formatDemandSeries,
   formatEta,
@@ -209,9 +210,9 @@ export default function ForecastPanel() {
   const aiSuggestsDifferent = champion.method !== method;
 
   // Apply scenario & promo lift to the raw forecast
-  const scenarioMult = scenario === "opt" ? 1.12 : scenario === "pess" ? 0.88 : 1.0;
-  const adjustedForecast = result.forecast.map((v, i) =>
-    v * scenarioMult * (1 + promoLift / 100) * (1 + (i === 1 ? 0 : 0))
+  const adjustedForecast = useMemo(
+    () => applyForecastScenario(result.forecast, scenario, promoLift),
+    [result.forecast, scenario, promoLift]
   );
 
   // Combined chart data (history + fitted + forecast bands)
