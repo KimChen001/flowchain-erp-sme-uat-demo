@@ -9,7 +9,8 @@
     "api": "node server/index.mjs",
     "start": "node server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test server/domain/*.test.mjs"
+    "test": "node --test server/domain/*.test.mjs",
+    "test:harness": "node --test server/domain/system-harness-product-review.test.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

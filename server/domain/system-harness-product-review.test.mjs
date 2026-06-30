@@ -1,0 +1,264 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import { handleActionDraftsRoute } from '../routes/action-drafts.routes.mjs'
+import { handleAiRoute } from '../routes/ai.routes.mjs'
+import { handleInventoryRoute } from '../routes/inventory.routes.mjs'
+import { handleProcurementReadRoute } from '../routes/procurement-read.routes.mjs'
+import { handleSearchRoute } from '../routes/search.routes.mjs'
+import { handleTodayCockpitRoute } from '../routes/today-cockpit.routes.mjs'
+import { buildActionDraftSuggestion } from './action-draft-boundary.mjs'
+import { buildTodayCockpit } from './today-cockpit-read-model.mjs'
+
+const repoRoot = path.resolve(import.meta.dirname, '..', '..')
+
+function readSource(...parts) {
+  return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8')
+}
+
+function createDb() {
+  return {
+    products: [
+      { sku: 'SKU-00287', name: '铝合金型材 6063', currentStock: 12, safetyStock: 50, reorderPoint: 80, unit: 'kg', warehouseId: 'WH-A', supplier: '江苏铝合金集团', riskLevel: '高', status: '低库存' },
+      { sku: 'SKU-00412', name: '伺服电机', currentStock: 120, safetyStock: 40, unit: 'pcs', warehouseId: 'WH-B', supplier: '深圳新元电气', riskLevel: '低' },
+    ],
+    suppliers: [
+      { id: 'SUP-001', name: '江苏铝合金集团', risk: '中', onTimeRate: 90, qualityRate: 96 },
+      { id: 'SUP-002', name: '深圳新元电气', risk: '低', onTimeRate: 93, qualityRate: 97 },
+    ],
+    warehouses: [{ id: 'WH-A', name: 'A 仓', status: 'active' }],
+    purchaseRequests: [
+      { pr: 'PR-2026-2400', sourceSku: 'SKU-00287', sourceName: '铝合金型材 6063', supplier: '江苏铝合金集团', requester: '张磊', buyer: '王志强', requiredDate: '2026-07-05', quantity: 1000, amount: 142000, currency: 'CNY', status: '已批准', linkedPo: 'PO-2026-1301' },
+    ],
+    rfqs: [
+      { id: 'RFQ-26-0047', title: 'SKU-00287 采购询价', suppliers: 3, quoted: 1, due: '2026-06-20', status: '进行中', sourceRequest: 'PR-2026-2400', linkedPo: 'PO-2026-1301', bestSupplier: '江苏铝合金集团' },
+    ],
+    purchaseOrders: [
+      { po: 'PO-2026-1301', supplier: '江苏铝合金集团', eta: '2026-06-12', owner: '王志强', amount: 142000, currency: 'CNY', items: 1000, received: 400, status: '已发出', sourceRequest: 'PR-2026-2400', sourceRfq: 'RFQ-26-0047' },
+    ],
+    receivingDocs: [
+      { grn: 'GRN-202606-0430', po: 'PO-2026-1301', supplier: '江苏铝合金集团', status: '异常处理', items: 400, passed: 390, failed: 10, warehouse: 'A 区' },
+    ],
+    supplierInvoices: [
+      { invoiceNumber: 'INV-JS-260620', supplier: '江苏铝合金集团', relatedPo: 'PO-2026-1301', relatedGrn: 'GRN-202606-0430', amount: 142000, currency: 'CNY', varianceAmount: 8600, matchStatus: '存在差异' },
+    ],
+    inventoryMovements: [
+      { movementId: 'IM-001', movementType: 'CycleCountVariance', sku: 'SKU-00287', itemName: '铝合金型材 6063', warehouse: 'WH-A', sourceDocument: 'GRN-202606-0430', adjustmentQty: -8, status: '异常处理', unit: 'kg' },
+    ],
+    inventoryExceptions: [
+      { id: 'IEX-001', type: '盘点差异关闭', sku: 'SKU-00287', itemName: '铝合金型材 6063', warehouse: 'WH-A', quantityImpact: -8, unit: 'kg', status: '待复核', nextAction: '复核盘点差异' },
+    ],
+    events: [],
+    auditLog: [],
+    forecastPlans: [],
+    marketPrices: [],
+    marketSignals: [],
+  }
+}
+
+function snapshot(db) {
+  return JSON.stringify(db)
+}
+
+function routeContext(method, pathname, db = createDb(), body = {}, helpers = {}) {
+  let response = null
+  let wrote = false
+  return {
+    ctx: {
+      req: { method, body, headers: {} },
+      res: {},
+      url: new URL(pathname, 'http://localhost'),
+      db,
+      send(_res, status, payload) {
+        response = { status, payload }
+      },
+      readBody: async (req) => req.body,
+      writeDb: async () => { wrote = true },
+      event(database, type, message, ref) {
+        database.events = [{ type, message, ref }, ...(database.events || [])]
+      },
+      ensurePurchaseRequests: (nextDb) => nextDb.purchaseRequests || [],
+      ensureInventoryMovements: (nextDb) => nextDb.inventoryMovements || [],
+      ensureRfqs: (nextDb) => nextDb.rfqs || [],
+      ensureEvents: (nextDb) => nextDb.events || [],
+      ensureAuditLog: (nextDb) => nextDb.auditLog || [],
+      supplierPerformance: () => [],
+      supplierRecommendations: () => null,
+      supplierQuoteCount: 0,
+      openaiDispatcher: { dispatch() { throw new Error('provider should not be reached') } },
+      arkDispatcher: { dispatch() { throw new Error('provider should not be reached') } },
+      aiMaxTokens: 120,
+      ...helpers,
+    },
+    get response() {
+      return response
+    },
+    get wrote() {
+      return wrote
+    },
+  }
+}
+
+function expectCleanPayload(payload) {
+  const serialized = JSON.stringify(payload)
+  assert.equal(/stack|trace|sk-fake|fake-openai-key|fake-ark-key|fake-doubao-key|Bearer\s+/i.test(serialized), false)
+}
+
+function expectPreviewOnly(payload) {
+  assert.equal(payload.previewOnly, true)
+  assert.equal(payload.draft.status, 'preview')
+  assert.equal(payload.draft.requiresConfirmation, true)
+  assert.equal(payload.draft.confirmationBoundary.previewOnly, true)
+  assert.equal(payload.draft.confirmationBoundary.submitted, false)
+}
+
+test('system harness covers cockpit to inventory and procurement evidence paths', async () => {
+  const db = createDb()
+  const before = snapshot(db)
+  const cockpitRoute = routeContext('GET', '/api/today-cockpit', db)
+  await handleTodayCockpitRoute(cockpitRoute.ctx)
+
+  assert.equal(cockpitRoute.response.status, 200)
+  for (const key of ['summary', 'cards', 'followups', 'inventoryRisks', 'recentDocuments', 'recentMovements', 'recommendedActions', 'evidence']) {
+    assert.ok(cockpitRoute.response.payload[key] !== undefined)
+  }
+  const inventoryRisk = cockpitRoute.response.payload.inventoryRisks.find((item) => item.sku === 'SKU-00287')
+  assert.ok(inventoryRisk)
+  assert.equal(inventoryRisk.target.entityType, 'inventory_item')
+  assert.equal(inventoryRisk.target.entityId, 'SKU-00287')
+
+  const procurementAction = cockpitRoute.response.payload.recommendedActions.find((item) => item.target?.documentType || item.evidence?.length)
+  assert.ok(procurementAction)
+  assert.ok(procurementAction.evidence.every((item) => item.type && (item.id || item.label || item.summary)))
+  assert.equal(snapshot(db), before)
+})
+
+test('system harness validates global search and canonical evidence target shape', async () => {
+  const db = createDb()
+  const searchRoute = routeContext('GET', '/api/search?q=PO-2026-1301', db)
+  await handleSearchRoute(searchRoute.ctx)
+
+  assert.equal(searchRoute.response.status, 200)
+  const result = searchRoute.response.payload.results.find((item) => item.entityId === 'PO-2026-1301')
+  assert.ok(result)
+  assert.equal(result.moduleId, 'procurement:orders')
+  assert.equal(result.entityType, 'purchase_order')
+  assert.equal(result.deepLink, result.moduleId)
+  assert.ok(result.evidence.every((item) => item.label && item.value))
+})
+
+test('system harness locks draft-first preview invariants', async () => {
+  const db = createDb()
+  const before = snapshot(db)
+  for (const body of [
+    { type: 'purchase_request_draft', payload: { itemIdOrSku: 'SKU-00287' } },
+    { type: 'rfq_draft', payload: { itemIdOrSku: 'SKU-00287', quantity: 120 } },
+    { type: 'supplier_followup_draft', payload: { supplierIdOrName: 'SUP-001', message: '请确认交期。' } },
+  ]) {
+    const route = routeContext('POST', '/api/action-drafts/preview', db, body)
+    await handleActionDraftsRoute(route.ctx)
+    assert.equal(route.response.status, 200)
+    expectPreviewOnly(route.response.payload)
+    assert.equal(route.wrote, false)
+  }
+
+  const unsupported = buildActionDraftSuggestion({ type: 'real_purchase_order_create', payload: {} })
+  assert.equal(unsupported.ok, false)
+  assert.equal(unsupported.status, 'unsupported_type')
+  assert.equal(snapshot(db), before)
+})
+
+test('system harness validates AI safety, timeout fast path, and sanitized fallback', async () => {
+  const previous = {
+    AI_PROVIDER_ENABLED: process.env.AI_PROVIDER_ENABLED,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    ARK_API_KEY: process.env.ARK_API_KEY,
+    DOUBAO_API_KEY: process.env.DOUBAO_API_KEY,
+  }
+  process.env.AI_PROVIDER_ENABLED = ''
+  process.env.OPENAI_API_KEY = 'fake-openai-key'
+  process.env.ARK_API_KEY = 'fake-ark-key'
+  process.env.DOUBAO_API_KEY = 'fake-doubao-key'
+  try {
+    const cockpit = routeContext('POST', '/api/ai/chat', createDb(), { moduleId: 'overview', message: '今天最需要处理什么？' })
+    await handleAiRoute(cockpit.ctx)
+    assert.equal(cockpit.response.status, 200)
+    assert.equal(cockpit.response.payload.intent.name, 'today_cockpit_priority_query')
+    assert.equal(cockpit.response.payload.providerStatus, 'deterministic')
+    assert.equal(cockpit.wrote, false)
+    expectCleanPayload(cockpit.response.payload)
+
+    const fallback = routeContext('POST', '/api/ai/chat', createDb(), { message: 'write a poetic sourcing manifesto' })
+    await handleAiRoute(fallback.ctx)
+    assert.equal(fallback.response.status, 200)
+    assert.equal(fallback.response.payload.intent.name, 'provider_disabled')
+    assert.equal(fallback.response.payload.providerStatus, 'blocked')
+    expectCleanPayload(fallback.response.payload)
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
+})
+
+test('system harness covers key read API contracts without mutation', async () => {
+  const db = createDb()
+  const before = snapshot(db)
+  for (const [handler, pathName, expectedKey, expectedStatus] of [
+    [handleProcurementReadRoute, '/api/procurement/documents', 'documents', 200],
+    [handleProcurementReadRoute, '/api/procurement/documents/po/PO-2026-1301', 'document', 200],
+    [handleProcurementReadRoute, '/api/procurement/links', 'links', 200],
+    [handleProcurementReadRoute, '/api/procurement/followups', 'followups', 200],
+    [handleProcurementReadRoute, '/api/procurement/summary', 'summary', 200],
+    [handleInventoryRoute, '/api/inventory/items', 'items', 200],
+    [handleInventoryRoute, '/api/inventory/items/SKU-00287', 'item', 200],
+    [handleInventoryRoute, '/api/inventory/movements', 'movements', 200],
+    [handleInventoryRoute, '/api/inventory/exceptions', 'exceptions', 200],
+    [handleInventoryRoute, '/api/inventory/summary', 'summary', 200],
+    [handleActionDraftsRoute, '/api/action-drafts/schema', 'schema', 200],
+  ]) {
+    const route = routeContext('GET', pathName, db)
+    await handler(route.ctx)
+    assert.equal(route.response.status, expectedStatus)
+    assert.ok(route.response.payload[expectedKey] !== undefined)
+    expectCleanPayload(route.response.payload)
+  }
+
+  const invalid = routeContext('GET', '/api/procurement/documents/customer/CUST-001', db)
+  await handleProcurementReadRoute(invalid.ctx)
+  assert.equal(invalid.response.status, 400)
+  expectCleanPayload(invalid.response.payload)
+  assert.equal(snapshot(db), before)
+})
+
+test('system harness validates evidence and navigation compatibility surfaces', () => {
+  const helper = readSource('src', 'lib', 'evidenceLinks.ts')
+  const app = readSource('src', 'app', 'FlowChainApp.tsx')
+  const aiPanel = readSource('src', 'modules', 'ai-assistant', 'Panel.tsx')
+  const cockpit = buildTodayCockpit(createDb())
+
+  assert.match(helper, /pr: \{ entityType: "purchase_request", moduleId: "procurement:requests"/)
+  assert.match(helper, /threeWayMatch: \{ entityType: "supplier_invoice", moduleId: "procurement:invoices"/)
+  assert.match(helper, /focusTarget: clickable \? \{ entityType: normalizedEntityType, entityId \}/)
+  assert.match(app, /normalizeGlobalSearchResult\(result\)/)
+  assert.match(aiPanel, /normalizeEvidenceLinks\(evidence, \{ source: "ai" \}\)/)
+  assert.ok(cockpit.recommendedActions.every((item) => Array.isArray(item.evidence)))
+})
+
+test('system harness records typography grep boundary for current UAT scope', () => {
+  const typography = readSource('src', 'components', 'ui', 'typography.ts')
+  const table = readSource('src', 'components', 'ui', 'workbenchTable.ts')
+  const cockpitPanel = readSource('src', 'modules', 'overview', 'TodayCockpitPanel.tsx')
+  const salesPage = readSource('src', 'modules', 'sales', 'Page.tsx')
+
+  assert.match(typography, /tableHeader/)
+  assert.match(typography, /tableCell/)
+  assert.match(typography, /tableLink/)
+  assert.match(typography, /chip/)
+  assert.match(typography, /formLabel/)
+  assert.match(table, /tableLinkClass/)
+  assert.doesNotMatch(cockpitPanel, /compactDisplay|notation:\s*["']compact["']|万元|14万/)
+  assert.match(salesPage, /万/)
+})
