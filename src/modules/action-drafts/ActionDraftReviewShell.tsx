@@ -65,13 +65,19 @@ function payloadLabel(key: string) {
     itemName: "物料名称",
     warehouse: "仓库",
     warehouseId: "仓库",
+    suggestedQuantity: "建议数量",
     quantity: "数量",
     unit: "单位",
     reason: "原因",
+    supplierSuggestion: "供应商建议",
     supplierIdOrName: "供应商",
     message: "消息草稿",
     severity: "优先级",
+    urgency: "紧急程度",
     dueDate: "截止日期",
+    availableQuantity: "可用库存",
+    reorderPoint: "再订货点",
+    safetyStock: "安全库存",
   };
   return labels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
 }

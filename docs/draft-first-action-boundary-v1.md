@@ -36,6 +36,8 @@ The only current status is `preview`.
 
 The preview endpoint validates a draft payload and returns a draft shape. It does not call `writeDb`, persist a draft, create a PR/RFQ/PO, close inventory exceptions, or send supplier messages.
 
+`purchase_request_draft` now has a specialized preview helper for inventory-driven PR suggestions. It still returns preview-only draft data and does not create a real PR.
+
 ## Review UI Shell
 
 The frontend review shell lives in `src/modules/action-drafts/ActionDraftReviewShell.tsx`.
