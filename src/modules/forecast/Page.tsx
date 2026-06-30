@@ -12,6 +12,15 @@ import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
+import {
+  tableBodyTextClass,
+  tdClass,
+  tdNumericClass,
+  tdWideClass,
+  tdWideNumericClass,
+  thClass,
+  thWideClass,
+} from "../../components/ui/workbenchTable";
 import { forecastData, FORECAST_SKUS, supplierData } from "../../data/demo-data";
 import {
   METHOD_LABEL,
@@ -1433,11 +1442,11 @@ export default function ForecastPanel({
           </div>
         </div>
         {currentMrpRow ? (
-          <table className="w-full text-xs">
+          <table className={`w-full ${tableBodyTextClass}`}>
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
                 {["周期", "毛需求", "独立/BOM", "计划到货", "预计可用", "净需求", "计划入库", "计划释放", "例外"].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                  <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1447,9 +1456,9 @@ export default function ForecastPanel({
                 return (
                   <tr key={line.period} className="hover:bg-blue-50/40 transition-colors"
                     style={{ borderBottom: index < currentMrpRow.schedule.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className="px-4 py-3 font-medium" style={{ color: A.label }}>{line.period}</td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: A.label }}>{line.grossRequirement.toLocaleString()}</td>
-                    <td className="px-4 py-3 tabular-nums min-w-[190px]" style={{ color: A.sub }}>
+                    <td className={`${tdClass} font-medium`} style={{ color: A.label }}>{line.period}</td>
+                    <td className={tdNumericClass} style={{ color: A.label }}>{line.grossRequirement.toLocaleString()}</td>
+                    <td className={`${tdNumericClass} min-w-[190px]`} style={{ color: A.sub }}>
                       <div>{line.independentDemand.toLocaleString()} / {line.dependentDemand.toLocaleString()}</div>
                       {line.dependentDemandSources?.length ? (
                         <div className="mt-1 text-[10px] leading-4 tabular-nums" style={{ color: A.gray2 }}>
@@ -1457,22 +1466,22 @@ export default function ForecastPanel({
                         </div>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: line.scheduledReceipt > 0 ? A.blue : A.gray3 }}>
+                    <td className={tdNumericClass} style={{ color: line.scheduledReceipt > 0 ? A.blue : A.gray3 }}>
                       {line.scheduledReceipt > 0 ? `+${line.scheduledReceipt.toLocaleString()}` : "—"}
                     </td>
-                    <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: line.projectedAvailable < currentMrpRow.safetyStock ? A.red : A.label }}>
+                    <td className={`${tdNumericClass} font-semibold`} style={{ color: line.projectedAvailable < currentMrpRow.safetyStock ? A.red : A.label }}>
                       {line.projectedAvailable.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: line.netRequirement > 0 ? A.red : A.gray3 }}>
+                    <td className={tdNumericClass} style={{ color: line.netRequirement > 0 ? A.red : A.gray3 }}>
                       {line.netRequirement > 0 ? line.netRequirement.toLocaleString() : "—"}
                     </td>
-                    <td className="px-4 py-3 tabular-nums font-semibold" style={{ color: line.plannedReceipt > 0 ? A.blue : A.gray3 }}>
+                    <td className={`${tdNumericClass} font-semibold`} style={{ color: line.plannedReceipt > 0 ? A.blue : A.gray3 }}>
                       {line.plannedReceipt > 0 ? line.plannedReceipt.toLocaleString() : "—"}
                     </td>
-                    <td className="px-4 py-3" style={{ color: line.plannedRelease > 0 ? A.purple : A.gray3 }}>
+                    <td className={tdClass} style={{ color: line.plannedRelease > 0 ? A.purple : A.gray3 }}>
                       {line.plannedRelease > 0 ? `${line.plannedReleasePeriod} · ${line.plannedRelease.toLocaleString()}` : "—"}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className={tdClass}>
                       <Chip label={line.exception} color={exceptionColor} bg={`${exceptionColor}16`} />
                     </td>
                   </tr>
@@ -1549,11 +1558,11 @@ export default function ForecastPanel({
             </button>
           </div>
         </div>
-        <table className="w-full text-xs">
+        <table className={`w-full ${tableBodyTextClass}`}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {["月份", "预测需求", "计划入库", "期末库存", "缺口", "覆盖月数", "风险", "AI 建议"].map((h) => (
-                <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
+                <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -1563,14 +1572,14 @@ export default function ForecastPanel({
               return (
                 <tr key={i} className="hover:bg-blue-50/40 transition-colors"
                   style={{ borderBottom: i < reconciliation.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                  <td className="px-5 py-3 font-medium" style={{ color: A.label }}>{row.month}</td>
-                  <td className="px-5 py-3 tabular-nums" style={{ color: A.label }}>{row.demand.toLocaleString()}</td>
-                  <td className="px-5 py-3 tabular-nums" style={{ color: row.inbound > 0 ? A.blue : A.gray3 }}>{row.inbound > 0 ? "+" + row.inbound.toLocaleString() : "—"}</td>
-                  <td className="px-5 py-3 tabular-nums font-semibold" style={{ color: row.ending < 0 ? A.red : A.label }}>{row.ending.toLocaleString()}</td>
-                  <td className="px-5 py-3 tabular-nums font-medium" style={{ color: row.gap > 0 ? A.red : A.gray3 }}>{row.gap > 0 ? row.gap.toLocaleString() : "—"}</td>
-                  <td className="px-5 py-3 tabular-nums" style={{ color: A.sub }}>{row.cover.toFixed(1)}</td>
-                  <td className="px-5 py-3"><StatusPill status={row.risk === "高" ? "不足" : row.risk === "中" ? "预警" : "正常"} /></td>
-                  <td className="px-5 py-3" style={{ color: riskColor }}>
+                  <td className={`${tdWideClass} font-medium`} style={{ color: A.label }}>{row.month}</td>
+                  <td className={tdWideNumericClass} style={{ color: A.label }}>{row.demand.toLocaleString()}</td>
+                  <td className={tdWideNumericClass} style={{ color: row.inbound > 0 ? A.blue : A.gray3 }}>{row.inbound > 0 ? "+" + row.inbound.toLocaleString() : "—"}</td>
+                  <td className={`${tdWideNumericClass} font-semibold`} style={{ color: row.ending < 0 ? A.red : A.label }}>{row.ending.toLocaleString()}</td>
+                  <td className={`${tdWideNumericClass} font-medium`} style={{ color: row.gap > 0 ? A.red : A.gray3 }}>{row.gap > 0 ? row.gap.toLocaleString() : "—"}</td>
+                  <td className={tdWideNumericClass} style={{ color: A.sub }}>{row.cover.toFixed(1)}</td>
+                  <td className={tdWideClass}><StatusPill status={row.risk === "高" ? "不足" : row.risk === "中" ? "预警" : "正常"} /></td>
+                  <td className={tdWideClass} style={{ color: riskColor }}>
                     {row.risk === "高" ? `紧急补货 +${Math.ceil(row.gap * 1.1).toLocaleString()}`
                       : row.risk === "中" ? "提前下单" : "维持现状"}
                   </td>
