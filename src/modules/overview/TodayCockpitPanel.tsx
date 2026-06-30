@@ -1,5 +1,16 @@
 import { Sparkles } from "lucide-react";
 import { A, Card, Chip } from "../../components/ui";
+import {
+  tableBodyTextClass,
+  tableLinkClass,
+  tdClass,
+  tdIdClass,
+  tdNameClass,
+  tdNowrapClass,
+  tdNumericRightClass,
+  thClass,
+  thRightClass,
+} from "../../components/ui/workbenchTable";
 import { evidenceModuleId, normalizeTodayCockpitTarget, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
 import { fmt } from "../../lib/format";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
@@ -347,36 +358,36 @@ export function TodayCockpitRecentDocuments({
         <div className="text-[11px]" style={{ color: A.sub }}>{documents.length} 条</div>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-[760px] w-full text-[14px] leading-[22px]">
-          <thead className="text-[13px] leading-5" style={{ background: "#fbfdff", color: A.sub }}>
+        <table className={`min-w-[760px] w-full ${tableBodyTextClass}`}>
+          <thead style={{ background: "#fbfdff", color: A.sub }}>
             <tr>
-              <th className="px-4 py-2 text-left font-semibold">类型</th>
-              <th className="px-4 py-2 text-left font-semibold">单号</th>
-              <th className="px-4 py-2 text-left font-semibold">状态</th>
-              <th className="px-4 py-2 text-left font-semibold">供应商</th>
-              <th className="px-4 py-2 text-right font-semibold">金额</th>
-              <th className="px-4 py-2 text-left font-semibold">日期</th>
+              <th className={thClass}>类型</th>
+              <th className={thClass}>单号</th>
+              <th className={thClass}>状态</th>
+              <th className={thClass}>供应商</th>
+              <th className={thRightClass}>金额</th>
+              <th className={thClass}>日期</th>
             </tr>
           </thead>
           <tbody>
             {documents.length ? documents.map((doc, index) => (
               <tr key={`${doc.type}-${doc.id}`} style={{ borderTop: index ? `1px solid ${A.border}` : "none" }}>
-                <td className="px-4 py-3"><Chip label={documentTypeLabel(doc.type)} color={A.blue} bg="#eef4ff" /></td>
-                <td className="px-4 py-3 font-medium tabular-nums" style={{ color: A.blue }}>
+                <td className={tdClass}><Chip label={documentTypeLabel(doc.type)} color={A.blue} bg="#eef4ff" /></td>
+                <td className={tdIdClass} style={{ color: A.blue }}>
                   {(() => {
                     const link = normalizeTodayCockpitTarget(doc);
                     const moduleId = evidenceModuleId(link);
                     return link?.clickable && moduleId ? (
-                      <button type="button" onClick={() => onNavigate(moduleId, link.focusTarget || null)} className="font-medium tabular-nums hover:underline">
+                      <button type="button" onClick={() => onNavigate(moduleId, link.focusTarget || null)} className={tableLinkClass}>
                         {doc.id}
                       </button>
                     ) : doc.id;
                   })()}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.label }}>{doc.status || "—"}</td>
-                <td className="px-4 py-3 max-w-[180px] truncate" style={{ color: A.sub }}>{doc.supplier || "—"}</td>
-                <td className="px-4 py-3 text-right tabular-nums" style={{ color: A.label }}>{doc.amount ? fmt(Number(doc.amount)) : "—"}</td>
-                <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.sub }}>{doc.date || "—"}</td>
+                <td className={tdNowrapClass} style={{ color: A.label }}>{doc.status || "—"}</td>
+                <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.sub }}>{doc.supplier || "—"}</td>
+                <td className={tdNumericRightClass} style={{ color: A.label }}>{doc.amount ? fmt(Number(doc.amount)) : "—"}</td>
+                <td className={tdNowrapClass} style={{ color: A.sub }}>{doc.date || "—"}</td>
               </tr>
             )) : (
               <tr>

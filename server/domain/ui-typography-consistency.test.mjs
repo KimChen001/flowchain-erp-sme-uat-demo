@@ -12,10 +12,24 @@ function readSource(...parts) {
 test('workbench table typography defines body header and link scales', () => {
   const source = readSource('src', 'components', 'ui', 'workbenchTable.ts')
 
-  assert.match(source, /tableBodyTextClass = "text-\[14px\] leading-\[22px\]"/)
-  assert.match(source, /thClass = "text-left px-4 py-3 text-\[13px\] leading-5 font-semibold whitespace-nowrap"/)
-  assert.match(source, /tableLinkClass = "text-\[14px\] leading-\[22px\] font-medium tabular-nums hover:underline/)
+  assert.match(source, /tableBodyTextClass = typography\.tableCell/)
+  assert.match(source, /thClass = `text-left px-4 py-3 \$\{typography\.tableHeader\} whitespace-nowrap`/)
+  assert.match(source, /thRightClass = `text-right px-4 py-3 \$\{typography\.tableHeader\} whitespace-nowrap`/)
+  assert.match(source, /tableLinkClass = `\$\{typography\.tableLink\} tabular-nums hover:underline/)
   assert.doesNotMatch(source, /tableMinLgClass = "w-full min-w-\[1280px\] text-xs"/)
+})
+
+test('typography tokens expose consolidated operational scale', () => {
+  const source = readSource('src', 'components', 'ui', 'typography.ts')
+
+  assert.match(source, /pageTitle: "text-\[20px\] leading-7 font-semibold/)
+  assert.match(source, /sectionTitle: "text-\[16px\] leading-6 font-semibold/)
+  assert.match(source, /body: "text-\[14px\] leading-\[22px\]/)
+  assert.match(source, /tableHeader: "text-\[13px\] leading-5 font-semibold/)
+  assert.match(source, /tableCell: "text-\[14px\] leading-\[22px\]/)
+  assert.match(source, /tableLink: "text-\[14px\] leading-\[22px\] font-medium/)
+  assert.match(source, /formLabel: "text-\[13px\] leading-5 font-semibold/)
+  assert.match(source, /chip: "text-\[12px\] leading-\[18px\] font-semibold/)
 })
 
 test('primary procurement table id links use table link class', () => {
@@ -40,7 +54,8 @@ test('shared field input and chip typography follows compact SaaS scale', () => 
 test('today cockpit recent document table uses standard table body scale', () => {
   const source = readSource('src', 'modules', 'overview', 'TodayCockpitPanel.tsx')
 
-  assert.match(source, /min-w-\[760px\] w-full text-\[14px\] leading-\[22px\]/)
-  assert.match(source, /<thead className="text-\[13px\] leading-5"/)
-  assert.match(source, /px-4 py-3 font-medium tabular-nums/)
+  assert.match(source, /tableBodyTextClass/)
+  assert.match(source, /thRightClass/)
+  assert.match(source, /tdNumericRightClass/)
+  assert.match(source, /className=\{tableLinkClass\}/)
 })

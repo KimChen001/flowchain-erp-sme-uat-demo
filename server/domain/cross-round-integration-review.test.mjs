@@ -48,7 +48,7 @@ test('typography and amount display boundaries are still documented', () => {
   const table = readSource('src', 'components', 'ui', 'workbenchTable.ts')
 
   assert.match(typographyDoc, /PO, PR, and RFQ table ID buttons use `tableLinkClass`/)
-  assert.match(table, /tableLinkClass = "text-\[14px\] leading-\[22px\]/)
+  assert.match(table, /tableLinkClass = `\$\{typography\.tableLink\} tabular-nums hover:underline/)
   assert.match(cockpitTest, /compactDisplay/)
   assert.match(cockpitTest, /万元/)
 })
