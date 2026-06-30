@@ -1,109 +1,68 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import {
-  Area, ComposedChart, Line, LineChart,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from "recharts";
-import {
-  Activity, AlertTriangle, CheckCircle2, Clock,
-  Eye, FileCheck2, FileSpreadsheet, GitBranch, Loader2, ShoppingCart, Sparkles, TrendingUp, Zap,
-} from "lucide-react";
+import { Area, ComposedChart, Line, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AlertTriangle, CheckCircle2, FileCheck2, FileSpreadsheet, GitBranch, Loader2, ShoppingCart, Sparkles } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
-import { A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
-import {
-  tableBodyTextClass,
-  tdClass,
-  tdNumericClass,
-  tdWideClass,
-  tdWideNumericClass,
-  thClass,
-  thWideClass,
-} from "../../components/ui/workbenchTable";
-import { forecastData, FORECAST_SKUS, supplierData } from "../../data/demo-data";
-import {
-  METHOD_LABEL,
-  applyForecastScenario,
-  demandDiagnostics,
-  formatDemandSeries,
-  formatEta,
-  mapeGrade,
-  parseDemandSeries,
-  runForecast,
-  xyzClass,
-  zScore,
-  type Method,
-} from "../../domain/forecast";
+import { A, AppleTooltip, Card, Chip, Field, inputStyle, SectionHeader } from "../../components/ui";
+import { tableBodyTextClass, tdClass, tdNumericClass, tdWideClass, tdWideNumericClass, thClass, thWideClass } from "../../components/ui/workbenchTable";
+import { FORECAST_SKUS, supplierData } from "../../data/demo-data";
+import { METHOD_LABEL, applyForecastScenario, demandDiagnostics, formatDemandSeries, formatEta, mapeGrade, parseDemandSeries, runForecast, type Method } from "../../domain/forecast";
 import { forecastProcurementProfileForSku } from "../../domain/forecast/purchase-request";
-import {
-  buildMrpBomEvidence,
-  buildMrpBomSourceSummary,
-  buildMrpScheduleEvidence,
-  selectMrpRow,
-  type MrpPlan,
-} from "../../domain/mrp";
+import { buildMrpBomEvidence, buildMrpBomSourceSummary, buildMrpScheduleEvidence, selectMrpRow, type MrpPlan } from "../../domain/mrp";
 import { typography } from "../../components/ui/typography";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 
-const insightMeta = {
-  risk:        { color: A.red,    bg: "#fff1f0", label: "风险预警", icon: AlertTriangle },
-  opportunity: { color: A.green,  bg: "#f0faf4", label: "增长机会", icon: TrendingUp    },
-  info:        { color: A.blue,   bg: "#f0f6ff", label: "分析洞察", icon: Eye           },
-  action:      { color: A.orange, bg: "#fff8f0", label: "行动建议", icon: Zap           },
+type PlanningViewId = "cockpit" | "demand" | "mrp" | "replenishment" | "parameters";
+
+export const planningWorkbenchViews: Array<{ id: PlanningViewId; routeId: string; label: string; purpose: string }> = [
+  { id: "cockpit", routeId: "forecast:cockpit", label: "计划驾驶舱", purpose: "planning-priority-cockpit" },
+  { id: "demand", routeId: "forecast:demand", label: "需求预测", purpose: "demand-forecast-quality" },
+  { id: "mrp", routeId: "forecast:mrp", label: "MRP 计划", purpose: "material-requirements-planning" },
+  { id: "replenishment", routeId: "forecast:replenishment", label: "补货工作台", purpose: "action-draft-replenishment-review" },
+  { id: "parameters", routeId: "forecast:parameters", label: "计划参数", purpose: "read-only-planning-assumptions" },
+];
+
+function normalizePlanningView(view?: string): PlanningViewId {
+  if (view === "demand" || view === "mrp" || view === "replenishment" || view === "parameters") return view;
+  return "cockpit";
+}
+
+const MONTHS_24 = Array.from({ length: 24 }, (_, index) => {
+  const totalIdx = 2026 * 12 + 4 - (23 - index);
+  return `${String(Math.floor(totalIdx / 12)).slice(-2)}/${(totalIdx % 12) + 1}月`;
+});
+
+const FUTURE_LABEL = (index: number) => {
+  const totalIdx = 2026 * 12 + 5 + index;
+  return `${String(Math.floor(totalIdx / 12)).slice(-2)}/${(totalIdx % 12) + 1}月`;
+};
+
+type SavedForecastPlan = {
+  id: string;
+  sku: string;
+  name: string;
+  unit?: string;
+  method: Method;
+  metrics: { mape?: number; rmse?: number };
+  procurementSuggestion?: { supplier?: string; quantity?: number; amount?: number } | null;
 };
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
-  if (!supplier) {
-    return {
-      score: 68,
-      grade: "待评估",
-      note: "缺少完整供应商绩效，建议补充准时率、质量合格率和报价记录后再自动推荐。",
-      color: A.orange,
-    };
-  }
+  if (!supplier) return { score: 68, grade: "待评估", note: "缺少完整供应商绩效，建议人工复核。", color: A.orange };
   const gradeScore = supplier.grade === "S" ? 100 : supplier.grade === "A" ? 88 : supplier.grade === "B" ? 72 : 60;
   const trendScore = supplier.trend === "up" ? 5 : supplier.trend === "down" ? -8 : 0;
   const score = Math.round(supplier.ontime * 0.38 + supplier.quality * 0.42 + gradeScore * 0.16 + trendScore);
   const color = score >= 92 ? A.green : score >= 84 ? A.blue : score >= 74 ? A.orange : A.red;
   const grade = score >= 92 ? "优先推荐" : score >= 84 ? "可推荐" : score >= 74 ? "需复核" : "高风险";
-  return {
-    score,
-    grade,
-    color,
-    note: `准时率 ${supplier.ontime}% · 质量 ${supplier.quality}% · ${supplier.grade} 级供应商 · ${supplier.trend === "up" ? "趋势改善" : supplier.trend === "down" ? "趋势下滑" : "趋势稳定"}`,
-  };
+  return { score, grade, color, note: `准时率 ${supplier.ontime}% · 质量 ${supplier.quality}% · ${supplier.grade} 级供应商` };
 }
 
 function StatusPill({ status }: { status: string }) {
-  const map: Record<string, { color: string; bg: string }> = {
-    正常:   { color: A.green,  bg: "#f0faf4" },
-    预警:   { color: A.orange, bg: "#fff8f0" },
-    不足:   { color: A.red,    bg: "#fff1f0" },
-    关注:   { color: A.orange, bg: "#fff8f0" },
-    高风险: { color: A.red,    bg: "#fff1f0" },
-    草稿:   { color: A.gray1,  bg: "#f2f2f7" },
-    已确认: { color: A.blue,   bg: "#eff6ff" },
-    拣货中: { color: A.orange, bg: "#fff8f0" },
-    已发货: { color: A.purple, bg: "#faf3ff" },
-    已交付: { color: A.green,  bg: "#f0faf4" },
-    已关闭: { color: A.gray1,  bg: "#f2f2f7" },
-    待审批: { color: A.orange, bg: "#fff8f0" },
-    已审批: { color: A.blue,   bg: "#eff6ff" },
-    已收货: { color: A.purple, bg: "#faf3ff" },
-    已结案: { color: A.green,  bg: "#f0faf4" },
-    生效中: { color: A.green,  bg: "#f0faf4" },
-    待生效: { color: A.blue,   bg: "#eff6ff" },
-    已停用: { color: A.gray1,  bg: "#f2f2f7" },
-  };
-  const s = map[status] ?? { color: A.gray1, bg: "#f2f2f7" };
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium"
-      style={{ color: s.color, background: s.bg }}>
-      {status}
-    </span>
-  );
+  const color = status === "不足" || status === "加急" ? A.red : status === "预警" || status === "推迟/取消" ? A.orange : status === "释放" ? A.blue : A.green;
+  return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ color, background: `${color}16` }}>{status}</span>;
 }
 
 function exportCsv(filename: string, rows: Record<string, unknown>[]) {
@@ -115,53 +74,8 @@ function exportCsv(filename: string, rows: Record<string, unknown>[]) {
   toast.success("导出文件已生成");
 }
 
-// Apple-style card with clean shadow
-
-// ??? Forecast Engine (real statistics) ???????????????????????????????????????
-type SavedForecastPlan = {
-  id: string;
-  sku: string;
-  name: string;
-  unit?: string;
-  method: Method;
-  horizon: number;
-  metrics: { mape?: number; wmape?: number; rmse?: number };
-  procurementSuggestion?: {
-    supplier?: string;
-    quantity?: number;
-    amount?: number;
-    priority?: "高" | "中" | "低";
-    firstStockoutMonth?: string | null;
-  } | null;
-  createdAt: string;
-};
-
-// Generate the trailing 24 months ending at the current month (May 2026 → 24-month window 2024-06 ~ 2026-05)
-const MONTHS_24 = (() => {
-  const NOW_Y = 2026, NOW_M = 5;        // 2026 年 5 月作为最后一格
-  const out: string[] = [];
-  for (let i = 23; i >= 0; i--) {
-    const totalIdx = NOW_Y * 12 + (NOW_M - 1) - i;
-    const y = Math.floor(totalIdx / 12);
-    const m = (totalIdx % 12) + 1;
-    out.push(`${String(y).slice(-2)}/${m}月`);
-  }
-  return out;
-})();
-
-// Forecast horizon labels start at 2026-06
-const FUTURE_LABEL = (i: number) => {
-  const totalIdx = 2026 * 12 + 5 + i;
-  const y = Math.floor(totalIdx / 12);
-  const m = (totalIdx % 12) + 1;
-  return `${String(y).slice(-2)}/${m}月`;
-};
-
-export default function ForecastPanel({
-  onReviewActionDraft,
-}: {
-  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
-}) {
+export default function ForecastPanel({ initialView, onReviewActionDraft }: { initialView?: string; onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void }) {
+  const activePlanningView = normalizePlanningView(initialView);
   const [skuIdx, setSkuIdx] = useState(0);
   const baseSku = FORECAST_SKUS[skuIdx];
   const [historyText, setHistoryText] = useState(() => formatDemandSeries(baseSku.history));
@@ -172,9 +86,6 @@ export default function ForecastPanel({
   const [generatingRequest, setGeneratingRequest] = useState(false);
   const [lastGeneratedRequest, setLastGeneratedRequest] = useState("");
   const [method, setMethod] = useState<Method>("hw");
-  const [alpha, setAlpha] = useState(0.4);
-  const [beta,  setBeta]  = useState(0.15);
-  const [gamma, setGamma] = useState(0.25);
   const [horizon, setHorizon] = useState(6);
   const [scenario, setScenario] = useState<"base" | "opt" | "pess">("base");
   const [promoLift, setPromoLift] = useState(0);
@@ -195,93 +106,41 @@ export default function ForecastPanel({
   }, [baseSku]);
 
   useEffect(() => {
-    apiJson<SavedForecastPlan[]>("/api/forecast-plans")
-      .then(setSavedPlans)
-      .catch(() => setSavedPlans([]));
+    apiJson<SavedForecastPlan[]>("/api/forecast-plans").then(setSavedPlans).catch(() => setSavedPlans([]));
   }, [committed]);
 
   useEffect(() => {
     let alive = true;
-    apiJson<MrpPlan>("/api/mrp-plan?periods=6")
-      .then((data) => { if (alive) setMrpPlan(data); })
-      .catch(() => setMrpPlan(null));
+    apiJson<MrpPlan>("/api/mrp-plan?periods=6").then((data) => { if (alive) setMrpPlan(data); }).catch(() => setMrpPlan(null));
     return () => { alive = false; };
   }, [committed]);
 
-  const result = useMemo(() => runForecast(sku.history, method, { alpha, beta, gamma, season: 12 }, horizon),
-    [sku, method, alpha, beta, gamma, horizon]);
-
-  // Champion vs Challenger (auto-run all methods, surface best by MAPE)
-  const benchmark = useMemo(() => {
-    const methods: Method[] = ["naive", "sma", "ses", "holt", "hw"];
-    return methods.map((m) => {
-      const r = runForecast(sku.history, m, { alpha: 0.4, beta: 0.15, gamma: 0.25, season: 12 }, horizon);
-      return { method: m, mape: r.mape, rmse: r.rmse };
-    }).sort((a, b) => a.mape - b.mape);
-  }, [sku, horizon]);
-
-  const champion = benchmark[0];
-  const aiSuggestsDifferent = champion.method !== method;
-
-  // Apply scenario & promo lift to the raw forecast
-  const adjustedForecast = useMemo(
-    () => applyForecastScenario(result.forecast, scenario, promoLift),
-    [result.forecast, scenario, promoLift]
-  );
-
-  // Combined chart data (history + fitted + forecast bands)
-  const historyData = useMemo(() => sku.history.map((h, i) => ({
-    month: MONTHS_24[i], actual: h, fitted: result.fitted[i] ?? null,
-  })), [sku, result]);
-
-  const forecastChart = useMemo(() => {
-    const errStd = result.rmse;
-    const lastActual = sku.history[sku.history.length - 1];
-    // Anchor point: repeat last historical actual so the forecast line visually connects from "今天"
-    const arr: any[] = [{
-      month: MONTHS_24[MONTHS_24.length - 1],
-      forecast: lastActual, lower: lastActual, upper: lastActual, bandHeight: 0,
-    }];
-    for (let i = 0; i < horizon; i++) {
-      const f = adjustedForecast[i];
-      const lo = Math.max(0, f - 1.96 * errStd);
-      const hi = f + 1.96 * errStd;
-      arr.push({
-        month: FUTURE_LABEL(i),
-        forecast: f, lower: lo, upper: hi, bandHeight: hi - lo,
-      });
-    }
-    return arr;
-  }, [sku, result, adjustedForecast, horizon]);
-
-  // Shared Y domain so the two side-by-side charts read on the same scale
+  const result = useMemo(() => runForecast(sku.history, method, { alpha: 0.4, beta: 0.15, gamma: 0.25, season: 12 }, horizon), [sku, method, horizon]);
+  const benchmark = useMemo(() => (["naive", "sma", "ses", "holt", "hw"] as Method[]).map((m) => {
+    const r = runForecast(sku.history, m, { alpha: 0.4, beta: 0.15, gamma: 0.25, season: 12 }, horizon);
+    return { method: m, mape: r.mape, rmse: r.rmse };
+  }).sort((a, b) => a.mape - b.mape), [sku, horizon]);
+  const adjustedForecast = useMemo(() => applyForecastScenario(result.forecast, scenario, promoLift), [result.forecast, scenario, promoLift]);
+  const historyData = useMemo(() => sku.history.map((actual, index) => ({ month: MONTHS_24[index], actual, fitted: result.fitted[index] ?? null })), [sku, result]);
+  const forecastChart = useMemo(() => adjustedForecast.map((forecast, index) => {
+    const lower = Math.max(0, forecast - 1.96 * result.rmse);
+    const upper = forecast + 1.96 * result.rmse;
+    return { month: FUTURE_LABEL(index), forecast, lower, upper, bandHeight: upper - lower };
+  }), [result, adjustedForecast]);
   const yDomain = useMemo(() => {
-    const allVals: number[] = [];
-    historyData.forEach(d => { if (d.actual != null) allVals.push(d.actual); if (d.fitted != null) allVals.push(d.fitted); });
-    forecastChart.forEach(d => { allVals.push(d.upper); allVals.push(d.lower); });
-    const lo = Math.min(...allVals);
-    const hi = Math.max(...allVals);
-    const pad = (hi - lo) * 0.1;
-    return [Math.max(0, Math.floor((lo - pad) / 10) * 10), Math.ceil((hi + pad) / 10) * 10];
+    const values = [...historyData.flatMap((d) => [d.actual, d.fitted ?? d.actual]), ...forecastChart.flatMap((d) => [d.lower, d.upper])];
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    return [Math.max(0, Math.floor((lo - (hi - lo) * 0.1) / 10) * 10), Math.ceil((hi + (hi - lo) * 0.1) / 10) * 10];
   }, [historyData, forecastChart]);
-
-  // Supply-demand reconciliation (next `horizon` months)
   const reconciliation = useMemo(() => {
     let inv = sku.onHand;
-    const inbound = (m: number) => m === 0 ? sku.open : 0;
-    return adjustedForecast.map((demand, i) => {
-      inv = inv + inbound(i) - demand;
+    return adjustedForecast.map((demand, index) => {
+      const inbound = index === 0 ? sku.open : 0;
+      inv = inv + inbound - demand;
       const gap = inv < 0 ? -inv : 0;
       const cover = demand > 0 ? (inv + demand) / demand : 0;
-      return {
-        month: FUTURE_LABEL(i),
-        demand: Math.round(demand),
-        inbound: inbound(i),
-        ending: Math.round(inv),
-        gap: Math.round(gap),
-        cover: cover,
-        risk: inv < 0 ? "高" : cover < 1.2 ? "中" : "低",
-      };
+      return { month: FUTURE_LABEL(index), demand: Math.round(demand), inbound, ending: Math.round(inv), gap: Math.round(gap), cover, risk: inv < 0 ? "高" : cover < 1.2 ? "中" : "低" };
     });
   }, [sku, adjustedForecast]);
 
@@ -297,117 +156,92 @@ export default function ForecastPanel({
   const executableRecommendedQty = Number(currentMrpRow?.totalPlannedReceipt || 0) > 0 ? Number(currentMrpRow?.totalPlannedReceipt || 0) : recommendedQty;
   const executableRecommendedAmount = executableRecommendedQty * procurementProfile.unitPrice;
   const executablePriority = currentMrpRow?.exception === "加急" ? "高" : purchasePriority;
+  const fallbackSafetyStock = Math.max(0, Math.round(sku.onHand * 0.35));
   const mrpBomSourceSummary = buildMrpBomSourceSummary(currentMrpRow, sku.unit);
   const mrpScheduleEvidence = buildMrpScheduleEvidence(currentMrpRow);
   const mrpBomEvidence = buildMrpBomEvidence(currentMrpRow);
   const supplierScore = supplierRecommendation(procurementProfile.supplier);
-  const backendMrpExceptions = (mrpPlan?.exceptions || [])
-    .filter((item) => item.sku === sku.sku)
-    .slice(0, 2)
-    .map((item) => ({
-      type: `MRP ${item.type}`,
-      title: `${item.period} ${item.name} 计划例外`,
-      body: item.action,
-      metric: `${Number(item.quantity || 0).toLocaleString()} ${sku.unit}`,
-      color: item.type === "加急" ? A.red : item.type === "释放" ? A.blue : A.orange,
-    }));
+  const backendMrpExceptions = (mrpPlan?.exceptions || []).filter((item) => item.sku === sku.sku).slice(0, 2).map((item) => ({
+    type: `MRP ${item.type}`,
+    title: `${item.period} ${item.name} 计划例外`,
+    body: item.action,
+    metric: `${Number(item.quantity || 0).toLocaleString()} ${sku.unit}`,
+    color: item.type === "加急" ? A.red : item.type === "释放" ? A.blue : A.orange,
+  }));
   const mrpExceptions = [
     ...backendMrpExceptions,
-    ...(firstStockoutIndex >= 0 ? [{
-      type: "加急释放",
-      title: `${reconciliation[firstStockoutIndex]?.month} 出现首个净缺口`,
-      body: `预计期末库存转负，需在本周释放采购申请，避免计划收货晚于需求窗口。`,
-      metric: `${recommendedQty.toLocaleString()} ${sku.unit}`,
-      color: A.red,
-    }] : []),
-    ...(stockoutMonths >= 3 ? [{
-      type: "供应风险",
-      title: `${stockoutMonths} 个月连续缺料`,
-      body: `建议检查供应商产能与物流提前期，必要时拆单或引入备选供应商。`,
-      metric: fmt(recommendedAmount),
-      color: A.orange,
-    }] : []),
-    ...(Math.abs(result.trackingSignal) > 4 ? [{
-      type: "预测偏差",
-      title: `Tracking Signal ${result.trackingSignal.toFixed(1)}`,
-      body: `模型存在系统性偏差，释放采购前建议复核最近订单和促销/项目需求。`,
-      metric: `MAPE ${result.mape.toFixed(1)}%`,
-      color: A.purple,
-    }] : []),
-    ...(supplierScore.score < 84 ? [{
-      type: "供应商复核",
-      title: `${procurementProfile.supplier} 评分 ${supplierScore.score}`,
-      body: `供应商评分低于自动推荐阈值，建议触发 RFQ 或选择备选供应商。`,
-      metric: supplierScore.grade,
-      color: A.orange,
-    }] : []),
+    ...(firstStockoutIndex >= 0 ? [{ type: "加急释放", title: `${reconciliation[firstStockoutIndex]?.month} 出现首个净缺口`, body: "预计期末库存转负，需先打开草稿审阅并复核供应商交期。", metric: `${recommendedQty.toLocaleString()} ${sku.unit}`, color: A.red }] : []),
+    ...(Math.abs(result.trackingSignal) > 4 ? [{ type: "预测偏差", title: `Tracking Signal ${result.trackingSignal.toFixed(1)}`, body: "模型存在系统性偏差，释放采购前建议复核需求来源。", metric: `MAPE ${result.mape.toFixed(1)}%`, color: A.orange }] : []),
   ].slice(0, 4);
 
-  useEffect(() => {
-    setLastGeneratedRequest("");
-  }, [sku.sku, method, horizon, scenario, promoLift, serviceLevel, leadTimeDays, peakGap]);
+  useEffect(() => { setLastGeneratedRequest(""); }, [sku.sku, method, horizon, scenario, promoLift, serviceLevel, leadTimeDays, peakGap]);
 
   function runEngine() {
-    setRunning(true); setProgress(0); setCommitted(false);
+    setRunning(true);
+    setProgress(0);
     let p = 0;
     const step = () => {
-      p += Math.random() * 18 + 10;
-      if (p >= 100) { setProgress(100); setRunning(false); toast.success(`${METHOD_LABEL[method]} 已收敛`, { description: `MAPE ${result.mape.toFixed(1)}% · RMSE ${result.rmse.toFixed(0)}` }); }
-      else { setProgress(Math.round(p)); setTimeout(step, 90); }
+      p += 24;
+      if (p >= 100) {
+        setProgress(100);
+        setRunning(false);
+        toast.success(`${METHOD_LABEL[method]} 已收敛`, { description: `MAPE ${result.mape.toFixed(1)}% · RMSE ${result.rmse.toFixed(0)}` });
+      } else {
+        setProgress(p);
+        setTimeout(step, 90);
+      }
     };
     setTimeout(step, 60);
   }
 
-  function applyAI() {
-    setMethod(champion.method);
-    toast(`已切换为 AI 推荐模型: ${METHOD_LABEL[champion.method]}`, {
-      description: `MAPE ${champion.mape.toFixed(1)}% (较当前 ↓${(result.mape - champion.mape).toFixed(1)}pts)`,
-    });
+  function forecastDraftRequest(): ActionDraftPreviewRequest {
+    const reason = currentMrpRow ? `MRP 净需求计划建议入库 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，例外 ${currentMrpRow.exception}` : `预测净缺口 ${peakGap.toLocaleString()} ${sku.unit}，服务水平 ${serviceLevel}%`;
+    return {
+      type: "purchase_request_draft",
+      title: `${sku.sku} 预测采购申请草稿预览`,
+      source: currentMrpRow ? "mrp-assisted-forecast" : "forecast",
+      originEvidence: [
+        { type: "forecast_plan", id: sku.sku, label: `${sku.sku} ${sku.name}`, status: `${METHOD_LABEL[method]} · MAPE ${result.mape.toFixed(1)}%`, summary: `峰值净缺口 ${peakGap.toLocaleString()} ${sku.unit}，建议 ${executableRecommendedQty.toLocaleString()} ${sku.unit}。` },
+        ...(currentMrpRow ? [{ type: "mrp_plan", id: currentMrpRow.sku, label: `${currentMrpRow.sku} MRP 净需求计划`, status: currentMrpRow.exception, summary: `计划入库 ${currentMrpRow.totalPlannedReceipt.toLocaleString()} ${currentMrpRow.unit}，最大净需求 ${currentMrpRow.maxNetRequirement.toLocaleString()}。` }] : []),
+        ...(mrpBomSourceSummary ? [{ type: "bom_source", id: currentMrpRow?.sku || sku.sku, label: "BOM 来源证据", summary: mrpBomSourceSummary }] : []),
+        { type: "supplier_master", id: procurementProfile.supplier, label: procurementProfile.supplier, status: supplierScore.grade, summary: supplierScore.note },
+      ],
+      payload: { itemIdOrSku: sku.sku, itemName: sku.name, quantity: executableRecommendedQty, unit: sku.unit, requestedDeliveryDate: formatEta(leadTimeDays), reason, supplierIdOrName: procurementProfile.supplier, supplierSuggestion: { supplierName: procurementProfile.supplier }, severity: executablePriority, forecastBasis: { method, mape: result.mape, peakGap, stockoutMonths }, mrpEvidence: currentMrpRow ? { sku: currentMrpRow.sku, exception: currentMrpRow.exception, totalPlannedReceipt: currentMrpRow.totalPlannedReceipt, bomSourceSummary: mrpBomSourceSummary, schedule: mrpScheduleEvidence, bom: mrpBomEvidence } : undefined },
+    };
   }
+
+  function mrpReleaseDraftRequest(): ActionDraftPreviewRequest | null {
+    if (!currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0) return null;
+    const request = forecastDraftRequest();
+    return { ...request, title: `${currentMrpRow.sku} MRP 计划释放 PR 草稿预览`, source: "mrp_plan_release_preview", payload: { ...request.payload, quantity: currentMrpRow.totalPlannedReceipt, reason: `MRP 计划订单释放：${currentMrpRow.exception}，计划入库 ${currentMrpRow.totalPlannedReceipt.toLocaleString()} ${currentMrpRow.unit}。` } };
+  }
+
+  function openDraftPreview(request: ActionDraftPreviewRequest | null) {
+    if (!request) {
+      toast("当前没有可释放的 MRP 计划", { description: "净需求计划未产生计划订单释放。" });
+      return;
+    }
+    if (!onReviewActionDraft) {
+      toast.error("草稿预览暂不可用", { description: "Planning 仍保持 preview-only，不会创建采购申请。" });
+      return;
+    }
+    setGeneratingRequest(true);
+    onReviewActionDraft(request);
+    const draftId = `DRAFT-MRP-${sku.sku}-${Date.now().toString().slice(-6)}`;
+    setLastGeneratedRequest(draftId);
+    setGeneratingRequest(false);
+    toast.success("已打开 PR 草稿预览", { description: "未创建采购申请业务记录。" });
+  }
+
+  function createRequestFromForecast() { openDraftPreview(forecastDraftRequest()); }
+  function releaseMrpAsPr() { openDraftPreview(mrpReleaseDraftRequest()); }
 
   async function saveForecastPlan() {
     setSavingPlan(true);
     try {
-      const recommendation = peakGap > 0
-        ? `建议追加采购 ${recommendedQty.toLocaleString()} ${sku.unit}，优先覆盖 ${stockoutMonths} 个月断货风险。`
-        : "当前供需平衡，建议维持现有采购节奏并持续监控 MAPE 与 Tracking Signal。";
       const plan = await apiJson<SavedForecastPlan>("/api/forecast-plans", {
         method: "POST",
-        body: JSON.stringify({
-          sku: sku.sku,
-          name: sku.name,
-          unit: sku.unit,
-          method,
-          horizon,
-          scenario,
-          promoLift,
-          serviceLevel,
-          leadTimeDays,
-          history: sku.history,
-          metrics: {
-            mape: Number(result.mape.toFixed(2)),
-            wmape: Number(result.wmape.toFixed(2)),
-            smape: Number(result.smape.toFixed(2)),
-            rmse: Number(result.rmse.toFixed(2)),
-            mae: Number(result.mae.toFixed(2)),
-            trackingSignal: Number(result.trackingSignal.toFixed(2)),
-            theilU: Number(result.theilU.toFixed(2)),
-            cov: Number(diag.cov.toFixed(3)),
-          },
-          reconciliation,
-          procurementSuggestion: {
-            supplier: procurementProfile.supplier,
-            buyer: procurementProfile.buyer,
-            unitPrice: procurementProfile.unitPrice,
-            quantity: recommendedQty,
-            amount: recommendedAmount,
-            priority: purchasePriority,
-            firstStockoutMonth: firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : null,
-            safetyFactor,
-            basis: "peak-net-shortage",
-          },
-          recommendation,
-        }),
+        body: JSON.stringify({ sku: sku.sku, name: sku.name, unit: sku.unit, method, horizon, metrics: { mape: Number(result.mape.toFixed(2)), rmse: Number(result.rmse.toFixed(2)) }, procurementSuggestion: { supplier: procurementProfile.supplier, quantity: recommendedQty, amount: recommendedAmount } }),
       });
       setSavedPlans((prev) => [plan, ...prev].slice(0, 8));
       setCommitted(true);
@@ -419,1324 +253,170 @@ export default function ForecastPanel({
     }
   }
 
-  function forecastDraftRequest(): ActionDraftPreviewRequest {
-    const source = currentMrpRow ? "mrp-assisted-forecast" : "forecast";
-    const reason = currentMrpRow
-      ? `MRP 净需求计划建议入库 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，例外 ${currentMrpRow.exception}`
-      : `预测净缺口 ${peakGap.toLocaleString()} ${sku.unit}，服务水平 ${serviceLevel}%`;
-    return {
-      type: "purchase_request_draft",
-      title: `${sku.sku} 预测采购申请草稿预览`,
-      source,
-      originEvidence: [
-        {
-          type: "forecast_plan",
-          id: sku.sku,
-          label: `${sku.sku} ${sku.name}`,
-          status: `${METHOD_LABEL[method]} · MAPE ${result.mape.toFixed(1)}%`,
-          summary: `峰值净缺口 ${peakGap.toLocaleString()} ${sku.unit}，建议 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，优先级 ${executablePriority}。`,
-        },
-        ...(currentMrpRow ? [{
-          type: "mrp_plan",
-          id: currentMrpRow.sku,
-          label: `${currentMrpRow.sku} MRP 净需求计划`,
-          status: currentMrpRow.exception,
-          summary: `计划入库 ${currentMrpRow.totalPlannedReceipt.toLocaleString()} ${currentMrpRow.unit}，最大净需求 ${currentMrpRow.maxNetRequirement.toLocaleString()}，首个短缺期 ${currentMrpRow.firstShortagePeriod || "—"}。`,
-        }] : []),
-        ...(mrpBomSourceSummary ? [{
-          type: "bom_source",
-          id: currentMrpRow?.sku || sku.sku,
-          label: "BOM 来源证据",
-          summary: mrpBomSourceSummary,
-        }] : []),
-        {
-          type: "supplier_master",
-          id: procurementProfile.supplier,
-          label: procurementProfile.supplier,
-          status: supplierScore.grade,
-          summary: supplierScore.note,
-        },
-      ],
-      payload: {
-        itemIdOrSku: sku.sku,
-        itemName: sku.name,
-        quantity: executableRecommendedQty,
-        unit: sku.unit,
-        requestedDeliveryDate: formatEta(leadTimeDays),
-        reason,
-        supplierIdOrName: procurementProfile.supplier,
-        supplierSuggestion: { supplierName: procurementProfile.supplier },
-        buyer: procurementProfile.buyer,
-        unitPrice: procurementProfile.unitPrice,
-        amount: executableRecommendedAmount,
-        severity: executablePriority,
-        forecastBasis: {
-          method,
-          horizon,
-          scenario,
-          promoLift,
-          mape: Number(result.mape.toFixed(2)),
-          rmse: Number(result.rmse.toFixed(2)),
-          peakGap,
-          serviceLevel,
-          safetyFactor,
-          stockoutMonths,
-          firstStockoutMonth: firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : null,
-          source: currentMrpRow ? "mrp-net-requirements" : "forecast",
-        },
-        mrpEvidence: currentMrpRow ? {
-          exception: currentMrpRow.exception,
-          totalPlannedReceipt: currentMrpRow.totalPlannedReceipt,
-          maxNetRequirement: currentMrpRow.maxNetRequirement,
-          firstShortagePeriod: currentMrpRow.firstShortagePeriod,
-          bomSourceSummary: mrpBomSourceSummary,
-          bomSources: currentMrpRow.bomSources || [],
-          schedule: mrpScheduleEvidence,
-          ...mrpBomEvidence,
-        } : null,
-        requiresConfirmation: true,
-      },
-    };
-  }
+  function exportForecastResultCsv() { exportCsv("forecast-result-export.csv", [...historyData.map((row) => ({ 月份: row.month, 实际需求: row.actual, 拟合: row.fitted })), ...forecastChart.map((row) => ({ 月份: row.month, 预测: Math.round(row.forecast), 下限: Math.round(row.lower), 上限: Math.round(row.upper) }))]); }
+  function exportReconciliationCsv() { exportCsv("forecast-reconciliation-export.csv", reconciliation.map((row) => ({ 月份: row.month, 预测需求: row.demand, 计划入库: row.inbound, 期末库存: row.ending, 缺口: row.gap, 覆盖月数: row.cover.toFixed(1), 风险: row.risk }))); }
+  function exportBenchmarkCsv() { exportCsv("forecast-benchmark-export.csv", benchmark.map((row, index) => ({ 排名: index + 1, 方法: METHOD_LABEL[row.method], MAPE: row.mape, RMSE: row.rmse }))); }
+  function exportSavedPlansCsv() { exportCsv("forecast-saved-plans-export.csv", savedPlans.map((plan) => ({ ID: plan.id, SKU: plan.sku, 方法: METHOD_LABEL[plan.method], MAPE: plan.metrics?.mape, 建议供应商: plan.procurementSuggestion?.supplier, 建议数量: plan.procurementSuggestion?.quantity }))); }
+  function exportMrpExceptionsCsv() { exportCsv("mrp-exceptions-export.csv", (mrpPlan?.exceptions || []).map((exception) => ({ SKU: exception.sku, 物料: exception.name, 期间: exception.period, 异常类型: exception.type, 数量: exception.quantity, 建议动作: exception.action }))); }
+  function exportMrpPlannedOrdersCsv() { exportCsv("mrp-planned-orders-export.csv", currentMrpRow?.schedule.map((line) => ({ SKU: currentMrpRow.sku, 品名: currentMrpRow.name, 期间: line.period, 需求: line.grossRequirement, 计划收货: line.scheduledReceipt, 计划释放: line.plannedRelease, 预计库存: line.projectedAvailable, 净需求: line.netRequirement, 异常: line.exception, BOM来源摘要: line.dependentDemandSources?.length ? line.dependentDemandSources.map((source) => `${source.parentName || source.parent}:${source.demand}`).join(" | ") : mrpBomSourceSummary })) || []); }
 
-  function createRequestFromForecast() {
-    if (executableRecommendedQty <= 0) {
-      toast("当前无需生成 PR 草稿", { description: "供需对账未识别到净缺口，建议继续监控预测偏差。" });
-      return;
-    }
-    if (lastGeneratedRequest) {
-      toast("已打开草稿预览", { description: `${lastGeneratedRequest} 已在 ActionDraft 审阅壳中。` });
-      return;
-    }
-    if (!onReviewActionDraft) {
-      toast.error("草稿预览暂不可用", { description: "Forecast 模块尚未接入 ActionDraft 审阅壳。" });
-      return;
-    }
-    setGeneratingRequest(true);
-    const draftId = `DRAFT-${sku.sku}-${Date.now().toString().slice(-6)}`;
-    onReviewActionDraft({ ...forecastDraftRequest(), id: draftId } as ActionDraftPreviewRequest);
-    setLastGeneratedRequest(draftId);
-    setGeneratingRequest(false);
-    toast.success("已打开 PR 草稿预览", {
-      description: `${procurementProfile.supplier} · ${executableRecommendedQty.toLocaleString()} ${sku.unit} · ${fmt(executableRecommendedAmount)}`,
-    });
-  }
+  const viewMeta = planningWorkbenchViews.find((view) => view.id === activePlanningView) || planningWorkbenchViews[0];
+  const totalForecastDemand = reconciliation.reduce((sum, row) => sum + row.demand, 0);
+  const planningKpis = [
+    { label: "MRP 例外", value: mrpExceptions.length ? `${mrpExceptions.length}` : "0", sub: currentMrpRow?.exception || "正常", color: mrpExceptions.length ? A.orange : A.green },
+    { label: "缺货风险", value: `${stockoutMonths}`, sub: "未来月份", color: stockoutMonths ? A.red : A.green },
+    { label: "预测误差", value: `${result.mape.toFixed(1)}%`, sub: `RMSE ${result.rmse.toFixed(0)}`, color: result.mape > 20 ? A.orange : A.green },
+    { label: "草稿建议", value: executableRecommendedQty > 0 ? `${executableRecommendedQty.toLocaleString()}` : "0", sub: sku.unit, color: executableRecommendedQty > 0 ? A.blue : A.gray1 },
+  ];
 
-  function mrpReleaseDraftRequest(): ActionDraftPreviewRequest | null {
-    if (!currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0) {
-      return null;
-    }
-    const releaseLine = currentMrpRow.schedule.find((line) => line.plannedRelease > 0 && line.exception !== "正常")
-      || currentMrpRow.schedule.find((line) => line.plannedRelease > 0);
-    const releaseQty = Number(currentMrpRow.totalPlannedReceipt || 0);
-    const unitPrice = Number(currentMrpRow.unitPrice || procurementProfile.unitPrice || 0);
-    const amount = releaseQty * unitPrice;
-    return {
-      type: "purchase_request_draft",
-      title: `${currentMrpRow.sku} MRP 计划释放 PR 草稿预览`,
-      source: "mrp-release",
-      originEvidence: [
-        {
-          type: "mrp_plan",
-          id: currentMrpRow.sku,
-          label: `${currentMrpRow.sku} ${currentMrpRow.name}`,
-          status: currentMrpRow.exception,
-          summary: `计划入库 ${releaseQty.toLocaleString()} ${currentMrpRow.unit}，释放期 ${releaseLine?.plannedReleasePeriod || "—"}，首个短缺期 ${currentMrpRow.firstShortagePeriod || "—"}。`,
-        },
-        {
-          type: "forecast_plan",
-          id: sku.sku,
-          label: `${sku.sku} ${METHOD_LABEL[method]}`,
-          status: `MAPE ${result.mape.toFixed(1)}%`,
-          summary: `预测独立需求参与 MRP 净需求计算，峰值净缺口 ${peakGap.toLocaleString()} ${sku.unit}。`,
-        },
-        ...(mrpBomSourceSummary ? [{
-          type: "bom_source",
-          id: currentMrpRow.sku,
-          label: "BOM 来源证据",
-          summary: mrpBomSourceSummary,
-        }] : []),
-        {
-          type: "supplier_master",
-          id: currentMrpRow.supplier || procurementProfile.supplier,
-          label: currentMrpRow.supplier || procurementProfile.supplier,
-          status: supplierScore.grade,
-          summary: supplierScore.note,
-        },
-      ],
-      payload: {
-        itemIdOrSku: currentMrpRow.sku,
-        itemName: currentMrpRow.name,
-        quantity: releaseQty,
-        unit: currentMrpRow.unit,
-        requestedDeliveryDate: formatEta(Math.max(7, Number(currentMrpRow.leadTimePeriods || 1) * 7)),
-        reason: `MRP 计划订单释放：${currentMrpRow.exception}，计划入库 ${releaseQty.toLocaleString()} ${currentMrpRow.unit}，释放期 ${releaseLine?.plannedReleasePeriod || "—"}。`,
-        supplierIdOrName: currentMrpRow.supplier || procurementProfile.supplier,
-        supplierSuggestion: { supplierName: currentMrpRow.supplier || procurementProfile.supplier },
-        buyer: procurementProfile.buyer,
-        unitPrice,
-        amount,
-        severity: currentMrpRow.exception === "加急" ? "高" : currentMrpRow.exception === "释放" ? "中" : executablePriority,
-        forecastBasis: {
-          method,
-          horizon,
-          scenario,
-          mape: Number(result.mape.toFixed(2)),
-          rmse: Number(result.rmse.toFixed(2)),
-          source: "mrp-release",
-        },
-        mrpEvidence: {
-          generatedAt: mrpPlan?.generatedAt,
-          horizon: mrpPlan?.horizon,
-          exception: currentMrpRow.exception,
-          firstShortagePeriod: currentMrpRow.firstShortagePeriod,
-          maxNetRequirement: currentMrpRow.maxNetRequirement,
-          totalPlannedReceipt: currentMrpRow.totalPlannedReceipt,
-          plannedReleasePeriod: releaseLine?.plannedReleasePeriod || "",
-          leadTimeDays: Number(currentMrpRow.leadTimePeriods || 1) * 7,
-          moq: currentMrpRow.moq,
-          batchMultiple: currentMrpRow.batchMultiple,
-          bomSourceSummary: mrpBomSourceSummary,
-          bomSources: currentMrpRow.bomSources || [],
-          schedule: mrpScheduleEvidence,
-          ...mrpBomEvidence,
-        },
-        requiresConfirmation: true,
-      },
-    };
-  }
-
-  function releaseMrpAsPr() {
-    if (!currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0) {
-      toast("当前没有可释放的 MRP 计划", { description: "净需求计划未产生计划订单释放。" });
-      return;
-    }
-    if (lastGeneratedRequest) {
-      toast("已打开草稿预览", { description: `${lastGeneratedRequest} 已在 ActionDraft 审阅壳中。` });
-      return;
-    }
-    if (!onReviewActionDraft) {
-      toast.error("草稿预览暂不可用", { description: "MRP 释放尚未接入 ActionDraft 审阅壳。" });
-      return;
-    }
-    const request = mrpReleaseDraftRequest();
-    if (!request) return;
-    setGeneratingRequest(true);
-    const draftId = `DRAFT-MRP-${currentMrpRow.sku}-${Date.now().toString().slice(-6)}`;
-    onReviewActionDraft({ ...request, id: draftId } as ActionDraftPreviewRequest);
-    setLastGeneratedRequest(draftId);
-    setGeneratingRequest(false);
-    toast.success("已打开 MRP 释放草稿预览", {
-      description: `${currentMrpRow.sku} · ${currentMrpRow.totalPlannedReceipt.toLocaleString()} ${currentMrpRow.unit} · ${fmt(currentMrpRow.amount)}`,
-    });
-  }
-
-  function exportForecastResultCsv() {
-    const rows = [
-      ...historyData.map((row) => ({
-        "SKU": sku.sku,
-        "品名": sku.name,
-        "月份": row.month,
-        "数据类型": "历史",
-        "实际需求": row.actual,
-        "拟合值": row.fitted ?? "",
-        "预测值": "",
-        "下限": "",
-        "上限": "",
-        "方法": METHOD_LABEL[method],
-        "场景": scenario,
-        "促销提升百分比": promoLift,
-        "预测期数": horizon,
-        "MAPE": Number(result.mape.toFixed(2)),
-        "WMAPE": Number(result.wmape.toFixed(2)),
-        "RMSE": Number(result.rmse.toFixed(2)),
-        "MAE": Number(result.mae.toFixed(2)),
-        "TrackingSignal": Number(result.trackingSignal.toFixed(2)),
-        "TheilU": Number(result.theilU.toFixed(2)),
-      })),
-      ...forecastChart.slice(1).map((row) => ({
-        "SKU": sku.sku,
-        "品名": sku.name,
-        "月份": row.month,
-        "数据类型": "预测",
-        "实际需求": "",
-        "拟合值": "",
-        "预测值": Math.round(row.forecast),
-        "下限": Math.round(row.lower),
-        "上限": Math.round(row.upper),
-        "方法": METHOD_LABEL[method],
-        "场景": scenario,
-        "促销提升百分比": promoLift,
-        "预测期数": horizon,
-        "MAPE": Number(result.mape.toFixed(2)),
-        "WMAPE": Number(result.wmape.toFixed(2)),
-        "RMSE": Number(result.rmse.toFixed(2)),
-        "MAE": Number(result.mae.toFixed(2)),
-        "TrackingSignal": Number(result.trackingSignal.toFixed(2)),
-        "TheilU": Number(result.theilU.toFixed(2)),
-      })),
-    ];
-    exportCsv("forecast-result-export.csv", rows);
-  }
-
-  function exportReconciliationCsv() {
-    const firstStockoutMonth = firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : "";
-    exportCsv("forecast-reconciliation-export.csv", reconciliation.map((row) => ({
-      "SKU": sku.sku,
-      "品名": sku.name,
-      "月份": row.month,
-      "预测需求": row.demand,
-      "计划入库": row.inbound,
-      "期末库存": row.ending,
-      "缺口": row.gap,
-      "覆盖倍数": Number(row.cover.toFixed(2)),
-      "风险等级": row.risk,
-      "服务水平": serviceLevel,
-      "建议采购量": executableRecommendedQty,
-      "建议采购金额": executableRecommendedAmount,
-      "首个缺料月份": firstStockoutMonth || "",
-      "供应商": currentMrpRow?.supplier || procurementProfile.supplier,
-      "采购负责人": procurementProfile.buyer,
-    })));
-  }
-
-  function exportBenchmarkCsv() {
-    exportCsv("forecast-benchmark-export.csv", benchmark.map((row, index) => ({
-      "SKU": sku.sku,
-      "品名": sku.name,
-      "方法": row.method,
-      "方法名称": METHOD_LABEL[row.method],
-      "MAPE": Number(row.mape.toFixed(2)),
-      "RMSE": Number(row.rmse.toFixed(2)),
-      "是否Champion": index === 0 ? "是" : "否",
-      "当前选择方法": row.method === method ? "是" : "否",
-    })));
-  }
-
-  function exportSavedPlansCsv() {
-    exportCsv("forecast-saved-plans-export.csv", savedPlans.map((plan) => ({
-      "方案ID": plan.id,
-      "SKU": plan.sku,
-      "品名": plan.name,
-      "单位": plan.unit || "",
-      "方法": METHOD_LABEL[plan.method] ?? plan.method,
-      "预测期数": plan.horizon,
-      "MAPE": plan.metrics?.mape ?? "",
-      "WMAPE": plan.metrics?.wmape ?? "",
-      "RMSE": plan.metrics?.rmse ?? "",
-      "建议供应商": plan.procurementSuggestion?.supplier || "",
-      "建议采购量": plan.procurementSuggestion?.quantity ?? "",
-      "建议采购金额": plan.procurementSuggestion?.amount ?? "",
-      "优先级": plan.procurementSuggestion?.priority || "",
-      "首个缺料月份": plan.procurementSuggestion?.firstStockoutMonth || "",
-      "创建时间": plan.createdAt,
-    })));
-  }
-
-  function exportMrpExceptionsCsv() {
-    exportCsv("mrp-exceptions-export.csv", (mrpPlan?.exceptions || []).map((exception) => ({
-      "SKU": exception.sku,
-      "品名": exception.name,
-      "期间": exception.period,
-      "异常类型": exception.type,
-      "数量": exception.quantity,
-      "建议动作": exception.action,
-    })));
-  }
-
-  function exportMrpPlannedOrdersCsv() {
-    const rows = currentMrpRow?.schedule.map((line) => ({
-      "SKU": currentMrpRow.sku,
-      "品名": currentMrpRow.name,
-      "期间": line.period,
-      "需求": line.grossRequirement,
-      "计划收货": line.scheduledReceipt,
-      "计划释放": line.plannedRelease,
-      "预计库存": line.projectedAvailable,
-      "净需求": line.netRequirement,
-      "异常": line.exception,
-      "BOM来源摘要": line.dependentDemandSources?.length
-        ? line.dependentDemandSources.map((source) => `${source.parentName || source.parent}:${source.demand}`).join(" | ")
-        : mrpBomSourceSummary,
-    })) || [];
-    exportCsv("mrp-planned-orders-export.csv", rows);
-  }
-
-  return (
-    <div className="space-y-5">
-      {/* Header KPIs */}
-      <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="模型 MAPE" value={`${result.mape.toFixed(1)}%`} sub={`RMSE ${result.rmse.toFixed(0)}`}
-          delta={aiSuggestsDifferent ? `AI ↓${(result.mape - champion.mape).toFixed(1)}pts` : "已最优"}
-          positive={!aiSuggestsDifferent} icon={Activity} color={A.green} />
-        <KpiCard label={`未来 ${horizon} 月需求`}
-          value={reconciliation.reduce((s, r) => s + r.demand, 0).toLocaleString()}
-          sub={sku.unit}
-          delta={scenario !== "base" ? (scenario === "opt" ? "+12%" : "-12%") : promoLift ? `促销 +${promoLift}%` : "基准"}
-          positive={scenario === "opt"} icon={TrendingUp} color={A.blue} />
-        <KpiCard label="峰值净缺口" value={peakGap > 0 ? peakGap.toLocaleString() : "0"}
-          sub={`${stockoutMonths} 个月断货风险`}
-          delta={peakGap > 0 ? "需采购" : "充足"} positive={peakGap === 0}
-          icon={AlertTriangle} color={peakGap > 0 ? A.red : A.green} />
-        <KpiCard label="计划状态" value={committed ? "已发布" : "草稿"} sub="S&OP 共识需求"
-          icon={committed ? CheckCircle2 : Clock} color={committed ? A.green : A.orange} />
+  const ViewShell = ({ children }: { children: ReactNode }) => (
+    <div className="space-y-5" data-planning-view={activePlanningView} data-route-id={`forecast:${activePlanningView}`}>
+      <div>
+        <div className={typography.pageTitle} style={{ color: A.label }}>{viewMeta.label}</div>
+        <p className={typography.body} style={{ color: A.sub }}>{viewMeta.purpose}</p>
       </div>
-
       <Card className="p-4">
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#f0f6ff", color: A.blue }}>
-            <FileCheck2 size={17} />
-          </div>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#f0f6ff", color: A.blue }}><FileCheck2 size={17} /></div>
           <div className="min-w-0">
             <div className={typography.subsectionTitle} style={{ color: A.label }}>规划演示边界</div>
             <p className={`${typography.compactMetadata} mt-1 max-w-5xl`} style={{ color: A.sub }}>
-              当前 Forecast/MRP 使用演示商品主数据、静态计划参数和 BOM 展开生成只读计划证据；计划入库和计划释放用于人工审阅节奏，不代表系统已自动创建生产级 PR/PO。释放前仍需确认供应商产能、预算、替代料和审批策略。
+              当前 Forecast/MRP 使用演示商品主数据、静态计划参数和 BOM 展开生成只读计划证据；计划入库和计划释放用于人工审阅节奏，不代表系统已自动创建生产级 PR/PO，不是自动下发 PR/PO。补货和释放动作只会打开 ActionDraft purchase_request_draft 预览。
             </p>
           </div>
         </div>
       </Card>
-
-      {/* SKU selector */}
       <Card className="p-3">
         <div className="flex items-center gap-2 overflow-x-auto">
           <span className="text-[10px] font-semibold uppercase tracking-widest px-2 shrink-0" style={{ color: A.gray2 }}>SKU</span>
-          {FORECAST_SKUS.map((s, i) => (
-            <button key={s.sku} onClick={() => { setSkuIdx(i); setCommitted(false); }}
+          {FORECAST_SKUS.map((item, index) => (
+            <button key={item.sku} onClick={() => { setSkuIdx(index); setCommitted(false); }}
               className="shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-all"
-              style={skuIdx === i
-                ? { background: "#f0f6ff", color: A.blue, boxShadow: `0 0 0 1px ${A.blue}30` }
-                : { background: "transparent", color: A.gray1 }}>
-              <span style={{ color: skuIdx === i ? A.blue : A.gray2 }}>{s.sku}</span>
-              <span className="ml-2">{s.name}</span>
+              style={skuIdx === index ? { background: "#f0f6ff", color: A.blue, boxShadow: `0 0 0 1px ${A.blue}30` } : { background: "transparent", color: A.gray1 }}>
+              <span style={{ color: skuIdx === index ? A.blue : A.gray2 }}>{item.sku}</span><span className="ml-2">{item.name}</span>
             </button>
           ))}
         </div>
       </Card>
+      {children}
+    </div>
+  );
 
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="col-span-2 p-5">
-          <SectionHeader title="历史需求输入"
-            right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-              style={{ background: useCustomHistory ? "#f0faf4" : A.gray6, color: useCustomHistory ? A.green : A.gray1 }}>
-              {useCustomHistory ? "使用用户输入" : "使用系统基线"}
-            </span>} />
-          <textarea
-            value={historyText}
-            onChange={(e) => setHistoryText(e.target.value)}
-            className="w-full h-24 rounded-xl p-3 text-xs outline-none resize-none"
-            style={{ background: A.gray6, color: A.label, border: "0.5px solid rgba(0,0,0,0.08)" }}
-            placeholder="粘贴历史月需求，例如：120, 132, 141, 138..."
-          />
-          <div className="flex items-center justify-between mt-3">
-            <div className="text-[10px]" style={{ color: parsedHistory.length >= 6 ? A.green : A.orange }}>
-              已识别 {parsedHistory.length} 个历史点 · 至少 6 个点才可用于预测，建议 18-36 个点
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => { setHistoryText(formatDemandSeries(baseSku.history)); setUseCustomHistory(false); }}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                style={{ background: A.gray6, color: A.label }}>
-                恢复基线
-              </button>
-              <button onClick={() => {
-                  if (parsedHistory.length < 6) {
-                    toast.error("历史数据不足", { description: "请至少输入 6 个非负数字。" });
-                    return;
-                  }
-                  setUseCustomHistory(true);
-                  setCommitted(false);
-                  toast.success("历史需求已应用", { description: `${parsedHistory.slice(-36).length} 个数据点已进入预测引擎` });
-                }}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-                style={{ background: A.blue }}>
-                应用输入数据
-              </button>
-            </div>
-          </div>
+  const PlanningKpiGrid = () => (
+    <div className="grid grid-cols-4 gap-3">
+      {planningKpis.map((item) => (
+        <Card key={item.label} className="p-4">
+          <div className={typography.compactMetadata} style={{ color: A.gray2 }}>{item.label}</div>
+          <div className="mt-2 text-xl font-semibold tabular-nums" style={{ color: item.color }}>{item.value}</div>
+          <div className={`${typography.compactMetadata} mt-1`} style={{ color: A.sub }}>{item.sub}</div>
         </Card>
+      ))}
+    </div>
+  );
 
-        <Card className="p-5">
-          <SectionHeader title="客观数据诊断" />
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              ["历史点数", `${diag.n}`],
-              ["均值", `${diag.mean.toFixed(0)} ${sku.unit}`],
-              ["中位数", `${diag.median.toFixed(0)} ${sku.unit}`],
-              ["范围", `${diag.min.toFixed(0)}-${diag.max.toFixed(0)}`],
-              ["标准差", `${diag.std.toFixed(0)}`],
-              ["CoV", `${diag.cov.toFixed(2)}`],
-              ["近3月趋势", `${diag.recentTrend >= 0 ? "+" : ""}${diag.recentTrend.toFixed(1)}%`],
-              ["零需求点", `${diag.zeros}`],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg p-2" style={{ background: A.gray6 }}>
-                <div className="text-[9px]" style={{ color: A.gray2 }}>{label}</div>
-                <div className="text-xs font-semibold mt-0.5" style={{ color: label === "近3月趋势" ? (diag.recentTrend >= 0 ? A.green : A.red) : A.label }}>{value}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 text-[10px] leading-relaxed" style={{ color: A.sub }}>
-            诊断基于当前进入模型的历史需求，不依赖 AI 生成。CoV 越高，预测越不稳定。
-          </div>
-        </Card>
-      </div>
-
-      {/* Engine controls */}
+  const DemandForecastView = () => (
+    <ViewShell>
+      <PlanningKpiGrid />
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-5">
-          <SectionHeader title="预测引擎"
-            right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#f0f6ff", color: A.blue }}>v2.4</span>} />
-
-          <Field label="算法">
-            <select value={method} onChange={(e) => setMethod(e.target.value as Method)} style={inputStyle}>
-              {(["naive","sma","ses","holt","hw"] as Method[]).map((m) => (
-                <option key={m} value={m}>{METHOD_LABEL[m]}</option>
-              ))}
-            </select>
-          </Field>
-
-          <div className="space-y-4 mt-4">
-            {[
-              { label: "α (Level)",    val: alpha, set: setAlpha, enabled: method === "ses" || method === "holt" || method === "hw" },
-              { label: "β (Trend)",    val: beta,  set: setBeta,  enabled: method === "holt" || method === "hw" },
-              { label: "γ (Seasonal)", val: gamma, set: setGamma, enabled: method === "hw" },
-            ].map((p) => (
-              <div key={p.label} style={{ opacity: p.enabled ? 1 : 0.4 }}>
-                <div className="flex justify-between text-[11px] mb-1">
-                  <span style={{ color: A.sub }}>{p.label}</span>
-                  <span className="font-medium tabular-nums" style={{ color: A.label }}>{p.val.toFixed(2)}</span>
-                </div>
-                <input type="range" min={0.05} max={0.95} step={0.05}
-                  value={p.val} disabled={!p.enabled}
-                  onChange={(e) => p.set(parseFloat(e.target.value))}
-                  className="w-full h-1 rounded-full appearance-none cursor-pointer"
-                  style={{ accentColor: A.blue, background: A.gray5 }} />
-              </div>
-            ))}
-
-            <div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span style={{ color: A.sub }}>预测期 (月)</span>
-                <span className="font-medium tabular-nums" style={{ color: A.label }}>{horizon}</span>
-              </div>
-              <input type="range" min={3} max={12} step={1} value={horizon}
-                onChange={(e) => setHorizon(parseInt(e.target.value))}
-                className="w-full h-1 rounded-full appearance-none cursor-pointer"
-                style={{ accentColor: A.blue, background: A.gray5 }} />
-            </div>
-          </div>
-
-          <button onClick={runEngine} disabled={running}
-            className="w-full mt-5 text-xs py-2.5 rounded-xl font-medium text-white flex items-center justify-center gap-1.5"
-            style={{ background: A.blue, opacity: running ? 0.6 : 1 }}>
-            {running ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-            {running ? `运算中… ${progress}%` : "运行预测引擎"}
+          <SectionHeader title="预测引擎" />
+          <Field label="算法"><select value={method} onChange={(event) => setMethod(event.target.value as Method)} style={inputStyle}>{(["naive", "sma", "ses", "holt", "hw"] as Method[]).map((m) => <option key={m} value={m}>{METHOD_LABEL[m]}</option>)}</select></Field>
+          <Field label="预测期"><input type="number" min={3} max={12} value={horizon} onChange={(event) => setHorizon(Math.max(3, Math.min(12, Number(event.target.value) || 6)))} style={inputStyle} /></Field>
+          <button onClick={runEngine} disabled={running} className="w-full mt-3 text-xs py-2.5 rounded-xl font-medium text-white flex items-center justify-center gap-1.5" style={{ background: A.blue, opacity: running ? 0.6 : 1 }}>
+            {running ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}{running ? `运算中… ${progress}%` : "运行预测引擎"}
           </button>
-
-          {running && (
-            <div className="h-1 mt-2 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
-              <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, background: A.blue }} />
-            </div>
-          )}
-
-          {/* Accuracy metrics — industry standard suite */}
-          <div className="mt-4 pt-4" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
-            {(() => {
-              const g = mapeGrade(result.mape);
-              const tsAlert = Math.abs(result.trackingSignal) > 4;
-              const theilBetter = result.theilU < 1;
-              return (
-                <>
-                  {/* Lewis grade banner */}
-                  <div className="rounded-xl p-3 mb-3 flex items-center gap-3"
-                    style={{ background: `${g.color}12`, border: `1px solid ${g.color}30` }}>
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-base"
-                      style={{ background: g.color, color: A.white }}>{g.grade}</div>
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold" style={{ color: A.label }}>Lewis 等级 · {g.band}</div>
-                      <div className="text-[10px]" style={{ color: A.sub }}>MAPE {result.mape.toFixed(1)}% (A&lt;10 · B&lt;20 · C&lt;50 · D≥50)</div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: "MAPE",    val: `${result.mape.toFixed(1)}%`,  hint: "平均绝对百分比误差",  color: g.color },
-                      { label: "WMAPE",   val: `${result.wmape.toFixed(1)}%`, hint: "按销量加权 MAPE",     color: A.label },
-                      { label: "sMAPE",   val: `${result.smape.toFixed(1)}%`, hint: "对称 MAPE (无穷大保护)", color: A.label },
-                      { label: "RMSE",    val: result.rmse.toFixed(0),         hint: "均方根误差",          color: A.label },
-                      { label: "MAE",     val: result.mae.toFixed(0),          hint: "平均绝对误差",        color: A.label },
-                      { label: "Bias",    val: (result.bias >= 0 ? "+" : "") + result.bias.toFixed(0),
-                        hint: "误差均值 (>0 低估)", color: Math.abs(result.bias) < result.mae * 0.3 ? A.green : A.orange },
-                      { label: "Tracking Signal",
-                        val: (result.trackingSignal >= 0 ? "+" : "") + result.trackingSignal.toFixed(2),
-                        hint: tsAlert ? "|TS|>4 系统性偏差" : "在 ±4 控制限内",
-                        color: tsAlert ? A.red : A.green },
-                      { label: "Theil's U",
-                        val: result.theilU.toFixed(2),
-                        hint: theilBetter ? "U<1 优于朴素法" : "U≥1 不如朴素法",
-                        color: theilBetter ? A.green : A.red },
-                    ].map((m) => (
-                      <div key={m.label} className="rounded-lg p-2.5" style={{ background: A.gray6 }}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px]" style={{ color: A.gray1 }}>{m.label}</span>
-                        </div>
-                        <div className="text-sm font-semibold tabular-nums mt-0.5" style={{ color: m.color }}>{m.val}</div>
-                        <div className="text-[9px] mt-0.5" style={{ color: A.gray2 }}>{m.hint}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 rounded-xl p-3" style={{ background: A.gray6 }}>
-                    <div className={`${typography.compactMetadata} font-semibold`} style={{ color: A.label }}>指标怎么读</div>
-                    <p className={`${typography.compactMetadata} mt-1`} style={{ color: A.sub }}>
-                      MAPE/WMAPE 用百分比看预测误差，WMAPE 更偏向高销量月份；RMSE 会放大尖峰误差，适合发现促销或项目需求冲击；Tracking Signal 超出 ±4 时通常代表持续高估或低估，需要在释放采购前复核需求来源。
-                    </p>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
         </Card>
-
-        {/* Chart */}
         <Card className="col-span-2 p-5">
-          <SectionHeader title={`${sku.sku} · ${sku.name}`}
-            right={
-              <div className="flex items-center gap-4 text-xs" style={{ color: A.sub }}>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5" style={{ background: A.blue }} /><span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: A.blue, marginLeft: -2 }} /><span style={{ color: A.gray1 }}>实际 (历史)</span></span>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0" style={{ borderTop: `1.5px dotted ${A.green}` }} /><span style={{ color: A.gray1 }}>拟合 (训练)</span></span>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0" style={{ borderTop: `2px dashed ${A.orange}` }} /><span style={{ color: A.gray1 }}>预测 (未来)</span></span>
-                <button onClick={exportForecastResultCsv}
-                  className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-                  <FileSpreadsheet size={11} /> 导出当前结果
-                </button>
-              </div>
-            } />
-
-          {/* Two side-by-side panels: HISTORY (actual vs fitted) | FORECAST (prediction + 95% CI band) */}
-          <div className="flex items-stretch rounded-xl overflow-hidden" style={{ border: `0.5px solid ${A.gray5}` }}>
-            {/* LEFT — 历史拟合度 */}
-            <div className="flex-1 min-w-0 p-3" style={{ background: "rgba(0,113,227,0.02)", borderRight: `1px dashed ${A.gray4}` }}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-semibold" style={{ color: A.blue }}>① 历史拟合 · 模型在 24 个月真实数据上的表现</span>
-                <span className="text-[10px]" style={{ color: A.gray1 }}>2024-06 ~ 2026-05</span>
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={historyData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="0" stroke="rgba(0,0,0,0.05)" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} interval={2} />
-                  <YAxis domain={yDomain} tick={{ fontSize: 11, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} width={42} />
-                  <Tooltip content={<AppleTooltip />} />
-                  <Line type="monotone" dataKey="actual" name="实际" stroke={A.blue} strokeWidth={2}
-                    dot={{ r: 2.5, fill: A.blue, strokeWidth: 0 }}
-                    activeDot={{ r: 4.5, fill: A.blue, stroke: A.white, strokeWidth: 2 }}
-                    isAnimationActive={false} />
-                  <Line type="monotone" dataKey="fitted" name="拟合" stroke={A.green} strokeWidth={1.5}
-                    strokeDasharray="3 3" dot={false} connectNulls
-                    isAnimationActive={false} />
-                </LineChart>
-              </ResponsiveContainer>
-              <div className="flex items-center gap-4 mt-1 text-[10px]" style={{ color: A.gray1 }}>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5" style={{ background: A.blue }} />实际销量</span>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0" style={{ borderTop: `1.5px dashed ${A.green}` }} />模型拟合</span>
-                <span className="ml-auto">MAPE <span className="font-semibold" style={{ color: A.green }}>{result.mape.toFixed(1)}%</span></span>
-              </div>
-            </div>
-
-            {/* RIGHT — 未来预测 */}
-            <div className="p-3" style={{ background: "rgba(255,149,0,0.03)", width: `${Math.max(24, (horizon / (24 + horizon)) * 100 + 10)}%`, minWidth: 220 }}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-semibold" style={{ color: A.orange }}>② 未来 {horizon} 月预测 · 含 95% 置信带</span>
-                <span className="text-[10px]" style={{ color: A.gray1 }}>{FUTURE_LABEL(0)} ~ {FUTURE_LABEL(horizon - 1)}</span>
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart data={forecastChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="ciG2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={A.orange} stopOpacity={0.22} />
-                      <stop offset="100%" stopColor={A.orange} stopOpacity={0.04} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="0" stroke="rgba(0,0,0,0.05)" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} />
-                  <YAxis domain={yDomain} tick={{ fontSize: 11, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} width={42} />
-                  <Tooltip content={<AppleTooltip />} />
-                  <Area type="monotone" dataKey="lower"      stackId="ci2" stroke="none" fill="transparent" isAnimationActive={false} legendType="none" />
-                  <Area type="monotone" dataKey="bandHeight" stackId="ci2" name="95% 区间" stroke="none" fill="url(#ciG2)" isAnimationActive={false} />
-                  <Line type="monotone" dataKey="forecast" name="预测" stroke={A.orange} strokeWidth={2.5}
-                    strokeDasharray="6 4"
-                    dot={{ r: 3.5, fill: A.white, strokeWidth: 2, stroke: A.orange }}
-                    activeDot={{ r: 5, fill: A.orange, stroke: A.white, strokeWidth: 2 }}
-                    isAnimationActive={false} />
-                </ComposedChart>
-              </ResponsiveContainer>
-              <div className="flex items-center gap-4 mt-1 text-[10px]" style={{ color: A.gray1 }}>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0" style={{ borderTop: `2px dashed ${A.orange}` }} />预测中位</span>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-2 rounded-sm" style={{ background: `${A.orange}33` }} />95% 置信带</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-2 grid grid-cols-3 gap-2 text-[10px]" style={{ color: A.gray1 }}>
-            <div><span style={{ color: A.blue, fontWeight: 500 }}>实际</span> 真实销量历史值,模型的训练原料</div>
-            <div><span style={{ color: A.green, fontWeight: 500 }}>拟合</span> 模型对历史的"反推",越贴合实际越好</div>
-            <div><span style={{ color: A.orange, fontWeight: 500 }}>预测</span> 模型对未来的外推 ± 1.96σ 置信带</div>
-          </div>
-
-          {/* AI consensus banner */}
-          <div className="mt-4 rounded-xl p-3 flex items-center gap-3"
-            style={{ background: aiSuggestsDifferent ? "#fff8f0" : "#f0faf4", border: `1px solid ${aiSuggestsDifferent ? A.orange : A.green}30` }}>
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: `linear-gradient(135deg, ${A.blue} 0%, #34aadc 100%)` }}>
-              <Sparkles size={12} className="text-white" />
-            </div>
-            <div className="flex-1 text-[11px]" style={{ color: A.label }}>
-              {aiSuggestsDifferent ? (
-                <>
-                  <span className="font-semibold">AI 推荐切换至 {METHOD_LABEL[champion.method]}</span>
-                  ：在交叉验证中 MAPE 为 <span className="font-semibold" style={{ color: A.green }}>{champion.mape.toFixed(1)}%</span>，
-                  优于当前模型 {(result.mape - champion.mape).toFixed(1)} 个百分点。
-                </>
-              ) : (
-                <><span className="font-semibold">当前已是 5 模型基准中的最优解。</span> 可直接应用此预测进入 S&OP。</>
-              )}
-            </div>
-            {aiSuggestsDifferent && (
-              <button onClick={applyAI}
-                className="text-[11px] px-3 py-1.5 rounded-lg font-medium text-white shrink-0 hover:opacity-90 transition-opacity"
-                style={{ background: A.blue }}>采纳建议</button>
-            )}
+          <SectionHeader title="历史需求输入" />
+          <textarea value={historyText} onChange={(event) => setHistoryText(event.target.value)} className="w-full h-24 rounded-xl p-3 text-xs outline-none resize-none" style={{ background: A.gray6, color: A.label, border: "0.5px solid rgba(0,0,0,0.08)" }} />
+          <div className="flex items-center justify-between mt-3">
+            <span className="text-[10px]" style={{ color: parsedHistory.length >= 6 ? A.green : A.orange }}>已识别 {parsedHistory.length} 个历史点 · CoV {diag.cov.toFixed(2)}</span>
+            <button onClick={() => { if (parsedHistory.length < 6) return toast.error("历史数据不足"); setUseCustomHistory(true); setCommitted(false); }} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: A.blue }}>应用输入数据</button>
           </div>
         </Card>
       </div>
-
-      {/* Scenario + benchmark + reconciliation */}
-      <div className="grid grid-cols-3 gap-3">
-        {/* Scenario planning */}
-        <Card className="p-5">
-          <SectionHeader title="情景规划 (What-If)" />
-          <div className="space-y-1.5">
-            {([
-              { id: "pess", label: "悲观",   note: "-12% · 经济下行 / 客户流失", color: A.red    },
-              { id: "base", label: "基准",   note: "模型基线",                    color: A.blue   },
-              { id: "opt",  label: "乐观",   note: "+12% · 大客户中标 / 市场扩张", color: A.green  },
-            ] as const).map((s) => (
-              <button key={s.id} onClick={() => setScenario(s.id)}
-                className="w-full text-left p-3 rounded-xl transition-all flex items-center gap-3"
-                style={{
-                  background: scenario === s.id ? `${s.color}12` : A.gray6,
-                  border: `1px solid ${scenario === s.id ? s.color + "40" : "transparent"}`,
-                }}>
-                <div className="w-3 h-3 rounded-full shrink-0" style={{ background: s.color }} />
-                <div className="flex-1">
-                  <div className="text-xs font-semibold" style={{ color: A.label }}>{s.label}情景</div>
-                  <div className="text-[10px]" style={{ color: A.sub }}>{s.note}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-5">
-            <div className="flex justify-between text-[11px] mb-1">
-              <span style={{ color: A.sub }}>促销/活动叠加</span>
-              <span className="font-medium tabular-nums" style={{ color: promoLift >= 0 ? A.green : A.red }}>
-                {promoLift >= 0 ? "+" : ""}{promoLift}%
-              </span>
-            </div>
-            <input type="range" min={-30} max={50} step={5} value={promoLift}
-              onChange={(e) => setPromoLift(parseInt(e.target.value))}
-              className="w-full h-1 rounded-full appearance-none cursor-pointer"
-              style={{ accentColor: A.purple }} />
-            <div className="flex justify-between text-[9px] mt-1" style={{ color: A.gray2 }}>
-              <span>-30%</span><span>基线</span><span>+50%</span>
-            </div>
-          </div>
-        </Card>
-
-        {/* Model benchmark */}
-        <Card className="p-5">
-          <SectionHeader title="模型对比 (Champion / Challenger)"
-            right={<button onClick={exportBenchmarkCsv}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出当前结果
-            </button>} />
-          <div className="space-y-2">
-            {benchmark.map((b, i) => {
-              const max = Math.max(...benchmark.map((x) => x.mape));
-              const isCurrent = b.method === method;
-              const isChamp = i === 0;
-              return (
-                <div key={b.method}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[11px] w-4" style={{ color: A.gray2 }}>{i + 1}</span>
-                    <span className="text-xs flex-1 truncate" style={{ color: isCurrent ? A.blue : A.label, fontWeight: isCurrent ? 600 : 500 }}>
-                      {METHOD_LABEL[b.method]}
-                    </span>
-                    {isChamp && <span className="text-[9px] px-1.5 py-px rounded-full font-semibold" style={{ background: "#f0faf4", color: A.green }}>BEST</span>}
-                    {isCurrent && !isChamp && <span className="text-[9px] px-1.5 py-px rounded-full font-semibold" style={{ background: "#f0f6ff", color: A.blue }}>当前</span>}
-                  </div>
-                  <div className="flex items-center gap-2 pl-6">
-                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
-                      <div className="h-full rounded-full" style={{ width: `${(b.mape / max) * 100}%`, background: isChamp ? A.green : isCurrent ? A.blue : A.gray3 }} />
-                    </div>
-                    <span className="text-[11px] tabular-nums w-12 text-right" style={{ color: A.sub }}>{b.mape.toFixed(1)}%</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-4 pt-3 text-[10px]" style={{ color: A.gray2, borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
-            交叉验证：留最后 6 个月作为测试集
-          </div>
-        </Card>
-
-        {/* AI insights for current SKU */}
-        <Card className="p-5">
-          <SectionHeader title="AI 关键发现"
-            right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#f0f6ff", color: A.blue }}>实时</span>} />
-          <div className="space-y-2.5">
-            {[
-              {
-                t: "info" as const,
-                title: "强季节性 (γ 推荐 0.25)",
-                body: `检出年度季节因子峰值 +${(Math.max(...sku.history) / (sku.history.reduce((a, b) => a + b, 0) / 24) - 1).toFixed(2)}x，建议 γ ≥ 0.20。`,
-              },
-              {
-                t: stockoutMonths > 0 ? "risk" : "info" as const,
-                title: stockoutMonths > 0 ? `${stockoutMonths} 个月断货风险` : "供需平衡",
-                body: stockoutMonths > 0
-                  ? `当前在手 ${sku.onHand} + 在途 ${sku.open}，预测期最大净缺口 ${peakGap.toLocaleString()} ${sku.unit}。`
-                  : `在手 ${sku.onHand} + 在途 ${sku.open} 充足覆盖未来 ${horizon} 月需求。`,
-              },
-              {
-                t: "action" as const,
-                title: peakGap > 0 ? `建议追加采购 ${recommendedQty.toLocaleString()} ${sku.unit}` : "无需追加采购",
-                body: peakGap > 0 ? `按峰值净缺口叠加 ${(safetyFactor * 100 - 100).toFixed(0)}% 安全系数，建议转待审批采购单。` : `当前计划已满足安全库存要求。`,
-              },
-            ].map((it, i) => {
-              const m = insightMeta[it.t];
-              const Icon = m.icon;
-              return (
-                <div key={i} className="rounded-xl p-3" style={{ background: m.bg }}>
-                  <div className="flex items-start gap-2">
-                    <Icon size={11} style={{ color: m.color }} className="mt-0.5 shrink-0" />
-                    <div className="flex-1">
-                      <div className="text-[11px] font-semibold" style={{ color: A.label }}>{it.title}</div>
-                      <div className="text-[10px] mt-0.5 leading-relaxed" style={{ color: A.sub }}>{it.body}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </div>
-
-      {/* Inventory planning: Service Level + Safety Stock + Forecastability */}
-      {(() => {
-        const xyz = xyzClass(sku.history);
-        const mean = sku.history.reduce((a, b) => a + b, 0) / sku.history.length;
-        const std = Math.sqrt(sku.history.reduce((s, v) => s + (v - mean) ** 2, 0) / sku.history.length);
-        const z = zScore(serviceLevel);
-        const leadMonths = leadTimeDays / 30;
-        // Safety Stock = z × σ_d × √L  (Browne's formula, demand variability dominant)
-        const safetyStock = Math.ceil(z * std * Math.sqrt(leadMonths));
-        const cycleStock  = Math.ceil(mean * leadMonths);
-        const reorderPoint = Math.ceil(mean * leadMonths + safetyStock);
-        const eoq = Math.ceil(Math.sqrt((2 * mean * 12 * 800) / (50 * 0.25))); // Wilson EOQ, K=800 setup, h=50*0.25
-        const fillRate = serviceLevel; // simplified — assume CSL ≈ Fill Rate for illustration
-
-        return (
-          <div className="grid grid-cols-3 gap-3">
-            <Card className="p-5">
-              <SectionHeader title="服务水平与安全库存"
-                right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                  style={{ background: "#eef0ff", color: A.indigo }}>z = {z.toFixed(2)}</span>} />
-
-              <Field label={`服务水平 (CSL)`}>
-                <div className="grid grid-cols-6 gap-1">
-                  {([85, 90, 95, 97, 98, 99] as const).map((s) => (
-                    <button key={s} onClick={() => setServiceLevel(s)}
-                      className="text-[11px] py-1.5 rounded-md font-medium transition-colors"
-                      style={{
-                        background: serviceLevel === s ? A.blue : A.gray6,
-                        color: serviceLevel === s ? A.white : A.gray1,
-                      }}>{s}%</button>
-                  ))}
-                </div>
-              </Field>
-
-              <div className="mt-4">
-                <div className="flex justify-between text-[11px] mb-1">
-                  <span style={{ color: A.sub }}>采购提前期 (L)</span>
-                  <span className="font-medium tabular-nums" style={{ color: A.label }}>{leadTimeDays} 天</span>
-                </div>
-                <input type="range" min={3} max={45} step={1} value={leadTimeDays}
-                  onChange={(e) => setLeadTimeDays(parseInt(e.target.value))}
-                  className="w-full h-1 rounded-full appearance-none cursor-pointer"
-                  style={{ accentColor: A.blue }} />
-              </div>
-
-              <div className="mt-5 pt-4 space-y-2" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {[
-                  { k: "需求均值 (μ)",   v: `${Math.round(mean).toLocaleString()} ${sku.unit}/月` },
-                  { k: "需求标准差 (σ)", v: `${Math.round(std).toLocaleString()} ${sku.unit}/月` },
-                  { k: "周期库存",       v: `${cycleStock.toLocaleString()} ${sku.unit}`, hl: A.label },
-                  { k: "安全库存 SS",    v: `${safetyStock.toLocaleString()} ${sku.unit}`, hl: A.orange },
-                  { k: "再订货点 ROP",   v: `${reorderPoint.toLocaleString()} ${sku.unit}`, hl: A.blue },
-                  { k: "经济订货量 EOQ", v: `${eoq.toLocaleString()} ${sku.unit}`, hl: A.purple },
-                  { k: "预计填充率",     v: `${fillRate}%`, hl: A.green },
-                ].map((r) => (
-                  <div key={r.k} className="flex justify-between text-xs">
-                    <span style={{ color: A.sub }}>{r.k}</span>
-                    <span className="font-medium tabular-nums" style={{ color: r.hl || A.label }}>{r.v}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 rounded-lg p-2.5 text-[10px] leading-relaxed" style={{ background: "#f0f6ff", color: A.sub }}>
-                <span style={{ color: A.label, fontWeight: 600 }}>SS = z × σ × √L</span>
-                {" "}· EOQ = √(2DK/h) · ROP = μL + SS
-              </div>
-            </Card>
-
-            <Card className="p-5">
-              <SectionHeader title="可预测性诊断 (XYZ)" />
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-semibold"
-                  style={{ background: `${xyz.color}18`, color: xyz.color }}>{xyz.cls}</div>
-                <div className="flex-1">
-                  <div className="text-xs font-semibold" style={{ color: A.label }}>{xyz.note}</div>
-                  <div className="text-[10px]" style={{ color: A.sub }}>变异系数 CoV = {xyz.cov.toFixed(2)}</div>
-                </div>
-              </div>
-
-              <div className="space-y-2 mt-3">
-                {([
-                  { c: "X", min: "0", max: "0.25", note: "稳定 · 自动补货", color: A.green },
-                  { c: "Y", min: "0.25", max: "0.50", note: "波动 · 半月预测", color: A.orange },
-                  { c: "Z", min: "0.50", max: "∞", note: "不规则 · 按订单生产", color: A.red },
-                ] as const).map((row) => (
-                  <div key={row.c} className="flex items-center gap-2 p-2 rounded-lg"
-                    style={{ background: xyz.cls === row.c ? `${row.color}10` : A.gray6 }}>
-                    <span className="text-[11px] font-semibold w-4" style={{ color: row.color }}>{row.c}</span>
-                    <span className="text-[10px] tabular-nums w-20" style={{ color: A.sub }}>CoV {row.min}–{row.max}</span>
-                    <span className="text-[10px]" style={{ color: A.label }}>{row.note}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 pt-3 text-[10px] leading-relaxed" style={{ color: A.gray2, borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
-                结合 ABC 价值分类形成 9 宫格策略矩阵：AX 高价值稳定品 100% 自动补货，CZ 低价值不规则品按需采购。
-              </div>
-            </Card>
-
-            <Card className="p-5">
-              <SectionHeader title="预测准确度 SLA 趋势" />
-              <ResponsiveContainer width="100%" height={140}>
-                <ComposedChart data={Array.from({ length: 12 }, (_, i) => ({
-                  m: `${(i + 1)}月`,
-                  mape: 6 + Math.sin(i * 0.7) * 3 + Math.random() * 2,
-                  target: 10,
-                }))} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="0" stroke="rgba(0,0,0,0.05)" vertical={false} />
-                  <XAxis dataKey="m" tick={{ fontSize: 9, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 9, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} width={28} tickFormatter={(v) => `${v}%`} />
-                  <Tooltip content={<AppleTooltip />} />
-                  <Line type="monotone" dataKey="target" name="SLA 目标" stroke={A.red} strokeWidth={1} strokeDasharray="4 3" dot={false} />
-                  <Line type="monotone" dataKey="mape"   name="实际 MAPE" stroke={A.blue} strokeWidth={2} dot={{ r: 2.5, fill: A.white, strokeWidth: 1.5, stroke: A.blue }} />
-                </ComposedChart>
-              </ResponsiveContainer>
-
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                {[
-                  { l: "12个月均值", v: "7.8%", c: A.green },
-                  { l: "SLA 达成率", v: "92%",   c: A.green },
-                  { l: "偏差天数",   v: "1/30",  c: A.orange },
-                ].map((m) => (
-                  <div key={m.l} className="rounded-lg p-2" style={{ background: A.gray6 }}>
-                    <div className="text-[9px]" style={{ color: A.gray2 }}>{m.l}</div>
-                    <div className="text-sm font-semibold tabular-nums" style={{ color: m.c }}>{m.v}</div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-        );
-      })()}
-
       <Card className="p-5">
-        <SectionHeader title="MRP 例外消息"
-          right={<div className="flex items-center gap-2">
-            <button onClick={exportMrpExceptionsCsv}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出当前结果
-            </button>
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-              style={{ background: mrpExceptions.length ? "#fff8f0" : "#f0faf4", color: mrpExceptions.length ? A.orange : A.green }}>
-              {mrpExceptions.length ? `${mrpExceptions.length} 条异常` : "无异常"}
-            </span>
-          </div>} />
-        {mrpExceptions.length === 0 ? (
-          <div className="text-xs py-6 text-center" style={{ color: A.gray2 }}>
-            当前预测、库存和供应商评分未触发 MRP 例外消息。
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className={`${typography.compactMetadata} rounded-xl px-3 py-2`} style={{ background: A.gray6, color: A.sub }}>
-              例外由净需求、预计可用库存、安全库存和采购提前期共同判定；“加急”表示按当前提前期可能晚于需求窗口，“释放”表示存在可审阅的计划订单释放，“推迟/取消”表示供给早于或多于当前需求。
-            </div>
-            <div className="grid grid-cols-4 gap-3">
-              {mrpExceptions.map((item) => (
-                <div key={item.type} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-semibold" style={{ color: item.color }}>{item.type}</span>
-                    <span className="text-[10px] font-semibold tabular-nums" style={{ color: item.color }}>{item.metric}</span>
-                  </div>
-                  <div className="text-xs font-semibold" style={{ color: A.label }}>{item.title}</div>
-                  <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{item.body}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <SectionHeader title={`${sku.sku} · 需求预测曲线`} right={<button onClick={exportForecastResultCsv} className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}><FileSpreadsheet size={11} /> 导出当前结果</button>} />
+        <div className="grid grid-cols-2 gap-3">
+          <ResponsiveContainer width="100%" height={220}><LineChart data={historyData}><CartesianGrid strokeDasharray="0" stroke="rgba(0,0,0,0.05)" vertical={false} /><XAxis dataKey="month" tick={{ fontSize: 10, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} interval={2} /><YAxis domain={yDomain} tick={{ fontSize: 11, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} width={42} /><Tooltip content={<AppleTooltip />} /><Line type="monotone" dataKey="actual" name="实际" stroke={A.blue} strokeWidth={2} dot={false} isAnimationActive={false} /><Line type="monotone" dataKey="fitted" name="拟合" stroke={A.green} strokeWidth={1.5} strokeDasharray="3 3" dot={false} connectNulls isAnimationActive={false} /></LineChart></ResponsiveContainer>
+          <ResponsiveContainer width="100%" height={220}><ComposedChart data={forecastChart}><CartesianGrid strokeDasharray="0" stroke="rgba(0,0,0,0.05)" vertical={false} /><XAxis dataKey="month" tick={{ fontSize: 10, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} /><YAxis domain={yDomain} tick={{ fontSize: 11, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} width={42} /><Tooltip content={<AppleTooltip />} /><Area type="monotone" dataKey="bandHeight" stroke="none" fill={A.orange} fillOpacity={0.08} isAnimationActive={false} /><Line type="monotone" dataKey="forecast" name="预测" stroke={A.orange} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} /></ComposedChart></ResponsiveContainer>
+        </div>
       </Card>
+      <Card className="p-5">
+        <SectionHeader title="模型对比 (Champion / Challenger)" right={<button onClick={exportBenchmarkCsv} className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}><FileSpreadsheet size={11} /> 导出模型对比</button>} />
+        <div className="grid grid-cols-5 gap-2">{benchmark.map((row, index) => <div key={row.method} className="rounded-xl p-3" style={{ background: index === 0 ? "#f0faf4" : A.gray6 }}><div className="text-[10px]" style={{ color: A.gray2 }}>#{index + 1} {METHOD_LABEL[row.method]}</div><div className="text-sm font-semibold mt-1" style={{ color: index === 0 ? A.green : A.label }}>MAPE {row.mape.toFixed(1)}%</div><div className="text-[10px] mt-1" style={{ color: A.sub }}>RMSE {row.rmse.toFixed(0)}</div></div>)}</div>
+      </Card>
+      <Card>
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}><div><h2 className="text-sm font-semibold" style={{ color: A.label }}>需求 - 供给对账 (S&OP)</h2><p className="text-[11px] mt-0.5" style={{ color: A.sub }}>作为 Demand Forecast 的下方输入证据，不作为主 CTA。</p></div><button onClick={saveForecastPlan} disabled={savingPlan} className="text-xs px-4 py-2 rounded-xl font-medium text-white flex items-center gap-1.5" style={{ background: committed ? A.green : A.blue, opacity: savingPlan ? 0.7 : 1 }}>{savingPlan ? <Loader2 size={12} className="animate-spin" /> : <FileCheck2 size={12} />}{committed ? "已保存方案" : "保存共识预测方案"}</button></div>
+        <ReconciliationTable compact />
+      </Card>
+    </ViewShell>
+  );
 
+  const ReconciliationTable = ({ compact = false }: { compact?: boolean }) => (
+    <table className={`w-full ${tableBodyTextClass}`}>
+      <thead><tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>{(compact ? ["月份", "预测需求", "计划入库", "期末库存", "缺口", "风险"] : ["月份", "预测需求", "计划入库", "期末库存", "缺口", "风险", "建议"]).map((h) => <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>)}</tr></thead>
+      <tbody>{reconciliation.map((row, index) => <tr key={row.month} className="hover:bg-blue-50/40 transition-colors" style={{ borderBottom: index < reconciliation.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}><td className={`${tdWideClass} font-medium`}>{row.month}</td><td className={tdWideNumericClass}>{row.demand.toLocaleString()}</td><td className={tdWideNumericClass}>{row.inbound > 0 ? `+${row.inbound.toLocaleString()}` : "—"}</td><td className={tdWideNumericClass}>{row.ending.toLocaleString()}</td><td className={tdWideNumericClass}>{row.gap > 0 ? row.gap.toLocaleString() : "—"}</td><td className={tdWideClass}><StatusPill status={row.risk === "高" ? "不足" : row.risk === "中" ? "预警" : "正常"} /></td>{!compact && <td className={tdWideClass}>{row.risk === "高" ? `准备草稿 +${Math.ceil(row.gap * 1.1).toLocaleString()}` : row.risk === "中" ? "提前复核" : "观察"}</td>}</tr>)}</tbody>
+    </table>
+  );
+
+  const MrpPlanView = () => (
+    <ViewShell>
+      <PlanningKpiGrid />
+      <Card className="p-5">
+        <SectionHeader title="MRP 例外消息" right={<button onClick={exportMrpExceptionsCsv} className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}><FileSpreadsheet size={11} /> 导出例外</button>} />
+        {mrpExceptions.length ? <div className="grid grid-cols-3 gap-3">{mrpExceptions.map((item) => <div key={item.title} className="rounded-xl p-3" style={{ background: A.gray6 }}><div className="flex items-center justify-between mb-2"><span className="text-[10px] font-semibold" style={{ color: item.color }}>{item.type}</span><span className="text-[10px] font-semibold tabular-nums" style={{ color: item.color }}>{item.metric}</span></div><div className="text-xs font-semibold" style={{ color: A.label }}>{item.title}</div><div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{item.body}</div></div>)}</div> : <div className="text-xs py-6 text-center" style={{ color: A.gray2 }}>当前预测、库存和供应商评分未触发 MRP 例外消息。</div>}
+      </Card>
       <Card>
         <div className="px-5 py-4 flex items-start justify-between gap-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-          <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>MRP 净需求计划</h2>
-            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>
-              {currentMrpRow
-                ? `${currentMrpRow.sku} · 在手 ${currentMrpRow.onHand.toLocaleString()} ${currentMrpRow.unit} · 已分配 ${currentMrpRow.allocated.toLocaleString()} · MOQ ${currentMrpRow.moq} · 提前期 ${currentMrpRow.leadTimePeriods} 期`
-                : "等待 MRP 接口返回计划结果"}
-            </p>
-            {currentMrpRow ? (
-              <p className={`${typography.compactMetadata} mt-1 max-w-3xl`} style={{ color: A.gray2 }}>
-                计划入库表示目标到货期；计划释放表示按提前期倒推后应由计划员审阅/释放的期间，不是自动下发 PR/PO。{mrpBomSourceSummary ? `BOM 证据来自静态 BOM 展开：${mrpBomSourceSummary}。` : "当前行未识别到 BOM 相关需求来源。"}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="grid grid-cols-4 gap-2 min-w-[460px]">
-              {[
-                { label: "计划入库", value: currentMrpRow ? `${currentMrpRow.totalPlannedReceipt.toLocaleString()} ${currentMrpRow.unit}` : "—", color: A.blue },
-                { label: "最大净需求", value: currentMrpRow ? currentMrpRow.maxNetRequirement.toLocaleString() : "—", color: currentMrpRow?.maxNetRequirement ? A.red : A.green },
-                { label: "BOM来源", value: currentMrpRow?.bomSources?.length ? `${currentMrpRow.bomSources.length} 个父项` : "—", color: A.orange },
-                { label: "计划金额", value: currentMrpRow ? fmt(currentMrpRow.amount) : "—", color: A.purple },
-              ].map((item) => (
-                <div key={item.label} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
-                  <div className="text-[9px]" style={{ color: A.gray2 }}>{item.label}</div>
-                  <div className="text-xs font-semibold truncate" style={{ color: item.color }}>{item.value}</div>
-                </div>
-              ))}
-            </div>
-            <button onClick={exportMrpPlannedOrdersCsv}
-              className="h-10 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5"
-              style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={13} /> 导出当前结果
-            </button>
-            <button onClick={releaseMrpAsPr} disabled={generatingRequest || !currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0 || Boolean(lastGeneratedRequest)}
-              className="h-10 px-3 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed"
-              style={{ background: lastGeneratedRequest ? A.green : currentMrpRow && currentMrpRow.totalPlannedReceipt > 0 ? A.purple : A.gray3, opacity: generatingRequest ? 0.7 : 1 }}>
-              {generatingRequest ? <Loader2 size={13} className="animate-spin" /> : lastGeneratedRequest ? <CheckCircle2 size={13} /> : <GitBranch size={13} />}
-              {lastGeneratedRequest ? `已预览 ${lastGeneratedRequest}` : "预览 PR 草稿"}
-            </button>
-          </div>
+          <div><h2 className="text-sm font-semibold" style={{ color: A.label }}>MRP 净需求计划</h2><p className="text-[11px] mt-0.5" style={{ color: A.sub }}>{currentMrpRow ? `${currentMrpRow.sku} · 毛需求、库存余额、计划收货、净需求、计划入库、计划释放、BOM 和需求来源证据` : "等待 MRP 接口返回计划结果"}</p><p className={`${typography.compactMetadata} mt-1 max-w-3xl`} style={{ color: A.gray2 }}>计划释放只表示审阅节奏，不会自动下发 PR/PO。{mrpBomSourceSummary ? `BOM 证据：${mrpBomSourceSummary}。` : "当前行未识别到 BOM 相关需求来源。"}</p></div>
+          <div className="flex items-center gap-2"><button onClick={exportMrpPlannedOrdersCsv} className="h-10 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5" style={{ background: A.gray6, color: A.blue }}><FileSpreadsheet size={13} /> 导出当前结果</button><button onClick={releaseMrpAsPr} disabled={generatingRequest || !currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0 || Boolean(lastGeneratedRequest)} className="h-10 px-3 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed" style={{ background: lastGeneratedRequest ? A.green : currentMrpRow && currentMrpRow.totalPlannedReceipt > 0 ? A.purple : A.gray3, opacity: generatingRequest ? 0.7 : 1 }}>{generatingRequest ? <Loader2 size={13} className="animate-spin" /> : lastGeneratedRequest ? <CheckCircle2 size={13} /> : <GitBranch size={13} />}{lastGeneratedRequest ? `已预览 ${lastGeneratedRequest}` : "预览 PR 草稿"}</button></div>
         </div>
-        {currentMrpRow ? (
-          <table className={`w-full ${tableBodyTextClass}`}>
-            <thead>
-              <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {["周期", "毛需求", "独立/BOM", "计划到货", "预计可用", "净需求", "计划入库", "计划释放", "例外"].map((h) => (
-                  <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {currentMrpRow.schedule.map((line, index) => {
-                const exceptionColor = line.exception === "加急" ? A.red : line.exception === "释放" ? A.blue : line.exception === "推迟/取消" ? A.orange : A.green;
-                return (
-                  <tr key={line.period} className="hover:bg-blue-50/40 transition-colors"
-                    style={{ borderBottom: index < currentMrpRow.schedule.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className={`${tdClass} font-medium`} style={{ color: A.label }}>{line.period}</td>
-                    <td className={tdNumericClass} style={{ color: A.label }}>{line.grossRequirement.toLocaleString()}</td>
-                    <td className={`${tdNumericClass} min-w-[190px]`} style={{ color: A.sub }}>
-                      <div>{line.independentDemand.toLocaleString()} / {line.dependentDemand.toLocaleString()}</div>
-                      {line.dependentDemandSources?.length ? (
-                        <div className="mt-1 text-[10px] leading-4 tabular-nums" style={{ color: A.gray2 }}>
-                          {line.dependentDemandSources.map((source) => `${source.parentName || source.parent} ${source.demand.toLocaleString()}`).join(" · ")}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className={tdNumericClass} style={{ color: line.scheduledReceipt > 0 ? A.blue : A.gray3 }}>
-                      {line.scheduledReceipt > 0 ? `+${line.scheduledReceipt.toLocaleString()}` : "—"}
-                    </td>
-                    <td className={`${tdNumericClass} font-semibold`} style={{ color: line.projectedAvailable < currentMrpRow.safetyStock ? A.red : A.label }}>
-                      {line.projectedAvailable.toLocaleString()}
-                    </td>
-                    <td className={tdNumericClass} style={{ color: line.netRequirement > 0 ? A.red : A.gray3 }}>
-                      {line.netRequirement > 0 ? line.netRequirement.toLocaleString() : "—"}
-                    </td>
-                    <td className={`${tdNumericClass} font-semibold`} style={{ color: line.plannedReceipt > 0 ? A.blue : A.gray3 }}>
-                      {line.plannedReceipt > 0 ? line.plannedReceipt.toLocaleString() : "—"}
-                    </td>
-                    <td className={tdClass} style={{ color: line.plannedRelease > 0 ? A.purple : A.gray3 }}>
-                      {line.plannedRelease > 0 ? `${line.plannedReleasePeriod} · ${line.plannedRelease.toLocaleString()}` : "—"}
-                    </td>
-                    <td className={tdClass}>
-                      <Chip label={line.exception} color={exceptionColor} bg={`${exceptionColor}16`} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <div className="py-10 text-center text-xs" style={{ color: A.gray2 }}>MRP 计划暂不可用，预测页仍可使用供需对账。</div>
-        )}
+        {currentMrpRow ? <table className={`w-full ${tableBodyTextClass}`}><thead><tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>{["周期", "毛需求", "独立/BOM", "计划到货", "预计可用", "净需求", "计划入库", "计划释放", "例外"].map((h) => <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>)}</tr></thead><tbody>{currentMrpRow.schedule.map((line, index) => { const exceptionColor = line.exception === "加急" ? A.red : line.exception === "释放" ? A.blue : line.exception === "推迟/取消" ? A.orange : A.green; return <tr key={line.period} className="hover:bg-blue-50/40 transition-colors" style={{ borderBottom: index < currentMrpRow.schedule.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}><td className={`${tdClass} font-medium`} style={{ color: A.label }}>{line.period}</td><td className={tdNumericClass}>{line.grossRequirement.toLocaleString()}</td><td className={`${tdNumericClass} min-w-[190px]`}><div>{line.independentDemand.toLocaleString()} / {line.dependentDemand.toLocaleString()}</div></td><td className={tdNumericClass}>{line.scheduledReceipt > 0 ? `+${line.scheduledReceipt.toLocaleString()}` : "—"}</td><td className={tdNumericClass}>{line.projectedAvailable.toLocaleString()}</td><td className={tdNumericClass}>{line.netRequirement > 0 ? line.netRequirement.toLocaleString() : "—"}</td><td className={tdNumericClass}>{line.plannedReceipt > 0 ? line.plannedReceipt.toLocaleString() : "—"}</td><td className={tdClass}>{line.plannedRelease > 0 ? `${line.plannedReleasePeriod} · ${line.plannedRelease.toLocaleString()}` : "—"}</td><td className={tdClass}><Chip label={line.exception} color={exceptionColor} bg={`${exceptionColor}16`} /></td></tr>; })}</tbody></table> : <div className="py-10 text-center text-xs" style={{ color: A.gray2 }}>MRP 计划暂不可用。</div>}
       </Card>
+    </ViewShell>
+  );
 
+  const ReplenishmentWorkbenchView = () => (
+    <ViewShell>
+      <PlanningKpiGrid />
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <SectionHeader title="预测转采购建议"
-              right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                style={{ background: peakGap > 0 ? "#fff1f0" : "#f0faf4", color: peakGap > 0 ? A.red : A.green }}>
-                {peakGap > 0 ? "需要补货" : "无需补货"}
-              </span>} />
-            <p className="text-xs leading-5 max-w-3xl" style={{ color: A.sub }}>
-              基于峰值净缺口、服务水平、MRP 净需求和提前期形成采购建议；生成申请前仍需人工确认供应商、预算、释放期和 BOM 来源，审批通过后才可转采购订单。
-            </p>
-          </div>
-          <button onClick={createRequestFromForecast} disabled={generatingRequest || executableRecommendedQty <= 0 || Boolean(lastGeneratedRequest)}
-            className="h-9 px-4 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed"
-            style={{ background: lastGeneratedRequest ? A.green : executableRecommendedQty > 0 ? A.blue : A.gray3, opacity: generatingRequest ? 0.7 : 1 }}>
-            {generatingRequest ? <Loader2 size={13} className="animate-spin" /> : lastGeneratedRequest ? <CheckCircle2 size={13} /> : <ShoppingCart size={13} />}
-            {lastGeneratedRequest ? `已预览 ${lastGeneratedRequest}` : "预览 PR 草稿"}
-          </button>
+          <div><SectionHeader title="补货建议转草稿" right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#f0f6ff", color: A.blue }}>ActionDraft preview only</span>} /><p className="text-xs leading-5 max-w-3xl" style={{ color: A.sub }}>基于峰值净缺口、服务水平、MRP 净需求和提前期形成采购草稿建议；这里不会直接创建采购申请业务记录。</p></div>
+          <button onClick={createRequestFromForecast} disabled={generatingRequest || executableRecommendedQty <= 0 || Boolean(lastGeneratedRequest)} className="h-9 px-4 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed" style={{ background: lastGeneratedRequest ? A.green : executableRecommendedQty > 0 ? A.blue : A.gray3, opacity: generatingRequest ? 0.7 : 1 }}>{generatingRequest ? <Loader2 size={13} className="animate-spin" /> : lastGeneratedRequest ? <CheckCircle2 size={13} /> : <ShoppingCart size={13} />}{lastGeneratedRequest ? `已预览 ${lastGeneratedRequest}` : "预览 PR 草稿"}</button>
         </div>
-        <div className="grid grid-cols-7 gap-2 mt-4">
-          {[
-            { label: currentMrpRow ? "MRP 建议量" : "建议采购量", value: executableRecommendedQty > 0 ? `${executableRecommendedQty.toLocaleString()} ${sku.unit}` : "0", color: executableRecommendedQty > 0 ? A.red : A.green },
-            { label: "峰值净缺口", value: `${peakGap.toLocaleString()} ${sku.unit}`, color: peakGap > 0 ? A.red : A.green },
-            { label: "推荐供应商", value: procurementProfile.supplier, color: A.blue },
-            { label: "供应商评分", value: `${supplierScore.score} · ${supplierScore.grade}`, color: supplierScore.color },
-            { label: "预估金额", value: fmt(executableRecommendedAmount), color: A.purple },
-            { label: "优先级", value: executablePriority, color: executablePriority === "高" ? A.red : executablePriority === "中" ? A.orange : A.green },
-            { label: "预计到货", value: formatEta(leadTimeDays), color: A.label },
-          ].map((item) => (
-            <div key={item.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>{item.label}</div>
-              <div className="text-xs font-semibold mt-1 truncate" style={{ color: item.color }}>{item.value}</div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.sub }}>
-          <span className="font-semibold" style={{ color: supplierScore.color }}>供应商推荐依据：</span>{supplierScore.note}
-        </div>
+        <div className="grid grid-cols-7 gap-2 mt-4">{[{ label: currentMrpRow ? "MRP 建议量" : "建议采购量", value: executableRecommendedQty > 0 ? `${executableRecommendedQty.toLocaleString()} ${sku.unit}` : "0", color: executableRecommendedQty > 0 ? A.red : A.green }, { label: "峰值净缺口", value: `${peakGap.toLocaleString()} ${sku.unit}`, color: peakGap > 0 ? A.red : A.green }, { label: "推荐供应商", value: procurementProfile.supplier, color: A.blue }, { label: "采购负责人", value: procurementProfile.buyer, color: A.label }, { label: "预估金额", value: fmt(executableRecommendedAmount), color: A.purple }, { label: "优先级", value: executablePriority, color: executablePriority === "高" ? A.red : executablePriority === "中" ? A.orange : A.green }, { label: "预计到货", value: formatEta(leadTimeDays), color: A.label }].map((item) => <div key={item.label} className="rounded-xl p-3" style={{ background: A.gray6 }}><div className="text-[10px]" style={{ color: A.gray2 }}>{item.label}</div><div className="text-xs font-semibold mt-1 truncate" style={{ color: item.color }}>{item.value}</div></div>)}</div>
+        <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.sub }}><span className="font-semibold" style={{ color: supplierScore.color }}>供应商推荐依据：</span>{supplierScore.note}</div>
       </Card>
+      <Card><div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}><div><h2 className="text-sm font-semibold" style={{ color: A.label }}>需求 - 供给对账</h2><p className="text-[11px] mt-0.5" style={{ color: A.sub }}>用于解释建议数量，保存计划仍按 legacy mutation guard 管控。</p></div><button onClick={exportReconciliationCsv} className="text-xs px-3 py-2 rounded-xl font-medium flex items-center gap-1.5" style={{ background: A.gray6, color: A.blue }}><FileSpreadsheet size={12} /> 导出</button></div><ReconciliationTable /></Card>
+    </ViewShell>
+  );
 
-      {/* Demand-Supply Reconciliation */}
-      <Card>
-        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-          <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>需求 — 供给对账 (S&OP)</h2>
-            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>
-              起始在手 {sku.onHand.toLocaleString()} {sku.unit} · 待入库 {sku.open.toLocaleString()} {sku.unit}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={exportReconciliationCsv}
-              className="text-xs px-3 py-2 rounded-xl font-medium flex items-center gap-1.5 transition-opacity hover:opacity-90"
-              style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={12} /> 导出当前结果
-            </button>
-            <button onClick={saveForecastPlan} disabled={savingPlan}
-              className="text-xs px-4 py-2 rounded-xl font-medium text-white flex items-center gap-1.5 transition-opacity hover:opacity-90"
-              style={{ background: committed ? A.green : A.blue, opacity: savingPlan ? 0.7 : 1 }}>
-              {savingPlan ? <><Loader2 size={12} className="animate-spin" /> 保存中</>
-                : committed ? <><CheckCircle2 size={12} /> 已保存方案</>
-                  : <><FileCheck2 size={12} /> 保存共识预测方案</>}
-            </button>
-          </div>
-        </div>
-        <table className={`w-full ${tableBodyTextClass}`}>
-          <thead>
-            <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["月份", "预测需求", "计划入库", "期末库存", "缺口", "覆盖月数", "风险", "AI 建议"].map((h) => (
-                <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {reconciliation.map((row, i) => {
-              const riskColor = row.risk === "高" ? A.red : row.risk === "中" ? A.orange : A.green;
-              return (
-                <tr key={i} className="hover:bg-blue-50/40 transition-colors"
-                  style={{ borderBottom: i < reconciliation.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                  <td className={`${tdWideClass} font-medium`} style={{ color: A.label }}>{row.month}</td>
-                  <td className={tdWideNumericClass} style={{ color: A.label }}>{row.demand.toLocaleString()}</td>
-                  <td className={tdWideNumericClass} style={{ color: row.inbound > 0 ? A.blue : A.gray3 }}>{row.inbound > 0 ? "+" + row.inbound.toLocaleString() : "—"}</td>
-                  <td className={`${tdWideNumericClass} font-semibold`} style={{ color: row.ending < 0 ? A.red : A.label }}>{row.ending.toLocaleString()}</td>
-                  <td className={`${tdWideNumericClass} font-medium`} style={{ color: row.gap > 0 ? A.red : A.gray3 }}>{row.gap > 0 ? row.gap.toLocaleString() : "—"}</td>
-                  <td className={tdWideNumericClass} style={{ color: A.sub }}>{row.cover.toFixed(1)}</td>
-                  <td className={tdWideClass}><StatusPill status={row.risk === "高" ? "不足" : row.risk === "中" ? "预警" : "正常"} /></td>
-                  <td className={tdWideClass} style={{ color: riskColor }}>
-                    {row.risk === "高" ? `紧急补货 +${Math.ceil(row.gap * 1.1).toLocaleString()}`
-                      : row.risk === "中" ? "提前下单" : "维持现状"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
-
+  const PlanningParametersView = () => (
+    <ViewShell>
+      <PlanningKpiGrid />
       <Card className="p-5">
-        <SectionHeader title="已保存预测方案"
-          right={<div className="flex items-center gap-2">
-            <button onClick={exportSavedPlansCsv}
-              className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={11} /> 导出当前结果
-            </button>
-            <span className="text-[10px]" style={{ color: A.gray2 }}>{savedPlans.length} 条计划记录</span>
-          </div>} />
-        {savedPlans.length === 0 ? (
-          <div className="text-xs py-6 text-center" style={{ color: A.gray2 }}>
-            还没有保存方案。运行预测后点击“保存共识预测方案”，结果会进入计划记录。
-          </div>
-        ) : (
-          <div className="grid grid-cols-4 gap-2">
-            {savedPlans.slice(0, 8).map((plan) => (
-              <div key={plan.id} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                <div className="text-[10px] font-semibold truncate" style={{ color: A.blue }}>{plan.id}</div>
-                <div className="text-xs font-semibold mt-1 truncate" style={{ color: A.label }}>{plan.sku}</div>
-                <div className="text-[10px] mt-0.5 truncate" style={{ color: A.sub }}>{plan.name}</div>
-                <div className="flex items-center justify-between mt-2 text-[10px]">
-                  <span style={{ color: A.gray1 }}>{METHOD_LABEL[plan.method] ?? plan.method}</span>
-                  <span style={{ color: A.green }}>MAPE {Number(plan.metrics?.mape ?? 0).toFixed(1)}%</span>
-                </div>
-                {plan.procurementSuggestion && Number(plan.procurementSuggestion.quantity || 0) > 0 && (
-                  <div className="mt-2 pt-2 text-[10px]" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
-                    <div className="flex items-center justify-between">
-                      <span style={{ color: A.gray2 }}>建议采购</span>
-                      <span className="font-semibold" style={{ color: A.red }}>
-                        {Number(plan.procurementSuggestion.quantity).toLocaleString()} {plan.unit || ""}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="truncate" style={{ color: A.gray2 }}>{plan.procurementSuggestion.supplier || "—"}</span>
-                      <span style={{ color: A.purple }}>{fmt(Number(plan.procurementSuggestion.amount || 0))}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <SectionHeader title="SKU 计划参数与静态假设" right={<span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#fff8f0", color: A.orange }}>demo/static assumptions</span>} />
+        <div className="grid grid-cols-4 gap-3">{[{ label: "Lead time", value: currentMrpRow ? `${currentMrpRow.leadTimePeriods} 期` : `${leadTimeDays} 天`, detail: "MRP 静态 profile / forecast UI" }, { label: "MOQ", value: currentMrpRow ? `${currentMrpRow.moq} ${sku.unit}` : "—", detail: "最小采购批量" }, { label: "Batch multiple", value: currentMrpRow ? `${currentMrpRow.batchMultiple}` : "—", detail: "批量倍数" }, { label: "Safety stock", value: `${(currentMrpRow?.safetyStock || fallbackSafetyStock).toLocaleString()} ${sku.unit}`, detail: "安全库存 / 最低库存" }, { label: "Reorder point", value: `${Math.round((currentMrpRow?.safetyStock || fallbackSafetyStock) * 1.15).toLocaleString()} ${sku.unit}`, detail: "Alpha 只读假设" }, { label: "Preferred supplier", value: procurementProfile.supplier, detail: supplierScore.grade }, { label: "Buyer", value: procurementProfile.buyer, detail: "采购负责人假设" }, { label: "Unit cost", value: fmt(procurementProfile.unitPrice), detail: "用于草稿金额估算" }].map((item) => <div key={item.label} className="rounded-xl p-4" style={{ background: A.gray6 }}><div className={typography.compactMetadata} style={{ color: A.gray2 }}>{item.label}</div><div className="mt-2 text-sm font-semibold truncate" style={{ color: A.label }}>{item.value}</div><div className={`${typography.compactMetadata} mt-1`} style={{ color: A.sub }}>{item.detail}</div></div>)}</div>
       </Card>
-    </div>
+      <Card className="p-5"><SectionHeader title="BOM 与需求来源证据" /><div className="grid grid-cols-3 gap-3">{(currentMrpRow?.bomSources || []).slice(0, 6).map((source, index) => <div key={`${source.parent}-${index}`} className="rounded-xl p-3" style={{ background: A.gray6 }}><div className="text-xs font-semibold" style={{ color: A.label }}>{source.parentName || source.parent}</div><div className="text-[10px] mt-1" style={{ color: A.sub }}>贡献需求 {Number(source.demand || 0).toLocaleString()} · qty/parent {source.qtyPer}</div></div>)}{!currentMrpRow?.bomSources?.length && <div className="text-xs py-6" style={{ color: A.gray2 }}>当前 SKU 没有可展示的 BOM 来源。</div>}</div></Card>
+    </ViewShell>
   );
-}
 
-// Legacy forecast block removed in favor of S&OP engine above
-function _ForecastLegacy_Unused() {
-  return (
-    <div style={{ display: "none" }}>
-      <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="Q1 预测营收" value="¥3.09亿" sub="1—3月 (信心 91%)" delta="+12.8% YoY" positive icon={TrendingUp} color={A.blue} />
-        <KpiCard label="预测准确率" value="94.2%" sub="MAPE 5.8%" icon={Activity} color={A.green} />
-        <KpiCard label="需补货品种" value="342" sub="未来 30 天" delta="+24 vs 上期" positive={false} icon={AlertTriangle} color={A.red} />
-        <KpiCard label="模型更新" value="2h 前" sub="持续学习中" icon={Clock} color={A.purple} />
-      </div>
-
+  const PlanningCockpitView = () => (
+    <ViewShell>
+      <PlanningKpiGrid />
       <div className="grid grid-cols-3 gap-3">
-        <Card className="col-span-2 p-5">
-          <SectionHeader title="营收预测 vs 实际（含置信区间）"
-            right={<div className="flex items-center gap-4 text-xs" style={{ color: A.sub }}>
-              <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded" style={{ background: A.blue }} />实际</span>
-              <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded border-dashed" style={{ borderTop: `2px dashed ${A.orange}` }} />预测</span>
-            </div>}
-          />
-          <ResponsiveContainer width="100%" height={240}>
-            <ComposedChart data={forecastData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="confG" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={A.orange} stopOpacity={0.1} />
-                  <stop offset="100%" stopColor={A.orange} stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="0" stroke="rgba(0,0,0,0.05)" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v / 1e4}万`} width={48} />
-              <Tooltip content={<AppleTooltip />} />
-              <Area type="monotone" dataKey="upper" name="上限" stroke="none" fill="url(#confG)" />
-              <Area type="monotone" dataKey="lower" name="下限" stroke="none" fill="white" />
-              <Line type="monotone" dataKey="actual" name="实际" stroke={A.blue} strokeWidth={2.5} dot={{ r: 3.5, fill: A.white, strokeWidth: 2, stroke: A.blue }} connectNulls={false} />
-              <Line type="monotone" dataKey="forecast" name="预测" stroke={A.orange} strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3, fill: A.white, strokeWidth: 2, stroke: A.orange }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card className="p-5">
-          <SectionHeader title="季度预测" />
-          <div className="space-y-4">
-            {[
-              { q: "Q3 2026", revenue: "¥3.09亿", conf: 91 },
-              { q: "Q4 2026", revenue: "¥3.56亿", conf: 84 },
-              { q: "Q1 2027", revenue: "¥3.84亿", conf: 76 },
-              { q: "Q2 2027", revenue: "¥4.21亿", conf: 68 },
-            ].map((row) => (
-              <div key={row.q}>
-                <div className="flex justify-between items-baseline mb-2">
-                  <span className="text-xs font-medium" style={{ color: A.label }}>{row.q}</span>
-                  <span className="text-sm font-semibold" style={{ color: A.blue }}>{row.revenue}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
-                    <div className="h-full rounded-full" style={{ width: `${row.conf}%`, background: A.orange }} />
-                  </div>
-                  <span className="text-[11px] w-14 text-right" style={{ color: A.gray1 }}>置信 {row.conf}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+        <Card className="p-5"><SectionHeader title="Planning risk summary" /><div className="space-y-3">{[{ label: "今天最需要处理", value: peakGap > 0 ? `${sku.sku} 缺口 ${peakGap.toLocaleString()} ${sku.unit}` : "当前供需平衡", color: peakGap > 0 ? A.red : A.green }, { label: "Forecast quality", value: `MAPE ${result.mape.toFixed(1)}% · ${mapeGrade(result.mape).grade}`, color: mapeGrade(result.mape).color }, { label: "MRP exception", value: currentMrpRow?.exception || "正常", color: currentMrpRow?.exception === "加急" ? A.red : currentMrpRow?.exception === "释放" ? A.blue : A.green }].map((item) => <div key={item.label} className="rounded-xl p-3" style={{ background: A.gray6 }}><div className="text-[10px]" style={{ color: A.gray2 }}>{item.label}</div><div className="text-sm font-semibold mt-1" style={{ color: item.color }}>{item.value}</div></div>)}</div></Card>
+        <Card className="col-span-2 p-5"><SectionHeader title="Top MRP exceptions" />{mrpExceptions.length ? <div className="space-y-2">{mrpExceptions.slice(0, 3).map((item) => <div key={item.title} className="rounded-xl p-3 flex items-start justify-between gap-3" style={{ background: A.gray6 }}><div><div className="text-xs font-semibold" style={{ color: A.label }}>{item.title}</div><div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{item.body}</div></div><div className="text-xs font-semibold tabular-nums" style={{ color: item.color }}>{item.metric}</div></div>)}</div> : <div className="text-xs py-8 text-center" style={{ color: A.gray2 }}>没有高优先级 MRP 例外。</div>}</Card>
       </div>
-
-      <Card>
-        <div className="px-5 py-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>30 天补货优先级</h2>
-        </div>
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["品名", "当前库存", "预测消耗", "可用天数", "建议采购量", "建议时间", "预估金额", "紧迫度"].map((h) => (
-                <th key={h} className="text-left px-5 py-3 font-medium" style={{ color: A.gray1 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              { name: "控制器主板 V3.2",  qty: 12,  consume: 48,  days: 7,  suggest: 60,  when: "立即",   cost: fmt(720000), urgency: "不足" },
-              { name: "伺服电机 750W",     qty: 34,  consume: 120, days: 8,  suggest: 150, when: "立即",   cost: fmt(450000), urgency: "不足" },
-              { name: "铝合金型材 6063",   qty: 148, consume: 620, days: 7,  suggest: 800, when: "48h 内", cost: fmt(280000), urgency: "不足" },
-              { name: "液压油缸 50mm",     qty: 67,  consume: 140, days: 14, suggest: 120, when: "本周内", cost: fmt(310000), urgency: "预警" },
-              { name: "密封垫片 φ80",      qty: 520, consume: 900, days: 17, suggest: 600, when: "本周内", cost: fmt(90000),  urgency: "预警" },
-            ].map((row, i) => (
-              <tr key={row.name} className="hover:bg-blue-50/40 transition-colors"
-                style={{ borderBottom: i < 4 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className="px-5 py-3.5 font-medium" style={{ color: A.label }}>{row.name}</td>
-                <td className="px-5 py-3.5" style={{ color: A.label }}>{row.qty}</td>
-                <td className="px-5 py-3.5" style={{ color: A.sub }}>{row.consume}</td>
-                <td className="px-5 py-3.5 font-semibold" style={{ color: row.days <= 10 ? A.red : A.orange }}>{row.days} 天</td>
-                <td className="px-5 py-3.5 font-medium" style={{ color: A.green }}>{row.suggest}</td>
-                <td className="px-5 py-3.5 font-medium" style={{ color: A.label }}>{row.when}</td>
-                <td className="px-5 py-3.5 font-medium" style={{ color: A.orange }}>{row.cost}</td>
-                <td className="px-5 py-3.5"><StatusPill status={row.urgency} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
+      <div className="grid grid-cols-3 gap-3">{[{ title: "需求预测", body: `未来 ${horizon} 月需求 ${totalForecastDemand.toLocaleString()} ${sku.unit}，MAPE ${result.mape.toFixed(1)}%。`, cta: "查看 Demand Forecast" }, { title: "MRP 计划", body: currentMrpRow ? `计划入库 ${currentMrpRow.totalPlannedReceipt.toLocaleString()} ${sku.unit}，最大净需求 ${currentMrpRow.maxNetRequirement.toLocaleString()}。` : "MRP 数据加载中。", cta: "查看 MRP Plan" }, { title: "补货工作台", body: executableRecommendedQty > 0 ? `建议准备 ${executableRecommendedQty.toLocaleString()} ${sku.unit} 草稿，金额 ${fmt(executableRecommendedAmount)}。` : "当前无需准备补货草稿。", cta: "打开 Replenishment" }].map((item) => <Card key={item.title} className="p-5"><div className={typography.sectionTitle} style={{ color: A.label }}>{item.title}</div><p className={`${typography.body} mt-2`} style={{ color: A.sub }}>{item.body}</p><div className={`${typography.compactMetadata} mt-4`} style={{ color: A.blue }}>{item.cta}</div></Card>)}</div>
+    </ViewShell>
   );
+
+  if (activePlanningView === "demand") return <DemandForecastView />;
+  if (activePlanningView === "mrp") return <MrpPlanView />;
+  if (activePlanningView === "replenishment") return <ReplenishmentWorkbenchView />;
+  if (activePlanningView === "parameters") return <PlanningParametersView />;
+  return <PlanningCockpitView />;
 }
