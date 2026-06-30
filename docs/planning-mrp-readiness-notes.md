@@ -1,8 +1,8 @@
 # Planning / Forecast / MRP Readiness Notes
 
-Round: R56 Planning Reality Audit and Scope Freeze
+Round: R65 Planning Alpha Readiness Gate
 
-This note freezes the current Planning / Forecast / MRP reality before additional hardening work. It is an internal readiness artifact, not product copy, and does not claim production MRP readiness.
+This note records the current Planning / Forecast / MRP readiness after R57-R65 hardening. It is an internal readiness artifact, not product copy, and does not claim production MRP readiness.
 
 ## Inspected Surface
 
@@ -39,36 +39,46 @@ This note freezes the current Planning / Forecast / MRP reality before additiona
 - S&OP draft uses fixed planning copy and IDs such as `2026-06` / `SOP-2026-`, and its source can fall back to `MRP profile`.
 - Supplier assumptions for planning recommendations are static through forecast procurement profiles and route-local MRP supplier fields.
 
-## Unsafe For Alpha
+## Alpha Safety Gate
 
-- Forecast-generated PR creation still directly calls `POST /api/purchase-requests` from the Forecast page.
-- MRP release still directly calls `POST /api/purchase-requests` from the Forecast page.
-- Forecast plan save still writes through `POST /api/forecast-plans`.
-- S&OP save still writes through `POST /api/sop-cycle`.
-- The Forecast panel is not wired to `openActionDraftReview`; `FlowChainApp` currently renders `<ForecastPanel />` without an ActionDraft review prop.
-- The Forecast/MRP UI uses execution language such as generating purchase requests and releasing MRP orders before the release path is converted to draft preview.
+- Forecast-generated PR and MRP release actions now open ActionDraft `purchase_request_draft` preview instead of directly calling `POST /api/purchase-requests`.
+- `FlowChainApp` wires Forecast/MRP to `openActionDraftReview`, and draft workflow tests lock that Forecast no longer contains `/api/purchase-requests`.
+- Forecast/MRP copy now explains demo/static planning boundaries, forecast metrics, MRP exceptions, planned receipt/release semantics, BOM evidence, and human review requirements.
+- Planning AI prompts are deterministic, read-only, and return Forecast/MRP evidence without provider dependency or business writes.
+- `GET /api/mrp-plan` remains read-only and DB-mode allowed; `POST /api/forecast-plans`, `POST /api/sop-cycle`, and legacy PR mutations remain DB-mode blocked.
+
+## Remaining Non-Production Boundaries
+
+- Forecast plan save still writes through legacy JSON `POST /api/forecast-plans`; keep Alpha scenario optional and guided.
+- S&OP save still writes through legacy JSON `POST /api/sop-cycle`; do not include S&OP commit as an unguided Alpha task.
+- Forecast SKU history, month labels, procurement profiles, MRP profiles, and BOM master still include demo/static assumptions.
+- ActionDraft confirmation remains intentionally disabled; Alpha users may preview/save draft shells but must not expect final PR/PO creation from Forecast/MRP.
 
 ## Already Solid
 
-- Forecast algorithms are domain-level enough to test directly in `src/domain/forecast/planning.ts`.
-- Forecast metric calculations are centralized in `runForecast`, although edge cases need stronger tests.
+- Forecast algorithms are domain-level and covered by deterministic edge-case tests in `src/domain/forecast/planning.ts`.
+- Forecast metric calculations are centralized in `runForecast`, including invalid/short history degradation and scenario adjustment tests.
 - Route classification already marks `GET /api/mrp-plan` read-only and DB-mode allowed.
 - Route classification already marks `POST /api/forecast-plans`, `POST /api/sop-cycle`, and `POST /api/purchase-requests` as legacy mutations and DB-mode blocked.
 - Legacy mutation guard is already exercised by route classification, backend foundation, DB smoke, and procurement DB parity tests.
 - ActionDraft boundary and review shell already make final confirmation unavailable / not implemented.
+- MRP read model, BOM explosion, net requirements, lot sizing, planned release periods, exception classification, and planning route guards now have focused tests.
+- Planning AI UAT prompts are covered by read-only route tests and contextual quick prompt tests.
 
-## Needs Dedicated Work
+## Completed Hardening
 
-- R57: Harden forecast engine tests and edge-case behavior before reducing page-level calculation.
-- R58: Stabilize the MRP read model contract and add explicit source/demo metadata where useful.
-- R59: Strengthen BOM explosion tests and evidence, especially multi-level, phantom, scrap, lead-time offset, and shared components.
-- R60: Strengthen MRP netting, lot sizing, planned release, and exception tests; extract pure helpers only where small.
-- R61: Add planning route guard tests proving read/write boundaries and DB-mode blocking.
-- R62: Improve Forecast/MRP explanation copy and typography while avoiding production-readiness claims.
-- R63: Convert Forecast and MRP release actions to ActionDraft `purchase_request_draft` preview and remove direct PR creation from UAT-facing release actions.
-- R64: Add read-only planning AI prompts only if the existing AI architecture supports them safely.
-- R65: Gate Forecast/MRP as optional guided Alpha, observation-only, or excluded from Alpha.
+- R57: Hardened forecast engine tests and edge-case behavior.
+- R58: Stabilized the MRP read model contract with explicit source metadata.
+- R59: Strengthened BOM explosion tests and evidence for multi-level, phantom, scrap, lead-time offset, and shared components.
+- R60: Strengthened MRP netting, lot sizing, planned release, and exception tests with exported pure helpers.
+- R61: Added planning route guard tests proving read/write boundaries and DB-mode blocking.
+- R62: Improved Forecast/MRP explanation copy while avoiding production-readiness claims.
+- R63: Converted Forecast and MRP release actions to ActionDraft `purchase_request_draft` preview and removed direct PR creation from UAT-facing release actions.
+- R64: Added deterministic read-only planning AI prompts.
+- R65: Gates Forecast/MRP for optional guided Alpha only.
 
-## R56 Recommendation
+## R65 Recommendation
 
-Forecast/MRP should not enter Alpha yet. Treat it as a dedicated Planning phase with useful demo capability, partially solid domain logic, and known unsafe mutation paths. The next round should begin with Forecast engine domain hardening, not release conversion, so the planning basis is testable before the safety workflow is changed.
+Forecast/MRP ready for optional guided Alpha scenario.
+
+Use this only as a guided planning demonstration: forecast metrics, MRP evidence, exception review, and ActionDraft preview. Do not position it as autonomous MRP, production replenishment, or final PR/PO release.
