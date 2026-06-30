@@ -16,6 +16,11 @@ test('route classification covers read preview legacy mutation and diagnostics r
   assert.equal(classifyRoute('POST', '/api/action-drafts/preview').classification, ROUTE_CLASSES.previewOnly)
   assert.equal(classifyRoute('POST', '/api/action-drafts').classification, ROUTE_CLASSES.controlledPersistence)
   assert.equal(classifyRoute('POST', '/api/action-drafts/save').databaseMode, 'allowed-db-persistence')
+  assert.equal(classifyRoute('GET', '/api/mrp-plan').classification, ROUTE_CLASSES.readOnly)
+  assert.equal(classifyRoute('GET', '/api/mrp-plan').writesJson, false)
+  assert.equal(classifyRoute('GET', '/api/sop-cycle').classification, ROUTE_CLASSES.readOnly)
+  assert.equal(classifyRoute('POST', '/api/forecast-plans').classification, ROUTE_CLASSES.legacyMutation)
+  assert.equal(classifyRoute('POST', '/api/sop-cycle').classification, ROUTE_CLASSES.legacyMutation)
   assert.equal(classifyRoute('POST', '/api/purchase-requests').classification, ROUTE_CLASSES.legacyMutation)
   assert.equal(classifyRoute('PATCH', '/api/receiving-docs/GRN-1').classification, ROUTE_CLASSES.legacyMutation)
   assert.equal(classifyRoute('GET', '/index.html').classification, ROUTE_CLASSES.static)
@@ -49,6 +54,8 @@ test('database mode blocks legacy mutation routes but allows read and preview ro
     ['GET', '/api/master-data/items'],
     ['GET', '/api/procurement/documents'],
     ['GET', '/api/inventory/items'],
+    ['GET', '/api/mrp-plan'],
+    ['GET', '/api/sop-cycle'],
     ['POST', '/api/action-drafts/preview'],
     ['POST', '/api/ai/chat'],
   ]
