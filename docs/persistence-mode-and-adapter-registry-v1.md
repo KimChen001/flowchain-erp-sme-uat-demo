@@ -9,7 +9,7 @@ The helper `getPersistenceMode(env)` reads `FLOWCHAIN_PERSISTENCE_MODE`.
 Supported values:
 
 - `json`: default and current runtime behavior.
-- `database`: opt-in database-readiness mode. Rounds 26-29 add DB adapters for ActionDraft, AuditLog, Master Data, and Procurement Read while inventory read remains JSON read fallback until its DB adapter exists.
+- `database`: opt-in database-readiness mode. Rounds 26-30 add DB adapters for ActionDraft, AuditLog, Master Data, Procurement Read, and Inventory Read.
 
 Rules:
 
@@ -45,12 +45,14 @@ Current database-mode mapping:
 - `auditLog`: DB adapter
 - `masterData`: DB adapter
 - `procurementRead`: DB adapter
-- `inventoryRead`: JSON read fallback
+- `inventoryRead`: DB adapter
 - `aiConversation`: future adapter placeholder
 
 The DB adapters validate `DATABASE_URL` only when their database-backed methods are invoked. JSON mode still ignores missing database configuration.
 
 The Procurement Read DB adapter is read-only. It supports the same public read categories as the JSON repository: document list/detail, links, followups, summary, and document type helpers.
+
+The Inventory Read DB adapter is read-only. It supports the same public read categories as the JSON repository: items, lots, serials, movements, exceptions, summary, and item lookup aliases.
 
 ## Test DB Harness
 

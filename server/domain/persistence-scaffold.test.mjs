@@ -56,15 +56,15 @@ test('Prisma client module validates config before dynamic import', async () => 
   assert.ok(source.indexOf('validateDatabasePersistenceConfig') < source.indexOf("await import('@prisma/client')"))
 })
 
-test('Prisma schema contains low-risk foundations and procurement read models only', () => {
+test('Prisma schema contains low-risk foundations and read models only', () => {
   const schema = readSource('prisma', 'schema.prisma')
   const config = readSource('prisma.config.ts')
 
-  for (const model of ['Tenant', 'User', 'Supplier', 'Item', 'Warehouse', 'PaymentTerm', 'TaxCode', 'ActionDraft', 'ActionDraftValidation', 'ActionDraftAuditTrail', 'AuditLog', 'AiEvidence', 'PurchaseRequest', 'PurchaseRequestLine', 'Rfq', 'RfqLine', 'SupplierQuotation', 'SupplierQuotationLine', 'PurchaseOrder', 'PurchaseOrderLine', 'ReceivingDocument', 'ReceivingLine', 'SupplierInvoice', 'SupplierInvoiceLine', 'ThreeWayMatch', 'DocumentLink', 'ProcurementFollowup']) {
+  for (const model of ['Tenant', 'User', 'Supplier', 'Item', 'Warehouse', 'PaymentTerm', 'TaxCode', 'ActionDraft', 'ActionDraftValidation', 'ActionDraftAuditTrail', 'AuditLog', 'AiEvidence', 'PurchaseRequest', 'PurchaseRequestLine', 'Rfq', 'RfqLine', 'SupplierQuotation', 'SupplierQuotationLine', 'PurchaseOrder', 'PurchaseOrderLine', 'ReceivingDocument', 'ReceivingLine', 'SupplierInvoice', 'SupplierInvoiceLine', 'ThreeWayMatch', 'DocumentLink', 'ProcurementFollowup', 'InventoryBalance', 'InventoryLot', 'InventorySerial', 'InventoryMovement', 'InventoryException']) {
     assert.match(schema, new RegExp(`model ${model} \\{`), model)
   }
 
-  for (const excluded of ['InventoryMovement', 'InventoryBalance', 'InventoryLot', 'InventorySerial', 'InventoryException']) {
+  for (const excluded of ['PaymentExecution', 'GeneralLedgerEntry', 'TaxFiling', 'BankIntegration']) {
     assert.doesNotMatch(schema, new RegExp(`model ${excluded} \\{`), excluded)
   }
 

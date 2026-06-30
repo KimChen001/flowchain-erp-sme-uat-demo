@@ -67,9 +67,16 @@ The schema now includes read-oriented procurement models for the Round 29 Procur
 - `DocumentLink`;
 - `ProcurementFollowup`.
 
-The schema intentionally still excludes inventory persistence and business write workflow models for now:
+Round 30 adds read-oriented inventory models:
 
-- no `InventoryMovement`;
+- `InventoryBalance`;
+- `InventoryLot`;
+- `InventorySerial`;
+- `InventoryMovement`;
+- `InventoryException`.
+
+The schema intentionally still excludes business write workflow and finance execution models for now:
+
 - no finance, payment, or tax filing execution models.
 
 ## Prisma 7 Configuration
@@ -110,8 +117,7 @@ DATABASE_URL=postgresql://...
 - returns a clean config error if database mode is selected without `DATABASE_URL`;
 - does not enable legacy write routes;
 - uses the Round 26 partial database registry for ActionDraft and AuditLog;
-- uses DB adapters for master data and procurement read;
-- keeps inventory read on JSON fallback until its DB adapter exists.
+- uses DB adapters for master data, procurement read, and inventory read.
 
 ## Prisma Client Loading
 

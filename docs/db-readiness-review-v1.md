@@ -1,14 +1,14 @@
 # DB Readiness Review v1
 
-Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter.
+Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter.
 
 ## Current Status
 
 - JSON mode remains the default.
 - Normal `npm test`, `npm run typecheck`, and `npm run build` do not require `DATABASE_URL`, `DATABASE_URL_TEST`, or a live database.
 - Database mode is opt-in through `FLOWCHAIN_PERSISTENCE_MODE=database`.
-- DB adapter coverage currently includes ActionDraft, AuditLog, Master Data, and Procurement Read.
-- Inventory Read remains a JSON fallback repository in database mode until Round 30.
+- DB adapter coverage currently includes ActionDraft, AuditLog, Master Data, Procurement Read, and Inventory Read.
+- JSON mode remains the default source of truth for normal demo runtime.
 - Legacy mutation routes remain blocked in database mode by the route mutation guard.
 
 ## Test DB Harness
@@ -64,12 +64,24 @@ Round 29 adds lean Prisma read models and a DB repository for:
 
 The adapter is read-only. It maps Prisma rows into the existing procurement read model shape for PR, RFQ, PO, GRN, supplier invoice, three-way match, links, followups, and summary. Missing `DATABASE_URL` in database mode returns the same clean database config error used by the other DB adapters.
 
+## Inventory Read DB Adapter
+
+Round 30 adds lean Prisma read models and a DB repository for:
+
+- InventoryBalance
+- InventoryLot
+- InventorySerial
+- InventoryMovement
+- InventoryException
+
+The adapter is read-only. It maps Prisma rows into the existing inventory read model shape for items, lots, serials, movements, exceptions, and summary. It does not post receiving, adjust stock, or create inventory movements.
+
 ## Remaining Gaps
 
-- Inventory Read DB adapter.
 - Master Data executable test DB seed and parity check.
 - ActionDraft persistence end-to-end.
 - AuditLog persistence end-to-end.
+- Procurement and inventory live DB parity datasets.
 - CI database service strategy.
 - Aliyun staging database strategy.
 - Tenant/user permission boundary.

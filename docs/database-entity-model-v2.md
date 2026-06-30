@@ -90,7 +90,7 @@ FlowChain remains an AI-assisted SCM platform for SMEs. The persistence model fo
 
 - Reads: balances, lots, serials, movements, exceptions, summary.
 - Future writes: none in read repository.
-- Current adapter: inventory read model helpers.
+- Current adapters: JSON inventory read model helpers and the Round 30 DB InventoryReadRepository.
 
 ### InventoryMovementRepository
 

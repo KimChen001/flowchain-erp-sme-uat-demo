@@ -71,7 +71,7 @@ test('adapter registry exposes MasterDataRepository in default JSON mode', () =>
   assert.equal(registry.masterData.listSuppliers()[0].id, 'SUP-001')
 })
 
-test('database mode registry uses DB MasterDataRepository and keeps inventory fallback', async () => {
+test('database mode registry uses DB read adapters', async () => {
   const db = createDb()
   const registry = createRepositoryRegistry({ db, env: { FLOWCHAIN_PERSISTENCE_MODE: 'database' } })
 
@@ -80,7 +80,11 @@ test('database mode registry uses DB MasterDataRepository and keeps inventory fa
   assert.equal(registry.actionDrafts.adapter, 'db-action-draft-v1')
   assert.equal(registry.auditLog.adapter, 'db-audit-log-v1')
   assert.equal(registry.procurementRead.adapter, 'db-procurement-read-v1')
-  assert.equal(registry.inventoryRead.listItems()[0].sku, 'A100')
+  assert.equal(registry.inventoryRead.adapter, 'db-inventory-read-v1')
+  await assert.rejects(
+    () => registry.inventoryRead.listItems(),
+    (error) => error.message === DATABASE_CONFIG_ERROR && error.code === 'FLOWCHAIN_DATABASE_CONFIG_MISSING'
+  )
   await assert.rejects(
     () => registry.procurementRead.getDocument('po', 'PO-1'),
     (error) => error.message === DATABASE_CONFIG_ERROR && error.code === 'FLOWCHAIN_DATABASE_CONFIG_MISSING'

@@ -32,6 +32,11 @@ model Tenant {
   threeWayMatches ThreeWayMatch[]
   documentLinks  DocumentLink[]
   procurementFollowups ProcurementFollowup[]
+  inventoryBalances InventoryBalance[]
+  inventoryLots InventoryLot[]
+  inventorySerials InventorySerial[]
+  inventoryMovements InventoryMovement[]
+  inventoryExceptions InventoryException[]
 }
 
 model User {
@@ -540,4 +545,140 @@ model ProcurementFollowup {
 
   @@index([tenantId, status, severity])
   @@index([tenantId, documentType, documentId])
+}
+
+model InventoryBalance {
+  id                String   @id
+  tenantId          String
+  itemId            String?
+  sku               String
+  itemName          String?
+  warehouseId       String?
+  location          String?
+  availableQuantity Decimal? @db.Decimal(18, 4)
+  onHandQuantity    Decimal? @db.Decimal(18, 4)
+  reservedQuantity  Decimal? @db.Decimal(18, 4)
+  safetyStock       Decimal? @db.Decimal(18, 4)
+  reorderPoint      Decimal? @db.Decimal(18, 4)
+  unit              String?
+  status            String?
+  riskLevel         String?
+  metadata          Json?
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, sku])
+  @@index([tenantId, warehouseId])
+}
+
+model InventoryLot {
+  id             String   @id
+  tenantId       String
+  itemId         String?
+  sku            String
+  itemName       String?
+  warehouseId    String?
+  location       String?
+  quantity       Decimal? @db.Decimal(18, 4)
+  qaStatus       String?
+  expiryDate     DateTime?
+  supplierId     String?
+  supplierName   String?
+  sourceDocument String?
+  status         String   @default("available")
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, sku])
+  @@index([tenantId, warehouseId])
+}
+
+model InventorySerial {
+  id             String   @id
+  tenantId       String
+  itemId         String?
+  sku            String
+  itemName       String?
+  warehouseId    String?
+  location       String?
+  status         String   @default("in_stock")
+  owner          String?
+  sourceDocument String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, sku])
+  @@index([tenantId, status])
+}
+
+model InventoryMovement {
+  id                  String   @id
+  tenantId            String
+  itemId              String?
+  sku                 String
+  itemName            String?
+  warehouseId         String?
+  location            String?
+  movementType        String
+  movementLabel       String?
+  movementDate        DateTime?
+  sourceDocument      String?
+  quantityIn          Decimal? @db.Decimal(18, 4)
+  quantityOut         Decimal? @db.Decimal(18, 4)
+  adjustmentQty       Decimal? @db.Decimal(18, 4)
+  status              String   @default("registered")
+  owner               String?
+  unit                String?
+  relatedPoId         String?
+  relatedGrnId        String?
+  relatedReturnId     String?
+  relatedSalesOrderId String?
+  inventoryImpact     String?
+  reason              String?
+  evidence            Json?
+  timeline            Json?
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, sku])
+  @@index([tenantId, movementDate])
+  @@index([tenantId, status])
+}
+
+model InventoryException {
+  id               String   @id
+  tenantId         String
+  type             String
+  itemId           String?
+  sku              String?
+  itemName         String?
+  warehouseId      String?
+  location         String?
+  quantityImpact   Decimal? @db.Decimal(18, 4)
+  unit             String?
+  status           String   @default("open")
+  owner            String?
+  linkedMovementId String?
+  linkedDocument   String?
+  nextAction       String?
+  reason           String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, sku])
 }

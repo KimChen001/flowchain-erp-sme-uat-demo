@@ -19,13 +19,13 @@ export async function handleInventoryRoute(ctx) {
   const repository = inventoryReadRepository(ctx)
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/items') {
-    send(res, 200, { items: repository.listItems(query(url)) })
+    send(res, 200, { items: await repository.listItems(query(url)) })
     return true
   }
 
   const itemMatch = url.pathname.match(/^\/api\/inventory\/items\/([^/]+)$/)
   if (req.method === 'GET' && itemMatch) {
-    const item = repository.getItem(itemMatch[1])
+    const item = await repository.getItem(itemMatch[1])
     if (!item) {
       send(res, 404, { error: 'Inventory item not found' })
       return true
@@ -35,27 +35,27 @@ export async function handleInventoryRoute(ctx) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/lots') {
-    send(res, 200, { lots: repository.listLots(query(url)) })
+    send(res, 200, { lots: await repository.listLots(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/serials') {
-    send(res, 200, { serials: repository.listSerials(query(url)) })
+    send(res, 200, { serials: await repository.listSerials(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/movements') {
-    send(res, 200, { movements: repository.listMovements(query(url)) })
+    send(res, 200, { movements: await repository.listMovements(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/exceptions') {
-    send(res, 200, { exceptions: repository.listExceptions(query(url)) })
+    send(res, 200, { exceptions: await repository.listExceptions(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/summary') {
-    send(res, 200, { summary: repository.getSummary() })
+    send(res, 200, { summary: await repository.getSummary() })
     return true
   }
 

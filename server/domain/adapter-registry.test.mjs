@@ -88,7 +88,7 @@ test('audit log registry records only when explicitly called', () => {
   assert.equal(registry.auditLog.listAuditEntries().length, 1)
 })
 
-test('database mode registry uses migrated DB adapters with inventory JSON read fallback', async () => {
+test('database mode registry uses migrated DB adapters', async () => {
   const db = createDb()
   const before = clone(db)
   const registry = createRepositoryRegistry({ db, env: { FLOWCHAIN_PERSISTENCE_MODE: 'database' } })
@@ -98,7 +98,11 @@ test('database mode registry uses migrated DB adapters with inventory JSON read 
   assert.equal(registry.actionDrafts.adapter, 'db-action-draft-v1')
   assert.equal(registry.auditLog.adapter, 'db-audit-log-v1')
   assert.equal(registry.procurementRead.adapter, 'db-procurement-read-v1')
-  assert.equal(registry.inventoryRead.getItem('A100').sku, 'A100')
+  assert.equal(registry.inventoryRead.adapter, 'db-inventory-read-v1')
+  await assert.rejects(
+    () => registry.inventoryRead.getItem('A100'),
+    (error) => error.message === DATABASE_CONFIG_ERROR && error.code === 'FLOWCHAIN_DATABASE_CONFIG_MISSING'
+  )
   await assert.rejects(
     () => registry.procurementRead.getDocument('po', 'PO-1'),
     (error) => error.message === DATABASE_CONFIG_ERROR && error.code === 'FLOWCHAIN_DATABASE_CONFIG_MISSING'

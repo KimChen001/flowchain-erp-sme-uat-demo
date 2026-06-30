@@ -63,7 +63,7 @@ Database mode uses migrated DB read adapters where available and JSON read fallb
 | `GET` | `/api/today-cockpit` | read-only | No | Allowed | Allowed | Aggregated read model. |
 | `GET` | `/api/master-data/*` | read-only | No | Allowed | Allowed with DB read adapter | Repository-compatible. |
 | `GET` | `/api/procurement/*` | read-only | No | Allowed | Allowed with DB read adapter | Repository-compatible. |
-| `GET` | `/api/inventory/*` | read-only | No | Allowed | Allowed with JSON read fallback | Repository-compatible. |
+| `GET` | `/api/inventory/*` | read-only | No | Allowed | Allowed with DB read adapter | Repository-compatible. |
 | `GET` | `/api/inventory-movements` | read-only | No | Allowed | Allowed | Compatibility read endpoint. |
 | `GET` | `/api/audit-log` | read-only | No | Allowed | Allowed | Existing audit list. |
 
