@@ -1,5 +1,6 @@
 import { actionDraftSchema, buildActionDraftSuggestion } from '../domain/action-draft-boundary.mjs'
 import { buildPurchaseRequestDraftPreview } from '../domain/purchase-request-draft-preview.mjs'
+import { buildRfqDraftPreview, buildSupplierFollowupDraftPreview } from '../domain/rfq-and-supplier-followup-draft-preview.mjs'
 
 export async function handleActionDraftsRoute(ctx) {
   const { req, res, url, send, readBody } = ctx
@@ -13,6 +14,24 @@ export async function handleActionDraftsRoute(ctx) {
     const body = await readBody(req)
     if (body?.type === 'purchase_request_draft') {
       const result = buildPurchaseRequestDraftPreview(body, { db: ctx.db })
+      if (!result.ok) {
+        send(res, 400, result)
+        return true
+      }
+      send(res, 200, { draft: result.draft, previewOnly: true })
+      return true
+    }
+    if (body?.type === 'rfq_draft') {
+      const result = buildRfqDraftPreview(body, { db: ctx.db })
+      if (!result.ok) {
+        send(res, 400, result)
+        return true
+      }
+      send(res, 200, { draft: result.draft, previewOnly: true })
+      return true
+    }
+    if (body?.type === 'supplier_followup_draft') {
+      const result = buildSupplierFollowupDraftPreview(body, { db: ctx.db })
       if (!result.ok) {
         send(res, 400, result)
         return true

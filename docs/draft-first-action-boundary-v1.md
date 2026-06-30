@@ -38,6 +38,8 @@ The preview endpoint validates a draft payload and returns a draft shape. It doe
 
 `purchase_request_draft` now has a specialized preview helper for inventory-driven PR suggestions. It still returns preview-only draft data and does not create a real PR.
 
+`rfq_draft` and `supplier_followup_draft` also have specialized preview helpers. They return reviewable draft payloads and never create RFQs or send supplier messages.
+
 ## Review UI Shell
 
 The frontend review shell lives in `src/modules/action-drafts/ActionDraftReviewShell.tsx`.
