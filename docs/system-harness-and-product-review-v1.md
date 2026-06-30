@@ -96,6 +96,13 @@ Covered by `server/domain/db-adapter-parity-harness.test.mjs`:
 - AuditLog records keep compatible public keys and redact sensitive metadata;
 - read adapters do not expose write-style methods.
 
+Covered by `server/domain/procurement-db-parity-harness.test.mjs`:
+
+- Procurement Read DB adapter matches JSON document list and detail contracts for PR, RFQ, PO, GRN, supplier invoice, and three-way match;
+- links, followups, and summary keys remain compatible;
+- missing documents, invalid types, no-mutation expectations, Today Cockpit compatibility, AI procurement compatibility, and DB guard behavior stay stable;
+- optional live DB parity skips cleanly without `DATABASE_URL_TEST`.
+
 ### Audit Persistence Harness
 
 Covered by `server/domain/audit-log-persistence.test.mjs`:

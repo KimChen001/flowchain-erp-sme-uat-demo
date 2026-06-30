@@ -65,6 +65,8 @@ Round 31 adds a mocked DB adapter parity harness. It checks:
 - AuditLog shape compatibility and redaction;
 - no write-style methods on read adapters.
 
+Round 35 adds a Procurement Read DB parity harness. It compares mocked Prisma output against the JSON procurement contract for document lists, document detail lookups, links, followups, summary keys, type helpers, missing document behavior, no mutation, Today Cockpit compatibility, AI procurement compatibility, and route guard stability. It does not add procurement write APIs or require a live database for default tests.
+
 ## Test DB Harness
 
 Round 28 adds an explicit test database harness for future adapter parity work. It is not part of the default runtime path.

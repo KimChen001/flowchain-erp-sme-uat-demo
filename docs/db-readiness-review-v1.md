@@ -1,6 +1,6 @@
 # DB Readiness Review v1
 
-Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter. Round 31 adds the DB adapter parity harness. Round 32 makes the Master Data seed path executable and adds a Master Data DB parity command. Round 33 adds explicit ActionDraft shell persistence. Round 34 wires safe AuditLog persistence for draft, AI, and database-mode guard events.
+Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter. Round 31 adds the DB adapter parity harness. Round 32 makes the Master Data seed path executable and adds a Master Data DB parity command. Round 33 adds explicit ActionDraft shell persistence. Round 34 wires safe AuditLog persistence for draft, AI, and database-mode guard events. Round 35 adds a Procurement Read DB parity harness.
 
 ## Current Status
 
@@ -73,6 +73,8 @@ Round 29 adds lean Prisma read models and a DB repository for:
 - ProcurementFollowup
 
 The adapter is read-only. It maps Prisma rows into the existing procurement read model shape for PR, RFQ, PO, GRN, supplier invoice, three-way match, links, followups, and summary. Missing `DATABASE_URL` in database mode returns the same clean database config error used by the other DB adapters.
+
+Round 35 adds a mocked parity harness for Procurement Read. It compares DB adapter output with the JSON repository contract for document lists, PR/RFQ/PO/GRN/invoice/three-way-match details, links, followups, summary keys, type normalization, missing document behavior, no mutation, Today Cockpit compatibility, AI procurement compatibility, and database-mode route guard behavior. The optional live DB path skips cleanly when `DATABASE_URL_TEST` is absent.
 
 ## Inventory Read DB Adapter
 
