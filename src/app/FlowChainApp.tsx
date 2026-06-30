@@ -36,6 +36,7 @@ import FinanceWorkbench from "../modules/finance/Page";
 import SrmPage from "../modules/srm/Page";
 import MasterDataPage from "../modules/master-data/Page";
 import AiPanel, { type ActiveContext } from "../modules/ai-assistant/Panel";
+import { ActionDraftReviewShell, type ActionDraftPreview, type ActionDraftPreviewRequest } from "../modules/action-drafts/ActionDraftReviewShell";
 import ReportsPanel from "../modules/reports/Page";
 import ImportsPanel from "../modules/imports/Page";
 
@@ -410,6 +411,10 @@ export default function FlowChainApp() {
   const [active, setActive] = useState("overview");
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(null);
   const [replenishmentSku, setReplenishmentSku] = useState<string | null>(null);
+  const [draftShellOpen, setDraftShellOpen] = useState(false);
+  const [draftPreview, setDraftPreview] = useState<ActionDraftPreview | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftError, setDraftError] = useState("");
   const [aiOpenSignal, setAiOpenSignal] = useState(0);
   const [aiActiveContext, setAiActiveContext] = useState<ActiveContext | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -567,6 +572,25 @@ export default function FlowChainApp() {
     setSearchFocus(focusTarget ? { ...focusTarget, source: "evidence", at: Date.now() } : null);
   }
 
+  async function openActionDraftReview(request: ActionDraftPreviewRequest) {
+    setDraftShellOpen(true);
+    setDraftPreview(null);
+    setDraftError("");
+    setDraftLoading(true);
+    try {
+      const response = await apiJson<{ draft: ActionDraftPreview; previewOnly: boolean }>("/api/action-drafts/preview", {
+        method: "POST",
+        body: JSON.stringify(request),
+      });
+      setDraftPreview(response.draft);
+      if (!response.previewOnly) setDraftError("草稿预览边界异常：接口未返回 previewOnly。");
+    } catch (error) {
+      setDraftError(error instanceof Error ? error.message : "草稿预览暂不可用");
+    } finally {
+      setDraftLoading(false);
+    }
+  }
+
   function clearFocus() {
     setSearchFocus(null);
   }
@@ -593,7 +617,7 @@ export default function FlowChainApp() {
     : "";
 
   const panels: Record<string, React.ReactNode> = {
-    overview:    <OverviewPanel onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} />,
+    overview:    <OverviewPanel onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
     inventory:   <InventoryPanel initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
     forecast:    <ForecastPanel />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
@@ -942,7 +966,16 @@ export default function FlowChainApp() {
           </main>
         </div>
       </div>
-      <AiPanel moduleId={activeModule} activeContext={aiActiveContext} openSignal={aiOpenSignal} onNavigate={navigateTo} />
+      <AiPanel moduleId={activeModule} activeContext={aiActiveContext} openSignal={aiOpenSignal} onNavigate={navigateTo} onReviewActionDraft={openActionDraftReview} />
+      <ActionDraftReviewShell
+        open={draftShellOpen}
+        loading={draftLoading}
+        error={draftError}
+        draft={draftPreview}
+        onClose={() => setDraftShellOpen(false)}
+        onCancelPreview={() => { setDraftPreview(null); setDraftError(""); setDraftShellOpen(false); }}
+        onNavigate={navigateTo}
+      />
     </div>
   );
 }

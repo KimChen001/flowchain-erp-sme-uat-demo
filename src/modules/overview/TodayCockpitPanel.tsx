@@ -2,6 +2,7 @@ import { Sparkles } from "lucide-react";
 import { A, Card, Chip } from "../../components/ui";
 import { evidenceModuleId, normalizeTodayCockpitTarget, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
 import { fmt } from "../../lib/format";
+import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import type {
   TodayCockpitAction,
   TodayCockpitCard,
@@ -16,6 +17,7 @@ type TodayCockpitPanelProps = {
   loading: boolean;
   error?: boolean;
   onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 };
 
 function cockpitSeverityStyle(severity: TodayCockpitSeverity) {
@@ -57,6 +59,47 @@ function procurementModuleForDocument(type?: string) {
 function quantityText(value?: number | null, unit = "") {
   if (value === null || value === undefined) return "—";
   return `${Number(value).toLocaleString()} ${unit}`.trim();
+}
+
+function firstEvidence(item: { evidence?: unknown[] }) {
+  return Array.isArray(item.evidence) ? item.evidence[0] as Record<string, unknown> | undefined : undefined;
+}
+
+function actionDraftRequest(item: TodayCockpitAction): ActionDraftPreviewRequest | null {
+  const evidence = firstEvidence(item);
+  const target = item.target || {};
+  const entityId = String(target.entityId || evidence?.id || "").trim();
+  const documentType = String(target.documentType || evidence?.type || "").trim();
+  if (item.module === "inventory" || documentType === "inventory_item" || target.entityType === "inventory_item") {
+    return {
+      type: "purchase_request_draft",
+      title: `${entityId || item.title} 补货 PR 草稿预览`,
+      source: "today_cockpit",
+      originEvidence: item.evidence as Record<string, unknown>[] || [],
+      payload: {
+        itemIdOrSku: entityId,
+        quantity: "",
+        reason: item.reason || item.nextAction || item.title,
+      },
+    };
+  }
+  if (item.module === "procurement" || String(target.module || "").startsWith("procurement")) {
+    return {
+      type: documentType === "po" ? "po_followup_draft" : "supplier_followup_draft",
+      title: `${item.title} 草稿预览`,
+      source: "today_cockpit",
+      originEvidence: item.evidence as Record<string, unknown>[] || [],
+      payload: {
+        supplierIdOrName: "",
+        poId: documentType === "po" ? entityId : "",
+        message: item.nextAction || item.reason || "请确认当前跟进计划与责任人。",
+        relatedDocumentType: documentType,
+        relatedDocumentId: entityId,
+        reason: item.reason,
+      },
+    };
+  }
+  return null;
 }
 
 function TodayCockpitStateCard({
@@ -123,11 +166,13 @@ export function TodayCockpitActionList({
   title,
   items,
   onNavigate,
+  onReviewActionDraft,
   className = "",
 }: {
   title: string;
   items: TodayCockpitAction[];
   onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
   className?: string;
 }) {
   return (
@@ -138,21 +183,32 @@ export function TodayCockpitActionList({
           const style = cockpitSeverityStyle(item.priority);
           const link = normalizeTodayCockpitTarget(item);
           const moduleId = evidenceModuleId(link) || cockpitTargetModule(item.target, item.module);
+          const draftRequest = onReviewActionDraft ? actionDraftRequest(item) : null;
           return (
-            <button
+            <div
               key={item.id}
-              type="button"
-              onClick={() => onNavigate(moduleId, link?.focusTarget || null)}
-              className="w-full rounded-md border px-3 py-2 text-left hover:bg-slate-50"
+              className="rounded-md border px-3 py-2"
               style={{ borderColor: A.border }}
             >
-              <div className="flex items-center gap-2">
-                <Chip label={style.label} color={style.color} bg={style.bg} />
-                <div className="min-w-0 truncate text-[12px] font-semibold" style={{ color: A.label }}>{item.title}</div>
-              </div>
-              <div className="mt-1 line-clamp-2 text-[11px]" style={{ color: A.sub }}>{item.reason || item.nextAction || "等待复核"}</div>
-              {item.nextAction ? <div className="mt-1 text-[11px]" style={{ color: A.blue }}>{item.nextAction}</div> : null}
-            </button>
+              <button type="button" onClick={() => onNavigate(moduleId, link?.focusTarget || null)} className="w-full text-left">
+                <div className="flex items-center gap-2">
+                  <Chip label={style.label} color={style.color} bg={style.bg} />
+                  <div className="min-w-0 truncate text-[12px] font-semibold" style={{ color: A.label }}>{item.title}</div>
+                </div>
+                <div className="mt-1 line-clamp-2 text-[11px]" style={{ color: A.sub }}>{item.reason || item.nextAction || "等待复核"}</div>
+                {item.nextAction ? <div className="mt-1 text-[11px]" style={{ color: A.blue }}>{item.nextAction}</div> : null}
+              </button>
+              {draftRequest ? (
+                <button
+                  type="button"
+                  onClick={() => onReviewActionDraft?.(draftRequest)}
+                  className="mt-2 rounded-md px-2.5 py-1 text-[11px] font-medium"
+                  style={{ background: "#f0f6ff", color: A.blue }}
+                >
+                  草稿预览
+                </button>
+              ) : null}
+            </div>
           );
         }) : (
           <div className="rounded-md border px-3 py-3 text-[12px]" style={{ borderColor: A.border, color: A.sub }}>暂无待处理事项</div>
@@ -276,14 +332,16 @@ export function TodayCockpitRecentDocuments({
 export function TodayCockpitRecommendedActions({
   items,
   onNavigate,
+  onReviewActionDraft,
 }: {
   items: TodayCockpitAction[];
   onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
-  return <TodayCockpitActionList title="建议动作" items={items} onNavigate={onNavigate} className="xl:col-span-2" />;
+  return <TodayCockpitActionList title="建议动作" items={items} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} className="xl:col-span-2" />;
 }
 
-export function TodayCockpitPanel({ cockpit, loading, error = false, onNavigate }: TodayCockpitPanelProps) {
+export function TodayCockpitPanel({ cockpit, loading, error = false, onNavigate, onReviewActionDraft }: TodayCockpitPanelProps) {
   if (!cockpit && loading) {
     return <TodayCockpitStateCard title="今日驾驶舱正在加载" message="正在读取采购、库存和单据证据。" />;
   }
@@ -339,7 +397,7 @@ export function TodayCockpitPanel({ cockpit, loading, error = false, onNavigate 
 
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-5">
         <TodayCockpitRecentDocuments documents={documents} onNavigate={onNavigate} />
-        <TodayCockpitRecommendedActions items={actions} onNavigate={onNavigate} />
+        <TodayCockpitRecommendedActions items={actions} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />
       </div>
     </Card>
   );

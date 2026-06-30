@@ -4,6 +4,7 @@ import { apiJson } from "../../lib/api-client";
 import { evidenceModuleId, normalizeEvidenceLinks, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
 import { fmt } from "../../lib/format";
 import { A } from "../../components/ui";
+import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import { aiDisplayMessage, looksLikeRawJson, normalizeAiCardValue, safeUnknownCardMessage, sanitizeAiMessage } from "./presentation";
 import { getContextualQuickPrompts } from "./prompts";
 
@@ -229,12 +230,50 @@ function EvidenceList({
   );
 }
 
+function actionDraftRequestFromCard(card: AiChatCard): ActionDraftPreviewRequest | null {
+  const data = card.data || {};
+  if (card.type === "pr_draft") {
+    return {
+      type: "purchase_request_draft",
+      title: card.title || "Purchase Request Draft",
+      source: "ai_assistant",
+      originEvidence: card.evidence as Record<string, unknown>[] || [],
+      payload: {
+        itemIdOrSku: data.itemId || data.sku || data.itemLabel || data.itemName,
+        quantity: data.quantity,
+        reason: data.reason || data.prioritySignal || "AI draft preparation",
+        supplierIdOrName: data.preferredSupplierId || data.supplierId || data.supplier,
+        warehouse: data.warehouseId || data.defaultWarehouseId,
+      },
+    };
+  }
+  if (card.type === "rfq_draft") {
+    return {
+      type: "rfq_draft",
+      title: card.title || "RFQ Draft",
+      source: "ai_assistant",
+      originEvidence: card.evidence as Record<string, unknown>[] || [],
+      payload: {
+        itemIdOrSku: data.itemId || data.sku || data.itemLabel || data.itemName,
+        quantity: data.quantity,
+        supplierCandidates: data.supplierCandidates,
+        requestedDeliveryDate: data.targetDeliveryDate || data.requiredDate,
+        quotationDeadline: data.quotationDeadline,
+        reason: data.reason || data.prioritySignal || "AI draft preparation",
+      },
+    };
+  }
+  return null;
+}
+
 function AiResponseCard({
   card,
   onNavigate,
+  onReviewActionDraft,
 }: {
   card: AiChatCard;
   onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const data = card.data || {};
   switch (card.type) {
@@ -519,6 +558,7 @@ function AiResponseCard({
         </CardShell>
       );
     case "pr_draft":
+      const prDraftRequest = onReviewActionDraft ? actionDraftRequestFromCard(card) : null;
       return (
         <CardShell title={card.title || "采购申请草稿"}>
           <KeyValueGrid fields={[
@@ -534,9 +574,15 @@ function AiResponseCard({
             ["需要复核", (card as Record<string, unknown>).reviewRequired],
             ["状态", data.status],
           ]} />
+          {prDraftRequest ? (
+            <button type="button" onClick={() => onReviewActionDraft?.(prDraftRequest)} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
+              审阅草稿
+            </button>
+          ) : null}
         </CardShell>
       );
     case "rfq_draft":
+      const rfqDraftRequest = onReviewActionDraft ? actionDraftRequestFromCard(card) : null;
       return (
         <CardShell title={card.title || "询价草稿"}>
           <KeyValueGrid fields={[
@@ -552,6 +598,11 @@ function AiResponseCard({
             ["需要复核", (card as Record<string, unknown>).reviewRequired],
             ["状态", data.status],
           ]} />
+          {rfqDraftRequest ? (
+            <button type="button" onClick={() => onReviewActionDraft?.(rfqDraftRequest)} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
+              审阅草稿
+            </button>
+          ) : null}
         </CardShell>
       );
     case "missing_fields":
@@ -619,16 +670,18 @@ function AiResponseCard({
 function AiResponseCards({
   cards = [],
   onNavigate,
+  onReviewActionDraft,
 }: {
   cards?: AiChatCard[];
   onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const visibleCards = cards.filter((card) => card.type);
   if (!visibleCards.length) return null;
   return (
     <div className="mt-2 space-y-2">
       {visibleCards.map((card, index) => (
-        <AiResponseCard key={`${card.type}-${index}`} card={card} onNavigate={onNavigate} />
+        <AiResponseCard key={`${card.type}-${index}`} card={card} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />
       ))}
     </div>
   );
@@ -651,11 +704,13 @@ export default function FloatingAiAssistant({
   activeContext,
   openSignal,
   onNavigate,
+  onReviewActionDraft,
 }: {
   moduleId: string;
   activeContext?: ActiveContext | null;
   openSignal?: number;
   onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -828,7 +883,7 @@ export default function FloatingAiAssistant({
                   }}
                 >
                   <div className="whitespace-pre-wrap">{message.content}</div>
-                  {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={onNavigate} />}
+                  {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />}
                 </div>
               </div>
             ))}

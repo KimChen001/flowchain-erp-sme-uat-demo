@@ -20,6 +20,7 @@ import { isStatementException, statementToCockpitSignal } from "../../domain/pro
 import { calculateReturnFinancialImpact, isReturnException, returnToCockpitSignal } from "../../domain/procurement/returns";
 import { masterDataQualitySignals } from "../../domain/master-data/helpers";
 import type { InventoryMovement, PurchaseOrder, PurchaseRequest, PurchaseReturn, ReceivingDoc, RfqRecord, SupplierInvoice, SupplierReconciliationStatement } from "../../types/scm";
+import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import { TodayCockpitPanel } from "./TodayCockpitPanel";
 import { fetchTodayCockpit, type TodayCockpitResponse } from "./todayCockpit";
 
@@ -33,9 +34,10 @@ type SupplierPerformance = typeof PORTAL_SUPPLIERS[number] & {
 };
 
 type OverviewPanelProps = {
-  onNavigate: (moduleId: string) => void;
+  onNavigate: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null) => void;
   onPrepareReplenishmentRequest: (sku: string) => void;
   onOpenAi: () => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 };
 
 type ActionRow = {
@@ -438,7 +440,7 @@ function buildMasterDataEvidence(): EvidenceDetail {
   };
 }
 
-export default function OverviewPanel({ onNavigate, onPrepareReplenishmentRequest, onOpenAi }: OverviewPanelProps) {
+export default function OverviewPanel({ onNavigate, onPrepareReplenishmentRequest, onOpenAi, onReviewActionDraft }: OverviewPanelProps) {
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceDetail | null>(null);
   const [showAllActions, setShowAllActions] = useState(false);
   const [showMoreSummary, setShowMoreSummary] = useState(false);
@@ -761,7 +763,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
 
   return (
     <div className="space-y-4">
-      <TodayCockpitPanel cockpit={todayCockpit} loading={todayCockpitLoading} error={todayCockpitError} onNavigate={onNavigate} />
+      <TodayCockpitPanel cockpit={todayCockpit} loading={todayCockpitLoading} error={todayCockpitError} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />
 
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">

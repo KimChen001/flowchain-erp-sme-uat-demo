@@ -36,6 +36,26 @@ The only current status is `preview`.
 
 The preview endpoint validates a draft payload and returns a draft shape. It does not call `writeDb`, persist a draft, create a PR/RFQ/PO, close inventory exceptions, or send supplier messages.
 
+## Review UI Shell
+
+The frontend review shell lives in `src/modules/action-drafts/ActionDraftReviewShell.tsx`.
+
+It can display:
+
+- draft title, type, source, status, and confirmation boundary;
+- business-readable payload fields;
+- origin evidence through canonical evidence links where safe;
+- validation warnings and missing fields;
+- an audit preview note.
+
+Safe controls:
+
+- close;
+- cancel local preview;
+- copy draft content.
+
+The confirm button is visible but disabled. Real confirmation, save, submit, send, post, or close behavior remains future work.
+
 ## Confirmation Boundary
 
 - A draft is not submitted.
