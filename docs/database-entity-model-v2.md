@@ -161,7 +161,7 @@ Fields needing normalization:
 | Aliyun MySQL/PostgreSQL fit | Good support for both. | Good support for both. |
 | Learning cost | Lower for teams used to model-first ORM. | Lower for teams comfortable with SQL/TypeScript. |
 
-Recommendation: start with repository interfaces and no ORM package. When implementation begins, prefer Drizzle if FlowChain keeps a lean custom Node service and wants SQL-shaped control. Prefer Prisma if the team wants faster model-first onboarding, generated client conventions, and richer migration guardrails.
+Round 25 decision: choose Prisma for the first persistence scaffold. Prisma is selected for schema readability, generated client conventions, migration ergonomics, and PostgreSQL compatibility for Aliyun RDS-style deployment. Drizzle remains a reasonable SQL-first alternative, but it is not installed in this scaffold.
 
 ## Aliyun RDS / PolarDB Notes
 

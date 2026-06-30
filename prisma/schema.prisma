@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id        String   @id
+  name      String
+  locale    String   @default("zh-CN")
+  currency  String   @default("CNY")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  suppliers      Supplier[]
+  items          Item[]
+  warehouses     Warehouse[]
+  paymentTerms   PaymentTerm[]
+  taxCodes       TaxCode[]
+  actionDrafts   ActionDraft[]
+  auditLogs      AuditLog[]
+  aiEvidence     AiEvidence[]
+}
+
+model User {
+  id          String   @id
+  tenantId    String
+  email       String
+  name        String
+  role        String   @default("buyer")
+  department  String?
+  locale      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  actionDrafts ActionDraft[]
+  auditLogs    AuditLog[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model Supplier {
+  id          String   @id
+  tenantId    String
+  code        String?
+  name        String
+  category    String?
+  status      String   @default("active")
+  riskLevel   String?
+  score       Decimal? @db.Decimal(10, 2)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  items  Item[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, name])
+}
+
+model Item {
+  id                  String   @id
+  tenantId            String
+  sku                 String
+  name                String
+  category            String?
+  unit                String?
+  preferredSupplierId String?
+  status              String   @default("active")
+  safetyStock         Decimal? @db.Decimal(18, 4)
+  reorderPoint        Decimal? @db.Decimal(18, 4)
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+  preferredSupplier Supplier? @relation(fields: [preferredSupplierId], references: [id])
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, name])
+}
+
+model Warehouse {
+  id        String   @id
+  tenantId  String
+  code      String
+  name      String
+  status    String   @default("active")
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, code])
+}
+
+model PaymentTerm {
+  id        String   @id
+  tenantId  String
+  code      String
+  name      String
+  days      Int?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, code])
+}
+
+model TaxCode {
+  id        String   @id
+  tenantId  String
+  code      String
+  name      String
+  rate      Decimal? @db.Decimal(10, 4)
+  taxType   String?
+  region    String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, code])
+}
+
+model ActionDraft {
+  id                   String   @id
+  tenantId             String
+  type                 String
+  title                String
+  status               String   @default("preview")
+  source               String?
+  createdById          String?
+  requiresConfirmation Boolean  @default(true)
+  previewOnly          Boolean  @default(true)
+  originEvidence       Json?
+  payload              Json
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id])
+  createdBy   User?                   @relation(fields: [createdById], references: [id])
+  validations ActionDraftValidation[]
+  auditTrail  ActionDraftAuditTrail[]
+
+  @@index([tenantId, type, status])
+  @@index([tenantId, createdAt])
+}
+
+model ActionDraftValidation {
+  id            String   @id
+  actionDraftId String
+  ok            Boolean  @default(false)
+  missingFields Json?
+  warnings      Json?
+  errors        Json?
+  createdAt     DateTime @default(now())
+
+  actionDraft ActionDraft @relation(fields: [actionDraftId], references: [id], onDelete: Cascade)
+
+  @@index([actionDraftId])
+}
+
+model ActionDraftAuditTrail {
+  id            String   @id
+  actionDraftId String
+  action        String
+  actorId       String?
+  summary       String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  actionDraft ActionDraft @relation(fields: [actionDraftId], references: [id], onDelete: Cascade)
+
+  @@index([actionDraftId, createdAt])
+}
+
+model AuditLog {
+  id         String   @id
+  tenantId   String
+  source     String
+  module     String?
+  action     String
+  entityType String
+  entityId   String
+  actorId    String?
+  summary    String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  actor  User?  @relation(fields: [actorId], references: [id])
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
+}
+
+model AiEvidence {
+  id         String   @id
+  tenantId   String
+  sourceType String
+  entityType String
+  entityId   String
+  label      String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, entityType, entityId])
+}

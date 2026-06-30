@@ -11,7 +11,11 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test server/domain/*.test.mjs",
     "test:harness": "node --test server/domain/system-harness-product-review.test.mjs",
-    "test:contracts": "node --test server/domain/json-adapter-contracts.test.mjs"
+    "test:contracts": "node --test server/domain/json-adapter-contracts.test.mjs",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -19,6 +23,7 @@
     "@mui/icons-material": "7.3.5",
     "@mui/material": "7.3.5",
     "@popperjs/core": "2.11.8",
+    "@prisma/client": "^7.8.0",
     "@radix-ui/react-accordion": "1.2.3",
     "@radix-ui/react-alert-dialog": "1.1.6",
     "@radix-ui/react-aspect-ratio": "1.1.2",
@@ -76,6 +81,7 @@
     "@types/node": "^22.19.21",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "4.7.0",
+    "prisma": "^7.8.0",
     "tailwindcss": "4.1.12",
     "typescript": "^5.9.3",
     "vite": "6.3.5"

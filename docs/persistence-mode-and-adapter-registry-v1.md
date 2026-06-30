@@ -64,7 +64,7 @@ Each route group still keeps a local JSON fallback for isolated handler tests an
 
 ## Non-goals
 
-- No Prisma or Drizzle.
+- Round 17 did not add Prisma or Drizzle. Round 25 later adds a Prisma scaffold, but this registry still does not expose real database adapters.
 - No database connection.
 - No migrations.
 - No broad route migration.
