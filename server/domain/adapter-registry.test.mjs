@@ -88,15 +88,15 @@ test('audit log registry records only when explicitly called', () => {
   assert.equal(registry.auditLog.listAuditEntries().length, 1)
 })
 
-test('database mode registry uses DB action draft and audit adapters with JSON read fallbacks', () => {
+test('database mode registry uses migrated DB adapters with remaining JSON read fallbacks', () => {
   const db = createDb()
   const before = clone(db)
   const registry = createRepositoryRegistry({ db, env: { FLOWCHAIN_PERSISTENCE_MODE: 'database' } })
 
   assert.equal(registry.mode, 'database')
+  assert.equal(registry.masterData.adapter, 'db-master-data-v1')
   assert.equal(registry.actionDrafts.adapter, 'db-action-draft-v1')
   assert.equal(registry.auditLog.adapter, 'db-audit-log-v1')
-  assert.equal(registry.masterData.listItems()[0].sku, 'A100')
   assert.equal(registry.inventoryRead.getItem('A100').sku, 'A100')
   assert.equal(registry.procurementRead.getDocument('po', 'PO-1').id, 'PO-1')
   assert.equal(registry.aiConversation.implemented, false)

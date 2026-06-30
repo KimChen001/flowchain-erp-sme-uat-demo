@@ -9,7 +9,7 @@ The helper `getPersistenceMode(env)` reads `FLOWCHAIN_PERSISTENCE_MODE`.
 Supported values:
 
 - `json`: default and current runtime behavior.
-- `database`: opt-in database-readiness mode. Round 26 adds DB adapters for ActionDraft and AuditLog while master data, procurement read, and inventory read remain JSON read fallback until their DB adapters exist.
+- `database`: opt-in database-readiness mode. Rounds 26-27 add DB adapters for ActionDraft, AuditLog, and Master Data while procurement read and inventory read remain JSON read fallback until their DB adapters exist.
 
 Rules:
 
@@ -43,7 +43,7 @@ Current database-mode mapping:
 
 - `actionDrafts`: DB adapter
 - `auditLog`: DB adapter
-- `masterData`: JSON read fallback
+- `masterData`: DB adapter
 - `procurementRead`: JSON read fallback
 - `inventoryRead`: JSON read fallback
 - `aiConversation`: future adapter placeholder
@@ -70,7 +70,7 @@ Each route group still keeps a local JSON fallback for isolated handler tests an
 
 ## Non-goals
 
-- Round 17 did not add Prisma or Drizzle. Round 25 later adds a Prisma scaffold, and Round 26 starts the partial database registry for ActionDraft and AuditLog only.
+- Round 17 did not add Prisma or Drizzle. Round 25 later adds a Prisma scaffold, Round 26 starts the partial database registry for ActionDraft and AuditLog, and Round 27 adds Master Data DB reads.
 - No database connection during registry creation.
 - No migrations.
 - No broad route migration.

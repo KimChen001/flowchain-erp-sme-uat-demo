@@ -5,6 +5,7 @@ import { createJsonActionDraftRepository } from './json-action-draft-repository.
 import { createAuditLogRepository } from './audit-log-repository.mjs'
 import { createDbActionDraftRepository } from './db-action-draft-repository.mjs'
 import { createDbAuditLogRepository } from './db-audit-log-repository.mjs'
+import { createDbMasterDataRepository } from './db-master-data-repository.mjs'
 
 export const PERSISTENCE_MODES = Object.freeze({
   json: 'json',
@@ -45,7 +46,7 @@ export function createJsonRepositoryRegistry({ db = {} } = {}) {
 export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, prisma } = {}) {
   return {
     mode: PERSISTENCE_MODES.database,
-    masterData: createJsonMasterDataRepository(db),
+    masterData: createDbMasterDataRepository({ env, prisma }),
     inventoryRead: createJsonInventoryReadRepository(db),
     procurementRead: createJsonProcurementReadRepository(db),
     actionDrafts: createDbActionDraftRepository({ db, env, prisma }),

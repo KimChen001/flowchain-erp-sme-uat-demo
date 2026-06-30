@@ -20,6 +20,8 @@ Database mode is opt-in through `FLOWCHAIN_PERSISTENCE_MODE=database`:
 - `inventoryRead`: JSON read fallback until its DB adapter exists
 - `procurementRead`: JSON read fallback until its DB adapter exists
 
+Round 27 later moves `masterData` to its own DB adapter. Procurement and inventory remain JSON read fallback until their DB adapters exist.
+
 The registry can be created without opening a database connection. DB-backed methods validate database configuration when invoked.
 
 ## ActionDraft DB Adapter
@@ -88,7 +90,7 @@ Tests cover:
 
 - JSON registry behavior unchanged;
 - database registry selects DB ActionDraft and AuditLog adapters;
-- JSON read fallbacks remain for master data, procurement, and inventory;
+- JSON read fallbacks remain for master data, procurement, and inventory in Round 26;
 - missing `DATABASE_URL` produces a clean config error when a DB method is invoked;
 - action draft preview remains preview-only and non-mutating;
 - unsupported draft type handling remains clean;

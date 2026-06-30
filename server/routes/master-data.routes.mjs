@@ -9,13 +9,13 @@ export async function handleMasterDataRoute(ctx) {
   const repository = masterDataRepository(ctx)
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/items') {
-    send(res, 200, { items: repository.listItems() })
+    send(res, 200, { items: await repository.listItems() })
     return true
   }
 
   const itemMatch = url.pathname.match(/^\/api\/master-data\/items\/([^/]+)$/)
   if (req.method === 'GET' && itemMatch) {
-    const item = repository.getItem(itemMatch[1])
+    const item = await repository.getItem(itemMatch[1])
     if (!item) {
       send(res, 404, { error: 'Item not found' })
       return true
@@ -25,13 +25,13 @@ export async function handleMasterDataRoute(ctx) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/suppliers') {
-    send(res, 200, { suppliers: repository.listSuppliers() })
+    send(res, 200, { suppliers: await repository.listSuppliers() })
     return true
   }
 
   const supplierMatch = url.pathname.match(/^\/api\/master-data\/suppliers\/([^/]+)$/)
   if (req.method === 'GET' && supplierMatch) {
-    const supplier = repository.getSupplier(supplierMatch[1])
+    const supplier = await repository.getSupplier(supplierMatch[1])
     if (!supplier) {
       send(res, 404, { error: 'Supplier not found' })
       return true
@@ -41,17 +41,17 @@ export async function handleMasterDataRoute(ctx) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/warehouses') {
-    send(res, 200, { warehouses: repository.listWarehouses() })
+    send(res, 200, { warehouses: await repository.listWarehouses() })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/payment-terms') {
-    send(res, 200, { paymentTerms: repository.listPaymentTerms() })
+    send(res, 200, { paymentTerms: await repository.listPaymentTerms() })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/tax-codes') {
-    send(res, 200, { taxCodes: repository.listTaxCodes() })
+    send(res, 200, { taxCodes: await repository.listTaxCodes() })
     return true
   }
 

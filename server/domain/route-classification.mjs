@@ -23,7 +23,7 @@ const routeDefinitions = [
   { method: 'GET', pattern: /^\/api\/search$/, group: 'search', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed' },
   { method: 'GET', pattern: /^\/api\/today-cockpit$/, group: 'today-cockpit', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed' },
 
-  { method: 'GET', pattern: /^\/api\/master-data\/(?:items|suppliers|warehouses|payment-terms|tax-codes)(?:\/[^/]+)?$/, group: 'master-data', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-json-read-fallback' },
+  { method: 'GET', pattern: /^\/api\/master-data\/(?:items|suppliers|warehouses|payment-terms|tax-codes)(?:\/[^/]+)?$/, group: 'master-data', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-db-read' },
   { method: 'GET', pattern: /^\/api\/procurement\/(?:documents|links|followups|summary)(?:\/.*)?$/, group: 'procurement-read', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-json-read-fallback' },
   { method: 'GET', pattern: /^\/api\/inventory\/(?:items|lots|serials|movements|exceptions|summary)(?:\/.*)?$/, group: 'inventory-read', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-json-read-fallback' },
   { method: 'GET', pattern: /^\/api\/inventory-movements$/, group: 'inventory-movements', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed' },
