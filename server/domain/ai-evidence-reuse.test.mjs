@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildAiEvidenceReuseResponse } from './ai-evidence-reuse.mjs'
+import { buildAiCockpitFastPathResponse, buildAiEvidenceReuseResponse } from './ai-evidence-reuse.mjs'
 import { handleAiRoute } from '../routes/ai.routes.mjs'
 
 function createDb() {
@@ -51,7 +51,7 @@ function businessSnapshot(db) {
   })
 }
 
-function createRouteContext(body, db = createDb()) {
+function createRouteContext(body, db = createDb(), helpers = {}) {
   let response = null
   let wrote = false
   return {
@@ -77,6 +77,7 @@ function createRouteContext(body, db = createDb()) {
       openaiDispatcher: { dispatch() { throw new Error('provider should not be reached') } },
       arkDispatcher: { dispatch() { throw new Error('provider should not be reached') } },
       aiMaxTokens: 120,
+      ...helpers,
     },
     get response() {
       return response
@@ -127,6 +128,27 @@ test('AI evidence reuse answers today cockpit priority questions from read model
   assert.equal(businessSnapshot(db), before)
 })
 
+test('AI cockpit fast path handles overview priority prompts before provider fallback', () => {
+  const db = createDb()
+  const before = businessSnapshot(db)
+  const response = buildAiCockpitFastPathResponse(db, { moduleId: 'overview', message: '今天最需要处理什么？' }, { cache: {} })
+
+  assert.equal(response.intent.name, 'today_cockpit_priority_query')
+  assert.equal(response.providerStatus, 'deterministic')
+  assert.equal(response.mode, 'deterministic')
+  assert.match(response.message, /今天建议先处理/)
+  assert.ok(response.cards.some((card) => card.type === 'procurement_followup_summary'))
+  assert.ok(response.cards.some((card) => card.type === 'evidence'))
+  assertCleanAiPayload(response)
+  assert.equal(businessSnapshot(db), before)
+})
+
+test('AI cockpit fast path only handles cockpit-style module context', () => {
+  const response = buildAiCockpitFastPathResponse(createDb(), { moduleId: 'srm', message: '今天最需要处理什么？' }, { cache: {} })
+
+  assert.equal(response, null)
+})
+
 test('AI evidence reuse answers procurement risk questions with canonical evidence', () => {
   const response = buildAiEvidenceReuseResponse(createDb(), { message: '哪些采购单据有风险？' }, { cache: {} })
 
@@ -162,8 +184,46 @@ test('AI evidence reuse answers supplier follow-up questions without provider ca
     assert.equal(route.response.status, 200)
     assert.equal(route.response.payload.intent.name, 'supplier_followup_query')
     assert.notEqual(route.response.payload.providerStatus, 'blocked')
-    assert.equal(route.wrote, true)
+    assert.equal(route.wrote, false)
     assertCleanAiPayload(route.response.payload)
     assert.equal(businessSnapshot(db), before)
   })
+})
+
+test('AI route returns deterministic cockpit answer with fake provider keys present', async () => {
+  await withEnv({
+    AI_PROVIDER_ENABLED: undefined,
+    OPENAI_API_KEY: 'fake-openai-key',
+    ARK_API_KEY: 'fake-ark-key',
+    DOUBAO_API_KEY: 'fake-doubao-key',
+  }, async () => {
+    const db = createDb()
+    const before = businessSnapshot(db)
+    const route = createRouteContext({ moduleId: 'overview', message: '今天最需要处理什么？' }, db)
+    const handled = await handleAiRoute(route.ctx)
+
+    assert.equal(handled, true)
+    assert.equal(route.response.status, 200)
+    assert.equal(route.response.payload.intent.name, 'today_cockpit_priority_query')
+    assert.equal(route.response.payload.providerStatus, 'deterministic')
+    assert.notEqual(route.response.payload.providerStatus, 'blocked')
+    assert.equal(route.wrote, false)
+    assertCleanAiPayload(route.response.payload)
+    assert.equal(businessSnapshot(db), before)
+  })
+})
+
+test('AI cockpit answer survives audit write failure because persistence is not awaited', async () => {
+  const route = createRouteContext(
+    { moduleId: 'overview', message: '今天最需要处理什么？' },
+    createDb(),
+    { writeDb: async () => { throw new Error('audit persistence should not be called') } },
+  )
+
+  await handleAiRoute(route.ctx)
+
+  assert.equal(route.response.status, 200)
+  assert.equal(route.response.payload.intent.name, 'today_cockpit_priority_query')
+  assert.equal(route.response.payload.providerStatus, 'deterministic')
+  assertCleanAiPayload(route.response.payload)
 })

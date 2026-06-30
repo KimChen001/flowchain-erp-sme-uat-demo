@@ -84,6 +84,8 @@ function recommendedActions(items = []) {
 function response({ intent, confidence = 0.9, content, cards = [], evidence = [] }) {
   return {
     provider: 'local',
+    providerStatus: 'deterministic',
+    mode: 'deterministic',
     intent: { name: intent, confidence, slots: {} },
     content,
     message: content,
@@ -333,4 +335,19 @@ export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {})
   }
 
   return null
+}
+
+export function buildAiCockpitFastPathResponse(data = {}, body = {}, options = {}) {
+  const message = text(body.question || body.message || body.prompt || body.text)
+  if (!message) return null
+  const moduleId = text(body.moduleId || body.activeContext?.module)
+  const isCockpitContext = !moduleId || moduleId === 'overview' || moduleId === 'today-cockpit'
+  const cockpitPrompt = (
+    (/今天|今日|today/.test(message) && /处理|关注|跟进|优先|工作台/.test(message)) ||
+    (/采购|单据|三单|发票|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|差异|跟进|逾期|问题/.test(message)) ||
+    (/库存|sku|物料|inventory|stock|shortage/i.test(message) && /风险|关注|为什么|原因|缺货|低库存|补货|够不够/.test(message)) ||
+    (/供应商|supplier/i.test(message) && /跟进|follow|风险|关注/.test(message) && !/\bSUP-[A-Z0-9-]+\b/i.test(message))
+  )
+  if (!isCockpitContext || !cockpitPrompt) return null
+  return buildAiEvidenceReuseResponse(data, body, options)
 }

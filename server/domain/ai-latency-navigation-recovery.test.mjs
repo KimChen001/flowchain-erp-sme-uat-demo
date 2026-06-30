@@ -10,7 +10,9 @@ test('AI assistant UI has duplicate request guard, abort, and timeout fallback',
   assert.match(aiPanelSource, /requestInFlightRef/)
   assert.match(aiPanelSource, /AbortController/)
   assert.match(aiPanelSource, /setTimeout\(\(\) =>/)
-  assert.match(aiPanelSource, /AI 助手响应超时，请稍后再试。/)
+  assert.match(aiPanelSource, /AI 助手响应超时，可能是本地 API 服务未响应。可以重试，或先查看 Today Cockpit。/)
+  assert.match(aiPanelSource, /retryPrompt/)
+  assert.match(aiPanelSource, /重试/)
   assert.match(aiPanelSource, /disabled=\{asking\}/)
 })
 

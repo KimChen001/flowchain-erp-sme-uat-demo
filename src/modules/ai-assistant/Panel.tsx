@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { Loader2, MessageCircle, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { evidenceModuleId, normalizeEvidenceLinks, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
 import { fmt } from "../../lib/format";
@@ -21,6 +21,7 @@ type AiChatMessage = {
   role: "user" | "assistant";
   content: string;
   cards?: AiChatCard[];
+  retryPrompt?: string;
 };
 
 type AiChatCard = {
@@ -817,14 +818,21 @@ export default function FloatingAiAssistant({
       ]);
     } catch (error) {
       if (requestSeqRef.current !== requestId || abortReasonRef.current === "module-change" || abortReasonRef.current === "superseded") return;
-      if (import.meta.env.DEV) console.warn("AI assistant request failed", error);
+      if (import.meta.env.DEV) {
+        console.warn("AI assistant request failed", {
+          elapsedMs: Math.round(performance.now() - requestStartedAt),
+          timeout: timeoutHit || abortReasonRef.current === "timeout",
+          name: error instanceof Error ? error.name : "unknown",
+        });
+      }
       setMessages((current) => [
         ...current,
         {
           role: "assistant",
           content: timeoutHit || abortReasonRef.current === "timeout"
-            ? "AI 助手响应超时，请稍后再试。"
+            ? "AI 助手响应超时，可能是本地 API 服务未响应。可以重试，或先查看 Today Cockpit。"
             : "AI 助手暂时无法连接，请稍后再试。",
+          retryPrompt: timeoutHit || abortReasonRef.current === "timeout" ? message : undefined,
         },
       ]);
     } finally {
@@ -884,6 +892,18 @@ export default function FloatingAiAssistant({
                 >
                   <div className="whitespace-pre-wrap">{message.content}</div>
                   {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />}
+                  {message.role === "assistant" && message.retryPrompt ? (
+                    <button
+                      type="button"
+                      onClick={() => askAi(message.retryPrompt || "")}
+                      disabled={asking}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed"
+                      style={{ background: A.white, color: asking ? A.gray3 : A.blue, border: `1px solid ${A.border}` }}
+                    >
+                      <RotateCcw size={12} />
+                      重试
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}

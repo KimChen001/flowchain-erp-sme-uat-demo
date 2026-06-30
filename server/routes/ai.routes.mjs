@@ -4,7 +4,7 @@ import { buildAiChatStatusResponse, normalizeAiChatMessage } from '../domain/ai-
 import { buildAiProcurementOperationalResponse } from '../domain/ai-procurement-operational-query.mjs'
 import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-query.mjs'
 import { buildAiSupplierOperationalResponse } from '../domain/ai-supplier-operational-query.mjs'
-import { buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
+import { buildAiCockpitFastPathResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
 import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
@@ -476,6 +476,22 @@ export async function handleAiRoute(ctx) {
     const readModelCache = {}
 
     let branchStartedAt = Date.now()
+    const cockpitFastPathQuery = buildAiCockpitFastPathResponse(db, body, { cache: readModelCache })
+    if (cockpitFastPathQuery) {
+      const result = {
+        ...cockpitFastPathQuery,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_cockpit_fast_path', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name, persist: false })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'cockpit_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
     const evidenceReuseQuery = buildAiEvidenceReuseResponse(db, body, { cache: readModelCache })
     if (evidenceReuseQuery) {
       const result = {
