@@ -6,6 +6,7 @@ import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-quer
 import { buildAiSupplierOperationalResponse } from '../domain/ai-supplier-operational-query.mjs'
 import { buildAiCockpitFastPathResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
 import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
+import { buildAiReadContext } from '../domain/ai-read-context.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
 import {
@@ -487,7 +488,8 @@ export async function handleAiRoute(ctx) {
     const body = await readBody(req)
     body.question = normalizeAiChatMessage(body)
     if (!body.question) return send(res, 400, { error: 'question is required' })
-    const readModelCache = {}
+    const aiReadContext = await buildAiReadContext(db, ctx)
+    const readModelCache = aiReadContext.cache
 
     let branchStartedAt = Date.now()
     const cockpitFastPathQuery = buildAiCockpitFastPathResponse(db, body, { cache: readModelCache })
