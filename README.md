@@ -1,118 +1,136 @@
 # FlowChain ERP/SCM UAT Demo
 
-FlowChain is a lightweight AI-assisted ERP/SCM UAT demo for small and medium-sized businesses moving from Excel, email, and manual approvals into structured supply-chain workflows.
+FlowChain is an AI-assisted supply chain and supplier management UAT demo for SMEs moving from Excel, email, chat, and manual approvals into structured procurement, inventory, supplier, and finance-collaboration workflows.
 
-This repository is not a production-ready SaaS system and is not intended to replace SAP, Oracle, or a full ERP implementation. It remains a JSON-backed UAT demo focused on product validation and workflow storytelling.
+It is not a full ERP, not a SAP/Oracle replacement, not a full finance/GL system, not a payment execution system, not a tax system, and not a fully autonomous AI system.
 
-## Current Capabilities
+## Current Status
 
-- Login demo with local user profile persistence.
-- SME-friendly workbench dashboard and navigation.
-- Inventory planning, stock movement traceability, warehouse views, ABC/XYZ, and replenishment requests.
-- Purchase request workflow with approval evidence, supplier recommendation, RFQ trigger, and PR to PO conversion.
-- RFQ workflow with source PR traceability and status transitions.
-- Purchase order workflow with line-level PO data, approval, dispatch, and audit history.
-- GRN receiving workflow with line-level receiving, QC, posted GRN lock, and inventory movement linkage.
-- Forecasting, MRP release, and S&OP cycle views.
-- Supplier performance and recommendation scoring.
-- AI assistant with module evidence, local fallback, external signal support, and AI confidence metadata.
-- Market price cards for iron, steel, aluminum, copper, and USD-CNY demo signals.
+FlowChain is currently a local JSON/demo-data-backed UAT project. It is useful for product storytelling, workflow validation, architecture review, and repeatable local testing. It is not production-ready SaaS infrastructure.
 
-## Project Structure
+Default runtime behavior remains JSON-backed through `data/scm-demo.json`. No production database, ORM, RDS, or PolarDB connection is required.
 
-The app is being refactored from a Figma demo bundle into a maintainable project:
+## Core Modules
 
-```text
-src/app/                 App shell, routing, and compatibility wrapper
-src/modules/             Module page entry points
-src/components/          Shared UI component categories
-src/domain/              Frontend domain helpers
-src/lib/                 API client, constants, formatting
-src/data/                Static demo data
-src/types/               Shared TypeScript types
-server/config/           Runtime environment loading
-server/domain/           Backend workflow/domain logic
-server/repositories/     JSON database adapter
-server/routes/           API route handlers
-server/services/         AI and market service boundaries
-server/utils/            HTTP and validation utilities
-```
+- Today Cockpit
+- Procurement / P2P
+- Purchase Request
+- RFQ / supplier quotation
+- Purchase Order
+- Receiving / GRN
+- Inventory
+- Inventory Exception Closure
+- SRM
+- Master Data
+- Forecast / MRP
+- AI Assistant
+- Finance collaboration visibility
+- Reports / Imports / Data Management
 
-`src/app/FlowChainApp.tsx` still contains the compatibility implementation while module pages are migrated incrementally. `server/routes/scm-legacy.routes.mjs` still contains the compatibility route implementation while endpoint handlers are split module by module.
-
-## Running Locally
-
-Install dependencies:
+## Run Locally
 
 ```bash
 npm install
-```
-
-Start the API server:
-
-```bash
 npm run api
 ```
 
-Start the frontend dev server in another terminal:
+In another terminal:
 
 ```bash
 npm run dev
 ```
 
-Build production assets:
+The frontend proxies `/api` requests to `http://127.0.0.1:8787`.
 
-```bash
-npm run build
-```
-
-Run TypeScript checks:
-
-```bash
-npm run typecheck
-```
-
-Run the minimal domain test suite:
+## Validate
 
 ```bash
 npm test
+npm run test:harness
+npm run typecheck
+npm run build
 ```
 
-The frontend proxies `/api` requests to `http://127.0.0.1:8787`.
+`npm run build` may report Vite chunk-size warnings; those warnings do not indicate a failed build.
 
-## Data And API
+## Key Backend APIs
 
-Demo data is stored in `data/scm-demo.json`. The project intentionally continues to use JSON persistence for UAT speed and traceability.
+Read and preview APIs:
 
-Key endpoints include:
-
-- `GET /api/health`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `GET /api/purchase-requests`
-- `POST /api/purchase-requests`
-- `PATCH /api/purchase-requests/:pr/status`
-- `POST /api/purchase-requests/:pr/convert-to-po`
-- `GET /api/purchase-orders`
-- `POST /api/purchase-orders`
-- `PATCH /api/purchase-orders/:po/status`
-- `GET /api/rfqs`
-- `POST /api/rfqs`
-- `PATCH /api/rfqs/:id/status`
-- `GET /api/receiving-docs`
-- `POST /api/receiving-docs`
-- `PATCH /api/receiving-docs/:grn`
-- `GET /api/inventory-movements`
-- `GET /api/mrp-plan`
-- `GET /api/sop-cycle`
-- `POST /api/sop-cycle`
+- `GET /api/me`
+- `GET /api/tenants/current`
+- `GET /api/search`
+- `GET /api/today-cockpit`
+- `GET /api/procurement/documents`
+- `GET /api/procurement/documents/:type/:id`
+- `GET /api/procurement/links`
+- `GET /api/procurement/followups`
+- `GET /api/procurement/summary`
+- `GET /api/inventory/items`
+- `GET /api/inventory/items/:sku`
+- `GET /api/inventory/lots`
+- `GET /api/inventory/serials`
+- `GET /api/inventory/movements`
+- `GET /api/inventory/exceptions`
+- `GET /api/inventory/summary`
+- `GET /api/master-data/items`
+- `GET /api/master-data/suppliers`
+- `GET /api/action-drafts/schema`
+- `POST /api/action-drafts/preview`
+- `GET /api/ai/tools`
 - `POST /api/ai/chat`
-- `GET /api/external-signals`
-- `GET /api/market-prices`
-- `POST /api/market-prices/refresh`
 
-## AI Behavior
+Legacy/manual demo write routes still exist for compatibility, including purchase request, RFQ, purchase order, receiving, forecast, S&OP, login, and market-signal demo routes. The AI/draft-first surfaces do not autonomously execute those writes.
 
-AI provider configuration is read from local environment files at runtime. Do not commit `.env.local` or expose API keys.
+## AI Safety
 
-If configured, the backend can call OpenAI or Doubao/Ark. If provider calls fail or credentials are absent, the API returns a local rule-based fallback using structured demo evidence.
+External AI providers are disabled by default. Fake `OPENAI_API_KEY`, `ARK_API_KEY`, or `DOUBAO_API_KEY` values do not enable provider calls.
+
+Cockpit-style prompts such as `今天最需要处理什么？` use a deterministic local fast path backed by Today Cockpit, procurement, and inventory read models. Unsupported prompts fall back safely when providers are disabled.
+
+## Draft-first Actions
+
+AI and Today Cockpit actions prepare reviewable drafts rather than executing business writes.
+
+Current draft previews include:
+
+- purchase request draft;
+- RFQ draft;
+- supplier follow-up draft.
+
+Drafts keep `previewOnly: true`, `requiresConfirmation: true`, and `submitted: false`. Confirm/submit behavior is future work.
+
+## Documentation Map
+
+Start here:
+
+- [Docs index](docs/README.md)
+- [Product narrative](docs/product-narrative-v1.md)
+- [Demo script](docs/demo-script-v1.md)
+- [Architecture overview](docs/architecture-overview-v1.md)
+- [Backend route map](docs/backend-route-map-v1.md)
+- [Roadmap](docs/roadmap-v1.md)
+- [UAT limitations](docs/uat-limitations-v1.md)
+- [AI safety and draft-first explainer](docs/ai-safety-and-draft-first-explainer-v1.md)
+
+## Current Limitations
+
+- No production database.
+- No ORM.
+- No autonomous AI execution.
+- No real supplier message sending from drafts.
+- No payment execution.
+- No tax filing.
+- No full finance/GL.
+- No CRM, HR, sales order center, customer center, bank integration, OCR, PDF export, or xlsx export.
+
+## Roadmap
+
+The next architecture phase prepares adapter-ready persistence while keeping JSON/demo behavior stable:
+
+- JSON adapter contract tests;
+- persistence mode and adapter registry;
+- ActionDraft and AuditLog repositories;
+- Master Data repository;
+- Procurement and Inventory read repositories;
+- future ORM/database adapter implementation.

@@ -1,0 +1,71 @@
+# FlowChain Docs Index
+
+## Product / Demo
+
+- [Product narrative](product-narrative-v1.md)
+- [Demo script](demo-script-v1.md)
+- [Demo screenshot checklist](demo-screenshot-checklist-v1.md)
+- [UAT limitations](uat-limitations-v1.md)
+- [Product scope / IA review](product-scope-ia-review.md)
+- [System harness and product review](system-harness-and-product-review-v1.md)
+
+## Architecture
+
+- [Architecture overview](architecture-overview-v1.md)
+- [Database entity model v2](database-entity-model-v2.md)
+- [Database entity model v1](database-entity-model-v1.md)
+- [Aliyun backend deployment roadmap](aliyun-backend-deployment-roadmap.md)
+- [Backend phase 1-2 technical design](backend-phase-1-2-technical-design.md)
+- [Backend foundation v1 plan](backend-foundation-v1-plan.md)
+- [Data source audit](data-source-audit.md)
+- [Data source cleanup roadmap](data-source-cleanup-roadmap.md)
+
+## Backend
+
+- [Backend route map](backend-route-map-v1.md)
+- [Backend route audit](backend-route-audit.md)
+- [Backend write boundary and audit plan](backend-write-boundary-and-audit-plan.md)
+- [Procurement backend read model](procurement-backend-read-model-v1.md)
+- [Inventory read API foundation](inventory-read-api-foundation-v1.md)
+- [Master Data API field map](master-data-api-field-map.md)
+- [Today Cockpit v2](today-cockpit-v2.md)
+- [Action draft boundary](draft-first-action-boundary-v1.md)
+- [Purchase request draft preview](purchase-request-draft-preview-v1.md)
+- [RFQ and supplier follow-up draft preview](rfq-and-supplier-followup-draft-preview-v1.md)
+- [Audit latency hardening](ai-audit-latency-hardening-v1.md)
+
+## AI
+
+- [AI safety and draft-first explainer](ai-safety-and-draft-first-explainer-v1.md)
+- [AI provider safety gate](ai-provider-safety-gate-v1.md)
+- [AI provider adapter plan](ai-provider-adapter-v1-plan.md)
+- [AI evidence reuse](ai-evidence-reuse-v1.md)
+- [AI audit latency hardening](ai-audit-latency-hardening-v1.md)
+- [AI timeout diagnostics and cockpit fast path](ai-timeout-diagnostics-and-cockpit-fast-path-v1.md)
+- [AI response latency notes](ai-response-latency-notes.md)
+- [AI chat copilot plan](ai-chat-copilot-v1-plan.md)
+
+## UI
+
+- [UI typography system](ui-typography-system-v1.md)
+- [UI typography consistency](ui-typography-consistency-v1.md)
+- [Typography token consolidation v2](ui-typography-token-consolidation-v2.md)
+- [Evidence link boundary](evidence-link-boundary-v1.md)
+- [Navigation recovery and AI latency](navigation-recovery-and-ai-latency-v1.md)
+- [Overview evidence boundary](overview-evidence-boundary-v1.md)
+- [Workbench experience consolidation](workbench-experience-consolidation-v1.md)
+- [Frontend stability review](frontend-stability-review.md)
+
+## Domain Notes
+
+- [Global business search](global-business-search-v1.md)
+- [Supplier operational search](supplier-operational-search-v1.md)
+- [SRM supplier API migration notes](srm-supplier-api-migration-notes.md)
+- [Receiving GRN list/detail safe plan](receiving-grn-list-detail-safe-plan.md)
+- [ERPNext reference notes](erpnext-reference-notes-for-flowchain.md)
+- [SCM algorithm notes](SCM_ALGORITHM_NOTES.md)
+- [SCM optimization TODO](SCM_OPTIMIZATION_TODO.md)
+
+## Roadmap
+
+- [Roadmap v1](roadmap-v1.md)
