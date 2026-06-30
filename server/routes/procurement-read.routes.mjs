@@ -24,7 +24,7 @@ export async function handleProcurementReadRoute(ctx) {
       send(res, 200, { documents: [] })
       return true
     }
-    send(res, 200, { documents: repository.listDocuments(filters) })
+    send(res, 200, { documents: await repository.listDocuments(filters) })
     return true
   }
 
@@ -34,7 +34,7 @@ export async function handleProcurementReadRoute(ctx) {
       send(res, 400, { error: 'Invalid procurement document type' })
       return true
     }
-    const document = repository.getDocument(documentMatch[1], documentMatch[2])
+    const document = await repository.getDocument(documentMatch[1], documentMatch[2])
     if (!document) {
       send(res, 404, { error: 'Procurement document not found' })
       return true
@@ -44,17 +44,17 @@ export async function handleProcurementReadRoute(ctx) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/procurement/links') {
-    send(res, 200, { links: repository.listLinks(query(url)) })
+    send(res, 200, { links: await repository.listLinks(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/procurement/followups') {
-    send(res, 200, { followups: repository.listFollowups(query(url)) })
+    send(res, 200, { followups: await repository.listFollowups(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/procurement/summary') {
-    send(res, 200, { summary: repository.getSummary() })
+    send(res, 200, { summary: await repository.getSummary() })
     return true
   }
 

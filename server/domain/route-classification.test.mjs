@@ -71,6 +71,6 @@ test('route classification metadata includes major route groups and clean block 
 
 test('database mode route metadata reflects migrated master data read adapter', () => {
   assert.equal(classifyRoute('GET', '/api/master-data/items').databaseMode, 'allowed-db-read')
-  assert.equal(classifyRoute('GET', '/api/procurement/documents').databaseMode, 'allowed-json-read-fallback')
+  assert.equal(classifyRoute('GET', '/api/procurement/documents').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/inventory/items').databaseMode, 'allowed-json-read-fallback')
 })

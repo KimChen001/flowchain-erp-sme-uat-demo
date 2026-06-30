@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document prepares FlowChain for future managed persistence without adding a database, ORM, migrations, connection code, or runtime behavior changes.
+This document prepares FlowChain for managed persistence while preserving JSON mode as the default runtime.
 
 FlowChain remains an AI-assisted SCM platform for SMEs. The persistence model focuses on procurement, inventory, receiving, supplier collaboration, action drafts, AI evidence, imports, and audit. It intentionally excludes full GL, payment execution, tax filing, CRM, HR, and bank integration.
 
@@ -31,14 +31,14 @@ FlowChain remains an AI-assisted SCM platform for SMEs. The persistence model fo
 ### Procurement And P2P
 
 - `PurchaseRequest` and `PurchaseRequestLine`.
-- `RFQ` and `RFQLine`.
+- `Rfq` and `RfqLine`.
 - `SupplierQuotation` and `SupplierQuotationLine`.
 - `PurchaseOrder` and `PurchaseOrderLine`.
-- `ReceivingDocument` / `GRN` and `GRNLine`.
+- `ReceivingDocument` and `ReceivingLine`.
 - `SupplierInvoice` and `SupplierInvoiceLine`.
 - `ThreeWayMatch`: PO/GRN/invoice matching result, variance amount/type, resolution state.
 - `DocumentLink`: typed links across PR, RFQ, PO, GRN, invoice, return, and draft.
-- `Followup`: internal or supplier-facing follow-up tasks and messages.
+- `ProcurementFollowup`: internal or supplier-facing follow-up tasks and messages.
 
 ### AI And Audit
 
@@ -102,7 +102,7 @@ FlowChain remains an AI-assisted SCM platform for SMEs. The persistence model fo
 
 - Reads: PR/RFQ/PO/GRN/invoice/3WM lists and details, document links, followups, summary.
 - Future writes: none in read repository.
-- Current adapter: procurement read model helpers and legacy document arrays.
+- Current adapters: JSON procurement read model helpers and the Round 29 DB ProcurementReadRepository.
 
 ### ActionDraftRepository
 
@@ -185,8 +185,7 @@ Round 25 decision: choose Prisma for the first persistence scaffold. Prisma is s
 
 ## Non-goals
 
-- No live database code.
-- No ORM installation.
-- No migration files.
+- No default database runtime.
+- No migration files in this round.
 - No cloud deployment.
 - No full finance/GL, payment execution, tax filing, CRM, HR, or bank integration.

@@ -23,6 +23,15 @@ model Tenant {
   actionDrafts   ActionDraft[]
   auditLogs      AuditLog[]
   aiEvidence     AiEvidence[]
+  purchaseRequests PurchaseRequest[]
+  rfqs           Rfq[]
+  supplierQuotations SupplierQuotation[]
+  purchaseOrders PurchaseOrder[]
+  receivingDocuments ReceivingDocument[]
+  supplierInvoices SupplierInvoice[]
+  threeWayMatches ThreeWayMatch[]
+  documentLinks  DocumentLink[]
+  procurementFollowups ProcurementFollowup[]
 }
 
 model User {
@@ -218,4 +227,317 @@ model AiEvidence {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, entityType, entityId])
+}
+
+model PurchaseRequest {
+  id           String   @id
+  tenantId     String
+  status       String   @default("draft")
+  requester    String?
+  buyer        String?
+  supplierId   String?
+  supplierName String?
+  priority     String?
+  requiredDate DateTime?
+  amount       Decimal? @db.Decimal(18, 4)
+  currency     String   @default("CNY")
+  reason       String?
+  source       String?
+  linkedRfqId  String?
+  linkedPoId   String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  lines  PurchaseRequestLine[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
+model PurchaseRequestLine {
+  id                String   @id
+  purchaseRequestId String
+  itemId            String?
+  sku               String?
+  itemName          String?
+  quantity          Decimal? @db.Decimal(18, 4)
+  unit              String?
+  unitPrice         Decimal? @db.Decimal(18, 4)
+  amount            Decimal? @db.Decimal(18, 4)
+  metadata          Json?
+
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseRequestId])
+}
+
+model Rfq {
+  id                     String   @id
+  tenantId               String
+  title                  String
+  category               String?
+  status                 String   @default("active")
+  supplierCount          Int      @default(0)
+  respondedSupplierCount Int      @default(0)
+  dueDate                DateTime?
+  bestPrice              Decimal? @db.Decimal(18, 4)
+  awardedSupplier        String?
+  supplierId             String?
+  sourceRequestId        String?
+  linkedPoId             String?
+  currency               String   @default("CNY")
+  metadata               Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  lines  RfqLine[]
+  quotations SupplierQuotation[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+}
+
+model RfqLine {
+  id       String   @id
+  rfqId    String
+  itemId   String?
+  sku      String?
+  itemName String?
+  quantity Decimal? @db.Decimal(18, 4)
+  unit     String?
+  metadata Json?
+
+  rfq Rfq @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@index([rfqId])
+}
+
+model SupplierQuotation {
+  id           String   @id
+  tenantId     String
+  rfqId        String?
+  supplierId   String?
+  supplierName String?
+  status       String   @default("submitted")
+  quotedAmount Decimal? @db.Decimal(18, 4)
+  currency     String   @default("CNY")
+  submittedAt  DateTime?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  rfq    Rfq?   @relation(fields: [rfqId], references: [id])
+  lines  SupplierQuotationLine[]
+
+  @@index([tenantId, rfqId])
+  @@index([tenantId, supplierName])
+}
+
+model SupplierQuotationLine {
+  id                  String   @id
+  supplierQuotationId String
+  itemId              String?
+  sku                 String?
+  itemName            String?
+  quantity            Decimal? @db.Decimal(18, 4)
+  unit                String?
+  unitPrice           Decimal? @db.Decimal(18, 4)
+  amount              Decimal? @db.Decimal(18, 4)
+  metadata            Json?
+
+  supplierQuotation SupplierQuotation @relation(fields: [supplierQuotationId], references: [id], onDelete: Cascade)
+
+  @@index([supplierQuotationId])
+}
+
+model PurchaseOrder {
+  id              String   @id
+  tenantId        String
+  status          String   @default("draft")
+  supplierId      String?
+  supplierName    String?
+  sourceRequestId String?
+  sourceRfqId     String?
+  expectedDate    DateTime?
+  amount          Decimal? @db.Decimal(18, 4)
+  currency        String   @default("CNY")
+  owner           String?
+  priority        String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  lines  PurchaseOrderLine[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, expectedDate])
+}
+
+model PurchaseOrderLine {
+  id              String   @id
+  purchaseOrderId String
+  itemId          String?
+  sku             String?
+  itemName        String?
+  orderedQuantity Decimal? @db.Decimal(18, 4)
+  receivedQuantity Decimal? @db.Decimal(18, 4)
+  unit            String?
+  unitPrice       Decimal? @db.Decimal(18, 4)
+  amount          Decimal? @db.Decimal(18, 4)
+  metadata        Json?
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+}
+
+model ReceivingDocument {
+  id           String   @id
+  tenantId     String
+  poId         String?
+  supplierId   String?
+  supplierName String?
+  status       String   @default("receiving")
+  arrivedAt    DateTime?
+  receiver     String?
+  warehouseId  String?
+  currency     String   @default("CNY")
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  lines  ReceivingLine[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, poId])
+}
+
+model ReceivingLine {
+  id                  String   @id
+  receivingDocumentId String
+  itemId              String?
+  sku                 String?
+  itemName            String?
+  acceptedQty         Decimal? @db.Decimal(18, 4)
+  rejectedQty         Decimal? @db.Decimal(18, 4)
+  unit                String?
+  metadata            Json?
+
+  receivingDocument ReceivingDocument @relation(fields: [receivingDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([receivingDocumentId])
+}
+
+model SupplierInvoice {
+  id             String   @id
+  tenantId       String
+  supplierId     String?
+  supplierName   String?
+  relatedPoId    String?
+  relatedGrnId   String?
+  invoiceDate    DateTime?
+  dueDate        DateTime?
+  amount         Decimal? @db.Decimal(18, 4)
+  currency       String   @default("CNY")
+  status         String   @default("pending")
+  matchStatus    String?
+  varianceAmount Decimal? @db.Decimal(18, 4)
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  lines  SupplierInvoiceLine[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, relatedPoId])
+}
+
+model SupplierInvoiceLine {
+  id                String   @id
+  supplierInvoiceId String
+  itemId            String?
+  sku               String?
+  itemName          String?
+  quantity          Decimal? @db.Decimal(18, 4)
+  unit              String?
+  unitPrice         Decimal? @db.Decimal(18, 4)
+  amount            Decimal? @db.Decimal(18, 4)
+  metadata          Json?
+
+  supplierInvoice SupplierInvoice @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+
+  @@index([supplierInvoiceId])
+}
+
+model ThreeWayMatch {
+  id              String   @id
+  tenantId        String
+  poId            String?
+  grnId           String?
+  invoiceId       String?
+  supplierId      String?
+  supplierName    String?
+  poAmount        Decimal? @db.Decimal(18, 4)
+  invoiceAmount   Decimal? @db.Decimal(18, 4)
+  varianceAmount  Decimal? @db.Decimal(18, 4)
+  currency        String   @default("CNY")
+  status          String   @default("pending")
+  blockingReason  String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, invoiceId])
+}
+
+model DocumentLink {
+  id           String   @id
+  tenantId     String
+  sourceType   String
+  sourceId     String
+  targetType   String
+  targetId     String
+  relationship String
+  status       String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, sourceType, sourceId])
+  @@index([tenantId, targetType, targetId])
+}
+
+model ProcurementFollowup {
+  id           String   @id
+  tenantId     String
+  type         String
+  severity     String
+  status       String   @default("open")
+  owner        String?
+  title        String
+  message      String?
+  dueDate      DateTime?
+  supplierId   String?
+  supplierName String?
+  documentType String
+  documentId   String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status, severity])
+  @@index([tenantId, documentType, documentId])
 }

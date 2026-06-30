@@ -55,13 +55,20 @@ The first schema covers low-risk foundations:
 - `AuditLog`
 - `AiEvidence`
 
-The schema intentionally excludes transactional procurement and inventory write models for now:
+The schema now includes read-oriented procurement models for the Round 29 Procurement Read DB adapter:
 
-- no `PurchaseRequest`;
-- no `RFQ`;
-- no `PurchaseOrder`;
-- no `ReceivingDocument` / `GRN`;
-- no `SupplierInvoice`;
+- `PurchaseRequest` / `PurchaseRequestLine`;
+- `Rfq` / `RfqLine`;
+- `SupplierQuotation` / `SupplierQuotationLine`;
+- `PurchaseOrder` / `PurchaseOrderLine`;
+- `ReceivingDocument` / `ReceivingLine`;
+- `SupplierInvoice` / `SupplierInvoiceLine`;
+- `ThreeWayMatch`;
+- `DocumentLink`;
+- `ProcurementFollowup`.
+
+The schema intentionally still excludes inventory persistence and business write workflow models for now:
+
 - no `InventoryMovement`;
 - no finance, payment, or tax filing execution models.
 
@@ -103,7 +110,8 @@ DATABASE_URL=postgresql://...
 - returns a clean config error if database mode is selected without `DATABASE_URL`;
 - does not enable legacy write routes;
 - uses the Round 26 partial database registry for ActionDraft and AuditLog;
-- keeps master data, procurement read, and inventory read on JSON fallback until their DB adapters exist.
+- uses DB adapters for master data and procurement read;
+- keeps inventory read on JSON fallback until its DB adapter exists.
 
 ## Prisma Client Loading
 

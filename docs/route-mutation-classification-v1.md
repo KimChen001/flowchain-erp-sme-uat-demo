@@ -27,7 +27,7 @@ When `FLOWCHAIN_PERSISTENCE_MODE=database`:
 
 The block response uses HTTP `501` and contains no stack trace, provider details, or database configuration.
 
-Because real DB adapters do not exist yet, database mode v1 still uses JSON read fallback repositories for allowed read/preview routes. It does not write JSON in database mode.
+Database mode uses migrated DB read adapters where available and JSON read fallback where not yet migrated. It does not write JSON in database mode.
 
 ## Route Classification
 
@@ -61,8 +61,8 @@ Because real DB adapters do not exist yet, database mode v1 still uses JSON read
 |---|---|---|---|---|---|---|
 | `GET` | `/api/search` | read-only | No | Allowed | Allowed | Global search. |
 | `GET` | `/api/today-cockpit` | read-only | No | Allowed | Allowed | Aggregated read model. |
-| `GET` | `/api/master-data/*` | read-only | No | Allowed | Allowed with JSON read fallback | Repository-compatible. |
-| `GET` | `/api/procurement/*` | read-only | No | Allowed | Allowed with JSON read fallback | Repository-compatible. |
+| `GET` | `/api/master-data/*` | read-only | No | Allowed | Allowed with DB read adapter | Repository-compatible. |
+| `GET` | `/api/procurement/*` | read-only | No | Allowed | Allowed with DB read adapter | Repository-compatible. |
 | `GET` | `/api/inventory/*` | read-only | No | Allowed | Allowed with JSON read fallback | Repository-compatible. |
 | `GET` | `/api/inventory-movements` | read-only | No | Allowed | Allowed | Compatibility read endpoint. |
 | `GET` | `/api/audit-log` | read-only | No | Allowed | Allowed | Existing audit list. |

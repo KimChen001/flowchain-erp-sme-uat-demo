@@ -1,14 +1,14 @@
 # DB Readiness Review v1
 
-Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime.
+Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter.
 
 ## Current Status
 
 - JSON mode remains the default.
 - Normal `npm test`, `npm run typecheck`, and `npm run build` do not require `DATABASE_URL`, `DATABASE_URL_TEST`, or a live database.
 - Database mode is opt-in through `FLOWCHAIN_PERSISTENCE_MODE=database`.
-- DB adapter coverage currently includes ActionDraft, AuditLog, and Master Data.
-- Procurement Read and Inventory Read remain JSON fallback repositories in database mode until later rounds.
+- DB adapter coverage currently includes ActionDraft, AuditLog, Master Data, and Procurement Read.
+- Inventory Read remains a JSON fallback repository in database mode until Round 30.
 - Legacy mutation routes remain blocked in database mode by the route mutation guard.
 
 ## Test DB Harness
@@ -48,9 +48,24 @@ npm run db:seed:dry-run
 
 The command reads the committed demo JSON as source input, returns a deterministic plan, and does not mutate `data/scm-demo.json`. Apply mode is intentionally not implemented in this round.
 
+## Procurement Read DB Adapter
+
+Round 29 adds lean Prisma read models and a DB repository for:
+
+- PurchaseRequest and PurchaseRequestLine
+- Rfq and RfqLine
+- SupplierQuotation and SupplierQuotationLine
+- PurchaseOrder and PurchaseOrderLine
+- ReceivingDocument and ReceivingLine
+- SupplierInvoice and SupplierInvoiceLine
+- ThreeWayMatch
+- DocumentLink
+- ProcurementFollowup
+
+The adapter is read-only. It maps Prisma rows into the existing procurement read model shape for PR, RFQ, PO, GRN, supplier invoice, three-way match, links, followups, and summary. Missing `DATABASE_URL` in database mode returns the same clean database config error used by the other DB adapters.
+
 ## Remaining Gaps
 
-- Procurement Read DB adapter.
 - Inventory Read DB adapter.
 - Master Data executable test DB seed and parity check.
 - ActionDraft persistence end-to-end.

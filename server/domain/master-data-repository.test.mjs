@@ -71,7 +71,7 @@ test('adapter registry exposes MasterDataRepository in default JSON mode', () =>
   assert.equal(registry.masterData.listSuppliers()[0].id, 'SUP-001')
 })
 
-test('database mode registry uses DB MasterDataRepository and keeps procurement inventory fallbacks', () => {
+test('database mode registry uses DB MasterDataRepository and keeps inventory fallback', async () => {
   const db = createDb()
   const registry = createRepositoryRegistry({ db, env: { FLOWCHAIN_PERSISTENCE_MODE: 'database' } })
 
@@ -79,8 +79,12 @@ test('database mode registry uses DB MasterDataRepository and keeps procurement 
   assert.equal(registry.masterData.adapter, 'db-master-data-v1')
   assert.equal(registry.actionDrafts.adapter, 'db-action-draft-v1')
   assert.equal(registry.auditLog.adapter, 'db-audit-log-v1')
+  assert.equal(registry.procurementRead.adapter, 'db-procurement-read-v1')
   assert.equal(registry.inventoryRead.listItems()[0].sku, 'A100')
-  assert.equal(registry.procurementRead.getDocument('po', 'PO-1'), null)
+  await assert.rejects(
+    () => registry.procurementRead.getDocument('po', 'PO-1'),
+    (error) => error.message === DATABASE_CONFIG_ERROR && error.code === 'FLOWCHAIN_DATABASE_CONFIG_MISSING'
+  )
 })
 
 test('database MasterDataRepository maps Prisma rows to current read shapes', async () => {
