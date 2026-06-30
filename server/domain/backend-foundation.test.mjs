@@ -217,8 +217,13 @@ test('GET /api/me returns current user, tenant, and permissions context', async 
   assert.equal(route.response.payload.user.email, 'buyer@flowchain.local')
   assert.equal(route.response.payload.user.role, 'buyer')
   assert.equal(route.response.payload.tenant.id, 'tenant-flowchain-sme')
+  assert.equal(route.response.payload.permissionsContext.role, 'buyer')
+  assert.equal(route.response.payload.permissionsContext.alphaBoundary, 'read_preview_draft_save_only_no_final_business_confirmation')
   assert.equal(route.response.payload.permissionsContext.canPrepareDrafts, true)
-  assert.equal(route.response.payload.permissionsContext.canSubmitDocuments, true)
+  assert.equal(route.response.payload.permissionsContext.canReviewActionDrafts, true)
+  assert.equal(route.response.payload.permissionsContext.canSaveActionDraftShells, true)
+  assert.equal(route.response.payload.permissionsContext.canSubmitDocuments, false)
+  assert.equal(route.response.payload.permissionsContext.canSubmitBusinessDocuments, false)
   assert.equal(route.response.payload.permissionsContext.canApproveDocuments, false)
 })
 
@@ -246,7 +251,9 @@ test('GET /api/me can reuse existing bearer user context', async () => {
   assert.equal(route.response.status, 200)
   assert.equal(route.response.payload.user.id, 'USR-001')
   assert.equal(route.response.payload.user.email, 'alex@example.com')
+  assert.equal(route.response.payload.permissionsContext.role, 'approver')
   assert.equal(route.response.payload.permissionsContext.canApproveDocuments, true)
+  assert.equal(route.response.payload.permissionsContext.canSubmitBusinessDocuments, false)
 })
 
 test('GET /api/tenants/current returns minimal tenant context', async () => {

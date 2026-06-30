@@ -22,9 +22,50 @@ const defaultUser = Object.freeze({
 })
 
 const roleLabels = {
+  viewer: 'Viewer',
+  planner: 'Planner',
   buyer: 'Buyer',
   approver: 'Approver',
+  manager: 'Approver',
   admin: 'Admin',
+}
+
+const alphaRoleBoundaries = {
+  viewer: {
+    canViewReadModels: true,
+    canPrepareDrafts: false,
+    canSaveActionDraftShells: false,
+    canReviewActionDrafts: false,
+    canApproveBusinessDocuments: false,
+  },
+  planner: {
+    canViewReadModels: true,
+    canPrepareDrafts: true,
+    canSaveActionDraftShells: true,
+    canReviewActionDrafts: true,
+    canApproveBusinessDocuments: false,
+  },
+  buyer: {
+    canViewReadModels: true,
+    canPrepareDrafts: true,
+    canSaveActionDraftShells: true,
+    canReviewActionDrafts: true,
+    canApproveBusinessDocuments: false,
+  },
+  approver: {
+    canViewReadModels: true,
+    canPrepareDrafts: true,
+    canSaveActionDraftShells: true,
+    canReviewActionDrafts: true,
+    canApproveBusinessDocuments: true,
+  },
+  admin: {
+    canViewReadModels: true,
+    canPrepareDrafts: true,
+    canSaveActionDraftShells: true,
+    canReviewActionDrafts: true,
+    canApproveBusinessDocuments: true,
+  },
 }
 
 function tokenFromAuthorization(authorization = '') {
@@ -53,13 +94,29 @@ export function resolveCurrentUser(db = {}, authorization = '') {
 }
 
 export function permissionsForUser(user = defaultUser) {
-  const role = String(user.role || defaultUser.role).toLowerCase()
-  const isApprover = role.includes('approver') || role.includes('admin') || role.includes('manager')
+  const rawRole = String(user.role || defaultUser.role).toLowerCase()
+  const role = rawRole.includes('admin')
+    ? 'admin'
+    : rawRole.includes('approver') || rawRole.includes('manager')
+      ? 'approver'
+      : rawRole.includes('planner')
+        ? 'planner'
+        : rawRole.includes('viewer')
+          ? 'viewer'
+          : 'buyer'
+  const boundary = alphaRoleBoundaries[role]
   return {
+    role,
     roleLabel: roleLabels[role] || user.role || defaultUser.role,
-    canPrepareDrafts: true,
-    canSubmitDocuments: true,
-    canApproveDocuments: isApprover,
+    alphaBoundary: 'read_preview_draft_save_only_no_final_business_confirmation',
+    canViewReadModels: boundary.canViewReadModels,
+    canPrepareDrafts: boundary.canPrepareDrafts,
+    canReviewActionDrafts: boundary.canReviewActionDrafts,
+    canSaveActionDraftShells: boundary.canSaveActionDraftShells,
+    canSubmitDocuments: false,
+    canSubmitBusinessDocuments: false,
+    canApproveDocuments: boundary.canApproveBusinessDocuments,
+    canApproveBusinessDocuments: boundary.canApproveBusinessDocuments,
   }
 }
 

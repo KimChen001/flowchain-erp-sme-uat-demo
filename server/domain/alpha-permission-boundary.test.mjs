@@ -1,0 +1,92 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { buildCurrentContext, permissionsForUser } from './context.mjs'
+import {
+  ROUTE_CLASSES,
+  classifyRoute,
+  isDatabaseModeWriteBlocked,
+} from './route-classification.mjs'
+
+const actionDraftShell = readFileSync(new URL('../../src/modules/action-drafts/ActionDraftReviewShell.tsx', import.meta.url), 'utf8')
+const forecastPage = readFileSync(new URL('../../src/modules/forecast/Page.tsx', import.meta.url), 'utf8')
+
+test('Alpha role context exposes lightweight boundaries without production RBAC claims', () => {
+  const roles = [
+    ['viewer', { canPrepareDrafts: false, canReviewActionDrafts: false, canSaveActionDraftShells: false, canApproveDocuments: false }],
+    ['planner', { canPrepareDrafts: true, canReviewActionDrafts: true, canSaveActionDraftShells: true, canApproveDocuments: false }],
+    ['buyer', { canPrepareDrafts: true, canReviewActionDrafts: true, canSaveActionDraftShells: true, canApproveDocuments: false }],
+    ['approver', { canPrepareDrafts: true, canReviewActionDrafts: true, canSaveActionDraftShells: true, canApproveDocuments: true }],
+    ['admin', { canPrepareDrafts: true, canReviewActionDrafts: true, canSaveActionDraftShells: true, canApproveDocuments: true }],
+  ]
+
+  for (const [role, expected] of roles) {
+    const permissions = permissionsForUser({ role })
+
+    assert.equal(permissions.role, role)
+    assert.equal(permissions.alphaBoundary, 'read_preview_draft_save_only_no_final_business_confirmation')
+    assert.equal(permissions.canViewReadModels, true)
+    assert.equal(permissions.canSubmitDocuments, false, role)
+    assert.equal(permissions.canSubmitBusinessDocuments, false, role)
+    assert.equal(permissions.canPrepareDrafts, expected.canPrepareDrafts, role)
+    assert.equal(permissions.canReviewActionDrafts, expected.canReviewActionDrafts, role)
+    assert.equal(permissions.canSaveActionDraftShells, expected.canSaveActionDraftShells, role)
+    assert.equal(permissions.canApproveDocuments, expected.canApproveDocuments, role)
+  }
+})
+
+test('current context strips bearer token and maps manager to approver boundary', () => {
+  const context = buildCurrentContext({
+    users: [{
+      id: 'USR-MGR',
+      token: 'secret-token',
+      name: 'Morgan Manager',
+      email: 'morgan@example.com',
+      role: 'manager',
+    }],
+  }, 'Bearer secret-token')
+
+  assert.equal(context.user.id, 'USR-MGR')
+  assert.equal(context.user.token, undefined)
+  assert.equal(context.permissionsContext.role, 'approver')
+  assert.equal(context.permissionsContext.canApproveDocuments, true)
+  assert.equal(context.permissionsContext.canSubmitBusinessDocuments, false)
+})
+
+test('Alpha permission gate keeps legacy mutations blocked and preview routes distinct', () => {
+  const legacyMutations = [
+    ['POST', '/api/forecast-plans'],
+    ['POST', '/api/sop-cycle'],
+    ['POST', '/api/purchase-requests'],
+    ['PATCH', '/api/purchase-requests/PR-1/status'],
+    ['POST', '/api/purchase-requests/PR-1/convert-to-po'],
+    ['POST', '/api/rfqs'],
+    ['PATCH', '/api/rfqs/RFQ-1/status'],
+    ['POST', '/api/purchase-orders'],
+    ['PATCH', '/api/purchase-orders/PO-1/status'],
+    ['POST', '/api/receiving-docs'],
+    ['PATCH', '/api/receiving-docs/GRN-1'],
+  ]
+
+  for (const [method, pathname] of legacyMutations) {
+    assert.equal(classifyRoute(method, pathname).classification, ROUTE_CLASSES.legacyMutation, pathname)
+    assert.equal(isDatabaseModeWriteBlocked({ persistenceMode: 'database', method, pathname }), true, pathname)
+  }
+
+  assert.equal(classifyRoute('POST', '/api/action-drafts/preview').classification, ROUTE_CLASSES.previewOnly)
+  assert.equal(classifyRoute('POST', '/api/action-drafts/save').classification, ROUTE_CLASSES.controlledPersistence)
+  assert.equal(classifyRoute('POST', '/api/action-drafts/save').databaseMode, 'allowed-db-persistence')
+  assert.equal(classifyRoute('GET', '/api/mrp-plan').classification, ROUTE_CLASSES.readOnly)
+})
+
+test('ActionDraft and Forecast/MRP UI copy keeps final confirmation and release boundaries explicit', () => {
+  assert.match(actionDraftShell, /不会创建、提交、发送或过账任何业务记录/)
+  assert.match(actionDraftShell, /最终确认仍未实现/)
+  assert.match(actionDraftShell, /<button type="button" disabled className=\{`\$\{draftButtonClass\} text-white`\}/)
+  assert.match(actionDraftShell, /确认提交/)
+
+  assert.match(forecastPage, /不代表系统已自动创建生产级 PR\/PO/)
+  assert.match(forecastPage, /不是自动下发 PR\/PO/)
+  assert.match(forecastPage, /预览 PR 草稿/)
+  assert.doesNotMatch(forecastPage, /确认释放|自动释放|提交 PR/)
+})
