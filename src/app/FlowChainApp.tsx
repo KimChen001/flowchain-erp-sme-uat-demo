@@ -636,7 +636,7 @@ export default function FlowChainApp() {
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
     inventory:   <InventoryPanel initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} onReviewActionDraft={openActionDraftReview} />,
-    forecast:    <ForecastPanel />,
+    forecast:    <ForecastPanel onReviewActionDraft={openActionDraftReview} />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
     purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => navigateTo("procurement:rfq")} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     purchasing:  <ProcurementPanel view="orders" focus={searchFocus} onNavigate={navigateTo} />,

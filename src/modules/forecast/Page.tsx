@@ -12,7 +12,6 @@ import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
-import type { PurchaseRequest } from "../../types/scm";
 import { forecastData, FORECAST_SKUS, supplierData } from "../../data/demo-data";
 import {
   METHOD_LABEL,
@@ -36,6 +35,7 @@ import {
   type MrpPlan,
 } from "../../domain/mrp";
 import { typography } from "../../components/ui/typography";
+import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 
 const insightMeta = {
   risk:        { color: A.red,    bg: "#fff1f0", label: "风险预警", icon: AlertTriangle },
@@ -148,7 +148,11 @@ const FUTURE_LABEL = (i: number) => {
   return `${String(y).slice(-2)}/${m}月`;
 };
 
-export default function ForecastPanel() {
+export default function ForecastPanel({
+  onReviewActionDraft,
+}: {
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
+}) {
   const [skuIdx, setSkuIdx] = useState(0);
   const baseSku = FORECAST_SKUS[skuIdx];
   const [historyText, setHistoryText] = useState(() => formatDemandSeries(baseSku.history));
@@ -406,188 +410,216 @@ export default function ForecastPanel() {
     }
   }
 
-  async function createRequestFromForecast() {
+  function forecastDraftRequest(): ActionDraftPreviewRequest {
+    const source = currentMrpRow ? "mrp-assisted-forecast" : "forecast";
+    const reason = currentMrpRow
+      ? `MRP 净需求计划建议入库 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，例外 ${currentMrpRow.exception}`
+      : `预测净缺口 ${peakGap.toLocaleString()} ${sku.unit}，服务水平 ${serviceLevel}%`;
+    return {
+      type: "purchase_request_draft",
+      title: `${sku.sku} 预测采购申请草稿预览`,
+      source,
+      originEvidence: [
+        {
+          type: "forecast_plan",
+          id: sku.sku,
+          label: `${sku.sku} ${sku.name}`,
+          status: `${METHOD_LABEL[method]} · MAPE ${result.mape.toFixed(1)}%`,
+          summary: `峰值净缺口 ${peakGap.toLocaleString()} ${sku.unit}，建议 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，优先级 ${executablePriority}。`,
+        },
+        ...(currentMrpRow ? [{
+          type: "mrp_plan",
+          id: currentMrpRow.sku,
+          label: `${currentMrpRow.sku} MRP 净需求计划`,
+          status: currentMrpRow.exception,
+          summary: `计划入库 ${currentMrpRow.totalPlannedReceipt.toLocaleString()} ${currentMrpRow.unit}，最大净需求 ${currentMrpRow.maxNetRequirement.toLocaleString()}，首个短缺期 ${currentMrpRow.firstShortagePeriod || "—"}。`,
+        }] : []),
+        ...(mrpBomSourceSummary ? [{
+          type: "bom_source",
+          id: currentMrpRow?.sku || sku.sku,
+          label: "BOM 来源证据",
+          summary: mrpBomSourceSummary,
+        }] : []),
+        {
+          type: "supplier_master",
+          id: procurementProfile.supplier,
+          label: procurementProfile.supplier,
+          status: supplierScore.grade,
+          summary: supplierScore.note,
+        },
+      ],
+      payload: {
+        itemIdOrSku: sku.sku,
+        itemName: sku.name,
+        quantity: executableRecommendedQty,
+        unit: sku.unit,
+        requestedDeliveryDate: formatEta(leadTimeDays),
+        reason,
+        supplierIdOrName: procurementProfile.supplier,
+        supplierSuggestion: { supplierName: procurementProfile.supplier },
+        buyer: procurementProfile.buyer,
+        unitPrice: procurementProfile.unitPrice,
+        amount: executableRecommendedAmount,
+        severity: executablePriority,
+        forecastBasis: {
+          method,
+          horizon,
+          scenario,
+          promoLift,
+          mape: Number(result.mape.toFixed(2)),
+          rmse: Number(result.rmse.toFixed(2)),
+          peakGap,
+          serviceLevel,
+          safetyFactor,
+          stockoutMonths,
+          firstStockoutMonth: firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : null,
+          source: currentMrpRow ? "mrp-net-requirements" : "forecast",
+        },
+        mrpEvidence: currentMrpRow ? {
+          exception: currentMrpRow.exception,
+          totalPlannedReceipt: currentMrpRow.totalPlannedReceipt,
+          maxNetRequirement: currentMrpRow.maxNetRequirement,
+          firstShortagePeriod: currentMrpRow.firstShortagePeriod,
+          bomSourceSummary: mrpBomSourceSummary,
+          bomSources: currentMrpRow.bomSources || [],
+          schedule: mrpScheduleEvidence,
+          ...mrpBomEvidence,
+        } : null,
+        requiresConfirmation: true,
+      },
+    };
+  }
+
+  function createRequestFromForecast() {
     if (executableRecommendedQty <= 0) {
-      toast("当前无需生成采购申请", { description: "供需对账未识别到净缺口，建议继续监控预测偏差。" });
+      toast("当前无需生成 PR 草稿", { description: "供需对账未识别到净缺口，建议继续监控预测偏差。" });
       return;
     }
     if (lastGeneratedRequest) {
-      toast("已生成采购申请", { description: `${lastGeneratedRequest} 已在采购申请待审批队列中。` });
+      toast("已打开草稿预览", { description: `${lastGeneratedRequest} 已在 ActionDraft 审阅壳中。` });
+      return;
+    }
+    if (!onReviewActionDraft) {
+      toast.error("草稿预览暂不可用", { description: "Forecast 模块尚未接入 ActionDraft 审阅壳。" });
       return;
     }
     setGeneratingRequest(true);
-    try {
-      const created = await apiJson<PurchaseRequest>("/api/purchase-requests", {
-        method: "POST",
-        body: JSON.stringify({
-          supplier: procurementProfile.supplier,
-          requester: "张磊",
-          buyer: procurementProfile.buyer,
-          requiredDate: formatEta(leadTimeDays),
-          amount: executableRecommendedAmount,
-          status: "待审批",
-          priority: executablePriority,
-          source: "forecast",
-          sourceSku: sku.sku,
-          sourceName: sku.name,
-          quantity: executableRecommendedQty,
-          unit: sku.unit,
-          unitPrice: procurementProfile.unitPrice,
-          reason: currentMrpRow
-            ? `MRP 净需求计划建议入库 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，例外 ${currentMrpRow.exception}`
-            : `预测净缺口 ${peakGap.toLocaleString()} ${sku.unit}，服务水平 ${serviceLevel}%`,
-          forecastBasis: {
-            peakGap,
-            serviceLevel,
-            safetyFactor,
-            stockoutMonths,
-            firstStockoutMonth: firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : null,
-            source: currentMrpRow ? "mrp-net-requirements" : "forecast",
-            plannedReceipt: executableRecommendedQty,
-            mrpException: currentMrpRow?.exception,
-            bomSourceSummary: currentMrpRow ? mrpBomSourceSummary : "",
-            bomSources: currentMrpRow?.bomSources || [],
-          },
-          approvalSnapshot: {
-            source: currentMrpRow ? "mrp-assisted-forecast" : "forecast",
-            summary: `${sku.sku} ${sku.name} · 建议 ${executableRecommendedQty.toLocaleString()} ${sku.unit} · ${fmt(executableRecommendedAmount)}`,
-            explanation: currentMrpRow
-              ? `预测补货数量已按 MRP 净需求校准：MRP 例外 ${currentMrpRow.exception}，计划入库 ${executableRecommendedQty.toLocaleString()} ${sku.unit}，优先级 ${executablePriority}。${mrpBomSourceSummary ? `BOM 来源：${mrpBomSourceSummary}。` : ""}`
-              : `预测供需对账识别峰值净缺口 ${peakGap.toLocaleString()} ${sku.unit}，服务水平 ${serviceLevel}% 下建议采购 ${executableRecommendedQty.toLocaleString()} ${sku.unit}。`,
-            forecast: {
-              method,
-              horizon,
-              scenario,
-              promoLift,
-              mape: Number(result.mape.toFixed(2)),
-              rmse: Number(result.rmse.toFixed(2)),
-              peakGap,
-              stockoutMonths,
-              firstStockoutMonth: firstStockoutIndex >= 0 ? reconciliation[firstStockoutIndex]?.month : null,
-            },
-            mrp: currentMrpRow ? {
-              exception: currentMrpRow.exception,
-              totalPlannedReceipt: currentMrpRow.totalPlannedReceipt,
-              maxNetRequirement: currentMrpRow.maxNetRequirement,
-              firstShortagePeriod: currentMrpRow.firstShortagePeriod,
-              ...mrpBomEvidence,
-            } : null,
-            supplier: {
-              name: procurementProfile.supplier,
-              buyer: procurementProfile.buyer,
-              unitPrice: procurementProfile.unitPrice,
-              score: supplierScore.score,
-              grade: supplierScore.grade,
-              note: supplierScore.note,
-            },
-            createdAt: new Date().toISOString(),
-          },
-        }),
-      });
-      toast.success(`${created.pr} 已生成待审批采购申请`, {
-        description: `${procurementProfile.supplier} · ${executableRecommendedQty.toLocaleString()} ${sku.unit} · ${fmt(executableRecommendedAmount)}`,
-      });
-      setLastGeneratedRequest(created.pr);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      const duplicate = message.match(/PR-\d{4}-\d{4}/)?.[0];
-      if (duplicate) {
-        setLastGeneratedRequest(duplicate);
-        toast("预测采购申请已存在", { description: `${duplicate} 已在待审批或执行中，无需重复生成。` });
-      } else {
-        toast.error("采购申请生成失败", { description: "请确认 API 服务正在运行。" });
-      }
-    } finally {
-      setGeneratingRequest(false);
-    }
+    const draftId = `DRAFT-${sku.sku}-${Date.now().toString().slice(-6)}`;
+    onReviewActionDraft({ ...forecastDraftRequest(), id: draftId } as ActionDraftPreviewRequest);
+    setLastGeneratedRequest(draftId);
+    setGeneratingRequest(false);
+    toast.success("已打开 PR 草稿预览", {
+      description: `${procurementProfile.supplier} · ${executableRecommendedQty.toLocaleString()} ${sku.unit} · ${fmt(executableRecommendedAmount)}`,
+    });
   }
 
-  async function releaseMrpAsPr() {
+  function mrpReleaseDraftRequest(): ActionDraftPreviewRequest | null {
     if (!currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0) {
-      toast("当前没有可释放的 MRP 计划", { description: "净需求计划未产生计划订单释放。" });
-      return;
-    }
-    if (lastGeneratedRequest) {
-      toast("已生成采购申请", { description: `${lastGeneratedRequest} 已在采购申请待审批队列中。` });
-      return;
+      return null;
     }
     const releaseLine = currentMrpRow.schedule.find((line) => line.plannedRelease > 0 && line.exception !== "正常")
       || currentMrpRow.schedule.find((line) => line.plannedRelease > 0);
     const releaseQty = Number(currentMrpRow.totalPlannedReceipt || 0);
     const unitPrice = Number(currentMrpRow.unitPrice || procurementProfile.unitPrice || 0);
     const amount = releaseQty * unitPrice;
-    setGeneratingRequest(true);
-    try {
-      const created = await apiJson<PurchaseRequest>("/api/purchase-requests", {
-        method: "POST",
-        body: JSON.stringify({
-          supplier: currentMrpRow.supplier || procurementProfile.supplier,
-          requester: "张磊",
-          buyer: procurementProfile.buyer,
-          requiredDate: formatEta(Math.max(7, Number(currentMrpRow.leadTimePeriods || 1) * 7)),
-          amount,
-          status: "待审批",
-          priority: currentMrpRow.exception === "加急" ? "高" : currentMrpRow.exception === "释放" ? "中" : executablePriority,
+    return {
+      type: "purchase_request_draft",
+      title: `${currentMrpRow.sku} MRP 计划释放 PR 草稿预览`,
+      source: "mrp-release",
+      originEvidence: [
+        {
+          type: "mrp_plan",
+          id: currentMrpRow.sku,
+          label: `${currentMrpRow.sku} ${currentMrpRow.name}`,
+          status: currentMrpRow.exception,
+          summary: `计划入库 ${releaseQty.toLocaleString()} ${currentMrpRow.unit}，释放期 ${releaseLine?.plannedReleasePeriod || "—"}，首个短缺期 ${currentMrpRow.firstShortagePeriod || "—"}。`,
+        },
+        {
+          type: "forecast_plan",
+          id: sku.sku,
+          label: `${sku.sku} ${METHOD_LABEL[method]}`,
+          status: `MAPE ${result.mape.toFixed(1)}%`,
+          summary: `预测独立需求参与 MRP 净需求计算，峰值净缺口 ${peakGap.toLocaleString()} ${sku.unit}。`,
+        },
+        ...(mrpBomSourceSummary ? [{
+          type: "bom_source",
+          id: currentMrpRow.sku,
+          label: "BOM 来源证据",
+          summary: mrpBomSourceSummary,
+        }] : []),
+        {
+          type: "supplier_master",
+          id: currentMrpRow.supplier || procurementProfile.supplier,
+          label: currentMrpRow.supplier || procurementProfile.supplier,
+          status: supplierScore.grade,
+          summary: supplierScore.note,
+        },
+      ],
+      payload: {
+        itemIdOrSku: currentMrpRow.sku,
+        itemName: currentMrpRow.name,
+        quantity: releaseQty,
+        unit: currentMrpRow.unit,
+        requestedDeliveryDate: formatEta(Math.max(7, Number(currentMrpRow.leadTimePeriods || 1) * 7)),
+        reason: `MRP 计划订单释放：${currentMrpRow.exception}，计划入库 ${releaseQty.toLocaleString()} ${currentMrpRow.unit}，释放期 ${releaseLine?.plannedReleasePeriod || "—"}。`,
+        supplierIdOrName: currentMrpRow.supplier || procurementProfile.supplier,
+        supplierSuggestion: { supplierName: currentMrpRow.supplier || procurementProfile.supplier },
+        buyer: procurementProfile.buyer,
+        unitPrice,
+        amount,
+        severity: currentMrpRow.exception === "加急" ? "高" : currentMrpRow.exception === "释放" ? "中" : executablePriority,
+        forecastBasis: {
+          method,
+          horizon,
+          scenario,
+          mape: Number(result.mape.toFixed(2)),
+          rmse: Number(result.rmse.toFixed(2)),
           source: "mrp-release",
-          sourceSku: currentMrpRow.sku,
-          sourceName: currentMrpRow.name,
-          quantity: releaseQty,
-          unit: currentMrpRow.unit,
-          unitPrice,
-          reason: `MRP 计划订单释放：${currentMrpRow.exception}，计划入库 ${releaseQty.toLocaleString()} ${currentMrpRow.unit}，释放期 ${releaseLine?.plannedReleasePeriod || "—"}。`,
-          forecastBasis: {
-            source: "mrp-release",
-            plannedReceipt: releaseQty,
-            plannedReleasePeriod: releaseLine?.plannedReleasePeriod || "",
-            mrpException: currentMrpRow.exception,
-            firstStockoutMonth: currentMrpRow.firstShortagePeriod,
-            peakGap: currentMrpRow.maxNetRequirement,
-            serviceLevel: currentMrpRow.serviceLevel,
-            leadTimeDays: Number(currentMrpRow.leadTimePeriods || 1) * 7,
-            moq: currentMrpRow.moq,
-            batchMultiple: currentMrpRow.batchMultiple,
-            bomSourceSummary: mrpBomSourceSummary,
-            bomSources: currentMrpRow.bomSources || [],
-          },
-          approvalSnapshot: {
-            source: "mrp-release",
-            summary: `${currentMrpRow.sku} ${currentMrpRow.name} · ${currentMrpRow.exception} · ${releaseQty.toLocaleString()} ${currentMrpRow.unit} · ${fmt(amount)}`,
-            explanation: `MRP 根据独立需求、BOM 相关需求、库存、在途和批量规则生成计划订单释放。${mrpBomSourceSummary ? `BOM 来源：${mrpBomSourceSummary}。` : ""}采购申请需由审批人确认释放期、供应商产能和预算。`,
-            mrp: {
-              generatedAt: mrpPlan?.generatedAt,
-              horizon: mrpPlan?.horizon,
-              firstShortagePeriod: currentMrpRow.firstShortagePeriod,
-              maxNetRequirement: currentMrpRow.maxNetRequirement,
-              totalPlannedReceipt: currentMrpRow.totalPlannedReceipt,
-              releasePeriod: releaseLine?.plannedReleasePeriod || "",
-              ...mrpBomEvidence,
-            },
-            supplier: {
-              name: currentMrpRow.supplier || procurementProfile.supplier,
-              score: supplierScore.score,
-              grade: supplierScore.grade,
-              note: supplierScore.note,
-            },
-            createdAt: new Date().toISOString(),
-          },
-        }),
-      });
-      toast.success(`${created.pr} 已由 MRP 释放为待审批 PR`, {
-        description: `${currentMrpRow.sku} · ${releaseQty.toLocaleString()} ${currentMrpRow.unit} · ${fmt(amount)}`,
-      });
-      setLastGeneratedRequest(created.pr);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      const duplicate = message.match(/PR-\d{4}-\d{4}/)?.[0];
-      if (duplicate) {
-        setLastGeneratedRequest(duplicate);
-        toast("MRP 释放申请已存在", { description: `${duplicate} 已在待审批或执行中。` });
-      } else {
-        toast.error("MRP 释放失败", { description: message || "请确认 API 服务正在运行。" });
-      }
-    } finally {
-      setGeneratingRequest(false);
+        },
+        mrpEvidence: {
+          generatedAt: mrpPlan?.generatedAt,
+          horizon: mrpPlan?.horizon,
+          exception: currentMrpRow.exception,
+          firstShortagePeriod: currentMrpRow.firstShortagePeriod,
+          maxNetRequirement: currentMrpRow.maxNetRequirement,
+          totalPlannedReceipt: currentMrpRow.totalPlannedReceipt,
+          plannedReleasePeriod: releaseLine?.plannedReleasePeriod || "",
+          leadTimeDays: Number(currentMrpRow.leadTimePeriods || 1) * 7,
+          moq: currentMrpRow.moq,
+          batchMultiple: currentMrpRow.batchMultiple,
+          bomSourceSummary: mrpBomSourceSummary,
+          bomSources: currentMrpRow.bomSources || [],
+          schedule: mrpScheduleEvidence,
+          ...mrpBomEvidence,
+        },
+        requiresConfirmation: true,
+      },
+    };
+  }
+
+  function releaseMrpAsPr() {
+    if (!currentMrpRow || currentMrpRow.totalPlannedReceipt <= 0) {
+      toast("当前没有可释放的 MRP 计划", { description: "净需求计划未产生计划订单释放。" });
+      return;
     }
+    if (lastGeneratedRequest) {
+      toast("已打开草稿预览", { description: `${lastGeneratedRequest} 已在 ActionDraft 审阅壳中。` });
+      return;
+    }
+    if (!onReviewActionDraft) {
+      toast.error("草稿预览暂不可用", { description: "MRP 释放尚未接入 ActionDraft 审阅壳。" });
+      return;
+    }
+    const request = mrpReleaseDraftRequest();
+    if (!request) return;
+    setGeneratingRequest(true);
+    const draftId = `DRAFT-MRP-${currentMrpRow.sku}-${Date.now().toString().slice(-6)}`;
+    onReviewActionDraft({ ...request, id: draftId } as ActionDraftPreviewRequest);
+    setLastGeneratedRequest(draftId);
+    setGeneratingRequest(false);
+    toast.success("已打开 MRP 释放草稿预览", {
+      description: `${currentMrpRow.sku} · ${currentMrpRow.totalPlannedReceipt.toLocaleString()} ${currentMrpRow.unit} · ${fmt(currentMrpRow.amount)}`,
+    });
   }
 
   function exportForecastResultCsv() {
@@ -1396,7 +1428,7 @@ export default function ForecastPanel() {
               className="h-10 px-3 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed"
               style={{ background: lastGeneratedRequest ? A.green : currentMrpRow && currentMrpRow.totalPlannedReceipt > 0 ? A.purple : A.gray3, opacity: generatingRequest ? 0.7 : 1 }}>
               {generatingRequest ? <Loader2 size={13} className="animate-spin" /> : lastGeneratedRequest ? <CheckCircle2 size={13} /> : <GitBranch size={13} />}
-              {lastGeneratedRequest ? `已生成 ${lastGeneratedRequest}` : "释放为 PR"}
+              {lastGeneratedRequest ? `已预览 ${lastGeneratedRequest}` : "预览 PR 草稿"}
             </button>
           </div>
         </div>
@@ -1469,7 +1501,7 @@ export default function ForecastPanel() {
             className="h-9 px-4 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5 disabled:cursor-not-allowed"
             style={{ background: lastGeneratedRequest ? A.green : executableRecommendedQty > 0 ? A.blue : A.gray3, opacity: generatingRequest ? 0.7 : 1 }}>
             {generatingRequest ? <Loader2 size={13} className="animate-spin" /> : lastGeneratedRequest ? <CheckCircle2 size={13} /> : <ShoppingCart size={13} />}
-            {lastGeneratedRequest ? `已生成 ${lastGeneratedRequest}` : "生成采购申请"}
+            {lastGeneratedRequest ? `已预览 ${lastGeneratedRequest}` : "预览 PR 草稿"}
           </button>
         </div>
         <div className="grid grid-cols-7 gap-2 mt-4">
