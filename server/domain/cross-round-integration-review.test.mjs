@@ -26,7 +26,7 @@ test('provider safety remains exact opt-in and evidence links remain frontend-on
 
   assert.match(providerSafety, /env\.AI_PROVIDER_ENABLED === 'true'/)
   assert.match(evidenceLinks, /export function normalizeEvidenceLink/)
-  assert.match(evidenceLinks, /const clickable = Boolean\(entityId && target\?\.moduleId && normalizedEntityType && route\)/)
+  assert.match(evidenceLinks, /const clickable = Boolean\(entityId && canonicalModuleId && normalizedEntityType\)/)
   assert.doesNotMatch(evidenceLinks, /fetch\(|apiJson|writeDb|localStorage/)
   assert.match(aiRoutes, /getAiProviderSafetyState/)
 })
@@ -36,9 +36,10 @@ test('navigation evidence surfaces share canonical helper names', () => {
   const aiPanel = readSource('src', 'modules', 'ai-assistant', 'Panel.tsx')
   const cockpit = readSource('src', 'modules', 'overview', 'TodayCockpitPanel.tsx')
 
-  assert.match(app, /normalizeGlobalSearchResult/)
-  assert.match(app, /source: "globalSearch"/)
+  assert.match(app, /navigationIntentFromGlobalSearchResult/)
+  assert.match(app, /splitNavigationId/)
   assert.match(aiPanel, /normalizeEvidenceLinks\(evidence, \{ source: "ai" \}\)/)
+  assert.match(aiPanel, /navigationIntentFromEvidenceLink/)
   assert.match(cockpit, /normalizeTodayCockpitTarget/)
 })
 

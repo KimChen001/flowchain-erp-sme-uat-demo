@@ -242,7 +242,7 @@ test('system harness validates evidence and navigation compatibility surfaces', 
   assert.match(helper, /pr: \{ entityType: "purchase_request", moduleId: "procurement:requests"/)
   assert.match(helper, /threeWayMatch: \{ entityType: "supplier_invoice", moduleId: "procurement:invoices"/)
   assert.match(helper, /focusTarget: clickable \? \{ entityType: normalizedEntityType, entityId \}/)
-  assert.match(app, /normalizeGlobalSearchResult\(result\)/)
+  assert.match(app, /navigationIntentFromGlobalSearchResult\(result, \{ returnTo: active \}\)/)
   assert.match(aiPanel, /normalizeEvidenceLinks\(evidence, \{ source: "ai" \}\)/)
   assert.ok(cockpit.recommendedActions.every((item) => Array.isArray(item.evidence)))
 })

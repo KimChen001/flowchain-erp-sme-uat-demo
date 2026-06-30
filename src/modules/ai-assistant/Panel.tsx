@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, MessageCircle, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
-import { evidenceModuleId, normalizeEvidenceLinks, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
+import {
+  navigationIntentFromEvidenceLink,
+  normalizeEvidenceLinks,
+  type CanonicalFocusTarget,
+} from "../../lib/evidenceLinks";
 import { fmt } from "../../lib/format";
 import { A } from "../../components/ui";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
@@ -206,15 +210,15 @@ function EvidenceList({
   return (
     <div className="space-y-1">
       {links.map((link, index) => {
-        const moduleId = evidenceModuleId(link);
+        const intent = navigationIntentFromEvidenceLink(link, { source: "ai" });
         const title = [link.entityType !== "unknown" ? link.entityType : "", link.entityId].filter(Boolean).join(" · ") || link.label;
         const detail = link.status || link.label;
         return (
           <div key={`${title}-${index}`} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-            {link.clickable && moduleId && onNavigate ? (
+            {link.clickable && intent && onNavigate ? (
               <button
                 type="button"
-                onClick={() => onNavigate(moduleId, link.focusTarget || null)}
+                onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)}
                 className="max-w-full text-left text-[11px] font-medium truncate hover:underline"
                 style={{ color: A.blue }}
               >

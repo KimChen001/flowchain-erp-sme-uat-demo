@@ -7,6 +7,7 @@ export type CanonicalFocusTarget = {
 
 export type CanonicalEvidenceLink = {
   module: CanonicalEvidenceModule;
+  moduleId?: string;
   entityType: string;
   entityId: string;
   label: string;
@@ -16,6 +17,16 @@ export type CanonicalEvidenceLink = {
   source?: string;
   recovery?: unknown;
   clickable: boolean;
+};
+
+export type CanonicalNavigationIntent = {
+  moduleId: string;
+  viewId?: string;
+  activeId: string;
+  focusTarget?: CanonicalFocusTarget;
+  source?: string;
+  returnTo?: string;
+  entityLabel?: string;
 };
 
 type EvidenceLike = Record<string, unknown> | null | undefined;
@@ -80,6 +91,35 @@ function targetForType(rawType = "") {
   return null;
 }
 
+export function splitNavigationId(active = "") {
+  const [moduleId, viewId] = text(active).split(":");
+  return { moduleId: moduleId || "overview", viewId };
+}
+
+export function navigationActiveId(moduleId = "overview", viewId?: string) {
+  const safeModuleId = text(moduleId) || "overview";
+  const safeViewId = text(viewId);
+  return safeViewId ? `${safeModuleId}:${safeViewId}` : safeModuleId;
+}
+
+export function navigationIntentFromModule(moduleId = "overview", options: {
+  focusTarget?: CanonicalFocusTarget | null;
+  source?: string;
+  returnTo?: string;
+  entityLabel?: string;
+} = {}): CanonicalNavigationIntent {
+  const { moduleId: canonicalModuleId, viewId } = splitNavigationId(moduleId);
+  return {
+    moduleId: canonicalModuleId,
+    viewId,
+    activeId: navigationActiveId(canonicalModuleId, viewId),
+    focusTarget: options.focusTarget || undefined,
+    source: options.source,
+    returnTo: options.returnTo,
+    entityLabel: options.entityLabel,
+  };
+}
+
 export function normalizeEvidenceLink(raw: EvidenceLike, options: {
   source?: string;
   fallbackModuleId?: string;
@@ -96,10 +136,12 @@ export function normalizeEvidenceLink(raw: EvidenceLike, options: {
   const normalizedEntityType = target?.entityType || entityType;
   const label = readableLabel(row, target?.label || normalizedEntityType || "evidence");
   const route = safeRoute(row.route || row.deepLink || moduleId);
-  const clickable = Boolean(entityId && target?.moduleId && normalizedEntityType && route);
+  const canonicalModuleId = target?.moduleId || (route && !route.startsWith("/") ? route : moduleId);
+  const clickable = Boolean(entityId && canonicalModuleId && normalizedEntityType);
 
   return {
     module: target?.module || moduleKind(moduleId, options.source === "todayCockpit" ? "todayCockpit" : "ai"),
+    moduleId: canonicalModuleId || undefined,
     entityType: normalizedEntityType || "unknown",
     entityId,
     label,
@@ -154,6 +196,44 @@ export function normalizeGlobalSearchResult(result: EvidenceLike) {
 }
 
 export function evidenceModuleId(link: CanonicalEvidenceLink | null) {
-  if (!link?.clickable || !link.route) return "";
-  return link.route.startsWith("/") ? "" : link.route;
+  if (!link?.clickable) return "";
+  if (link.moduleId) return link.moduleId;
+  if (!link.route || link.route.startsWith("/")) return "";
+  return link.route;
+}
+
+export function navigationIntentFromEvidenceLink(link: CanonicalEvidenceLink | null, options: {
+  source?: string;
+  returnTo?: string;
+} = {}): CanonicalNavigationIntent | null {
+  if (!link?.clickable) return null;
+  const moduleId = evidenceModuleId(link);
+  if (!moduleId) return null;
+  return navigationIntentFromModule(moduleId, {
+    focusTarget: link.focusTarget || undefined,
+    source: options.source || link.source,
+    returnTo: options.returnTo,
+    entityLabel: link.label,
+  });
+}
+
+export function navigationIntentFromGlobalSearchResult(result: EvidenceLike, options: {
+  returnTo?: string;
+} = {}) {
+  const link = normalizeGlobalSearchResult(result);
+  const fallbackModuleId = result && typeof result === "object" ? text(result.moduleId) : "";
+  const fallbackFocus = result && typeof result === "object"
+    ? {
+        entityType: text(result.entityType || result.type),
+        entityId: text(result.entityId),
+      }
+    : null;
+  const intent = navigationIntentFromEvidenceLink(link, { source: "globalSearch", returnTo: options.returnTo });
+  if (intent) return intent;
+  return navigationIntentFromModule(fallbackModuleId || "overview", {
+    focusTarget: fallbackFocus?.entityType && fallbackFocus.entityId ? fallbackFocus : undefined,
+    source: "globalSearch",
+    returnTo: options.returnTo,
+    entityLabel: result && typeof result === "object" ? text(result.entityLabel || result.label) : "",
+  });
 }

@@ -12,7 +12,13 @@ import {
 import { navGroups, navItems } from "./routes";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
 import { apiJson } from "../lib/api-client";
-import { evidenceModuleId, normalizeGlobalSearchResult, type CanonicalFocusTarget } from "../lib/evidenceLinks";
+import {
+  navigationIntentFromGlobalSearchResult,
+  navigationIntentFromModule,
+  splitNavigationId,
+  type CanonicalFocusTarget,
+  type CanonicalNavigationIntent,
+} from "../lib/evidenceLinks";
 import { fmt } from "../lib/format";
 import { A, Card, Field, inputStyle, Modal } from "../components/ui";
 import { typography } from "../components/ui/typography";
@@ -274,11 +280,6 @@ function searchGroupKey(type: string) {
   return type === "bin" ? "warehouse" : type;
 }
 
-function splitActive(active: string) {
-  const [moduleId, viewId] = active.split(":");
-  return { moduleId, viewId };
-}
-
 function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => void }) {
   const [form, setForm] = useState({
     company: "新辰智能制造",
@@ -490,7 +491,7 @@ export default function FlowChainApp() {
 
   const replenishmentItem = replenishmentSku ? inventoryItems.find((item) => item.sku === replenishmentSku) ?? null : null;
 
-  const { moduleId: activeModule, viewId: activeView } = splitActive(active);
+  const { moduleId: activeModule, viewId: activeView } = splitNavigationId(active);
   const activeModuleLabel = PAGE_LABELS[activeModule] || activeModule;
   const activeNavItem = navItems.find((item) => item.id === activeModule);
   const activeChildLabel = activeNavItem?.children?.find((item) => item.id === active)?.label;
@@ -562,9 +563,24 @@ export default function FlowChainApp() {
     }
   }
 
+  function applyNavigationIntent(intent: CanonicalNavigationIntent) {
+    setActive(intent.activeId);
+    if (intent.returnTo) setFocusReturnActive(intent.returnTo);
+    setSearchFocus(intent.focusTarget
+      ? {
+          ...intent.focusTarget,
+          entityLabel: intent.entityLabel,
+          source: intent.source,
+          at: Date.now(),
+        }
+      : null);
+  }
+
   function navigateTo(moduleId: string, focusTarget?: CanonicalFocusTarget | null) {
-    setActive(moduleId);
-    setSearchFocus(focusTarget ? { ...focusTarget, source: "evidence", at: Date.now() } : null);
+    applyNavigationIntent(navigationIntentFromModule(moduleId, {
+      focusTarget,
+      source: focusTarget ? "evidence" : undefined,
+    }));
   }
 
   async function openActionDraftReview(request: ActionDraftPreviewRequest) {
@@ -596,13 +612,7 @@ export default function FlowChainApp() {
   }
 
   function openSearchResult(result: GlobalSearchResult) {
-    const link = normalizeGlobalSearchResult(result);
-    const moduleId = evidenceModuleId(link) || result.moduleId || "overview";
-    setFocusReturnActive(active);
-    setActive(moduleId);
-    setSearchFocus(link?.focusTarget
-      ? { ...link.focusTarget, entityLabel: link.label, source: "globalSearch", at: Date.now() }
-      : { entityType: result.entityType, entityId: result.entityId, entityLabel: result.entityLabel, source: "globalSearch", at: Date.now() });
+    applyNavigationIntent(navigationIntentFromGlobalSearchResult(result, { returnTo: active }));
     setSearchOpen(false);
     setActiveSearchIndex(-1);
   }
