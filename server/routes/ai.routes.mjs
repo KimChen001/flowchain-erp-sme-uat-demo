@@ -488,10 +488,45 @@ export async function handleAiRoute(ctx) {
     const body = await readBody(req)
     body.question = normalizeAiChatMessage(body)
     if (!body.question) return send(res, 400, { error: 'question is required' })
+
+    let branchStartedAt = Date.now()
+    const procurementFastPath = buildAiProcurementOperationalResponse(db, body, { ensurePurchaseRequests, ensureRfqs })
+    if (procurementFastPath) {
+      const result = {
+        ...procurementFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_procurement_operational_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'procurement_operational_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
+    const rfqFastPath = buildAiRfqOperationalResponse(db, body, { ensureRfqs })
+    if (rfqFastPath) {
+      const result = {
+        ...rfqFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_rfq_operational_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'rfq_operational_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
+
     const aiReadContext = await buildAiReadContext(db, ctx)
     const readModelCache = aiReadContext.cache
 
-    let branchStartedAt = Date.now()
+    branchStartedAt = Date.now()
     const cockpitFastPathQuery = buildAiCockpitFastPathResponse(db, body, { cache: readModelCache })
     if (cockpitFastPathQuery) {
       const result = {

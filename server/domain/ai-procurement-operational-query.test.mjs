@@ -144,6 +144,17 @@ function businessSnapshot(db) {
   })
 }
 
+function failingReadContextRepositories() {
+  const fail = async () => {
+    throw new Error('buildAiReadContext should not run for deterministic procurement UAT prompts')
+  }
+  return {
+    procurementRead: { listDocuments: fail, listFollowups: fail, getSummary: fail },
+    inventoryRead: { listItems: fail, listExceptions: fail, getSummary: fail },
+    masterData: { listItems: fail, listSuppliers: fail },
+  }
+}
+
 test('procurement operational catalog documents read-only capabilities', () => {
   assert.deepEqual(
     aiProcurementOperationalCapabilityCatalog.map((item) => item.intent),
@@ -344,6 +355,36 @@ test('procurement follow-up summary returns read-only counts', async () => {
   assert.equal(route.response.payload.cards[0].data.pendingPrCount, 1)
   assert.equal(route.response.payload.cards[0].data.pendingRfqResponseCount, 1)
   assert.equal(route.response.payload.cards[0].data.receivingExceptionCount, 1)
+  assert.deepEqual(businessSnapshot(db), before)
+})
+
+test('core procurement UAT prompts bypass read-context and external provider', async () => {
+  const db = createDb()
+  const before = businessSnapshot(db)
+  const prompts = [
+    ['今天采购有什么要跟？', 'procurement_followup_summary_query', 'procurement_followup_summary'],
+    ['哪些 PO 快逾期？', 'po_overdue_query', 'po_overdue_summary'],
+    ['哪些采购申请还没转 PO？', 'pr_conversion_status_query', 'pr_conversion_summary'],
+    ['哪些收货有异常？', 'receiving_exception_query', 'receiving_exception_summary'],
+    ['What procurement items need follow-up?', 'procurement_followup_summary_query', 'procurement_followup_summary'],
+    ['Which POs are overdue?', 'po_overdue_query', 'po_overdue_summary'],
+  ]
+
+  for (const [message, intent, cardType] of prompts) {
+    const route = createRouteContext({ message }, db, { repositories: failingReadContextRepositories() })
+    await handleAiRoute(route.ctx)
+
+    assert.equal(route.response.status, 200, message)
+    assert.equal(route.response.payload.intent.name, intent, message)
+    assert.equal(route.response.payload.cards[0].type, cardType, message)
+    assert.equal(route.response.payload.fastPath, 'pre_read_context', message)
+    assert.equal(route.response.payload.usedWeb, false, message)
+    assert.notEqual(route.response.payload.provider, 'openai', message)
+    assert.notEqual(route.response.payload.provider, 'doubao', message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'evidence'), message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'), message)
+  }
+
   assert.deepEqual(businessSnapshot(db), before)
 })
 

@@ -92,6 +92,17 @@ function businessSnapshot(db) {
   })
 }
 
+function failingReadContextRepositories() {
+  const fail = async () => {
+    throw new Error('buildAiReadContext should not run for deterministic RFQ UAT prompts')
+  }
+  return {
+    procurementRead: { listDocuments: fail, listFollowups: fail, getSummary: fail },
+    inventoryRead: { listItems: fail, listExceptions: fail, getSummary: fail },
+    masterData: { listItems: fail, listSuppliers: fail },
+  }
+}
+
 test('RFQ operational catalog documents read-only RFQ capabilities', () => {
   assert.equal(aiRfqOperationalCapabilityCatalog.length, 3)
   assert.deepEqual(
@@ -273,5 +284,29 @@ test('RFQ pending route returns RFQ response query and does not mutate data', as
   assert.equal(route.response.status, 200)
   assert.equal(route.response.payload.intent.name, 'rfq_response_query')
   assert.equal(route.response.payload.cards[0].type, 'rfq_response_summary')
+  assert.deepEqual(businessSnapshot(db), before)
+})
+
+test('core RFQ UAT response prompts bypass read-context and external provider', async () => {
+  const db = createDb()
+  const before = businessSnapshot(db)
+  const prompts = ['哪些 RFQ 没回复？', 'Which RFQs need response?']
+
+  for (const message of prompts) {
+    const route = createRouteContext({ message }, db)
+    route.ctx.repositories = failingReadContextRepositories()
+    await handleAiRoute(route.ctx)
+
+    assert.equal(route.response.status, 200, message)
+    assert.equal(route.response.payload.intent.name, 'rfq_response_query', message)
+    assert.equal(route.response.payload.cards[0].type, 'rfq_response_summary', message)
+    assert.equal(route.response.payload.fastPath, 'pre_read_context', message)
+    assert.equal(route.response.payload.usedWeb, false, message)
+    assert.notEqual(route.response.payload.provider, 'openai', message)
+    assert.notEqual(route.response.payload.provider, 'doubao', message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'evidence'), message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'), message)
+  }
+
   assert.deepEqual(businessSnapshot(db), before)
 })

@@ -691,7 +691,7 @@ export function detectAiProcurementOperationalIntent(message = '', body = {}) {
   const conversionText = /转\s*PO|转.*采购订单|convert(?:ed)?\s*(?:to)?\s*po|conversion|还没转|待转/i.test(text)
   const overdueText = /逾期|快逾期|due soon|overdue|需要跟进的\s*PO|本周.*PO.*跟|po.*follow/i.test(text)
   const exceptionText = /收货.*(?:异常|差异)|receiving exceptions?|grn variance|收货差异/i.test(text)
-  const followupText = /采购.*(?:跟进|下一步|重点|工作台|有什么要跟)|需要跟进.*采购|procurement follow/i.test(text)
+  const followupText = /采购.*(?:跟进|下一步|重点|工作台|有什么要跟)|需要跟进.*采购|procurement.*(?:follow|need|items)|what procurement items need follow-up/i.test(text)
 
   if (exceptionText) return 'receiving_exception_query'
   if (hasReceivingId || (receivingText && hasPoId)) return 'receiving_status_query'
