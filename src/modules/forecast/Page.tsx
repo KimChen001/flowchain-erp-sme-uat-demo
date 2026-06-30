@@ -35,6 +35,7 @@ import {
   selectMrpRow,
   type MrpPlan,
 } from "../../domain/mrp";
+import { typography } from "../../components/ui/typography";
 
 const insightMeta = {
   risk:        { color: A.red,    bg: "#fff1f0", label: "风险预警", icon: AlertTriangle },
@@ -740,6 +741,20 @@ export default function ForecastPanel() {
           icon={committed ? CheckCircle2 : Clock} color={committed ? A.green : A.orange} />
       </div>
 
+      <Card className="p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#f0f6ff", color: A.blue }}>
+            <FileCheck2 size={17} />
+          </div>
+          <div className="min-w-0">
+            <div className={typography.subsectionTitle} style={{ color: A.label }}>规划演示边界</div>
+            <p className={`${typography.compactMetadata} mt-1 max-w-5xl`} style={{ color: A.sub }}>
+              当前 Forecast/MRP 使用演示商品主数据、静态计划参数和 BOM 展开生成只读计划证据；计划入库和计划释放用于人工审阅节奏，不代表系统已自动创建生产级 PR/PO。释放前仍需确认供应商产能、预算、替代料和审批策略。
+            </p>
+          </div>
+        </div>
+      </Card>
+
       {/* SKU selector */}
       <Card className="p-3">
         <div className="flex items-center gap-2 overflow-x-auto">
@@ -926,6 +941,12 @@ export default function ForecastPanel() {
                         <div className="text-[9px] mt-0.5" style={{ color: A.gray2 }}>{m.hint}</div>
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-3 rounded-xl p-3" style={{ background: A.gray6 }}>
+                    <div className={`${typography.compactMetadata} font-semibold`} style={{ color: A.label }}>指标怎么读</div>
+                    <p className={`${typography.compactMetadata} mt-1`} style={{ color: A.sub }}>
+                      MAPE/WMAPE 用百分比看预测误差，WMAPE 更偏向高销量月份；RMSE 会放大尖峰误差，适合发现促销或项目需求冲击；Tracking Signal 超出 ±4 时通常代表持续高估或低估，需要在释放采购前复核需求来源。
+                    </p>
                   </div>
                 </>
               );
@@ -1317,17 +1338,22 @@ export default function ForecastPanel() {
             当前预测、库存和供应商评分未触发 MRP 例外消息。
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-3">
-            {mrpExceptions.map((item) => (
-              <div key={item.type} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-semibold" style={{ color: item.color }}>{item.type}</span>
-                  <span className="text-[10px] font-semibold tabular-nums" style={{ color: item.color }}>{item.metric}</span>
+          <div className="space-y-3">
+            <div className={`${typography.compactMetadata} rounded-xl px-3 py-2`} style={{ background: A.gray6, color: A.sub }}>
+              例外由净需求、预计可用库存、安全库存和采购提前期共同判定；“加急”表示按当前提前期可能晚于需求窗口，“释放”表示存在可审阅的计划订单释放，“推迟/取消”表示供给早于或多于当前需求。
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              {mrpExceptions.map((item) => (
+                <div key={item.type} className="rounded-xl p-3" style={{ background: A.gray6 }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-semibold" style={{ color: item.color }}>{item.type}</span>
+                    <span className="text-[10px] font-semibold tabular-nums" style={{ color: item.color }}>{item.metric}</span>
+                  </div>
+                  <div className="text-xs font-semibold" style={{ color: A.label }}>{item.title}</div>
+                  <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{item.body}</div>
                 </div>
-                <div className="text-xs font-semibold" style={{ color: A.label }}>{item.title}</div>
-                <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>{item.body}</div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </Card>
@@ -1341,6 +1367,11 @@ export default function ForecastPanel() {
                 ? `${currentMrpRow.sku} · 在手 ${currentMrpRow.onHand.toLocaleString()} ${currentMrpRow.unit} · 已分配 ${currentMrpRow.allocated.toLocaleString()} · MOQ ${currentMrpRow.moq} · 提前期 ${currentMrpRow.leadTimePeriods} 期`
                 : "等待 MRP 接口返回计划结果"}
             </p>
+            {currentMrpRow ? (
+              <p className={`${typography.compactMetadata} mt-1 max-w-3xl`} style={{ color: A.gray2 }}>
+                计划入库表示目标到货期；计划释放表示按提前期倒推后应由计划员审阅/释放的期间，不是自动下发 PR/PO。{mrpBomSourceSummary ? `BOM 证据来自静态 BOM 展开：${mrpBomSourceSummary}。` : "当前行未识别到 BOM 相关需求来源。"}
+              </p>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <div className="grid grid-cols-4 gap-2 min-w-[460px]">
@@ -1431,7 +1462,7 @@ export default function ForecastPanel() {
                 {peakGap > 0 ? "需要补货" : "无需补货"}
               </span>} />
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.sub }}>
-              基于峰值净缺口、服务水平和提前期生成采购申请；审批通过后再转采购订单。
+              基于峰值净缺口、服务水平、MRP 净需求和提前期形成采购建议；生成申请前仍需人工确认供应商、预算、释放期和 BOM 来源，审批通过后才可转采购订单。
             </p>
           </div>
           <button onClick={createRequestFromForecast} disabled={generatingRequest || executableRecommendedQty <= 0 || Boolean(lastGeneratedRequest)}
