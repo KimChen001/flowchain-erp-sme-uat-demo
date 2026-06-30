@@ -1,11 +1,19 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { createScmServer } from '../routes/scm-legacy.routes.mjs'
 import { handleAiRoute } from '../routes/ai.routes.mjs'
 import { handleContextRoute } from '../routes/context.routes.mjs'
 import { normalizeAuditEvent } from './audit-foundation.mjs'
 import { getAiToolRegistry } from './ai-tool-registry.mjs'
 import { listAuditEvents, recordAuditEvent } from '../repositories/audit-log-repository.mjs'
+
+const repoRoot = path.resolve(import.meta.dirname, '..', '..')
+
+function readSource(...parts) {
+  return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8')
+}
 
 function createRouteContext(method, pathname, options = {}) {
   let response = null
@@ -30,6 +38,15 @@ function createRouteContext(method, pathname, options = {}) {
 
 test('server factory imports with backend foundation routes', () => {
   assert.equal(typeof createScmServer, 'function')
+})
+
+test('server route context injects repository registry for repository-compatible routes', () => {
+  const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
+
+  assert.match(source, /import \{ createRepositoryRegistry \} from '\.\.\/repositories\/adapter-registry\.mjs'/)
+  assert.match(source, /const repositories = createRepositoryRegistry\(\{ db, env: process\.env \}\)/)
+  assert.match(source, /routeContext = \{[\s\S]*repositories,[\s\S]*\}/)
+  assert.ok(source.indexOf('const repositories = createRepositoryRegistry') < source.indexOf('const routeContext = {'))
 })
 
 test('GET /api/me returns current user, tenant, and permissions context', async () => {

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { ProxyAgent } from 'undici'
 import { loadEnv } from '../config/env.mjs'
 import { createJsonDb } from '../repositories/json-db.mjs'
+import { createRepositoryRegistry } from '../repositories/adapter-registry.mjs'
 import { contentTypeFor, readBody, send, sendText } from '../utils/http.mjs'
 import { handlePurchaseOrdersRoute } from './purchase-orders.routes.mjs'
 import { handlePurchaseRequestsRoute } from './purchase-requests.routes.mjs'
@@ -859,6 +860,7 @@ export function createScmServer() {
 
     const url = new URL(req.url || '/', `http://localhost:${port}`)
     const db = await readDb()
+    const repositories = createRepositoryRegistry({ db, env: process.env })
 
     if (req.method === 'GET' && url.pathname === '/api/health') {
       return send(res, 200, {
@@ -960,6 +962,7 @@ export function createScmServer() {
 
     const routeContext = {
       req, res, url, db, send, readBody, writeDb, event, todayLabel,
+      repositories,
       ensurePurchaseRequests, systemRequestSources, nextSequenceId,
       purchaseRequestStatuses, priorities, recordWorkflowCreation,
       actorFromBody, applyWorkflowTransition, recordValidationBlocked,

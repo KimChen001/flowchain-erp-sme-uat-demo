@@ -49,9 +49,16 @@ The Round 16 JSON adapter contract tests remain the behavioral baseline. Future 
 
 ## Route wiring status
 
-Routes continue using the existing JSON read models and helpers directly. This keeps public API behavior stable while the registry is introduced and tested.
+Round 22 wires the registry into the main server `routeContext` after the JSON database snapshot is loaded. Repository-compatible routes now receive `ctx.repositories` during normal request handling.
 
-Future rounds can incrementally move low-risk routes to `ctx.repositories.*` once repository-specific tests are in place.
+The first repository-compatible route groups are:
+
+- Master Data;
+- Procurement read;
+- Inventory read;
+- Action Draft preview.
+
+Each route group still keeps a local JSON fallback for isolated handler tests and compatibility, but injected repositories take priority.
 
 ## Non-goals
 
