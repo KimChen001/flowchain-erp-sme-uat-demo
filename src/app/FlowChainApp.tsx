@@ -19,14 +19,12 @@ import { typography } from "../components/ui/typography";
 import type {
   DemoUser,
   PurchaseIntent,
-  PurchaseRequest,
 } from "../types/scm";
 import {
   inventoryItems,
   supplierData,
 } from "../data/demo-data";
 import { inventoryPlan } from "../domain/inventory/planning";
-import { inventoryPurchaseRequestPayload } from "../domain/inventory/purchase-request";
 import ReceivingPanel from "../modules/receiving/Page";
 import InventoryPanel from "../modules/inventory/Page";
 import ForecastPanel from "../modules/forecast/Page";
@@ -67,12 +65,12 @@ function ReplenishmentRequestModal({
   item,
   open,
   onClose,
-  onSubmit,
+  onPreviewDraft,
 }: {
   item: typeof inventoryItems[number] | null;
   open: boolean;
   onClose: () => void;
-  onSubmit: (item: typeof inventoryItems[number], values: { quantity: number; requiredDate: string; reason: string }) => void;
+  onPreviewDraft: (request: ActionDraftPreviewRequest) => void;
 }) {
   const plan = item ? inventoryPlan(item) : null;
   const [quantity, setQuantity] = useState(0);
@@ -89,11 +87,39 @@ function ReplenishmentRequestModal({
   if (!item || !plan) return null;
   const amount = quantity * plan.unitPrice;
   const score = supplierRecommendation(plan.supplier);
-  const canSubmit = quantity > 0 && !plan.needsSourcing;
+  const draftType = plan.needsSourcing ? "rfq_draft" : "purchase_request_draft";
+  const draftLabel = plan.needsSourcing ? "预览 RFQ 草稿" : "预览 PR 草稿";
+  const canPreview = quantity > 0;
+  const previewDraft = () => {
+    onPreviewDraft({
+      type: draftType,
+      title: `${item.sku} ${plan.needsSourcing ? "RFQ 草稿预览" : "补货 PR 草稿预览"}`,
+      source: "inventory_replenishment",
+      originEvidence: [
+        {
+          type: "inventory_item",
+          id: item.sku,
+          label: item.name,
+          status: item.status,
+          summary: reason,
+        },
+      ],
+      payload: {
+        itemIdOrSku: item.sku,
+        quantity,
+        unit: plan.unit,
+        requestedDeliveryDate: requiredDate,
+        reason,
+        supplierIdOrName: plan.needsSourcing ? "" : plan.supplier,
+        supplierSuggestion: plan.needsSourcing ? undefined : { supplierName: plan.supplier },
+        severity: plan.priority,
+      },
+    });
+  };
 
   return (
     <Modal open={open} onClose={onClose} width={680}
-      title="生成补货采购申请" subtitle={`${item.sku} · ${item.name}`}>
+      title={plan.needsSourcing ? "补货 RFQ 草稿预览" : "补货 PR 草稿预览"} subtitle={`${item.sku} · ${item.name}`}>
       <div className="grid grid-cols-4 gap-2 mb-4">
         {[
           { label: "可用库存", value: `${plan.projectedAvailable.toLocaleString()} ${plan.unit}`, color: plan.projectedAvailable <= item.min ? A.red : A.label },
@@ -150,21 +176,30 @@ function ReplenishmentRequestModal({
 
       {plan.needsSourcing && (
         <div className="mt-4 rounded-xl p-3 text-xs" style={{ background: "#fff8f0", color: A.label }}>
-          当前 SKU 缺少有效供应商或单价，请先发起 RFQ 或维护报价后再生成 PR。
+          当前 SKU 缺少有效供应商或单价，将先进入 RFQ 草稿预览，确认能力仍保留为后续人工动作。
         </div>
       )}
 
       <div className="flex justify-end gap-2 mt-5">
         <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg font-medium"
           style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.1)" }}>取消</button>
-        <button onClick={() => onSubmit(item, { quantity, requiredDate, reason })} disabled={!canSubmit}
+        <button onClick={previewDraft} disabled={!canPreview}
           className="text-xs px-3 py-1.5 rounded-lg font-medium text-white"
-          style={{ background: canSubmit ? A.blue : A.gray3 }}>
-          提交采购申请
+          style={{ background: canPreview ? A.blue : A.gray3 }}>
+          {draftLabel}
         </button>
       </div>
     </Modal>
   );
+}
+
+function actionDraftErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message.trim() : "";
+  if (!message) return "草稿预览暂不可用，请补充上下文后重试。";
+  if (/^\s*[{[]/.test(message) || /<html|stack|trace| at /i.test(message)) {
+    return "当前动作需要人工复核，尚未接入草稿预览。";
+  }
+  return message;
 }
 
 const PAGE_LABELS: Record<string, string> = {
@@ -450,47 +485,7 @@ export default function FlowChainApp() {
       setActive("inventory");
       return;
     }
-    if (plan.needsSourcing) {
-      toast("请先补齐供应商与报价", { description: `${item.sku} 已低于 ROP，但缺少有效供应商或单价，建议先发起 RFQ。` });
-      setPurchaseIntent({ sourceSku: item.sku, createdAt: Date.now() });
-      setActive("procurement:requests");
-      return;
-    }
     setReplenishmentSku(sku);
-  }
-
-  async function submitReplenishmentRequest(item: typeof inventoryItems[number], values: { quantity: number; requiredDate: string; reason: string }) {
-    const quantity = Number(values.quantity || 0);
-    if (quantity <= 0) {
-      toast.error("申请数量必须大于 0");
-      return;
-    }
-    try {
-      const created = await apiJson<PurchaseRequest>("/api/purchase-requests", {
-        method: "POST",
-        body: JSON.stringify(inventoryPurchaseRequestPayload(item, values)),
-      });
-      setPurchaseIntent({ selectedPr: created.pr, sourceSku: item.sku, createdAt: Date.now() });
-      setReplenishmentSku(null);
-      setActive("procurement:requests");
-      toast.success(`${created.pr} 已生成`, { description: `${item.name} · ${quantity.toLocaleString()} ${created.unit}` });
-    } catch (error) {
-      const existing = await apiJson<PurchaseRequest[]>("/api/purchase-requests")
-        .then((requests) => requests.find((request) =>
-          request.source === "inventory" &&
-          request.sourceSku === item.sku &&
-          !["已转PO", "已驳回", "已取消"].includes(request.status)
-        ))
-        .catch(() => null);
-      if (existing) {
-        setPurchaseIntent({ selectedPr: existing.pr, sourceSku: item.sku, createdAt: Date.now() });
-        setReplenishmentSku(null);
-        setActive("procurement:requests");
-        toast("已有未关闭采购申请", { description: `${existing.pr} 已自动定位。` });
-        return;
-      }
-      toast.error("补货 PR 生成失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
-    }
   }
 
   const replenishmentItem = replenishmentSku ? inventoryItems.find((item) => item.sku === replenishmentSku) ?? null : null;
@@ -585,7 +580,7 @@ export default function FlowChainApp() {
       setDraftPreview(response.draft);
       if (!response.previewOnly) setDraftError("草稿预览边界异常：接口未返回 previewOnly。");
     } catch (error) {
-      setDraftError(error instanceof Error ? error.message : "草稿预览暂不可用");
+      setDraftError(actionDraftErrorMessage(error));
     } finally {
       setDraftLoading(false);
     }
@@ -658,7 +653,10 @@ export default function FlowChainApp() {
         open={Boolean(replenishmentItem)}
         item={replenishmentItem}
         onClose={() => setReplenishmentSku(null)}
-        onSubmit={submitReplenishmentRequest}
+        onPreviewDraft={(request) => {
+          setReplenishmentSku(null);
+          openActionDraftReview(request);
+        }}
       />
 
       <aside className="w-56 shrink-0 flex flex-col"

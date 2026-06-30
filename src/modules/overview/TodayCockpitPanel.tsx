@@ -65,37 +65,94 @@ function firstEvidence(item: { evidence?: unknown[] }) {
   return Array.isArray(item.evidence) ? item.evidence[0] as Record<string, unknown> | undefined : undefined;
 }
 
+function evidenceText(evidence: Record<string, unknown> | undefined, keys: string[]) {
+  for (const key of keys) {
+    const value = evidence?.[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+function actionEntityId(item: TodayCockpitAction, evidence: Record<string, unknown> | undefined) {
+  const target = item.target || {};
+  return String(target.entityId || evidence?.id || "").trim();
+}
+
+function actionSku(item: TodayCockpitAction, evidence: Record<string, unknown> | undefined) {
+  const entityId = actionEntityId(item, evidence);
+  if (/^SKU-/i.test(entityId)) return entityId;
+  return evidenceText(evidence, ["sku", "itemIdOrSku", "itemId", "itemCode"]);
+}
+
+function actionSupplier(item: TodayCockpitAction, evidence: Record<string, unknown> | undefined) {
+  const target = (item.target || {}) as Record<string, unknown>;
+  return String(
+    target.supplierId ||
+    target.supplierName ||
+    evidence?.supplierId ||
+    evidence?.supplierName ||
+    evidence?.supplier ||
+    (evidence?.type === "supplier" ? evidence?.id || evidence?.label : "") ||
+    "",
+  ).trim();
+}
+
+function actionQuantity(evidence: Record<string, unknown> | undefined) {
+  return evidenceText(evidence, ["quantity", "suggestedQuantity", "requiredQuantity", "replenishmentQuantity"]);
+}
+
 function actionDraftRequest(item: TodayCockpitAction): ActionDraftPreviewRequest | null {
   const evidence = firstEvidence(item);
   const target = item.target || {};
-  const entityId = String(target.entityId || evidence?.id || "").trim();
+  const entityId = actionEntityId(item, evidence);
   const documentType = String(target.documentType || evidence?.type || "").trim();
+  const sku = actionSku(item, evidence);
+  const supplierIdOrName = actionSupplier(item, evidence);
+  const quantity = actionQuantity(evidence);
+  const reason = item.reason || item.nextAction || item.title;
   if (item.module === "inventory" || documentType === "inventory_item" || target.entityType === "inventory_item") {
     return {
       type: "purchase_request_draft",
-      title: `${entityId || item.title} 补货 PR 草稿预览`,
+      title: `${sku || entityId || item.title} 补货 PR 草稿预览`,
       source: "today_cockpit",
       originEvidence: item.evidence as Record<string, unknown>[] || [],
       payload: {
-        itemIdOrSku: entityId,
-        quantity: "",
-        reason: item.reason || item.nextAction || item.title,
+        itemIdOrSku: sku || entityId,
+        quantity,
+        reason,
       },
     };
   }
   if (item.module === "procurement" || String(target.module || "").startsWith("procurement")) {
+    if (documentType === "rfq" || /rfq|报价|询价|寻源/i.test(`${item.title} ${reason}`)) {
+      if (!sku) return null;
+      return {
+        type: "rfq_draft",
+        title: `${sku} RFQ 草稿预览`,
+        source: "today_cockpit",
+        originEvidence: item.evidence as Record<string, unknown>[] || [],
+        payload: {
+          itemIdOrSku: sku,
+          quantity,
+          reason,
+          relatedDocumentType: documentType,
+          relatedDocumentId: entityId,
+        },
+      };
+    }
+    if (documentType !== "po" && !supplierIdOrName) return null;
     return {
       type: documentType === "po" ? "po_followup_draft" : "supplier_followup_draft",
       title: `${item.title} 草稿预览`,
       source: "today_cockpit",
       originEvidence: item.evidence as Record<string, unknown>[] || [],
       payload: {
-        supplierIdOrName: "",
+        supplierIdOrName,
         poId: documentType === "po" ? entityId : "",
         message: item.nextAction || item.reason || "请确认当前跟进计划与责任人。",
         relatedDocumentType: documentType,
         relatedDocumentId: entityId,
-        reason: item.reason,
+        reason,
       },
     };
   }
@@ -207,6 +264,10 @@ export function TodayCockpitActionList({
                 >
                   草稿预览
                 </button>
+              ) : onReviewActionDraft ? (
+                <div className="mt-2 text-[11px]" style={{ color: A.sub }}>
+                  当前动作需要人工复核，尚未接入草稿预览。
+                </div>
               ) : null}
             </div>
           );
