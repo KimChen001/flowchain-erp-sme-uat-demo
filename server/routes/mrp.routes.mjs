@@ -41,6 +41,14 @@ const bomMaster = {
   },
 }
 
+const MRP_SOURCE_METADATA = Object.freeze({
+  generatedFrom: 'json-products-plus-static-planning-profile',
+  productSource: 'data/scm-demo.json:products',
+  demoPlanningProfile: 'server/routes/mrp.routes.mjs:mrpProfiles',
+  staticBomSource: 'server/routes/mrp.routes.mjs:bomMaster',
+  persistence: 'read-only-generated-plan',
+})
+
 function roundUpToBatch(value, moq, batchMultiple) {
   if (value <= 0) return 0
   return Math.ceil(Math.max(value, moq) / batchMultiple) * batchMultiple
@@ -157,6 +165,7 @@ export function buildMrpPlan(db, options = {}) {
       unitPrice: 0,
       bomDemand: [],
     }
+    const profileSource = mrpProfiles[product.sku] ? 'static-profile' : 'default-profile'
     const bomBucket = bomExplosion.get(product.sku)
     const monthlyDemand = Number(product.monthlyDemand || 0)
     const safetyStock = Number(product.safetyStock || 0)
@@ -196,12 +205,16 @@ export function buildMrpPlan(db, options = {}) {
         independentDemand,
         dependentDemand,
         scheduledReceipt,
+        inventoryPositionBeforePlanning: Math.round(availableBeforePlanning),
         projectedAvailable: Math.round(projected),
         netRequirement: Math.round(netRequirement),
         plannedReceipt,
         plannedRelease: plannedReceipt,
+        releasePeriod: plannedReleasePeriod,
         plannedReleasePeriod,
         exception,
+        generatedFrom: MRP_SOURCE_METADATA.generatedFrom,
+        bomSource: bomBucket ? MRP_SOURCE_METADATA.staticBomSource : 'none',
         dependentDemandSources: bomBucket?.sourcesByPeriod?.[index] || [],
       })
     }
@@ -232,6 +245,11 @@ export function buildMrpPlan(db, options = {}) {
       maxNetRequirement: Math.round(maxNetRequirement),
       amount: totalPlannedReceipt * Number(profile.unitPrice || 0),
       exception: exceptionSummary,
+      sourceMetadata: {
+        ...MRP_SOURCE_METADATA,
+        profileSource,
+        hasStaticBom: Boolean(bomBucket),
+      },
       bomSources: bomBucket?.summary || [],
       schedule,
     }
@@ -256,6 +274,7 @@ export function buildMrpPlan(db, options = {}) {
 
   return {
     generatedAt: new Date().toISOString(),
+    sourceMetadata: MRP_SOURCE_METADATA,
     horizon: periods,
     periods: labels,
     summary: {

@@ -1,5 +1,15 @@
 export type MrpExceptionType = "正常" | "加急" | "释放" | "推迟/取消";
 
+export type MrpSourceMetadata = {
+  generatedFrom: string;
+  productSource: string;
+  demoPlanningProfile: string;
+  staticBomSource: string;
+  persistence: string;
+  profileSource?: string;
+  hasStaticBom?: boolean;
+};
+
 export type MrpDemandSource = {
   parent: string;
   parentName?: string;
@@ -28,12 +38,16 @@ export type MrpScheduleLine = {
   dependentDemand: number;
   dependentDemandSources?: MrpDemandSource[];
   scheduledReceipt: number;
+  inventoryPositionBeforePlanning?: number;
   projectedAvailable: number;
   netRequirement: number;
   plannedReceipt: number;
   plannedRelease: number;
+  releasePeriod?: string;
   plannedReleasePeriod: string;
   exception: MrpExceptionType;
+  generatedFrom?: string;
+  bomSource?: string;
 };
 
 export type MrpPlanRow = {
@@ -57,12 +71,14 @@ export type MrpPlanRow = {
   maxNetRequirement: number;
   amount: number;
   exception: MrpExceptionType;
+  sourceMetadata?: MrpSourceMetadata;
   bomSources?: MrpBomSource[];
   schedule: MrpScheduleLine[];
 };
 
 export type MrpPlan = {
   generatedAt: string;
+  sourceMetadata?: MrpSourceMetadata;
   horizon: number;
   periods: string[];
   summary: {
