@@ -1,4 +1,4 @@
-export type CanonicalEvidenceModule = "procurement" | "inventory" | "supplier" | "masterData" | "todayCockpit" | "ai";
+export type CanonicalEvidenceModule = "procurement" | "inventory" | "supplier" | "masterData" | "todayCockpit" | "planning" | "ai";
 
 export type CanonicalFocusTarget = {
   entityType: string;
@@ -56,6 +56,10 @@ const ENTITY_TARGETS: Record<string, { moduleId: string; entityType: string; mod
   supplier_master: { moduleId: "srm:master", entityType: "supplier", module: "supplier", label: "Supplier" },
   warehouse: { moduleId: "master-data:warehouses", entityType: "warehouse", module: "masterData", label: "Warehouse" },
   bin: { moduleId: "master-data:warehouses", entityType: "bin", module: "masterData", label: "Bin" },
+  forecast_plan: { moduleId: "forecast:demand", entityType: "forecast_plan", module: "planning", label: "Forecast" },
+  mrp_plan: { moduleId: "forecast:mrp", entityType: "mrp_plan", module: "planning", label: "MRP" },
+  bom_source: { moduleId: "forecast:mrp", entityType: "bom_source", module: "planning", label: "BOM" },
+  planning_source: { moduleId: "forecast:parameters", entityType: "planning_source", module: "planning", label: "Planning Source" },
 };
 
 function text(value: unknown) {
@@ -79,6 +83,7 @@ function moduleKind(moduleId = "", fallback: CanonicalEvidenceModule = "ai"): Ca
   if (moduleId.startsWith("srm")) return "supplier";
   if (moduleId.startsWith("master-data")) return "masterData";
   if (moduleId.startsWith("overview")) return "todayCockpit";
+  if (moduleId.startsWith("forecast")) return "planning";
   return fallback;
 }
 

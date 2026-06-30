@@ -4,6 +4,7 @@ import { apiJson } from "../../lib/api-client";
 import {
   navigationIntentFromInternalTarget,
   navigationIntentFromEvidenceLink,
+  navigationIntentFromModule,
   normalizeEvidenceLinks,
   type CanonicalFocusTarget,
 } from "../../lib/evidenceLinks";
@@ -633,7 +634,7 @@ function AiResponseCard({
           <div className="flex flex-wrap gap-1.5">
             {actions.slice(0, 3).map((action) => {
               const intent = action.kind === "deep_link"
-                ? navigationIntentFromInternalTarget(action.target, { source: "aiAction" })
+                ? navigationIntentFromInternalTarget(action.target, { source: "aiAction" }) || navigationIntentFromModule(action.target || "overview", { source: "aiAction" })
                 : null;
               return intent && onNavigate ? (
                 <button

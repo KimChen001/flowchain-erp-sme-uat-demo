@@ -143,9 +143,12 @@ const alphaCriticalPrompts = [
   { moduleId: 'inventory', message: '查看库存风险', intent: 'inventory_status_query' },
   { moduleId: 'inventory', message: '解释库存异常', intent: 'inventory_status_query' },
   { moduleId: 'inventory', message: '准备 PR 草稿 A100 50 明天', intent: 'prepare_purchase_request_draft' },
+  { moduleId: 'forecast', message: '今天计划模块最需要处理什么？', intent: 'planning_status_query' },
   { moduleId: 'forecast', message: '哪些 SKU 有 MRP 例外？', intent: 'planning_status_query' },
   { moduleId: 'forecast', message: 'MRP 计划释放有哪些需要审阅？', intent: 'planning_status_query' },
   { moduleId: 'forecast', message: '这个 forecast 的 MAPE 怎么样？', intent: 'planning_status_query' },
+  { moduleId: 'forecast', message: '哪些补货建议需要转成草稿？', intent: 'planning_status_query' },
+  { moduleId: 'forecast', message: '这个 SKU 的计划参数是什么？', intent: 'planning_status_query' },
 ]
 
 test('Alpha-critical AI quick prompts bypass read-context, provider, and mutation', async () => {

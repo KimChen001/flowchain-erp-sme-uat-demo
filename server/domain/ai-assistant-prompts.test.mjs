@@ -69,7 +69,14 @@ test('active purchase request context returns PR prompts', async () => {
 test('module prompts apply without active context', async () => {
   assert.deepEqual(await promptsFor({ moduleId: 'srm', activeContext: null }), ['查看高风险供应商', '解释评分规则', '下一步跟进'])
   assert.deepEqual(await promptsFor({ moduleId: 'procurement' }), ['今天采购有什么要跟？', '哪些 PO 快逾期？', '哪些 RFQ 没回复？'])
-  assert.deepEqual(await promptsFor({ moduleId: 'forecast' }), ['哪些 SKU 有 MRP 例外？', 'MRP 计划释放有哪些需要审阅？', '这个 forecast 的 MAPE 怎么样？'])
+  assert.deepEqual(await promptsFor({ moduleId: 'forecast' }), [
+    '今天计划模块最需要处理什么？',
+    '哪些 SKU 有 MRP 例外？',
+    'MRP 计划释放有哪些需要审阅？',
+    '这个 forecast 的 MAPE 怎么样？',
+    '哪些补货建议需要转成草稿？',
+    '这个 SKU 的计划参数是什么？',
+  ])
 })
 
 test('unknown module falls back to generic prompts and every result has exactly three prompts', async () => {

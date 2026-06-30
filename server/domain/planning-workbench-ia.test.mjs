@@ -39,6 +39,18 @@ test('Planning Cockpit CTAs use internal navigation clickthroughs', () => {
   assert.doesNotMatch(cockpitSection, /href=/)
 })
 
+test('AI Planning actions accept canonical view ids instead of raw forecast hrefs', () => {
+  const panel = readSource('src', 'modules', 'ai-assistant', 'Panel.tsx')
+  const status = readSource('server', 'domain', 'ai-chat-status.mjs')
+
+  assert.match(panel, /navigationIntentFromInternalTarget\(action\.target, \{ source: "aiAction" \}\) \|\| navigationIntentFromModule\(action\.target \|\| "overview", \{ source: "aiAction" \}\)/)
+  for (const routeId of ['forecast:cockpit', 'forecast:demand', 'forecast:mrp', 'forecast:replenishment', 'forecast:parameters']) {
+    assert.match(status, new RegExp(routeId))
+  }
+  assert.doesNotMatch(status, /target: `\/forecast/)
+  assert.doesNotMatch(status, /target: '\/forecast/)
+})
+
 test('Demand Forecast stays focused on forecast quality rather than release CTA', () => {
   const forecast = readSource('src', 'modules', 'forecast', 'Page.tsx')
   const demandSection = forecast.slice(forecast.indexOf('const DemandForecastView'), forecast.indexOf('const ReconciliationTable'))

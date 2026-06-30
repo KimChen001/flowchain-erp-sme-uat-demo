@@ -37,7 +37,7 @@ export const aiChatStatusCapabilityCatalog = Object.freeze([
   },
   {
     intent: 'planning_status_query',
-    examples: ['哪些 SKU 有 MRP 例外？', '这个 SKU 为什么 MRP 加急？', 'MRP 计划释放有哪些需要审阅？', '这个 forecast 的 MAPE 怎么样？'],
+    examples: ['今天计划模块最需要处理什么？', '哪些 SKU 有 MRP 例外？', '这个 SKU 为什么 MRP 加急？', 'MRP 计划释放有哪些需要审阅？', '这个 forecast 的 MAPE 怎么样？', '这个 SKU 的计划参数是什么？'],
     requiredSlots: [],
     optionalSlots: ['sku', 'metric', 'exceptionType'],
     responseCards: ['planning_status_summary', 'evidence', 'recommended_actions'],
@@ -48,7 +48,7 @@ export const aiChatStatusCapabilityCatalog = Object.freeze([
 const supplierIntentPattern = /供应商|supplier|SUP-[A-Z0-9-]+/i
 const inventoryIntentPattern = /库存|inventory|stock|shortage|缺货|断货|补货|仓库|warehouse|SKU|item|物料|movement history|movements?|事务流水|库存流水/i
 const procurementIntentPattern = /采购.*(?:异常|问题|待处理|状态)|procurement|purchase\s+(?:order|orders|issues|exceptions)|po\s+(?:status|pending|overdue)|order\s+(?:status|pending|overdue)|overdue|逾期|异常|问题|待处理|pending\s+(?:procurement|pr|po)|pr\s+(?:status|pending)|grn|receiving/i
-const planningIntentPattern = /MRP|forecast|预测|计划释放|净需求|MAPE|WMAPE|RMSE|tracking signal|加急|例外|BOM/i
+const planningIntentPattern = /MRP|forecast|预测|计划模块|计划释放|净需求|MAPE|WMAPE|RMSE|tracking signal|加急|例外|BOM|计划参数|lead time|MOQ|安全库存|safety stock|补货(?:建议)?(?:需要)?(?:转成)?草稿/i
 
 function asArray(value) {
   return Array.isArray(value) ? value : []
@@ -299,6 +299,14 @@ function latestForecastPlanFor(db = {}, row = null) {
   return plans[0]
 }
 
+function planningViewForMessage(message = '') {
+  if (/MAPE|WMAPE|RMSE|tracking signal|forecast|预测|需求/i.test(message)) return 'forecast:demand'
+  if (/计划参数|lead time|MOQ|安全库存|safety stock|reorder point|batch/i.test(message)) return 'forecast:parameters'
+  if (/补货|草稿|release|释放|PR draft|计划释放/i.test(message)) return 'forecast:replenishment'
+  if (/MRP|净需求|BOM|例外|加急/i.test(message)) return 'forecast:mrp'
+  return 'forecast:cockpit'
+}
+
 function buildPlanningStatusResponse(db = {}, message = '', options = {}) {
   const mrpPlan = buildMrpPlan(db, options.mrpOptions || {})
   const row = resolvePlanningRow(mrpPlan, message)
@@ -307,16 +315,17 @@ function buildPlanningStatusResponse(db = {}, message = '', options = {}) {
   const releaseLines = asArray(row?.schedule).filter((line) => Number(line.plannedRelease || 0) > 0)
   const urgent = row?.exception === '加急' || exceptionRows.some((item) => item.sku === row?.sku && item.type === '加急')
   const mape = forecastPlan?.metrics?.mape ?? forecastPlan?.metrics?.MAPE ?? null
+  const primaryTarget = planningViewForMessage(message)
   const evidence = [
-    { type: 'mrp_plan', id: row?.sku || 'mrp_plan', label: row?.name || 'MRP plan', summary: `${mrpPlan.summary?.exceptionCount || 0} MRP exceptions inspected across ${mrpPlan.summary?.skuCount || 0} SKUs.` },
+    { type: 'mrp_plan', id: row?.sku || 'mrp_plan', moduleId: 'forecast:mrp', label: row?.name || 'MRP plan', summary: `${mrpPlan.summary?.exceptionCount || 0} MRP exceptions inspected across ${mrpPlan.summary?.skuCount || 0} SKUs.` },
     forecastPlan
-      ? { type: 'forecast_plan', id: forecastPlan.id || forecastPlan.sku || row?.sku || 'forecast_plan', label: forecastPlan.name || forecastPlan.sku || row?.name, summary: `Forecast method ${forecastPlan.method || 'unknown'} with MAPE ${mape ?? 'not available'}.` }
-      : { type: 'forecast_plan', id: 'forecast_plans', summary: 'No saved forecast plan is available; MRP still uses current read model inputs.' },
+      ? { type: 'forecast_plan', id: forecastPlan.id || forecastPlan.sku || row?.sku || 'forecast_plan', moduleId: 'forecast:demand', label: forecastPlan.name || forecastPlan.sku || row?.name, summary: `Forecast method ${forecastPlan.method || 'unknown'} with MAPE ${mape ?? 'not available'}.` }
+      : { type: 'forecast_plan', id: 'forecast_plans', moduleId: 'forecast:demand', summary: 'No saved forecast plan is available; MRP still uses current read model inputs.' },
     row?.bomSources?.length
-      ? { type: 'bom_source', id: row.sku, label: 'BOM source evidence', summary: row.bomSources.map((source) => `${source.parentName || source.parent}:${source.demand}`).slice(0, 3).join(' | ') }
-      : { type: 'bom_source', id: row?.sku || 'static_bom', summary: 'No dependent BOM source was found for the selected row.' },
+      ? { type: 'bom_source', id: row.sku, moduleId: 'forecast:mrp', label: 'BOM source evidence', summary: row.bomSources.map((source) => `${source.parentName || source.parent}:${source.demand}`).slice(0, 3).join(' | ') }
+      : { type: 'bom_source', id: row?.sku || 'static_bom', moduleId: 'forecast:mrp', summary: 'No dependent BOM source was found for the selected row.' },
   ]
-  if (row?.sourceMetadata) evidence.push({ type: 'planning_source', id: row.sku, summary: `Generated from ${row.sourceMetadata.generatedFrom}; persistence ${row.sourceMetadata.persistence}.` })
+  if (row?.sourceMetadata) evidence.push({ type: 'planning_source', id: row.sku, moduleId: 'forecast:parameters', summary: `Generated from ${row.sourceMetadata.generatedFrom}; persistence ${row.sourceMetadata.persistence}.` })
 
   return {
     message: row
@@ -356,9 +365,9 @@ function buildPlanningStatusResponse(db = {}, message = '', options = {}) {
       },
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'Open Forecast/MRP', kind: 'deep_link', target: `/forecast?sku=${encodeURIComponent(row?.sku || '')}` },
-        { label: 'Review MRP exceptions', kind: 'deep_link', target: '/forecast?view=mrp-exceptions' },
-        { label: 'Preview PR draft before release', kind: 'deep_link', target: '/forecast?view=mrp-release-draft' },
+        { label: 'Open matching Planning view', kind: 'deep_link', target: primaryTarget },
+        { label: 'Review MRP exceptions', kind: 'deep_link', target: 'forecast:mrp' },
+        { label: 'Preview ActionDraft replenishment', kind: 'deep_link', target: 'forecast:replenishment' },
       ]),
     ],
     evidence,

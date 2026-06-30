@@ -492,6 +492,7 @@ test('planning AI UAT prompts return deterministic Forecast/MRP evidence and sta
     '这个 SKU 为什么 MRP 加急？',
     'MRP 计划释放有哪些需要审阅？',
     '这个 forecast 的 MAPE 怎么样？',
+    '这个 SKU 的计划参数是什么？',
   ]
 
   for (const message of prompts) {
@@ -508,9 +509,32 @@ test('planning AI UAT prompts return deterministic Forecast/MRP evidence and sta
     assert.ok(route.response.payload.cards.some((card) => card.type === 'evidence'), message)
     assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'), message)
     assert.ok(route.response.payload.evidence.some((item) => item.type === 'mrp_plan'), message)
+    const actions = route.response.payload.cards.find((card) => card.type === 'recommended_actions').actions
+    assert.ok(actions.every((action) => String(action.target).startsWith('forecast:')), message)
+    assert.ok(route.response.payload.evidence.every((item) => !item.moduleId || String(item.moduleId).startsWith('forecast:')), message)
   }
 
   assert.deepEqual(businessSnapshot(db), before)
+})
+
+test('planning AI recommended actions route to matching Planning subviews', () => {
+  const cases = [
+    ['今天计划模块最需要处理什么？', 'forecast:cockpit'],
+    ['这个 forecast 的 MAPE 怎么样？', 'forecast:demand'],
+    ['哪些 SKU 有 MRP 例外？', 'forecast:mrp'],
+    ['MRP 计划释放有哪些需要审阅？', 'forecast:replenishment'],
+    ['哪些补货建议需要转成草稿？', 'forecast:replenishment'],
+    ['这个 SKU 的计划参数是什么？', 'forecast:parameters'],
+  ]
+
+  for (const [message, expectedTarget] of cases) {
+    const response = buildAiChatStatusResponse(createDb(), { message, moduleId: 'forecast' })
+    const actions = response.cards.find((card) => card.type === 'recommended_actions').actions
+
+    assert.equal(response.intent.name, 'planning_status_query', message)
+    assert.equal(actions[0].target, expectedTarget, message)
+    assert.ok(actions.every((action) => !String(action.target).startsWith('/')), message)
+  }
 })
 
 test('unsupported AI chat prompts fall through deterministic status handler', () => {
