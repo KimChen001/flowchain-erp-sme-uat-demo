@@ -15,6 +15,7 @@ FlowChain still runs a lightweight Node HTTP server through `server/routes/scm-l
 - `/api/master-data/*`: supplier, item, and master-data reads.
 - `/api/market/*`: market reference reads.
 - `/api/ai/tools`: AI tool registry.
+- `/api/action-drafts/schema`: preview-only action draft schema and supported draft types.
 - `/api/purchase-requests`, `/api/rfqs`, `/api/purchase-orders`, `/api/receiving-docs`: legacy list reads for existing UI screens.
 
 ## Write Routes
@@ -32,10 +33,16 @@ FlowChain still runs a lightweight Node HTTP server through `server/routes/scm-l
 - `/api/receiving-docs/:id`: updates GRN status and can apply inventory.
 - `/api/ai/chat`: answers questions and records AI events.
 
+## Preview-only Routes
+
+- `/api/action-drafts/preview`: validates and returns a reviewable action draft shape without calling `writeDb`, creating PR/RFQ/PO records, closing inventory exceptions, sending supplier messages, or persisting a draft.
+
 ## Boundary Observations
 
 - Procurement read APIs are now separated from legacy write handlers.
 - Today Cockpit v2 reuses procurement and inventory read models and is covered by read-only mutation tests.
+- Evidence links are normalized in the frontend through `src/lib/evidenceLinks.ts`; backend read responses remain compatible.
+- Action draft preview routes are intentionally separate from write routes and remain non-mutating.
 - Existing AI chat and auth routes still write runtime events or user records; smoke tests against the shared local JSON file should account for that behavior.
 - Inventory read APIs already follow a pure domain model pattern and provided the template for procurement read APIs.
 - Search and AI still use their existing domain-specific assemblers. Procurement read-model evidence is now normalized for future reuse, but those consumers should be consolidated only after ranking, card shape, and intent tests are expanded.
