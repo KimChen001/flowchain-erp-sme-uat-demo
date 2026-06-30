@@ -827,8 +827,8 @@ export default function FlowChainApp() {
                 <div className="absolute right-0 top-full mt-2 w-[420px] rounded-xl shadow-xl z-30 overflow-hidden"
                   style={{ background: A.white, border: `1px solid ${A.border}` }}>
                   <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: `1px solid ${A.border}` }}>
-                    <span className="text-[11px] font-semibold" style={{ color: A.label }}>搜索结果</span>
-                    <span className="text-[10px]" style={{ color: A.gray2 }}>{searchLoading ? "搜索中..." : `${searchResults.length} 条`}</span>
+                    <span className={typography.searchResultTitle} style={{ color: A.label }}>搜索结果</span>
+                    <span className={typography.searchResultMeta} style={{ color: A.gray2 }}>{searchLoading ? "搜索中..." : `${searchResults.length} 条`}</span>
                   </div>
                   <div className="max-h-96 overflow-y-auto">
                     {searchLoading && (

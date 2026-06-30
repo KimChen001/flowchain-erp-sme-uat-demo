@@ -1,6 +1,7 @@
 import { Copy, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { A, Chip, Modal, RecoveryActions } from "../../components/ui";
+import { typography } from "../../components/ui/typography";
 import { navigationIntentFromEvidenceLink, normalizeEvidenceLinks, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
 
 export type ActionDraftPreviewRequest = {
@@ -115,6 +116,11 @@ function editValue(raw: string, original: unknown) {
   return raw;
 }
 
+const draftButtonClass = `h-8 rounded-lg px-3 ${typography.denseButton} disabled:cursor-not-allowed`;
+const draftEvidenceTitleClass = `${typography.metadata} font-semibold`;
+const draftEvidenceLinkClass = `text-left ${draftEvidenceTitleClass} hover:underline`;
+const draftEvidenceMetaClass = typography.compactMetadata;
+
 export function ActionDraftReviewShell({
   open,
   loading = false,
@@ -203,16 +209,16 @@ export function ActionDraftReviewShell({
               { key: "cancel", label: "取消草稿", onClick: onCancelPreview, kind: "clear", tone: "subtle" },
             ]}
           />
-          <button type="button" onClick={resetDraft} disabled={!activeDraft || saving} className="h-8 rounded-lg px-3 text-xs font-medium disabled:cursor-not-allowed" style={{ background: A.white, color: activeDraft ? A.gray1 : A.gray2 }}>
+          <button type="button" onClick={resetDraft} disabled={!activeDraft || saving} className={draftButtonClass} style={{ background: A.white, color: activeDraft ? A.gray1 : A.gray2 }}>
             <RotateCcw size={12} className="mr-1 inline" />重置修改
           </button>
-          <button type="button" onClick={copyDraft} disabled={!activeDraft} className="h-8 rounded-lg px-3 text-xs font-medium disabled:cursor-not-allowed" style={{ background: A.white, color: activeDraft ? A.blue : A.gray2 }}>
+          <button type="button" onClick={copyDraft} disabled={!activeDraft} className={draftButtonClass} style={{ background: A.white, color: activeDraft ? A.blue : A.gray2 }}>
             <Copy size={12} className="mr-1 inline" />复制草稿内容
           </button>
-          <button type="button" onClick={saveDraft} disabled={!activeDraft || !onSaveDraft || saving} className="h-8 rounded-lg px-3 text-xs font-medium disabled:cursor-not-allowed" style={{ background: activeDraft && onSaveDraft ? A.blue : A.gray4, color: A.white }}>
+          <button type="button" onClick={saveDraft} disabled={!activeDraft || !onSaveDraft || saving} className={draftButtonClass} style={{ background: activeDraft && onSaveDraft ? A.blue : A.gray4, color: A.white }}>
             <Save size={12} className="mr-1 inline" />{saving ? "保存中" : "保存草稿"}
           </button>
-          <button type="button" disabled className="h-8 rounded-lg px-3 text-xs font-medium text-white disabled:cursor-not-allowed" style={{ background: A.gray3 }}>
+          <button type="button" disabled className={`${draftButtonClass} text-white`} style={{ background: A.gray3 }}>
             确认提交
           </button>
         </>
@@ -290,13 +296,13 @@ export function ActionDraftReviewShell({
                 return (
                   <div key={`${link.entityType}-${link.entityId}-${index}`} className="rounded-lg border px-3 py-2" style={{ borderColor: A.border }}>
                     {intent && onNavigate ? (
-                      <button type="button" onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)} className="text-left text-[12px] font-semibold hover:underline" style={{ color: A.blue }}>
+                      <button type="button" onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)} className={draftEvidenceLinkClass} style={{ color: A.blue }}>
                         {[link.entityType, link.entityId].filter(Boolean).join(" · ")}
                       </button>
                     ) : (
-                      <div className="text-[12px] font-semibold" style={{ color: A.label }}>{link.label}</div>
+                      <div className={draftEvidenceTitleClass} style={{ color: A.label }}>{link.label}</div>
                     )}
-                    <div className="mt-1 text-[10px] leading-4" style={{ color: A.gray2 }}>{link.status || link.label}</div>
+                    <div className={`mt-1 ${draftEvidenceMetaClass}`} style={{ color: A.gray2 }}>{link.status || link.label}</div>
                   </div>
                 );
               }) : (

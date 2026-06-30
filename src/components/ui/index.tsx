@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { apiJson } from "../../lib/api-client";
 import type { AuditEntry } from "../../types/scm";
 import { A } from "./tokens";
+import { typography } from "./typography";
 
 export { A } from "./tokens";
 
@@ -54,7 +55,7 @@ export function RecoveryActions({
           key={action.key}
           type="button"
           onClick={action.onClick}
-          className="h-8 inline-flex items-center gap-1.5 rounded-lg px-3 text-xs font-medium"
+          className={`h-8 inline-flex items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`}
           style={recoveryActionStyle(action.tone)}
         >
           <RecoveryIcon kind={action.kind} />

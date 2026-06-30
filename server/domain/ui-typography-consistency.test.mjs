@@ -46,9 +46,34 @@ test('primary procurement table id links use table link class', () => {
 test('shared field input and chip typography follows compact SaaS scale', () => {
   const source = readSource('src', 'components', 'ui', 'index.tsx')
 
+  assert.match(source, /import \{ typography \} from "\.\/typography"/)
   assert.match(source, /text-\[12px\] leading-\[18px\] font-semibold/)
+  assert.match(source, /className=\{`h-8 inline-flex items-center gap-1\.5 rounded-lg px-3 \$\{typography\.denseButton\}`\}/)
   assert.match(source, /text-\[13px\] leading-5 font-semibold/)
   assert.match(source, /fontSize: 14, lineHeight: "22px"/)
+})
+
+test('AI assistant evidence and actions use compact typography tokens', () => {
+  const source = readSource('src', 'modules', 'ai-assistant', 'Panel.tsx')
+
+  assert.match(source, /import \{ typography \} from "\.\.\/\.\.\/components\/ui\/typography"/)
+  assert.match(source, /aiEvidenceLinkClass = `max-w-full text-left \$\{typography\.compactMetadata\} font-medium truncate hover:underline`/)
+  assert.match(source, /aiEvidenceTitleClass = `\$\{typography\.compactMetadata\} font-medium truncate`/)
+  assert.match(source, /aiEvidenceMetaClass = `\$\{typography\.compactMetadata\} truncate`/)
+  assert.match(source, /aiActionPillClass = `rounded-full px-2\.5 py-1 \$\{typography\.compactMetadata\} font-medium`/)
+  assert.match(source, /className=\{aiEvidenceLinkClass\}/)
+  assert.match(source, /className=\{aiActionLinkClass\}/)
+})
+
+test('action draft review shell keeps evidence links and draft actions on shared typography tokens', () => {
+  const source = readSource('src', 'modules', 'action-drafts', 'ActionDraftReviewShell.tsx')
+
+  assert.match(source, /import \{ typography \} from "\.\.\/\.\.\/components\/ui\/typography"/)
+  assert.match(source, /draftButtonClass = `h-8 rounded-lg px-3 \$\{typography\.denseButton\} disabled:cursor-not-allowed`/)
+  assert.match(source, /draftEvidenceTitleClass = `\$\{typography\.metadata\} font-semibold`/)
+  assert.match(source, /draftEvidenceLinkClass = `text-left \$\{draftEvidenceTitleClass\} hover:underline`/)
+  assert.match(source, /draftEvidenceMetaClass = typography\.compactMetadata/)
+  assert.match(source, /className=\{draftEvidenceLinkClass\}/)
 })
 
 test('today cockpit recent document table uses standard table body scale', () => {
@@ -58,4 +83,13 @@ test('today cockpit recent document table uses standard table body scale', () =>
   assert.match(source, /thRightClass/)
   assert.match(source, /tdNumericRightClass/)
   assert.match(source, /className=\{tableLinkClass\}/)
+})
+
+test('global search results use dedicated search result typography tokens', () => {
+  const source = readSource('src', 'app', 'FlowChainApp.tsx')
+
+  assert.match(source, /import \{ typography \} from "\.\.\/components\/ui\/typography"/)
+  assert.match(source, /typography\.searchResultTitle/)
+  assert.match(source, /typography\.searchResultMeta/)
+  assert.doesNotMatch(source, /<span className="text-\[11px\] font-semibold" style=\{\{ color: A\.label \}\}>搜索结果<\/span>/)
 })

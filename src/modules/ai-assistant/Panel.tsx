@@ -9,6 +9,7 @@ import {
 } from "../../lib/evidenceLinks";
 import { fmt } from "../../lib/format";
 import { A } from "../../components/ui";
+import { typography } from "../../components/ui/typography";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import { aiDisplayMessage, looksLikeRawJson, normalizeAiCardValue, safeUnknownCardMessage, sanitizeAiMessage } from "./presentation";
 import { getContextualQuickPrompts } from "./prompts";
@@ -60,6 +61,12 @@ const PAGE_LABELS: Record<string, string> = {
   srm: "供应商管理",
   finance: "财务协同",
 };
+
+const aiEvidenceLinkClass = `max-w-full text-left ${typography.compactMetadata} font-medium truncate hover:underline`;
+const aiEvidenceTitleClass = `${typography.compactMetadata} font-medium truncate`;
+const aiEvidenceMetaClass = `${typography.compactMetadata} truncate`;
+const aiActionPillClass = `rounded-full px-2.5 py-1 ${typography.compactMetadata} font-medium`;
+const aiActionLinkClass = `${aiActionPillClass} hover:underline`;
 
 function hasValue(value: unknown) {
   return value !== undefined && value !== null && value !== "";
@@ -215,15 +222,15 @@ function EvidenceList({
               <button
                 type="button"
                 onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)}
-                className="max-w-full text-left text-[11px] font-medium truncate hover:underline"
+                className={aiEvidenceLinkClass}
                 style={{ color: A.blue }}
               >
                 {textValue(title)}
               </button>
             ) : (
-              <div className="text-[11px] font-medium truncate" style={{ color: A.label }}>{textValue(title)}</div>
+              <div className={aiEvidenceTitleClass} style={{ color: A.label }}>{textValue(title)}</div>
             )}
-            {hasValue(detail) && <div className="text-[10px] truncate" style={{ color: A.gray2 }}>{textValue(detail)}</div>}
+            {hasValue(detail) && <div className={aiEvidenceMetaClass} style={{ color: A.gray2 }}>{textValue(detail)}</div>}
           </div>
         );
       })}
@@ -576,7 +583,7 @@ function AiResponseCard({
             ["状态", data.status],
           ]} />
           {prDraftRequest ? (
-            <button type="button" onClick={() => onReviewActionDraft?.(prDraftRequest)} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
+            <button type="button" onClick={() => onReviewActionDraft?.(prDraftRequest)} className={aiActionPillClass} style={{ background: "#f0f6ff", color: A.blue }}>
               审阅草稿
             </button>
           ) : null}
@@ -600,7 +607,7 @@ function AiResponseCard({
             ["状态", data.status],
           ]} />
           {rfqDraftRequest ? (
-            <button type="button" onClick={() => onReviewActionDraft?.(rfqDraftRequest)} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
+            <button type="button" onClick={() => onReviewActionDraft?.(rfqDraftRequest)} className={aiActionPillClass} style={{ background: "#f0f6ff", color: A.blue }}>
               审阅草稿
             </button>
           ) : null}
@@ -633,13 +640,13 @@ function AiResponseCard({
                   key={`${action.label}-${action.target}`}
                   type="button"
                   onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)}
-                  className="rounded-full px-2.5 py-1 text-[11px] font-medium hover:underline"
+                  className={aiActionLinkClass}
                   style={{ background: A.gray6, color: A.blue }}
                 >
                   {action.label || "打开"}
                 </button>
               ) : (
-                <span key={`${action.label}-${action.kind}`} className="rounded-full px-2.5 py-1 text-[11px] font-medium" style={{ background: A.gray6, color: A.gray1 }}>
+                <span key={`${action.label}-${action.kind}`} className={aiActionPillClass} style={{ background: A.gray6, color: A.gray1 }}>
                   {action.label || action.kind}
                 </span>
               );
