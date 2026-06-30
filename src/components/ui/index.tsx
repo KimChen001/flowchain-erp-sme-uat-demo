@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, ChevronDown, History, X } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowUpRight, ChevronDown, History, Home, List, X } from "lucide-react";
 import { toast } from "sonner";
 import { apiJson } from "../../lib/api-client";
 import type { AuditEntry } from "../../types/scm";
@@ -13,6 +13,55 @@ export function Chip({ label, color, bg }: { label: string; color: string; bg: s
       style={{ color, background: bg }}>
       {label}
     </span>
+  );
+}
+
+export type RecoveryAction = {
+  key: string;
+  label: string;
+  onClick: () => void;
+  kind?: "previous" | "list" | "module" | "clear";
+  tone?: "neutral" | "primary" | "subtle" | "warning" | "danger";
+};
+
+function recoveryActionStyle(tone: RecoveryAction["tone"] = "neutral") {
+  if (tone === "primary") return { background: "#f0f6ff", color: A.blue, boxShadow: "0 0 0 0.5px rgba(37,99,235,0.18)" };
+  if (tone === "subtle") return { background: A.gray6, color: A.gray1 };
+  if (tone === "warning") return { background: "#fff8f0", color: A.orange };
+  if (tone === "danger") return { background: "#fff1f0", color: A.red };
+  return { background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(15,23,42,0.08)" };
+}
+
+function RecoveryIcon({ kind }: { kind: RecoveryAction["kind"] }) {
+  if (kind === "list") return <List size={13} />;
+  if (kind === "module") return <Home size={13} />;
+  if (kind === "clear") return <X size={13} />;
+  return <ArrowLeft size={13} />;
+}
+
+export function RecoveryActions({
+  actions,
+  className = "",
+}: {
+  actions: RecoveryAction[];
+  className?: string;
+}) {
+  if (!actions.length) return null;
+  return (
+    <div className={`flex flex-wrap items-center gap-2 ${className}`}>
+      {actions.map((action) => (
+        <button
+          key={action.key}
+          type="button"
+          onClick={action.onClick}
+          className="h-8 inline-flex items-center gap-1.5 rounded-lg px-3 text-xs font-medium"
+          style={recoveryActionStyle(action.tone)}
+        >
+          <RecoveryIcon kind={action.kind} />
+          {action.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

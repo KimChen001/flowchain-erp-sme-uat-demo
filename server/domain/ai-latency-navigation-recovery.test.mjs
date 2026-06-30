@@ -5,6 +5,9 @@ import { readFileSync } from 'node:fs'
 const aiPanelSource = readFileSync(new URL('../../src/modules/ai-assistant/Panel.tsx', import.meta.url), 'utf8')
 const appSource = readFileSync(new URL('../../src/app/FlowChainApp.tsx', import.meta.url), 'utf8')
 const inventorySource = readFileSync(new URL('../../src/modules/inventory/Page.tsx', import.meta.url), 'utf8')
+const purchasingSource = readFileSync(new URL('../../src/modules/purchasing/Page.tsx', import.meta.url), 'utf8')
+const actionDraftSource = readFileSync(new URL('../../src/modules/action-drafts/ActionDraftReviewShell.tsx', import.meta.url), 'utf8')
+const uiSource = readFileSync(new URL('../../src/components/ui/index.tsx', import.meta.url), 'utf8')
 
 test('AI assistant UI has duplicate request guard, abort, and timeout fallback', () => {
   assert.match(aiPanelSource, /requestInFlightRef/)
@@ -17,7 +20,9 @@ test('AI assistant UI has duplicate request guard, abort, and timeout fallback',
 })
 
 test('global focus recovery renders return and clear focus controls', () => {
+  assert.match(uiSource, /export function RecoveryActions/)
   assert.match(appSource, /当前聚焦/)
+  assert.match(appSource, /<RecoveryActions/)
   assert.match(appSource, /返回上一层/)
   assert.match(appSource, /清除聚焦/)
   assert.match(appSource, /setSearchFocus\(null\)/)
@@ -25,7 +30,17 @@ test('global focus recovery renders return and clear focus controls', () => {
 
 test('inventory SKU focus renders visible recovery and related document entry points', () => {
   assert.match(inventorySource, /当前 SKU 聚焦/)
+  assert.match(inventorySource, /<RecoveryActions/)
   assert.match(inventorySource, /返回库存列表/)
   assert.match(inventorySource, /查看事务流水/)
   assert.match(inventorySource, /查看异常单据/)
+})
+
+test('PO detail and draft review shell use shared recovery actions', () => {
+  assert.match(purchasingSource, /<RecoveryActions/)
+  assert.match(purchasingSource, /返回列表/)
+  assert.match(purchasingSource, /返回采购工作台/)
+  assert.match(actionDraftSource, /<RecoveryActions/)
+  assert.match(actionDraftSource, /取消草稿/)
+  assert.match(actionDraftSource, /确认提交/)
 })

@@ -14,6 +14,7 @@ import { procurementTrend, purchaseOrders, receivingDocs, SUPPLIER_INVOICES } fr
 import type { POStatus, PurchaseOrder, ReceivingDoc, ReceivingDocLine } from "../../types/scm";
 import {
   A, AppleTooltip, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard,
+  RecoveryActions,
   SectionHeader,
 } from "../../components/ui";
 import {
@@ -345,7 +346,12 @@ export default function PurchasingOrdersPage({
         refreshKey={selectedPO.lastAuditId || selectedPO.auditTrailIds?.join(",") || selectedPO.status}
       />
       <DocumentActionBar>
-        <button onClick={returnToList} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>返回列表</button>
+        <RecoveryActions
+          actions={[
+            { key: "list", label: "返回列表", onClick: returnToList, kind: "list" },
+            { key: "module", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
+          ]}
+        />
         {selectedPO.status === "待审批" && <button onClick={() => approve(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>审批订单</button>}
         {selectedPO.status === "待审批" && <button onClick={() => reject(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>}
         {selectedPO.status === "已审批" && <button onClick={() => send(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>下发至供应商</button>}

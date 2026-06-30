@@ -16,7 +16,7 @@ import {
   COUNT_PLANS, INVENTORY_MOVEMENT_LEDGER, inventoryItems, LOTS, SERIALS, SKU_CATALOG, supplierData, TRANSFERS, VARIANCES,
 } from "../../data/demo-data";
 import {
-  A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, Modal, SectionHeader, SegmentedControl, SubTabs,
+  A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, Modal, RecoveryActions, SectionHeader, SegmentedControl, SubTabs,
 } from "../../components/ui";
 import InventoryMovementLedger from "./InventoryMovementLedger";
 import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
@@ -1230,23 +1230,14 @@ function InventoryLanding({
                 ))}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <button onClick={() => setSelectedSku("")}
-                className="h-8 px-3 rounded-lg text-xs font-medium"
-                style={{ background: A.gray6, color: A.label }}>
-                返回库存列表
-              </button>
-              <button onClick={() => onOpenTab("movements")}
-                className="h-8 px-3 rounded-lg text-xs font-medium"
-                style={{ background: "#f0f6ff", color: A.blue }}>
-                查看事务流水
-              </button>
-              <button onClick={() => onOpenTab("exceptions")}
-                className="h-8 px-3 rounded-lg text-xs font-medium"
-                style={{ background: "#fff8f0", color: A.orange }}>
-                查看异常单据
-              </button>
-            </div>
+            <RecoveryActions
+              className="shrink-0"
+              actions={[
+                { key: "list", label: "返回库存列表", onClick: () => setSelectedSku(""), kind: "list" },
+                { key: "movements", label: "查看事务流水", onClick: () => onOpenTab("movements"), kind: "module", tone: "primary" },
+                { key: "exceptions", label: "查看异常单据", onClick: () => onOpenTab("exceptions"), kind: "module", tone: "warning" },
+              ]}
+            />
           </div>
         </Card>
       )}

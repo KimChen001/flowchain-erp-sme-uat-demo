@@ -1,5 +1,5 @@
 import { Copy } from "lucide-react";
-import { A, Chip, Modal } from "../../components/ui";
+import { A, Chip, Modal, RecoveryActions } from "../../components/ui";
 import { evidenceModuleId, normalizeEvidenceLinks, type CanonicalFocusTarget } from "../../lib/evidenceLinks";
 
 export type ActionDraftPreviewRequest = {
@@ -136,12 +136,12 @@ export function ActionDraftReviewShell({
       width={860}
       footer={(
         <>
-          <button type="button" onClick={onClose} className="h-8 rounded-lg px-3 text-xs font-medium" style={{ background: A.white, color: A.label }}>
-            关闭
-          </button>
-          <button type="button" onClick={onCancelPreview} className="h-8 rounded-lg px-3 text-xs font-medium" style={{ background: A.white, color: A.gray1 }}>
-            取消草稿
-          </button>
+          <RecoveryActions
+            actions={[
+              { key: "close", label: "关闭", onClick: onClose, kind: "previous" },
+              { key: "cancel", label: "取消草稿", onClick: onCancelPreview, kind: "clear", tone: "subtle" },
+            ]}
+          />
           <button type="button" onClick={copyDraft} disabled={!draft} className="h-8 rounded-lg px-3 text-xs font-medium disabled:cursor-not-allowed" style={{ background: A.white, color: draft ? A.blue : A.gray2 }}>
             <Copy size={12} className="mr-1 inline" />复制草稿内容
           </button>

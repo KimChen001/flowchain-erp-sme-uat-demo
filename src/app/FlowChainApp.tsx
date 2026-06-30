@@ -20,7 +20,7 @@ import {
   type CanonicalNavigationIntent,
 } from "../lib/evidenceLinks";
 import { fmt } from "../lib/format";
-import { A, Card, Field, inputStyle, Modal } from "../components/ui";
+import { A, Card, Field, inputStyle, Modal, RecoveryActions } from "../components/ui";
 import { typography } from "../components/ui/typography";
 import type {
   DemoUser,
@@ -948,23 +948,14 @@ export default function FlowChainApp() {
                     <div className="mt-1 truncate text-sm font-semibold tabular-nums" style={{ color: A.label }}>{focusEntityLabel}</div>
                     <div className="mt-1 text-[11px]" style={{ color: A.sub }}>来自搜索或证据入口，可返回上一层或清除聚焦。</div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <button onClick={returnFromFocus}
-                      className="h-8 px-3 rounded-lg text-xs font-medium"
-                      style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(37,99,235,0.18)" }}>
-                      返回上一层
-                    </button>
-                    <button onClick={() => navigateTo(activeModule)}
-                      className="h-8 px-3 rounded-lg text-xs font-medium"
-                      style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(15,23,42,0.08)" }}>
-                      返回{activeModuleLabel}
-                    </button>
-                    <button onClick={clearFocus}
-                      className="h-8 px-3 rounded-lg text-xs font-medium"
-                      style={{ background: A.gray6, color: A.gray1 }}>
-                      清除聚焦
-                    </button>
-                  </div>
+                  <RecoveryActions
+                    className="shrink-0"
+                    actions={[
+                      { key: "previous", label: "返回上一层", onClick: returnFromFocus, kind: "previous", tone: "primary" },
+                      { key: "module", label: `返回${activeModuleLabel}`, onClick: () => navigateTo(activeModule), kind: "module" },
+                      { key: "clear", label: "清除聚焦", onClick: clearFocus, kind: "clear", tone: "subtle" },
+                    ]}
+                  />
                 </div>
               )}
               <PanelErrorBoundary key={active} moduleLabel={activeChildLabel || activeModuleLabel}>
