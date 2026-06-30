@@ -6,6 +6,9 @@ const aiPanelSource = readFileSync(new URL('../../src/modules/ai-assistant/Panel
 const appSource = readFileSync(new URL('../../src/app/FlowChainApp.tsx', import.meta.url), 'utf8')
 const inventorySource = readFileSync(new URL('../../src/modules/inventory/Page.tsx', import.meta.url), 'utf8')
 const purchasingSource = readFileSync(new URL('../../src/modules/purchasing/Page.tsx', import.meta.url), 'utf8')
+const purchaseRequestsSource = readFileSync(new URL('../../src/modules/purchase-requests/Page.tsx', import.meta.url), 'utf8')
+const rfqSource = readFileSync(new URL('../../src/modules/rfq/Page.tsx', import.meta.url), 'utf8')
+const receivingSource = readFileSync(new URL('../../src/modules/receiving/Page.tsx', import.meta.url), 'utf8')
 const actionDraftSource = readFileSync(new URL('../../src/modules/action-drafts/ActionDraftReviewShell.tsx', import.meta.url), 'utf8')
 const uiSource = readFileSync(new URL('../../src/components/ui/index.tsx', import.meta.url), 'utf8')
 
@@ -43,4 +46,15 @@ test('PO detail and draft review shell use shared recovery actions', () => {
   assert.match(actionDraftSource, /<RecoveryActions/)
   assert.match(actionDraftSource, /取消草稿/)
   assert.match(actionDraftSource, /确认提交/)
+})
+
+test('procurement PR RFQ and GRN details expose canonical recovery paths', () => {
+  assert.match(purchaseRequestsSource, /<RecoveryActions/)
+  assert.match(purchaseRequestsSource, /返回采购工作台/)
+  assert.match(purchaseRequestsSource, /moduleId: "procurement:orders"/)
+  assert.doesNotMatch(purchaseRequestsSource, /moduleId: "purchasing"/)
+  assert.match(rfqSource, /<RecoveryActions/)
+  assert.match(rfqSource, /返回采购工作台/)
+  assert.match(receivingSource, /<RecoveryActions/)
+  assert.match(receivingSource, /返回采购工作台/)
 })

@@ -9,7 +9,7 @@ import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { OWNERS, SKU_CATALOG, SUPPLIER_LIST, purchaseOrders } from "../../data/demo-data";
 import type { PurchaseIntent, PurchaseOrder, PurchaseRequest, PurchaseRequestStatus, RfqRecord, SupplierRecommendationResult } from "../../types/scm";
-import { A, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard, Modal, SectionHeader } from "../../components/ui";
+import { A, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard, Modal, RecoveryActions, SectionHeader } from "../../components/ui";
 import {
   DocumentActionBar,
   DocumentEvidencePanel,
@@ -525,8 +525,8 @@ export default function PurchaseRequestsPage({
       />
       <DocumentEvidencePanel
         linkedDocuments={[
-          ...(selected.linkedPo ? [{ label: "PO / 采购订单", value: selected.linkedPo, moduleId: "purchasing", tone: "success" as const }] : []),
-          ...purchaseOrders.filter((order) => order.sourceRequest === selected.pr).slice(0, 2).map((order) => ({ label: "PO / 采购订单", value: order.po, moduleId: "purchasing", tone: statusTone(order.status) })),
+          ...(selected.linkedPo ? [{ label: "PO / 采购订单", value: selected.linkedPo, moduleId: "procurement:orders", tone: "success" as const }] : []),
+          ...purchaseOrders.filter((order) => order.sourceRequest === selected.pr).slice(0, 2).map((order) => ({ label: "PO / 采购订单", value: order.po, moduleId: "procurement:orders", tone: statusTone(order.status) })),
           ...(selected.source === "forecast" || selected.source === "mrp-release" ? [{ label: "预测与 MRP", value: selected.source, moduleId: "forecast", tone: "info" as const }] : []),
           ...(selected.source === "inventory" ? [{ label: "库存补货证据", value: selected.sourceSku || selected.source, moduleId: "inventory", tone: "warning" as const }] : []),
         ]}
@@ -549,7 +549,12 @@ export default function PurchaseRequestsPage({
         refreshKey={selected.lastAuditId || selected.auditTrailIds?.join(",") || selected.status}
       />
       <DocumentActionBar>
-        <button onClick={returnToList} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>返回列表</button>
+        <RecoveryActions
+          actions={[
+            { key: "list", label: "返回列表", onClick: returnToList, kind: "list" },
+            { key: "module", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
+          ]}
+        />
         {selected.status === "待审批" && <button onClick={() => approveRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>批准申请</button>}
         {selected.status === "待审批" && <button onClick={() => rejectRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>}
         {selected.status === "已批准" && <button onClick={() => convertRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>转采购订单</button>}

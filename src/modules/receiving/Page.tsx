@@ -14,7 +14,7 @@ import { lineRemaining, poLinesOf, toNumber } from "../../domain/purchasing/help
 import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
 import { QCModal } from "./components/QCModal";
 import { ScanReceiveModal } from "./components/ScanReceiveModal";
-import { A, Card, Chip, DocumentHistoryPanel, KpiCard, Modal, SectionHeader, SubTabs } from "../../components/ui";
+import { A, Card, Chip, DocumentHistoryPanel, KpiCard, Modal, RecoveryActions, SectionHeader, SubTabs } from "../../components/ui";
 import {
   DocumentActionBar,
   DocumentEvidencePanel,
@@ -724,11 +724,13 @@ function ReceivingOps({
           <Card className="p-5">
             <div className="flex items-start justify-between gap-4 pb-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               <div>
-                <button onClick={() => setShowGrnDetail(false)}
-                  className="mb-3 text-[11px] px-3 py-1.5 rounded-lg font-medium"
-                  style={{ background: A.gray6, color: A.label }}>
-                  返回列表
-                </button>
+                <RecoveryActions
+                  className="mb-3"
+                  actions={[
+                    { key: "list", label: "返回列表", onClick: () => setShowGrnDetail(false), kind: "list" },
+                    { key: "module", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
+                  ]}
+                />
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg font-semibold tracking-tight" style={{ color: A.label }}>{selectedGrn.grn}</h2>
                   <RecvStatusPill status={selectedGrn.status} />

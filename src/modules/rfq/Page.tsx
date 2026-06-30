@@ -6,7 +6,7 @@ import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { RFQS } from "../../data/demo-data";
 import type { RfqRecord } from "../../types/scm";
-import { A, Card, Chip, DocumentHistoryPanel, Field, inputStyle, KpiCard, SectionHeader } from "../../components/ui";
+import { A, Card, Chip, DocumentHistoryPanel, Field, inputStyle, KpiCard, RecoveryActions, SectionHeader } from "../../components/ui";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
@@ -154,7 +154,12 @@ export default function PurchasingRFQPage({
           </div>
           <div className="text-xs mt-1" style={{ color: A.sub }}>{selectedRfq.title}</div>
         </div>
-        <button onClick={returnToList} className="h-8 px-3 rounded-lg text-xs font-medium" style={{ background: A.gray6, color: A.blue }}>返回列表</button>
+        <RecoveryActions
+          actions={[
+            { key: "list", label: "返回列表", onClick: returnToList, kind: "list" },
+            { key: "module", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
+          ]}
+        />
       </div>
       <div className="grid grid-cols-4 gap-3 mb-5">
         {[
