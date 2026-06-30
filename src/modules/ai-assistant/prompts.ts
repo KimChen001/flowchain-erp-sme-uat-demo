@@ -15,6 +15,7 @@ const MODULE_PROMPTS: Record<string, string[]> = {
   srm: ["查看高风险供应商", "解释评分规则", "下一步跟进"],
   inventory: ["查看库存风险", "解释库存异常", "准备 PR 草稿"],
   procurement: ["今天采购有什么要跟？", "哪些 PO 快逾期？", "哪些 RFQ 没回复？"],
+  forecast: ["哪些 SKU 有 MRP 例外？", "MRP 计划释放有哪些需要审阅？", "这个 forecast 的 MAPE 怎么样？"],
   master_data: ["检查主数据质量", "缺少哪些默认字段？", "下一步建议"],
   "master-data": ["检查主数据质量", "缺少哪些默认字段？", "下一步建议"],
   finance: ["查看待结算项", "解释差异原因", "下一步跟进"],

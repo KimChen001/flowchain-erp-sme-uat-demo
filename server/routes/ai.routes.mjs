@@ -523,6 +523,23 @@ export async function handleAiRoute(ctx) {
       return true
     }
 
+    branchStartedAt = Date.now()
+    const planningFastPath = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
+    if (planningFastPath?.intent?.name === 'planning_status_query') {
+      const result = {
+        ...planningFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_planning_status_fast_path', summary: `AI answered ${result.intent.name} before evidence reuse`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'planning_status_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
+
     const aiReadContext = await buildAiReadContext(db, ctx)
     const readModelCache = aiReadContext.cache
 

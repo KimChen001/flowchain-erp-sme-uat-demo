@@ -127,11 +127,11 @@ function businessSnapshot(db) {
 }
 
 test('AI chat status catalog documents read-only prompt patterns', () => {
-  assert.equal(aiChatStatusCapabilityCatalog.length, 3)
+  assert.equal(aiChatStatusCapabilityCatalog.length, 4)
   assert.ok(aiChatStatusCapabilityCatalog.every((item) => item.mode === 'read'))
   assert.deepEqual(
     aiChatStatusCapabilityCatalog.map((item) => item.intent),
-    ['supplier_status_query', 'inventory_status_query', 'procurement_exception_query'],
+    ['supplier_status_query', 'inventory_status_query', 'procurement_exception_query', 'planning_status_query'],
   )
 })
 
@@ -145,6 +145,8 @@ test('AI chat detects supported read-only status intents', () => {
   assert.equal(detectAiChatStatusIntent('supplier SUP-001 risk'), 'supplier_status_query')
   assert.equal(detectAiChatStatusIntent('Show item A100 inventory status'), 'inventory_status_query')
   assert.equal(detectAiChatStatusIntent('Show overdue POs'), 'procurement_exception_query')
+  assert.equal(detectAiChatStatusIntent('哪些 SKU 有 MRP 例外？'), 'planning_status_query')
+  assert.equal(detectAiChatStatusIntent('这个 forecast 的 MAPE 怎么样？'), 'planning_status_query')
 })
 
 test('supplier status query returns supplier card, evidence, and actions', () => {
@@ -468,8 +470,51 @@ test('procurement exception query returns empty state when no issues are availab
   assert.ok(response.evidence.some((item) => item.type === 'empty_state'))
 })
 
+test('planning AI UAT prompts return deterministic Forecast/MRP evidence and stay read-only', async () => {
+  const db = createDb({
+    products: [
+      { sku: 'SKU-FG', name: 'Finished Good', category: 'FG', currentStock: 0, allocated: 0, safetyStock: 10, moq: 50, batchMultiple: 10, leadTimePeriods: 2, unit: 'pcs', supplier: 'ABC Components', unitPrice: 10 },
+      { sku: 'SKU-COMP', name: 'Component', category: 'Component', currentStock: 0, allocated: 0, safetyStock: 20, moq: 100, batchMultiple: 10, leadTimePeriods: 3, unit: 'pcs', supplier: 'ABC Components', unitPrice: 3 },
+    ],
+    salesForecasts: [
+      { sku: 'SKU-FG', monthlyDemand: [120, 140, 160, 160, 150, 145] },
+    ],
+    bom: [
+      { parent: 'SKU-FG', component: 'SKU-COMP', qtyPer: 2, scrapPct: 0.05, leadTimeOffset: 1 },
+    ],
+    forecastPlans: [
+      { id: 'FC-PLAN-001', sku: 'SKU-FG', name: 'Finished Good', method: 'holt-winters', metrics: { mape: 8.4, rmse: 12.1 } },
+    ],
+  })
+  const before = businessSnapshot(db)
+  const prompts = [
+    '哪些 SKU 有 MRP 例外？',
+    '这个 SKU 为什么 MRP 加急？',
+    'MRP 计划释放有哪些需要审阅？',
+    '这个 forecast 的 MAPE 怎么样？',
+  ]
+
+  for (const message of prompts) {
+    const route = createRouteContext({ message, moduleId: 'forecast' }, db)
+    await handleAiRoute(route.ctx)
+
+    assert.equal(route.response.status, 200, message)
+    assert.equal(route.response.payload.intent.name, 'planning_status_query', message)
+    assert.equal(route.response.payload.cards[0].type, 'planning_status_summary', message)
+    assert.equal(route.response.payload.cards[0].data.reviewBoundary, 'read_only_planning_evidence_no_pr_po_created', message)
+    assert.equal(route.response.payload.usedWeb, false, message)
+    assert.notEqual(route.response.payload.provider, 'openai', message)
+    assert.notEqual(route.response.payload.provider, 'doubao', message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'evidence'), message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'), message)
+    assert.ok(route.response.payload.evidence.some((item) => item.type === 'mrp_plan'), message)
+  }
+
+  assert.deepEqual(businessSnapshot(db), before)
+})
+
 test('unsupported AI chat prompts fall through deterministic status handler', () => {
-  const response = buildAiChatStatusResponse(createDb(), { message: 'Explain forecast assumptions' })
+  const response = buildAiChatStatusResponse(createDb(), { message: 'Explain page assumptions' })
 
   assert.equal(response, null)
 })

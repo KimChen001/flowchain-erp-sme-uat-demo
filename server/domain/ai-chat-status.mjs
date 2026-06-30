@@ -8,6 +8,7 @@ import {
   resolveContextualEntityId,
 } from './ai-active-context.mjs'
 import { buildInventoryItems, buildInventoryMovements } from './inventory-read.mjs'
+import { buildMrpPlan } from '../routes/mrp.routes.mjs'
 
 export const aiChatStatusCapabilityCatalog = Object.freeze([
   {
@@ -34,11 +35,20 @@ export const aiChatStatusCapabilityCatalog = Object.freeze([
     responseCards: ['procurement_exception_summary', 'evidence', 'recommended_actions'],
     mode: 'read',
   },
+  {
+    intent: 'planning_status_query',
+    examples: ['哪些 SKU 有 MRP 例外？', '这个 SKU 为什么 MRP 加急？', 'MRP 计划释放有哪些需要审阅？', '这个 forecast 的 MAPE 怎么样？'],
+    requiredSlots: [],
+    optionalSlots: ['sku', 'metric', 'exceptionType'],
+    responseCards: ['planning_status_summary', 'evidence', 'recommended_actions'],
+    mode: 'read',
+  },
 ])
 
 const supplierIntentPattern = /供应商|supplier|SUP-[A-Z0-9-]+/i
 const inventoryIntentPattern = /库存|inventory|stock|shortage|缺货|断货|补货|仓库|warehouse|SKU|item|物料|movement history|movements?|事务流水|库存流水/i
 const procurementIntentPattern = /采购.*(?:异常|问题|待处理|状态)|procurement|purchase\s+(?:order|orders|issues|exceptions)|po\s+(?:status|pending|overdue)|order\s+(?:status|pending|overdue)|overdue|逾期|异常|问题|待处理|pending\s+(?:procurement|pr|po)|pr\s+(?:status|pending)|grn|receiving/i
+const planningIntentPattern = /MRP|forecast|预测|计划释放|净需求|MAPE|WMAPE|RMSE|tracking signal|加急|例外|BOM/i
 
 function asArray(value) {
   return Array.isArray(value) ? value : []
@@ -264,6 +274,95 @@ function recommendedActions(actions = []) {
 
 function evidenceCard(evidence = []) {
   return { type: 'evidence', evidence }
+}
+
+function resolvePlanningRow(mrpPlan = {}, message = '') {
+  const rows = asArray(mrpPlan.rows)
+  const skuMatch = String(message || '').match(/\b[A-Z]{1,6}[-_]?[A-Z0-9]{2,}\b/i)?.[0]
+  if (skuMatch) {
+    const normalizedSku = normalizedText(skuMatch)
+    const row = rows.find((item) => [item.sku, item.name].some((value) => normalizedText(value) === normalizedSku || normalizedText(value).includes(normalizedSku)))
+    if (row) return row
+  }
+  const exception = asArray(mrpPlan.exceptions)[0]
+  if (exception) return rows.find((row) => row.sku === exception.sku) || rows[0] || null
+  return rows[0] || null
+}
+
+function latestForecastPlanFor(db = {}, row = null) {
+  const plans = asArray(db.forecastPlans)
+  if (!plans.length) return null
+  if (row?.sku) {
+    const match = plans.find((plan) => normalizedText(plan.sku) === normalizedText(row.sku))
+    if (match) return match
+  }
+  return plans[0]
+}
+
+function buildPlanningStatusResponse(db = {}, message = '', options = {}) {
+  const mrpPlan = buildMrpPlan(db, options.mrpOptions || {})
+  const row = resolvePlanningRow(mrpPlan, message)
+  const forecastPlan = latestForecastPlanFor(db, row)
+  const exceptionRows = asArray(mrpPlan.exceptions)
+  const releaseLines = asArray(row?.schedule).filter((line) => Number(line.plannedRelease || 0) > 0)
+  const urgent = row?.exception === '加急' || exceptionRows.some((item) => item.sku === row?.sku && item.type === '加急')
+  const mape = forecastPlan?.metrics?.mape ?? forecastPlan?.metrics?.MAPE ?? null
+  const evidence = [
+    { type: 'mrp_plan', id: row?.sku || 'mrp_plan', label: row?.name || 'MRP plan', summary: `${mrpPlan.summary?.exceptionCount || 0} MRP exceptions inspected across ${mrpPlan.summary?.skuCount || 0} SKUs.` },
+    forecastPlan
+      ? { type: 'forecast_plan', id: forecastPlan.id || forecastPlan.sku || row?.sku || 'forecast_plan', label: forecastPlan.name || forecastPlan.sku || row?.name, summary: `Forecast method ${forecastPlan.method || 'unknown'} with MAPE ${mape ?? 'not available'}.` }
+      : { type: 'forecast_plan', id: 'forecast_plans', summary: 'No saved forecast plan is available; MRP still uses current read model inputs.' },
+    row?.bomSources?.length
+      ? { type: 'bom_source', id: row.sku, label: 'BOM source evidence', summary: row.bomSources.map((source) => `${source.parentName || source.parent}:${source.demand}`).slice(0, 3).join(' | ') }
+      : { type: 'bom_source', id: row?.sku || 'static_bom', summary: 'No dependent BOM source was found for the selected row.' },
+  ]
+  if (row?.sourceMetadata) evidence.push({ type: 'planning_source', id: row.sku, summary: `Generated from ${row.sourceMetadata.generatedFrom}; persistence ${row.sourceMetadata.persistence}.` })
+
+  return {
+    message: row
+      ? `${row.sku} has MRP exception ${row.exception}. Planned receipt is ${Number(row.totalPlannedReceipt || 0).toLocaleString()} ${row.unit || ''}; ${urgent ? 'lead time or projected availability requires urgent review.' : 'review planned release timing before any PR/PO action.'}`
+      : 'No MRP row is available in the current planning read model.',
+    intent: {
+      name: 'planning_status_query',
+      confidence: /MRP|forecast|预测|MAPE|计划释放|例外/i.test(message) ? 0.9 : 0.76,
+      slots: {
+        sku: row?.sku || '',
+        metric: /MAPE|WMAPE|RMSE|tracking signal/i.test(message) ? 'forecast_accuracy' : '',
+        exceptionType: row?.exception || '',
+      },
+    },
+    cards: [
+      {
+        type: 'planning_status_summary',
+        title: row ? `${row.sku} Forecast/MRP read-only summary` : 'Forecast/MRP read-only summary',
+        data: {
+          sku: row?.sku || '',
+          name: row?.name || '',
+          exception: row?.exception || 'unknown',
+          exceptionCount: mrpPlan.summary?.exceptionCount || 0,
+          urgentCount: mrpPlan.summary?.urgentCount || 0,
+          plannedQty: mrpPlan.summary?.plannedQty || 0,
+          plannedAmount: mrpPlan.summary?.plannedAmount || 0,
+          totalPlannedReceipt: row?.totalPlannedReceipt || 0,
+          maxNetRequirement: row?.maxNetRequirement || 0,
+          firstShortagePeriod: row?.firstShortagePeriod || null,
+          plannedReleasePeriods: releaseLines.map((line) => line.plannedReleasePeriod).filter(Boolean).slice(0, 4),
+          forecastPlanId: forecastPlan?.id || '',
+          mape,
+          rmse: forecastPlan?.metrics?.rmse ?? null,
+          bomSourceCount: row?.bomSources?.length || 0,
+          reviewBoundary: 'read_only_planning_evidence_no_pr_po_created',
+        },
+      },
+      evidenceCard(evidence),
+      recommendedActions([
+        { label: 'Open Forecast/MRP', kind: 'deep_link', target: `/forecast?sku=${encodeURIComponent(row?.sku || '')}` },
+        { label: 'Review MRP exceptions', kind: 'deep_link', target: '/forecast?view=mrp-exceptions' },
+        { label: 'Preview PR draft before release', kind: 'deep_link', target: '/forecast?view=mrp-release-draft' },
+      ]),
+    ],
+    evidence,
+  }
 }
 
 function buildSupplierStatusResponse(db = {}, message = '', options = {}) {
@@ -568,6 +667,7 @@ function buildProcurementExceptionResponse(db = {}, message = '', options = {}) 
 export function detectAiChatStatusIntent(message = '') {
   const text = String(message || '').trim()
   if (!text) return null
+  if (planningIntentPattern.test(text)) return 'planning_status_query'
   if (supplierIntentPattern.test(text)) return 'supplier_status_query'
   if (inventoryIntentPattern.test(text)) return 'inventory_status_query'
   if (procurementIntentPattern.test(text)) return 'procurement_exception_query'
@@ -583,7 +683,9 @@ export function buildAiChatStatusResponse(db = {}, body = {}, options = {}) {
     ? buildSupplierStatusResponse(db, message, contextOptions)
     : intent === 'inventory_status_query'
       ? buildInventoryStatusResponse(db, message, contextOptions)
-      : buildProcurementExceptionResponse(db, message, contextOptions)
+      : intent === 'procurement_exception_query'
+        ? buildProcurementExceptionResponse(db, message, contextOptions)
+        : buildPlanningStatusResponse(db, message, contextOptions)
   return {
     provider: 'local_status_query',
     mode: 'read',
