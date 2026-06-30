@@ -47,6 +47,7 @@ Covered by the system harness and AI-specific tests:
 - Provider-disabled fallback is sanitized.
 - Payloads do not expose fake keys, bearer tokens, stack traces, or raw provider errors.
 - Cockpit fast path does not wait for audit persistence.
+- Read-only AI answers stay successful when DB audit persistence fails.
 
 ### Evidence / Navigation Harness
 
@@ -94,6 +95,15 @@ Covered by `server/domain/db-adapter-parity-harness.test.mjs`:
 - ActionDraft preview remains preview-only and non-mutating;
 - AuditLog records keep compatible public keys and redact sensitive metadata;
 - read adapters do not expose write-style methods.
+
+### Audit Persistence Harness
+
+Covered by `server/domain/audit-log-persistence.test.mjs`:
+
+- ActionDraft save records a best-effort DB audit event without creating business documents;
+- ActionDraft preview survives DB audit failure;
+- database-mode legacy mutation block audit omits request bodies and secrets;
+- read-only AI answers survive DB audit adapter failure.
 
 ### Test DB Seed Harness
 

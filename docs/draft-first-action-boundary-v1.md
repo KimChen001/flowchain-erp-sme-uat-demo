@@ -40,6 +40,8 @@ The preview endpoint validates a draft payload and returns a draft shape. It doe
 
 The save endpoints persist only the ActionDraft shell in database mode. JSON mode returns a demo-safe `501`. Saving a draft does not create a PR/RFQ/PO, close inventory exceptions, send supplier messages, or confirm the draft.
 
+In database mode, draft preview and draft save also attempt best-effort AuditLog events. Audit failure does not block preview or save responses, and the audit summary omits raw prompts, request bodies, secrets, and database URLs.
+
 `purchase_request_draft` now has a specialized preview helper for inventory-driven PR suggestions. It still returns preview-only draft data and does not create a real PR.
 
 `rfq_draft` and `supplier_followup_draft` also have specialized preview helpers. They return reviewable draft payloads and never create RFQs or send supplier messages.
@@ -73,6 +75,11 @@ The confirm button is visible but disabled. Real confirmation, submit, send, pos
 - Autonomous execution is not allowed.
 
 ## Audit Boundary
+
+Current database-mode draft events use:
+
+- `draft_previewed`;
+- `draft_saved`.
 
 Future confirmed actions should record audit events that include:
 

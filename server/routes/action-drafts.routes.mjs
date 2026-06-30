@@ -1,4 +1,9 @@
 import { createJsonActionDraftRepository } from '../repositories/json-action-draft-repository.mjs'
+import {
+  actionDraftPreviewAuditEntry,
+  actionDraftSavedAuditEntry,
+  recordDatabaseAuditBestEffort,
+} from '../domain/audit-policy.mjs'
 
 function actionDraftRepository(ctx) {
   return ctx.repositories?.actionDrafts || createJsonActionDraftRepository(ctx.db)
@@ -20,6 +25,7 @@ export async function handleActionDraftsRoute(ctx) {
       send(res, 400, result)
       return true
     }
+    await recordDatabaseAuditBestEffort(ctx, actionDraftPreviewAuditEntry(result))
     send(res, 200, { draft: result.draft, previewOnly: true })
     return true
   }
@@ -33,6 +39,7 @@ export async function handleActionDraftsRoute(ctx) {
     }
     try {
       const saved = await repository.persistDraft(draft)
+      await recordDatabaseAuditBestEffort(ctx, actionDraftSavedAuditEntry(saved))
       send(res, 201, {
         draft: saved,
         persisted: true,

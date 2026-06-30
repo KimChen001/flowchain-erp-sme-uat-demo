@@ -1,6 +1,6 @@
 # DB Readiness Review v1
 
-Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter. Round 31 adds the DB adapter parity harness. Round 32 makes the Master Data seed path executable and adds a Master Data DB parity command. Round 33 adds explicit ActionDraft shell persistence.
+Round 28 adds the first explicit database test and seed harness while keeping JSON mode as the default runtime. Round 29 adds the Procurement Read DB adapter. Round 30 adds the Inventory Read DB adapter. Round 31 adds the DB adapter parity harness. Round 32 makes the Master Data seed path executable and adds a Master Data DB parity command. Round 33 adds explicit ActionDraft shell persistence. Round 34 wires safe AuditLog persistence for draft, AI, and database-mode guard events.
 
 ## Current Status
 
@@ -106,10 +106,18 @@ Round 33 adds explicit ActionDraft save endpoints:
 
 They persist only the ActionDraft shell in database mode. JSON mode returns a stable `501`. Preview remains non-mutating, and confirmation remains future work.
 
+## AuditLog Persistence
+
+Round 34 makes AuditLog persistence end-to-end for safe database-mode events:
+
+- ActionDraft preview and save attempt `draft_previewed` and `draft_saved`.
+- Database-mode legacy mutation blocks attempt `legacy_mutation_blocked`.
+- AI best-effort events can use the DB AuditLog adapter without falling back to JSON writes in database mode.
+
+Audit writes are best-effort for these flows. Failures do not break read-only AI answers, draft preview, or the legacy mutation guard response. Audit metadata intentionally avoids raw request bodies, raw prompts, bearer tokens, API keys, stack traces, and database URLs.
+
 ## Remaining Gaps
 
-- ActionDraft persistence end-to-end.
-- AuditLog persistence end-to-end.
 - Procurement and inventory live DB parity datasets.
 - CI database service strategy.
 - Aliyun staging database strategy.

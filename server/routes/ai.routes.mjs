@@ -293,9 +293,23 @@ function safeAuditText(value = '', fallback = 'ai') {
   return text.slice(0, 180)
 }
 
-async function recordAiEventBestEffort({ db, event, writeDb, action, summary, entity, persist = true }) {
+async function recordAiEventBestEffort({ db, event, writeDb, repositories, action, summary, entity, persist = true }) {
   const auditStartedAt = Date.now()
+  const auditRepository = repositories?.auditLog
   try {
+    if ((auditRepository?.mode === 'database' || auditRepository?.adapter === 'db-audit-log-v1') &&
+      typeof auditRepository.recordAiEventBestEffort === 'function') {
+      const result = await auditRepository.recordAiEventBestEffort({
+        module: 'ai',
+        action: safeAuditText(action),
+        entity: { type: 'ai', id: safeAuditText(entity) },
+        summary: safeAuditText(summary),
+        metadata: {
+          persistedVia: 'auditLogRepository',
+        },
+      })
+      return { ...result, auditMs: Date.now() - auditStartedAt }
+    }
     if (typeof event === 'function') {
       event(db, safeAuditText(action), safeAuditText(summary), safeAuditText(entity))
     }
@@ -461,7 +475,7 @@ function providerFailureResponse({ body, db, ctx }) {
 }
 
 export async function handleAiRoute(ctx) {
-  const { req, res, url, db, send, readBody, writeDb, event, ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs } = ctx
+  const { req, res, url, db, send, readBody, writeDb, event, repositories, ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs } = ctx
 
   if (req.method === 'GET' && url.pathname === '/api/ai/tools') {
     send(res, 200, { tools: getAiToolRegistry() })
@@ -485,7 +499,7 @@ export async function handleAiRoute(ctx) {
         externalMs: 0,
         modelMs: 0,
       }
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_cockpit_fast_path', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name, persist: false })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_cockpit_fast_path', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name, persist: false })
       logAiTiming({ startedAt, branchStartedAt, branch: 'cockpit_fast_path', body, result })
       send(res, 200, result)
       return true
@@ -501,7 +515,7 @@ export async function handleAiRoute(ctx) {
         externalMs: 0,
         modelMs: 0,
       }
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_evidence_reuse_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_evidence_reuse_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'evidence_reuse', body, result })
       send(res, 200, result)
       return true
@@ -517,7 +531,7 @@ export async function handleAiRoute(ctx) {
         externalMs: 0,
         modelMs: 0,
       }
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_supplier_operational_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_supplier_operational_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'supplier_operational', body, result })
       send(res, 200, result)
       return true
@@ -534,7 +548,7 @@ export async function handleAiRoute(ctx) {
         externalMs: 0,
         modelMs: 0,
       }
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_chat_status_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_chat_status_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'status_query', body, result })
       send(res, 200, result)
       return true
@@ -550,7 +564,7 @@ export async function handleAiRoute(ctx) {
         externalMs: 0,
         modelMs: 0,
       }
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_procurement_operational_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_procurement_operational_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'procurement_operational', body, result })
       send(res, 200, result)
       return true
@@ -566,7 +580,7 @@ export async function handleAiRoute(ctx) {
         externalMs: 0,
         modelMs: 0,
       }
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_rfq_operational_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_rfq_operational_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'rfq_operational', body, result })
       send(res, 200, result)
       return true
@@ -581,7 +595,7 @@ export async function handleAiRoute(ctx) {
         externalMs: 0,
         modelMs: 0,
       }
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_chat_status_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_chat_status_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'deferred_procurement_exception', body, result })
       send(res, 200, result)
       return true
@@ -600,7 +614,7 @@ export async function handleAiRoute(ctx) {
         modelMs: 0,
       }
       const missingCount = result.cards.find((card) => card.type === 'missing_fields')?.fields?.length || 0
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_draft_prepared', summary: `AI prepared ${result.intent.name} with ${missingCount} missing fields`, entity: result.intent.name })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_draft_prepared', summary: `AI prepared ${result.intent.name} with ${missingCount} missing fields`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'draft_preparation', body, result })
       send(res, 200, result)
       return true
@@ -617,7 +631,7 @@ export async function handleAiRoute(ctx) {
         modelMs: 0,
       }
       result.confidence = aiConfidence(body, db, result, ctx)
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_chat', summary: `AI answered ${body.moduleId || 'unknown'} question via ${result.provider}`, entity: body.moduleId || 'ai' })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_chat', summary: `AI answered ${body.moduleId || 'unknown'} question via ${result.provider}`, entity: body.moduleId || 'ai' })
       logAiTiming({ startedAt, branchStartedAt, branch: 'local_workbench', body, result })
       return send(res, 200, result)
     }
@@ -635,7 +649,7 @@ export async function handleAiRoute(ctx) {
         modelMs: 0,
       }
       result.confidence = aiConfidence(body, db, result, ctx)
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_chat', summary: `AI answered ${body.moduleId || 'unknown'} question via ${result.provider}`, entity: body.moduleId || 'ai' })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_chat', summary: `AI answered ${body.moduleId || 'unknown'} question via ${result.provider}`, entity: body.moduleId || 'ai' })
       logAiTiming({ startedAt, branchStartedAt, branch: 'market_data', body, result })
       return send(res, 200, result)
     }
@@ -644,7 +658,7 @@ export async function handleAiRoute(ctx) {
     if (!providerSafety.enabled) {
       branchStartedAt = Date.now()
       const result = providerDisabledResponse({ startedAt, branchStartedAt, body })
-      void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_chat_provider_blocked', summary: `AI provider fallback blocked for ${body.moduleId || 'unknown'}`, entity: body.moduleId || 'ai' })
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_chat_provider_blocked', summary: `AI provider fallback blocked for ${body.moduleId || 'unknown'}`, entity: body.moduleId || 'ai' })
       logAiTiming({ startedAt, branchStartedAt, branch: 'provider_disabled', body, result })
       return send(res, 200, result)
     }
@@ -674,7 +688,7 @@ export async function handleAiRoute(ctx) {
       modelMs,
     }
     result.confidence = aiConfidence(body, db, result, ctx)
-    void recordAiEventBestEffort({ db, event, writeDb, action: 'ai_chat', summary: `AI answered ${body.moduleId || 'unknown'} question via ${result.provider}`, entity: body.moduleId || 'ai' })
+    void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_chat', summary: `AI answered ${body.moduleId || 'unknown'} question via ${result.provider}`, entity: body.moduleId || 'ai' })
     logAiTiming({ startedAt, branchStartedAt, branch: 'configured_ai', body, result })
     return send(res, 200, result)
   }

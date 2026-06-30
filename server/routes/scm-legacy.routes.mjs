@@ -9,6 +9,10 @@ import { createRepositoryRegistry, getPersistenceMode } from '../repositories/ad
 import { contentTypeFor, readBody, send, sendText } from '../utils/http.mjs'
 import { sendInternalServerError } from '../utils/safe-errors.mjs'
 import {
+  legacyMutationBlockedAuditEntry,
+  recordDatabaseAuditBestEffort,
+} from '../domain/audit-policy.mjs'
+import {
   isDatabaseModeWriteBlocked,
   sendDatabaseModeMutationBlocked,
 } from '../domain/route-classification.mjs'
@@ -866,6 +870,7 @@ export function createScmServer() {
     const url = new URL(req.url || '/', `http://localhost:${port}`)
     const db = await readDb()
     const persistenceMode = getPersistenceMode(process.env)
+    const repositories = createRepositoryRegistry({ db, env: process.env })
 
     if (req.method === 'GET' && url.pathname === '/api/health') {
       return send(res, 200, {
@@ -880,6 +885,10 @@ export function createScmServer() {
     }
 
     if (isDatabaseModeWriteBlocked({ persistenceMode, method: req.method, pathname: url.pathname })) {
+      await recordDatabaseAuditBestEffort({ repositories }, legacyMutationBlockedAuditEntry({
+        method: req.method,
+        pathname: url.pathname,
+      }))
       return sendDatabaseModeMutationBlocked(res, send)
     }
 
@@ -960,7 +969,6 @@ export function createScmServer() {
       return send(res, 201, plan)
     }
 
-    const repositories = createRepositoryRegistry({ db, env: process.env })
     const routeWriteDb = persistenceMode === 'database' ? undefined : writeDb
     const routeContext = {
       req, res, url, db, send, readBody, writeDb: routeWriteDb, event, todayLabel,

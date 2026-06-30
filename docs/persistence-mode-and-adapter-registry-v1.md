@@ -87,6 +87,17 @@ Round 33 adds explicit ActionDraft shell persistence:
 - JSON mode returns a demo-safe `501`.
 - Saving a draft does not create PR/RFQ/PO records, send supplier messages, confirm drafts, or mutate inventory.
 
+## AuditLog Persistence
+
+Round 34 wires safe system events to the DB AuditLog adapter in database mode:
+
+- `draft_previewed`
+- `draft_saved`
+- `legacy_mutation_blocked`
+- AI best-effort events such as `ai_draft_prepared` and provider-blocked fallbacks
+
+Audit writes are best-effort for read-only and draft flows. A missing `DATABASE_URL` or audit write failure does not break AI read answers, draft preview, draft save responses after the draft is persisted, or the database-mode mutation guard response. Audit payloads use route and draft summaries rather than raw request bodies, prompts, bearer tokens, API keys, stack traces, or database URLs.
+
 ## Relation to contract tests
 
 The Round 16 JSON adapter contract tests remain the behavioral baseline. Future database adapters should satisfy the same contract categories before route behavior is migrated behind the registry.
