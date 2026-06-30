@@ -13,7 +13,8 @@ export async function handleAuditLogRoute(ctx) {
     const entityId = url.searchParams.get('entityId') || ''
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') || 100)))
     const entries = await repository.listAuditEntries({ entityType, entityId, limit })
-    return send(res, 200, entries)
+    send(res, 200, entries)
+    return true
   }
 
   return false
