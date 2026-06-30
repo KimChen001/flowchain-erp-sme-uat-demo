@@ -1,23 +1,6 @@
-import {
-  buildInventoryExceptions,
-  buildInventoryItems,
-  buildInventoryLots,
-  buildInventoryMovements,
-  buildInventorySerials,
-  buildInventorySummary,
-  filterInventoryRows,
-  getInventoryItemBySku,
-} from '../domain/inventory-read.mjs'
-import {
-  buildProcurementDocumentLinks,
-  buildProcurementDocuments,
-  buildProcurementFollowups,
-  buildProcurementSummary,
-  filterProcurementRows,
-  getProcurementDocument,
-  normalizeProcurementDocumentType,
-} from '../domain/procurement-read-model.mjs'
 import { createJsonMasterDataRepository } from './json-master-data-repository.mjs'
+import { createJsonInventoryReadRepository } from './json-inventory-read-repository.mjs'
+import { createJsonProcurementReadRepository } from './json-procurement-read-repository.mjs'
 import { createJsonActionDraftRepository } from './json-action-draft-repository.mjs'
 import { createAuditLogRepository } from './audit-log-repository.mjs'
 
@@ -37,31 +20,6 @@ export function getPersistenceMode(env = process.env) {
   return PERSISTENCE_MODES.json
 }
 
-function createInventoryReadRepository(db = {}) {
-  return {
-    listItems: (filters = {}) => filterInventoryRows(buildInventoryItems(db), filters),
-    listInventoryItems: (filters = {}) => filterInventoryRows(buildInventoryItems(db), filters),
-    getItem: (idOrSku) => getInventoryItemBySku(db, idOrSku),
-    getInventoryItem: (idOrSku) => getInventoryItemBySku(db, idOrSku),
-    listLots: (filters = {}) => filterInventoryRows(buildInventoryLots(db), filters),
-    listSerials: (filters = {}) => filterInventoryRows(buildInventorySerials(db), filters),
-    listMovements: (filters = {}) => filterInventoryRows(buildInventoryMovements(db), filters),
-    listExceptions: (filters = {}) => filterInventoryRows(buildInventoryExceptions(db), filters),
-    getSummary: () => buildInventorySummary(db),
-  }
-}
-
-function createProcurementReadRepository(db = {}) {
-  return {
-    listDocuments: (filters = {}) => filterProcurementRows(buildProcurementDocuments(db), filters),
-    getDocument: (type, id) => getProcurementDocument(db, type, id),
-    listLinks: (filters = {}) => filterProcurementRows(buildProcurementDocumentLinks(db), filters),
-    listFollowups: (filters = {}) => filterProcurementRows(buildProcurementFollowups(db), filters),
-    getSummary: () => buildProcurementSummary(db),
-    normalizeDocumentType: (type) => normalizeProcurementDocumentType(type),
-  }
-}
-
 function createAiConversationRepository() {
   return {
     implemented: false,
@@ -74,8 +32,8 @@ export function createJsonRepositoryRegistry({ db = {} } = {}) {
   return {
     mode: PERSISTENCE_MODES.json,
     masterData: createJsonMasterDataRepository(db),
-    inventoryRead: createInventoryReadRepository(db),
-    procurementRead: createProcurementReadRepository(db),
+    inventoryRead: createJsonInventoryReadRepository(db),
+    procurementRead: createJsonProcurementReadRepository(db),
     actionDrafts: createJsonActionDraftRepository(db),
     auditLog: createAuditLogRepository(db),
     aiConversation: createAiConversationRepository(),

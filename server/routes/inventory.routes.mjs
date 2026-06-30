@@ -1,13 +1,4 @@
-import {
-  buildInventoryExceptions,
-  buildInventoryItems,
-  buildInventoryLots,
-  buildInventoryMovements,
-  buildInventorySerials,
-  buildInventorySummary,
-  filterInventoryRows,
-  getInventoryItemBySku,
-} from '../domain/inventory-read.mjs'
+import { createJsonInventoryReadRepository } from '../repositories/json-inventory-read-repository.mjs'
 
 function query(url) {
   return {
@@ -19,17 +10,22 @@ function query(url) {
   }
 }
 
+function inventoryReadRepository(ctx) {
+  return ctx.repositories?.inventoryRead || createJsonInventoryReadRepository(ctx.db)
+}
+
 export async function handleInventoryRoute(ctx) {
-  const { req, res, url, db, send } = ctx
+  const { req, res, url, send } = ctx
+  const repository = inventoryReadRepository(ctx)
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/items') {
-    send(res, 200, { items: filterInventoryRows(buildInventoryItems(db), query(url)) })
+    send(res, 200, { items: repository.listItems(query(url)) })
     return true
   }
 
   const itemMatch = url.pathname.match(/^\/api\/inventory\/items\/([^/]+)$/)
   if (req.method === 'GET' && itemMatch) {
-    const item = getInventoryItemBySku(db, itemMatch[1])
+    const item = repository.getItem(itemMatch[1])
     if (!item) {
       send(res, 404, { error: 'Inventory item not found' })
       return true
@@ -39,27 +35,27 @@ export async function handleInventoryRoute(ctx) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/lots') {
-    send(res, 200, { lots: filterInventoryRows(buildInventoryLots(db), query(url)) })
+    send(res, 200, { lots: repository.listLots(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/serials') {
-    send(res, 200, { serials: filterInventoryRows(buildInventorySerials(db), query(url)) })
+    send(res, 200, { serials: repository.listSerials(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/movements') {
-    send(res, 200, { movements: filterInventoryRows(buildInventoryMovements(db), query(url)) })
+    send(res, 200, { movements: repository.listMovements(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/exceptions') {
-    send(res, 200, { exceptions: filterInventoryRows(buildInventoryExceptions(db), query(url)) })
+    send(res, 200, { exceptions: repository.listExceptions(query(url)) })
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/summary') {
-    send(res, 200, { summary: buildInventorySummary(db) })
+    send(res, 200, { summary: repository.getSummary() })
     return true
   }
 
