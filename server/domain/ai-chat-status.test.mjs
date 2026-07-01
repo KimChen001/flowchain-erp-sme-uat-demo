@@ -247,13 +247,15 @@ test('item-specific inventory query returns missing quantity evidence when balan
   assert.equal(route.response.payload.cards[0].data.sku, 'A100')
   assert.equal(route.response.payload.cards[0].data.availableQuantity, null)
   assert.equal(route.response.payload.cards[0].data.riskLevel, 'unknown')
-  assert.equal(route.response.payload.cards[0].data.riskReason, 'Current data does not expose a safe stock balance.')
+  assert.equal(route.response.payload.cards[0].data.riskReason, '当前数据缺少可用库存余额字段，因此无法确认 SKU 级库存余额风险；但可以基于库存事务、MRP 例外和主数据完整性给出观察项。')
+  assert.match(route.response.payload.message, /当前数据缺少可用库存余额字段/)
   assert.ok(route.response.payload.evidence.some((item) => item.type === 'inventory_item' && item.id === 'A100'))
   assert.ok(route.response.payload.evidence.some((item) => item.type === 'missing_quantity_evidence'))
   assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'))
   const actions = route.response.payload.cards.find((card) => card.type === 'recommended_actions').actions
   assert.ok(actions.some((action) => action.target === '/inventory?sku=A100'))
   assert.ok(actions.some((action) => action.target === '/inventory?view=movements&sku=A100'))
+  assert.ok(actions.every((action) => !/^https?:\/\//i.test(action.target || '')))
   assert.deepEqual(businessSnapshot(db), before)
 })
 
@@ -297,7 +299,7 @@ test('item-specific inventory query marks zero quantity as high risk', () => {
   assert.equal(response.cards[0].data.sku, 'B200')
   assert.equal(response.cards[0].data.availableQuantity, 0)
   assert.equal(response.cards[0].data.riskLevel, 'high')
-  assert.equal(response.cards[0].data.riskReason, 'Available quantity is zero or below.')
+  assert.equal(response.cards[0].data.riskReason, '可用库存为 0 或低于 0，需要优先复核补货。')
 })
 
 test('item-specific inventory query marks quantity below MOQ as medium risk', () => {
@@ -308,7 +310,7 @@ test('item-specific inventory query marks quantity below MOQ as medium risk', ()
   assert.equal(response.intent.name, 'inventory_status_query')
   assert.equal(response.cards[0].data.availableQuantity, 20)
   assert.equal(response.cards[0].data.riskLevel, 'medium')
-  assert.equal(response.cards[0].data.riskReason, 'Available quantity is below MOQ.')
+  assert.equal(response.cards[0].data.riskReason, '可用库存低于 MOQ/补货批量口径，需要关注补货节奏。')
 })
 
 test('item-specific inventory query marks quantity at or above MOQ as low risk', () => {
@@ -319,7 +321,7 @@ test('item-specific inventory query marks quantity at or above MOQ as low risk',
   assert.equal(response.intent.name, 'inventory_status_query')
   assert.equal(response.cards[0].data.availableQuantity, 50)
   assert.equal(response.cards[0].data.riskLevel, 'low')
-  assert.equal(response.cards[0].data.riskReason, 'Available quantity is at or above MOQ.')
+  assert.equal(response.cards[0].data.riskReason, '可用库存不低于 MOQ/补货批量口径，余额风险较低。')
 })
 
 test('general inventory risk query returns inventory risk summary', () => {
@@ -328,10 +330,12 @@ test('general inventory risk query returns inventory risk summary', () => {
   assert.equal(response.intent.name, 'inventory_status_query')
   assert.equal(response.cards[0].type, 'inventory_risk_summary')
   assert.equal(response.cards[0].data.riskItemCount, 1)
+  assert.equal(response.cards[0].title, '库存风险摘要')
+  assert.match(response.message, /库存风险信号|缺少可用库存余额字段/)
   assert.ok(response.cards.some((card) => card.type === 'evidence'))
 })
 
-test('inventory AI UAT prompts return deterministic evidence actions and stay read-only', async () => {
+test('inventory AI UAT prompts return localized deterministic evidence actions and stay read-only', async () => {
   const db = createDb()
   const before = businessSnapshot(db)
   const prompts = [
@@ -339,6 +343,10 @@ test('inventory AI UAT prompts return deterministic evidence actions and stay re
     ['A100 movement history', 'inventory_status'],
     ['今天库存有什么风险？', 'inventory_risk_summary', 'inventory_status'],
     ['inventory exceptions', 'inventory_risk_summary', 'inventory_status'],
+    ['查看库存风险', 'inventory_risk_summary', 'inventory_status'],
+    ['哪些库存项目需要关注？', 'inventory_risk_summary', 'inventory_status'],
+    ['解释库存异常', 'inventory_risk_summary', 'inventory_status'],
+    ['哪些 SKU 低于安全库存？', 'inventory_risk_summary', 'inventory_status'],
   ]
 
   for (const [message, ...cardTypes] of prompts) {
@@ -351,8 +359,11 @@ test('inventory AI UAT prompts return deterministic evidence actions and stay re
     assert.equal(route.response.payload.usedWeb, false, message)
     assert.notEqual(route.response.payload.provider, 'openai', message)
     assert.notEqual(route.response.payload.provider, 'doubao', message)
+    assert.doesNotMatch(route.response.payload.message || route.response.payload.content || '', /\bitems show\b|\bNo item-level\b|\bavailable quantity\b/i, message)
     assert.ok(route.response.payload.cards.some((card) => card.type === 'evidence'), message)
     assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'), message)
+    const actions = route.response.payload.cards.find((card) => card.type === 'recommended_actions').actions
+    assert.ok(actions.every((action) => !/^https?:\/\//i.test(action.target || '')), message)
   }
 
   assert.deepEqual(businessSnapshot(db), before)

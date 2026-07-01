@@ -414,6 +414,8 @@ function AiResponseCard({
             ["有库存证据", data.itemsWithQuantityEvidence],
             ["风险物料", data.riskItemCount],
             ["库存流水", data.movementCount],
+            ["余额证据", data.stockBalanceEvidence],
+            ["证据缺口", data.balanceGapExplanation],
           ]} />
           <MiniList
             items={arrayValue(data.topRiskItems).map((item) => {
@@ -423,11 +425,62 @@ function AiResponseCard({
                 reason: [
                   hasValue(row.availableQuantity) ? `可用 ${textValue(row.availableQuantity)}` : "",
                   row.riskLevel,
+                  row.riskReason,
                 ].filter(hasValue).map(textValue).join(" · "),
               };
             })}
             limit={3}
           />
+        </CardShell>
+      );
+    case "inventory_exception_summary":
+      return (
+        <CardShell title={card.title || "库存异常摘要"}>
+          <KeyValueGrid fields={[
+            ["异常数", data.exceptionCount],
+            ["未关闭", data.openExceptionCount],
+            ["高风险", data.highRiskCount],
+            ["影响数量", data.quantityImpact],
+          ]} />
+          <MiniList items={arrayValue(data.topExceptions)} limit={3} />
+        </CardShell>
+      );
+    case "inventory_movement_summary":
+      return (
+        <CardShell title={card.title || "库存流水摘要"}>
+          <KeyValueGrid fields={[
+            ["流水数", data.movementCount],
+            ["入库", data.inboundCount],
+            ["出库", data.outboundCount],
+            ["调整", data.adjustmentCount],
+            ["净变动", data.netMovement],
+          ]} />
+          <MiniList items={arrayValue(data.topMovements)} limit={3} />
+        </CardShell>
+      );
+    case "inventory_replenishment_summary":
+      return (
+        <CardShell title={card.title || "补货观察摘要"}>
+          <KeyValueGrid fields={[
+            ["建议数", data.replenishmentCount],
+            ["待审阅", data.reviewCount],
+            ["预估数量", data.plannedQuantity],
+            ["预估金额", data.plannedAmount],
+            ["边界", data.reviewBoundary],
+          ]} />
+          <MiniList items={arrayValue(data.topSuggestions)} limit={3} />
+        </CardShell>
+      );
+    case "stock_balance_gap_summary":
+      return (
+        <CardShell title={card.title || "库存余额证据缺口"}>
+          <KeyValueGrid fields={[
+            ["物料数", data.itemCount],
+            ["缺余额证据", data.missingBalanceCount],
+            ["可用字段", data.availableFields],
+            ["限制", data.limitation],
+          ]} />
+          <MiniList items={arrayValue(data.topItems)} limit={3} />
         </CardShell>
       );
     case "planning_status_summary":

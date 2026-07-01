@@ -144,6 +144,26 @@ test('PR prompt with SKU and quantity returns reviewable pr_draft', async () => 
   assert.deepEqual(businessSnapshot(db), before)
 })
 
+test('Chinese inventory PR draft prompt remains ActionDraft preview only', async () => {
+  const db = createDb()
+  const before = businessSnapshot(db)
+  const route = createRouteContext({ moduleId: 'inventory', message: '准备 PR 草稿 A100 50 明天' }, db)
+  const handled = await handleAiRoute(route.ctx)
+
+  assert.ok(handled)
+  assert.equal(route.response.status, 200)
+  assert.equal(route.response.payload.intent.name, 'prepare_purchase_request_draft')
+  assert.equal(route.response.payload.mode, 'draft_preparation')
+  assert.equal(route.response.payload.usedWeb, false)
+  assert.equal(route.response.payload.externalMs, 0)
+  assert.notEqual(route.response.payload.provider, 'openai')
+  assert.notEqual(route.response.payload.provider, 'doubao')
+  assert.equal(route.response.payload.cards[0].type, 'pr_draft')
+  assert.equal(route.response.payload.cards[0].reviewRequired, true)
+  assert.equal(route.response.payload.cards[0].data.documentStatus, 'draft')
+  assert.deepEqual(businessSnapshot(db), before)
+})
+
 test('PR prompt with item keyword and quantity matches item master and infers preferred supplier', () => {
   const response = buildAiDraftPreparationResponse(
     createDb(),

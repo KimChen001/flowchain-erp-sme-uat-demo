@@ -78,6 +78,9 @@ const deterministicReturnedCardTypes = Object.freeze([
   'empty_state',
   'evidence',
   'inventory_risk_summary',
+  'inventory_exception_summary',
+  'inventory_movement_summary',
+  'inventory_replenishment_summary',
   'inventory_status',
   'missing_fields',
   'planning_status_summary',
@@ -104,6 +107,7 @@ const deterministicReturnedCardTypes = Object.freeze([
   'supplier_rfq_participation',
   'supplier_rfq_summary',
   'supplier_status',
+  'stock_balance_gap_summary',
 ])
 
 function createDb() {

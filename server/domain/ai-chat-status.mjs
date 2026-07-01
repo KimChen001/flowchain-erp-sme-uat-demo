@@ -84,6 +84,15 @@ function tokenMatch(message, value) {
   return tokens.some((token) => normalizedText(message).includes(token))
 }
 
+function inventoryRiskLevelLabel(value = '') {
+  const level = String(value || '').toLowerCase()
+  if (level === 'high') return '高'
+  if (level === 'medium') return '中'
+  if (level === 'low') return '低'
+  if (level === 'unknown') return '待确认'
+  return String(value || '')
+}
+
 function isTerminalStatus(status = '') {
   const normalized = String(status || '').trim().toLowerCase().replace(/\s+/g, '_')
   return new Set([
@@ -463,13 +472,13 @@ function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
 
   if (matches.length > 1) {
     return {
-      message: 'I found more than one item match. Please provide an item sku or item id.',
+      message: '找到多个可能匹配的物料，请提供更明确的 SKU 或物料 ID 后再查看库存风险。',
       intent: { ...intent, confidence: 0.62, slots: { item: 'ambiguous' } },
       cards: [
         { type: 'ambiguous_match', matches: matches.slice(0, 5).map((item) => ({ itemId: item.id, sku: item.sku, name: item.name })) },
-        recommendedActions([{ label: 'View item master', kind: 'deep_link', target: '/inventory?view=items' }]),
+        recommendedActions([{ label: '查看物料主数据', kind: 'deep_link', target: '/inventory?view=items' }]),
       ],
-      evidence: [{ type: 'item_master', id: '', summary: `${matches.length} item master records matched.` }],
+      evidence: [{ type: 'item_master', id: '', summary: `匹配到 ${matches.length} 条物料主数据。` }],
     }
   }
 
@@ -487,8 +496,8 @@ function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
           : 'low'
       : 'unknown'
     const riskReason = hasQuantity
-      ? (quantity <= 0 ? 'Available quantity is zero or below.' : quantity < item.moq ? 'Available quantity is below MOQ.' : 'Available quantity is at or above MOQ.')
-      : 'Current data does not expose a safe stock balance.'
+      ? (quantity <= 0 ? '可用库存为 0 或低于 0，需要优先复核补货。' : quantity < item.moq ? '可用库存低于 MOQ/补货批量口径，需要关注补货节奏。' : '可用库存不低于 MOQ/补货批量口径，余额风险较低。')
+      : '当前数据缺少可用库存余额字段，因此无法确认 SKU 级库存余额风险；但可以基于库存事务、MRP 例外和主数据完整性给出观察项。'
     const warehouse = warehouses.find((record) => record.id === item.defaultWarehouseId)
     const data = {
       itemId: item.id,
@@ -507,29 +516,29 @@ function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
     }
     const inventoryEvidenceId = item.sku || item.id
     const evidence = [
-      { type: 'inventory_item', id: inventoryEvidenceId, label: item.name, summary: 'Matched inventory item for SKU focus.' },
-      { type: 'item_master', id: item.id, summary: 'Matched item from Master Data.' },
+      { type: 'inventory_item', id: inventoryEvidenceId, label: item.name, summary: '已匹配库存物料用于 SKU 聚焦。' },
+      { type: 'item_master', id: item.id, summary: '已匹配物料主数据。' },
       warehouse
-        ? { type: 'warehouse_reference', id: warehouse.id, summary: `Warehouse source type is ${warehouse.sourceType}.` }
-        : { type: 'warehouse_reference', id: item.defaultWarehouseId, summary: 'Warehouse reference was not found in Master Data.' },
+        ? { type: 'warehouse_reference', id: warehouse.id, summary: `默认仓库来源：${warehouse.sourceType}。` }
+        : { type: 'warehouse_reference', id: item.defaultWarehouseId, summary: '主数据中未找到默认仓库引用。' },
     ]
     const contextEvidence = activeContextEvidence(context, 'item')
     if (contextEvidence) evidence.push(contextEvidence)
-    if (movements.length) evidence.push({ type: 'inventory_movement', id: movements[0].id || movements[0].movementId || '', summary: `${movements.length} related inventory movements found; observed delta ${movementDelta}.` })
-    if (!hasQuantity) evidence.push({ type: 'missing_quantity_evidence', id: item.id, summary: 'No safe current stock balance field is available.' })
+    if (movements.length) evidence.push({ type: 'inventory_movement', id: movements[0].id || movements[0].movementId || '', summary: `找到 ${movements.length} 条相关库存流水，观察净变动 ${movementDelta}。` })
+    if (!hasQuantity) evidence.push({ type: 'missing_quantity_evidence', id: item.id, summary: '当前数据缺少可用库存余额字段。' })
 
     return {
       message: hasQuantity
-        ? `${item.sku || item.name} has available quantity ${quantity} ${item.baseUom}.`
-        : `${item.sku || item.name} is available in item master, but current stock balance is not available from the current data.`,
+        ? `${item.sku || item.name} 当前可用库存为 ${quantity} ${item.baseUom || ''}，库存余额风险为${inventoryRiskLevelLabel(riskLevel)}。${riskReason}`
+        : `${item.sku || item.name} 已在物料主数据中匹配。当前数据缺少可用库存余额字段，因此无法确认 SKU 级库存余额风险；但可以基于库存事务、MRP 例外和主数据完整性给出观察项。`,
       intent: { ...intent, slots: { item: context?.entityId || item.sku || item.id } },
       cards: [
         { type: 'inventory_status', title: item.sku || item.name, data },
         evidenceCard(evidence),
         recommendedActions([
-          { label: 'Open inventory SKU', kind: 'deep_link', target: `/inventory?sku=${encodeURIComponent(inventoryEvidenceId)}` },
-          { label: 'Review inventory movements', kind: 'deep_link', target: `/inventory?view=movements&sku=${encodeURIComponent(inventoryEvidenceId)}` },
-          { label: 'Review procurement options', kind: 'deep_link', target: `/procurement?view=options&itemId=${encodeURIComponent(item.id)}` },
+          { label: '打开库存 SKU', kind: 'deep_link', target: `/inventory?sku=${encodeURIComponent(inventoryEvidenceId)}` },
+          { label: '查看库存流水', kind: 'deep_link', target: `/inventory?view=movements&sku=${encodeURIComponent(inventoryEvidenceId)}` },
+          { label: '查看补货选项', kind: 'deep_link', target: `/procurement?view=options&itemId=${encodeURIComponent(item.id)}` },
         ]),
       ],
       evidence,
@@ -540,22 +549,22 @@ function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
   const quantityItems = items.filter((item) => quantityForItem(db, item) !== null)
   const riskItems = quantityItems.filter((item) => quantityForItem(db, item) <= 0 || quantityForItem(db, item) < item.moq)
   const evidence = [
-    { type: 'item_master', id: 'items', summary: `${items.length} item master records available.` },
+    { type: 'item_master', id: 'items', summary: `当前有 ${items.length} 条物料主数据可用于库存风险观察。` },
     movementCount
-      ? { type: 'inventory_movement', id: 'inventory_movements', summary: `${movementCount} inventory movement records available.` }
-      : { type: 'missing_quantity_evidence', id: 'inventory_balance', summary: 'No inventory movement or balance evidence is available.' },
+      ? { type: 'inventory_movement', id: 'inventory_movements', summary: `当前有 ${movementCount} 条库存流水可用于观察事务风险。` }
+      : { type: 'missing_quantity_evidence', id: 'inventory_balance', summary: '当前缺少库存流水或库存余额证据。' },
   ]
-  if (!quantityItems.length) evidence.push({ type: 'missing_quantity_evidence', id: 'stock_balance', summary: 'No safe current stock balance fields were found on item records.' })
+  if (!quantityItems.length) evidence.push({ type: 'missing_quantity_evidence', id: 'stock_balance', summary: '物料记录中未找到安全的当前库存余额字段。' })
 
   return {
     message: riskItems.length
-      ? `${riskItems.length} items show conservative inventory risk signals.`
-      : 'No item-level stock balance risk can be confirmed from the current data.',
+      ? `当前有 ${riskItems.length} 个物料显示保守库存风险信号；请先区分已确认库存余额风险、库存事务风险和 MRP/计划风险，再决定是否准备补货草稿。`
+      : '当前数据缺少可用库存余额字段，因此无法确认 SKU 级库存余额风险；但可以基于库存事务、MRP 例外和主数据完整性给出观察项。',
     intent,
     cards: [
       {
         type: 'inventory_risk_summary',
-        title: 'Inventory risk summary',
+        title: '库存风险摘要',
         data: {
           itemCount: items.length,
           itemsWithQuantityEvidence: quantityItems.length,
@@ -567,14 +576,19 @@ function buildInventoryStatusResponse(db = {}, message = '', options = {}) {
             name: item.name,
             availableQuantity: quantityForItem(db, item),
             riskLevel: quantityForItem(db, item) <= 0 ? 'high' : 'medium',
+            riskReason: quantityForItem(db, item) <= 0 ? '可用库存为 0 或低于 0。' : '可用库存低于 MOQ/补货批量口径。',
           })),
+          stockBalanceEvidence: quantityItems.length ? 'available' : 'missing',
+          balanceGapExplanation: quantityItems.length
+            ? ''
+            : '当前数据缺少可用库存余额字段，因此无法确认 SKU 级库存余额风险；但可以基于库存事务、MRP 例外和主数据完整性给出观察项。',
         },
       },
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'View item master', kind: 'deep_link', target: '/inventory?view=items' },
-        { label: 'Review inventory movements', kind: 'deep_link', target: '/inventory?view=movements' },
-        { label: 'Review procurement options', kind: 'deep_link', target: '/procurement?view=options' },
+        { label: '查看物料主数据', kind: 'deep_link', target: '/inventory?view=items' },
+        { label: '查看库存流水', kind: 'deep_link', target: '/inventory?view=movements' },
+        { label: '查看补货选项', kind: 'deep_link', target: '/procurement?view=options' },
       ]),
     ],
     evidence,
@@ -676,6 +690,7 @@ function buildProcurementExceptionResponse(db = {}, message = '', options = {}) 
 export function detectAiChatStatusIntent(message = '') {
   const text = String(message || '').trim()
   if (!text) return null
+  if (/低于.*安全库存|安全库存.*(?:不足|偏低|风险)|below.*safety stock/i.test(text)) return 'inventory_status_query'
   if (planningIntentPattern.test(text)) return 'planning_status_query'
   if (supplierIntentPattern.test(text)) return 'supplier_status_query'
   if (inventoryIntentPattern.test(text)) return 'inventory_status_query'
