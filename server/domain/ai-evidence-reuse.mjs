@@ -176,7 +176,7 @@ function evidenceItems(items = []) {
           reorderPoint: item.reorderPoint ?? evidence.reorderPoint,
         }))
       : [item])
-    .filter((item) => item && (item.id || item.label || item.summary))
+    .filter((item) => item && (item.id || item.documentId || item.sku || item.label || item.summary))
     .map((item) => businessEvidence(item))
     .filter((item, index, rows) => index === rows.findIndex((candidate) => `${candidate.type}:${candidate.id}:${candidate.summary}` === `${item.type}:${item.id}:${item.summary}`))
     .slice(0, 6)
