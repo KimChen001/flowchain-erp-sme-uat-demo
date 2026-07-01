@@ -5,6 +5,7 @@ import {
   buildProcurementSummary,
 } from './procurement-read-model.mjs'
 import { buildTodayCockpit } from './today-cockpit-read-model.mjs'
+import { retrieveAiSopGuidance } from './ai-sop-retrieval.mjs'
 
 function text(value, fallback = '') {
   const next = String(value ?? '').trim()
@@ -490,6 +491,22 @@ function priorityExplanation(item = {}, models = {}) {
   return `${docLabel(item.documentType || item.type, id) || text(item.title)} 被列为优先事项，主要因为${signals.join('，')}。建议${action.replace(/^打开\s*/, '').replace(/^查看\s*/, '')}`
 }
 
+function priorityScoringSignals(item = {}, document = {}, models = {}) {
+  const dueDate = text(item.dueDate || document?.expectedDate || document?.dueDate || document?.requiredDate || '')
+  const status = text(item.status || document?.status || document?.matchStatus || document?.invoiceStatus)
+  const amountValue = toNumber(document?.amount ?? item.amount, 0)
+  const inventoryImpact = relatedInventoryRisksFor(document, models)
+  return {
+    overdueSignal: Boolean(dueDate && isPastDate(dueDate) && !isTerminalStatus(status)),
+    severitySignal: severityLabel(item.priority || item.severity || document?.riskLevel),
+    dueDateSignal: dueDate,
+    amountSignal: amountValue >= 50000 ? '金额较高' : amountValue > 0 ? '有金额影响' : '',
+    inventoryImpactSignal: inventoryImpact.length ? `关联库存风险：${inventoryImpact.join('、')}` : '',
+    receivingExceptionSignal: relatedDocumentsFor(document, models).some((value) => /收货单/.test(value)) || document?.documentType === 'grn',
+    supplierRfqPendingSignal: document?.documentType === 'rfq' ? toNumber(document.pendingSupplierCount, 0) > 0 : /供应商|RFQ|待回复/.test(text(item.reason || item.summary || item.title)),
+  }
+}
+
 function priorityItemsFromCockpit(models) {
   const cockpit = models.todayCockpit
   const source = [
@@ -518,6 +535,7 @@ function priorityItemsFromCockpit(models) {
         status: item.status || document?.status || document?.matchStatus || document?.invoiceStatus || '',
         evidence: evidenceItems([item]),
         recommendedActions: recommendedActions([item]),
+        scoringSignals: priorityScoringSignals(item, document, models),
         sourceIndex: item.sourceIndex,
       }
     })
@@ -847,11 +865,54 @@ function buildRelationshipResponse(models, message = '') {
   })
 }
 
+function buildSopResponse(models, message = '') {
+  if (!/SOP|规则|流程|通常|一般|怎么处理|应该/.test(message)) return null
+  const sop = retrieveAiSopGuidance({ query: message })
+  if (!sop.found) {
+    return response({
+      intent: 'sop_retrieval_query',
+      content: sop.limitation,
+      cards: [{ type: 'empty_state', title: '未找到内部处理建议', data: { reason: sop.limitation } }],
+      evidence: [],
+    })
+  }
+  const guidance = sop.guidance
+  return response({
+    intent: 'sop_retrieval_query',
+    content: `处理建议/内部规则：${guidance.guidance.join('；')}。边界：${guidance.reviewBoundary}`,
+    evidence: [{ type: 'internal_sop', id: guidance.id, label: guidance.topic, summary: guidance.reviewBoundary }],
+    cards: [
+      {
+        type: 'evidence_workspace',
+        title: '内部处理建议',
+        data: {
+          primaryObject: guidance.topic,
+          keyFacts: guidance.guidance,
+          relatedDocuments: [],
+          inventorySignals: [],
+          supplierSignals: [],
+          limitations: [guidance.reviewBoundary],
+        },
+        evidence: [{ type: 'internal_sop', id: guidance.id, label: guidance.topic, summary: guidance.reviewBoundary }],
+      },
+      {
+        type: 'recommended_actions',
+        actions: guidance.allowedActions.includes('po_followup_draft') || guidance.allowedActions.includes('supplier_followup_draft') || guidance.allowedActions.includes('purchase_request_draft')
+          ? [{ kind: 'review', label: '按内部处理建议复核业务证据后，再预览对应 ActionDraft。', target: '' }]
+          : [],
+      },
+    ],
+  })
+}
+
 export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {}) {
   const message = text(body.question || body.message || body.prompt || body.text)
   if (!message) return null
   const normalized = compact(message)
   const models = readModels(data, options.cache || {})
+
+  const sop = buildSopResponse(models, message)
+  if (sop) return sop
 
   const relationship = buildRelationshipResponse(models, message)
   if (relationship) return relationship
