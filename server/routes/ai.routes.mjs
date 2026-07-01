@@ -543,6 +543,26 @@ export async function handleAiRoute(ctx) {
     }
 
     branchStartedAt = Date.now()
+    const moduleIdForSupplierFastPath = String(body.moduleId || body.activeContext?.module || '').trim().toLowerCase()
+    if (moduleIdForSupplierFastPath === 'srm' || moduleIdForSupplierFastPath === 'supplier') {
+      const supplierFastPath = buildAiSupplierOperationalResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs })
+      if (supplierFastPath) {
+        const result = {
+          ...supplierFastPath,
+          fastPath: 'pre_read_context',
+          usedWeb: false,
+          timingMs: Date.now() - startedAt,
+          externalMs: 0,
+          modelMs: 0,
+        }
+        void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_supplier_operational_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name })
+        logAiTiming({ startedAt, branchStartedAt, branch: 'supplier_operational_fast_path', body, result })
+        send(res, 200, result)
+        return true
+      }
+    }
+
+    branchStartedAt = Date.now()
     const rfqFastPath = buildAiRfqOperationalResponse(db, body, { ensureRfqs })
     if (rfqFastPath) {
       const result = {
@@ -639,22 +659,6 @@ export async function handleAiRoute(ctx) {
     }
 
     branchStartedAt = Date.now()
-    const evidenceReuseQuery = buildAiEvidenceReuseResponse(db, body, { cache: readModelCache })
-    if (evidenceReuseQuery) {
-      const result = {
-        ...evidenceReuseQuery,
-        usedWeb: false,
-        timingMs: Date.now() - startedAt,
-        externalMs: 0,
-        modelMs: 0,
-      }
-      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_evidence_reuse_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
-      logAiTiming({ startedAt, branchStartedAt, branch: 'evidence_reuse', body, result })
-      send(res, 200, result)
-      return true
-    }
-
-    branchStartedAt = Date.now()
     const supplierOperationalQuery = buildAiSupplierOperationalResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs })
     if (supplierOperationalQuery) {
       const result = {
@@ -666,6 +670,22 @@ export async function handleAiRoute(ctx) {
       }
       void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_supplier_operational_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'supplier_operational', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
+    const evidenceReuseQuery = buildAiEvidenceReuseResponse(db, body, { cache: readModelCache })
+    if (evidenceReuseQuery) {
+      const result = {
+        ...evidenceReuseQuery,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_evidence_reuse_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'evidence_reuse', body, result })
       send(res, 200, result)
       return true
     }

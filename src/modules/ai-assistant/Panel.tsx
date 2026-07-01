@@ -394,6 +394,65 @@ function AiResponseCard({
           />
         </CardShell>
       );
+    case "supplier_high_risk_summary":
+      return (
+        <CardShell title={card.title || "高风险供应商"}>
+          <KeyValueGrid fields={[
+            ["供应商数", data.supplierCount],
+            ["高风险", data.highRiskCount],
+            ["逾期 PO", data.overduePoCount],
+            ["RFQ 待回复", data.pendingRfqResponseCount],
+            ["发票差异", data.invoiceIssueCount],
+          ]} />
+          <MiniList
+            items={arrayValue(data.topSuppliers).map((supplier) => {
+              const row = typeof supplier === "object" && supplier ? supplier as Record<string, unknown> : {};
+              return {
+                title: bestText(row.supplierName, row.supplierId),
+                reason: [
+                  row.risk ? `风险 ${textValue(row.risk)}` : "",
+                  row.score ? `评分 ${textValue(row.score)}` : "",
+                  row.pendingRfqResponseCount ? `RFQ 待回复 ${textValue(row.pendingRfqResponseCount)}` : "",
+                  row.nextAction,
+                ].filter(hasValue).join(" · "),
+              };
+            })}
+            limit={5}
+          />
+        </CardShell>
+      );
+    case "supplier_scoring_explanation":
+      return (
+        <CardShell title={card.title || "供应商评分规则"}>
+          <KeyValueGrid fields={[
+            ["已评分供应商", data.scoredSupplierCount],
+            ["说明", data.message],
+          ]} />
+          <MiniList items={arrayValue(data.rules).map((rule) => ({ title: textValue(rule) }))} limit={4} />
+        </CardShell>
+      );
+    case "supplier_next_actions":
+      return (
+        <CardShell title={card.title || "SRM 下一步"}>
+          <MiniList items={arrayValue(data.actions).map((action) => ({ title: textValue(action) }))} limit={5} />
+          <MiniList
+            items={arrayValue(data.topSuppliers).map((supplier) => {
+              const row = typeof supplier === "object" && supplier ? supplier as Record<string, unknown> : {};
+              return {
+                title: bestText(row.supplierName, row.supplierId),
+                reason: row.nextAction,
+              };
+            })}
+            limit={5}
+          />
+        </CardShell>
+      );
+    case "supplier_boundary_notice":
+      return (
+        <CardShell title={card.title || "SRM Alpha 边界"}>
+          <p className="text-sm text-slate-600">{textValue(data.message || card.title)}</p>
+        </CardShell>
+      );
     case "inventory_status":
       return (
         <CardShell title={card.title || textValue(data.sku) || "库存状态"}>

@@ -209,7 +209,13 @@ function businessSnapshot(db) {
 test('supplier operational catalog documents read-only capabilities', () => {
   assert.deepEqual(
     aiSupplierOperationalCapabilityCatalog.map((item) => item.intent),
-    ['supplier_operational_summary_query', 'supplier_operational_comparison_query'],
+    [
+      'supplier_operational_summary_query',
+      'supplier_operational_comparison_query',
+      'supplier_high_risk_summary_query',
+      'supplier_scoring_rule_query',
+      'supplier_next_actions_query',
+    ],
   )
   assert.ok(aiSupplierOperationalCapabilityCatalog.every((item) => item.mode === 'read'))
 })
@@ -300,6 +306,36 @@ test('single supplier operational summary returns section cards and does not mut
   assert.deepEqual(businessSnapshot(db), before)
 })
 
+test('SRM module prompts return local read-only supplier risk and scoring cards', async () => {
+  const prompts = [
+    ['查看高风险供应商', 'supplier_high_risk_summary_query', 'supplier_high_risk_summary'],
+    ['解释评分规则', 'supplier_scoring_rule_query', 'supplier_scoring_explanation'],
+    ['下一步跟进', 'supplier_next_actions_query', 'supplier_next_actions'],
+    ['哪些供应商 RFQ 没回复？', 'supplier_high_risk_summary_query', 'supplier_high_risk_summary'],
+    ['哪些供应商交付风险高？', 'supplier_high_risk_summary_query', 'supplier_high_risk_summary'],
+  ]
+
+  for (const [message, intentName, cardType] of prompts) {
+    const db = createDb()
+    const before = businessSnapshot(db)
+    const route = createRouteContext({ moduleId: 'srm', question: message }, db)
+    await handleAiRoute(route.ctx)
+
+    assert.equal(route.response.status, 200, message)
+    assert.equal(route.response.payload.provider, 'local_supplier_operational_query', message)
+    assert.equal(route.response.payload.intent.name, intentName, message)
+    assert.equal(route.response.payload.mode, 'read', message)
+    assert.equal(route.response.payload.usedWeb, false, message)
+    assert.equal(route.response.payload.externalMs, 0, message)
+    assert.match(route.response.payload.content, /SRM|供应商|评分|跟进|风险/, message)
+    assert.match(route.response.payload.content, /不创建 RFQ|不发送供应商消息|不变更评分|不执行供应商主数据审批/, message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === cardType), message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'supplier_boundary_notice'), message)
+    assert.ok(route.response.payload.cards.some((card) => card.type === 'recommended_actions'), message)
+    assert.deepEqual(businessSnapshot(db), before, message)
+  }
+})
+
 test('multi-supplier comparison resolves two names and returns comparison card', async () => {
   const db = createDb()
   const before = businessSnapshot(db)
@@ -371,4 +407,7 @@ test('supplier operational intent detection avoids pure status prompt', () => {
   assert.equal(detectAiSupplierOperationalIntent('supplier SUP-001 status'), null)
   assert.equal(buildAiSupplierOperationalResponse(createDb(), { message: 'ABC Components PO invoice' }).intent.name, 'supplier_operational_summary_query')
   assert.equal(detectAiSupplierOperationalIntent('Compare ABC Components and Delta Plastics'), 'supplier_operational_comparison_query')
+  assert.equal(detectAiSupplierOperationalIntent('解释评分规则', { moduleId: 'srm' }), 'supplier_scoring_rule_query')
+  assert.equal(detectAiSupplierOperationalIntent('下一步跟进', { moduleId: 'srm' }), 'supplier_next_actions_query')
+  assert.equal(detectAiSupplierOperationalIntent('查看高风险供应商', { moduleId: 'srm' }), 'supplier_high_risk_summary_query')
 })

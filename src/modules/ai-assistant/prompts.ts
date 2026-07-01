@@ -12,7 +12,7 @@ const ACTIVE_CONTEXT_PROMPTS: Record<string, string[]> = {
 };
 
 const MODULE_PROMPTS: Record<string, string[]> = {
-  srm: ["查看高风险供应商", "查看供应商风险", "解释当前页面"],
+  srm: ["查看高风险供应商", "解释评分规则", "下一步跟进"],
   inventory: ["查看库存风险", "解释库存异常", "准备 PR 草稿"],
   procurement: ["今天采购有什么要跟？", "哪些 PO 快逾期？", "哪些 RFQ 没回复？"],
   forecast: ["今天计划模块最需要处理什么？", "哪些 SKU 有 MRP 例外？", "MRP 计划释放有哪些需要审阅？", "这个 forecast 的 MAPE 怎么样？", "哪些补货建议需要转成草稿？", "这个 SKU 的计划参数是什么？"],

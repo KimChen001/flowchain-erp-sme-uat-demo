@@ -38,7 +38,62 @@ export const aiSupplierOperationalCapabilityCatalog = Object.freeze([
     responseCards: ['supplier_operational_comparison', 'evidence', 'recommended_actions'],
     mode: 'read',
   },
+  {
+    intent: 'supplier_high_risk_summary_query',
+    examples: [
+      '查看高风险供应商',
+      '哪些供应商交付风险高？',
+      '哪些供应商 RFQ 没回复？',
+    ],
+    requiredSlots: [],
+    optionalSlots: ['riskSignals'],
+    responseCards: [
+      'supplier_high_risk_summary',
+      'supplier_scoring_explanation',
+      'supplier_next_actions',
+      'supplier_boundary_notice',
+      'evidence',
+      'recommended_actions',
+    ],
+    mode: 'read',
+  },
+  {
+    intent: 'supplier_scoring_rule_query',
+    examples: [
+      '解释评分规则',
+      '供应商评分怎么算？',
+    ],
+    requiredSlots: [],
+    optionalSlots: ['scoreInputs'],
+    responseCards: [
+      'supplier_scoring_explanation',
+      'supplier_high_risk_summary',
+      'supplier_boundary_notice',
+      'evidence',
+      'recommended_actions',
+    ],
+    mode: 'read',
+  },
+  {
+    intent: 'supplier_next_actions_query',
+    examples: [
+      '下一步跟进',
+      'SRM 下一步建议',
+    ],
+    requiredSlots: [],
+    optionalSlots: ['followupSignals'],
+    responseCards: [
+      'supplier_next_actions',
+      'supplier_high_risk_summary',
+      'supplier_boundary_notice',
+      'evidence',
+      'recommended_actions',
+    ],
+    mode: 'read',
+  },
 ])
+
+const SUPPLIER_ALPHA_BOUNDARY = '当前 Alpha 仅展示 SRM 可见性：不创建 RFQ、不发送供应商消息、不变更评分、不执行供应商主数据审批。'
 
 const GENERIC_SUPPLIER_WORDS = new Set([
   'supplier',
@@ -713,6 +768,14 @@ function recommendedActions(actions = []) {
   return { type: 'recommended_actions', actions }
 }
 
+function supplierBoundaryNotice() {
+  return {
+    type: 'supplier_boundary_notice',
+    title: 'SRM Alpha 边界',
+    data: { message: SUPPLIER_ALPHA_BOUNDARY },
+  }
+}
+
 function missingFieldCard(name, reason) {
   return { type: 'missing_fields', fields: [{ name, reason }] }
 }
@@ -742,7 +805,15 @@ function sectionsFromMessage(message = '') {
 export function detectAiSupplierOperationalIntent(message = '', body = {}) {
   const text = cleanText(message)
   if (!text) return null
+  const moduleId = cleanText(body.moduleId || body.activeContext?.module).toLowerCase()
+  const isSrmContext = moduleId === 'srm' || moduleId === 'supplier'
+  const hasActiveSupplier = Boolean(activeContextEntity(body, 'supplier'))
   if (DRAFT_PATTERN.test(text) && PR_OR_RFQ_DRAFT_PATTERN.test(text)) return null
+  if (isSrmContext && !hasActiveSupplier && /评分规则|评分.*算|score.*rule|scoring/i.test(text)) return 'supplier_scoring_rule_query'
+  if (isSrmContext && !hasActiveSupplier && /下一步|跟进|建议|next action|follow.?up/i.test(text)) return 'supplier_next_actions_query'
+  if (isSrmContext && !hasActiveSupplier && /高风险|风险|没回复|未回复|交付风险|rfq|供应商/i.test(text) && !/\bSUP-[A-Z0-9-]+\b/i.test(text)) {
+    return 'supplier_high_risk_summary_query'
+  }
   const hasOperational = OPERATIONAL_PATTERN.test(text)
   const comparison = /(?:compare|comparison|versus| vs |对比|比较|分别|哪个更|哪家更|还有多少)/i.test(text)
   if (!hasOperational && !comparison) return null
@@ -754,6 +825,170 @@ export function detectAiSupplierOperationalIntent(message = '', body = {}) {
     return 'supplier_operational_summary_query'
   }
   return null
+}
+
+function supplierRiskLevel(supplier = {}) {
+  const raw = cleanText(supplier.risk || supplier.riskStatus || supplier.status)
+  const score = toNumber(supplier.score ?? supplier.rating ?? supplier.grade, null)
+  if (/高|high|整改|暂停|disabled|blocked/i.test(raw)) return '高'
+  if (score !== null && score < 70) return '高'
+  if (/中|medium|待完善|warning/i.test(raw)) return '中'
+  if (score !== null && score < 82) return '中'
+  return raw || '低'
+}
+
+function supplierScoreValue(supplier = {}) {
+  const score = toNumber(supplier.score ?? supplier.rating ?? supplier.grade, null)
+  if (score !== null) return score
+  const onTime = toNumber(supplier.onTimeRate, null)
+  const quality = toNumber(supplier.qualityRate, null)
+  if (onTime !== null && quality !== null) return Math.round((onTime * 0.6) + (quality * 0.4))
+  return null
+}
+
+function buildModuleSupplierRows(db = {}, options = {}) {
+  const index = options.supplierIndex || buildSupplierEntityIndex(db, options)
+  const now = options.now || new Date()
+  return uniqueCandidates(index.candidates).map((supplier) => {
+    const sections = buildSections(db, supplier, { ...options, now })
+    const summary = supplierSummaryCard(supplier, sections).data
+    const score = supplierScoreValue(supplier)
+    const risk = supplierRiskLevel({ ...supplier, score })
+    const pendingRfqCount = sections.rfq.card.data.pendingResponseCount || 0
+    const deliveryRiskCount = (sections.po.card.data.overduePoCount || 0) + (sections.po.card.data.dueSoonPoCount || 0)
+    const invoiceIssueCount = sections.invoice.card.data.invoiceVarianceCount || 0
+    const inventoryRiskItemCount = sections.inventory.card.data.inventoryRiskItemCount || 0
+    const signalScore =
+      (risk === '高' ? 5 : risk === '中' ? 2 : 0) +
+      deliveryRiskCount * 2 +
+      pendingRfqCount +
+      invoiceIssueCount +
+      inventoryRiskItemCount
+    return {
+      supplierId: supplier.supplierId,
+      supplierName: supplier.supplierName,
+      risk,
+      score,
+      openPoCount: summary.openPoCount,
+      overduePoCount: summary.overduePoCount,
+      dueSoonPoCount: sections.po.card.data.dueSoonPoCount,
+      pendingRfqResponseCount: pendingRfqCount,
+      invoiceIssueCount,
+      inventoryRiskItemCount,
+      nextAction: nextActionFor(summary),
+      signalScore,
+    }
+  }).sort((a, b) => b.signalScore - a.signalScore || (a.score ?? 100) - (b.score ?? 100) || a.supplierName.localeCompare(b.supplierName))
+}
+
+function scoringExplanationCard(rows = []) {
+  return {
+    type: 'supplier_scoring_explanation',
+    title: '供应商评分规则',
+    data: {
+      message: '评分解释基于本地 SRM/采购可见数据，不重算或写回供应商评分。',
+      rules: [
+        '评分字段优先读取供应商主数据；缺失时用准时率和质量率估算展示值。',
+        '风险排序会叠加高/中风险标签、逾期或临期 PO、RFQ 待回复、发票差异和关联库存风险。',
+        '结果仅用于内部跟进排序，最终供应商评级和审批仍由业务用户确认。',
+      ],
+      scoredSupplierCount: rows.filter((row) => row.score !== null).length,
+    },
+  }
+}
+
+function highRiskSupplierCard(rows = []) {
+  const highRiskRows = rows.filter((row) =>
+    row.risk === '高' ||
+    row.overduePoCount > 0 ||
+    row.pendingRfqResponseCount > 0 ||
+    row.invoiceIssueCount > 0 ||
+    row.inventoryRiskItemCount > 0
+  )
+  const targetRows = highRiskRows.length ? highRiskRows : rows
+  return {
+    type: 'supplier_high_risk_summary',
+    title: '高风险供应商',
+    data: {
+      supplierCount: rows.length,
+      highRiskCount: highRiskRows.length,
+      overduePoCount: rows.reduce((sum, row) => sum + row.overduePoCount, 0),
+      pendingRfqResponseCount: rows.reduce((sum, row) => sum + row.pendingRfqResponseCount, 0),
+      invoiceIssueCount: rows.reduce((sum, row) => sum + row.invoiceIssueCount, 0),
+      topSuppliers: targetRows.slice(0, 5).map((row) => ({
+        supplierId: row.supplierId,
+        supplierName: row.supplierName,
+        risk: row.risk,
+        score: row.score,
+        overduePoCount: row.overduePoCount,
+        pendingRfqResponseCount: row.pendingRfqResponseCount,
+        invoiceIssueCount: row.invoiceIssueCount,
+        inventoryRiskItemCount: row.inventoryRiskItemCount,
+        nextAction: row.nextAction,
+      })),
+    },
+  }
+}
+
+function supplierNextActionsCard(rows = []) {
+  const top = rows.slice(0, 5)
+  const actions = []
+  if (top.some((row) => row.overduePoCount > 0 || row.dueSoonPoCount > 0)) actions.push('先跟进逾期或 7 天内到期 PO 的承诺交期。')
+  if (top.some((row) => row.pendingRfqResponseCount > 0)) actions.push('对 RFQ 待回复供应商发起人工确认，避免自动创建或发送消息。')
+  if (top.some((row) => row.invoiceIssueCount > 0)) actions.push('把发票差异交给采购和财务共同复核。')
+  if (top.some((row) => row.inventoryRiskItemCount > 0)) actions.push('复核关联物料库存风险，并准备可审阅的补货或询价草稿。')
+  if (!actions.length) actions.push('保持常规供应商绩效复盘，优先查看评分缺失或主数据待完善项。')
+  return {
+    type: 'supplier_next_actions',
+    title: 'SRM 下一步跟进',
+    data: {
+      actions,
+      topSuppliers: top.map((row) => ({
+        supplierId: row.supplierId,
+        supplierName: row.supplierName,
+        nextAction: row.nextAction,
+      })),
+    },
+  }
+}
+
+function buildSupplierModuleResponse(db = {}, intentName = 'supplier_high_risk_summary_query', options = {}) {
+  const rows = buildModuleSupplierRows(db, options)
+  const evidence = [
+    { type: 'supplier_master', id: 'supplier_risk_summary', summary: `${rows.length} supplier candidates evaluated from local SRM and procurement context.` },
+    { type: 'limited_data', id: 'supplier_alpha_boundary', summary: SUPPLIER_ALPHA_BOUNDARY },
+  ]
+  const cards = []
+  if (intentName !== 'supplier_next_actions_query') cards.push(highRiskSupplierCard(rows))
+  if (intentName !== 'supplier_next_actions_query') cards.push(scoringExplanationCard(rows))
+  if (intentName === 'supplier_next_actions_query') cards.push(supplierNextActionsCard(rows), highRiskSupplierCard(rows))
+  if (intentName === 'supplier_next_actions_query') cards.push(scoringExplanationCard(rows))
+  cards.push(
+    supplierBoundaryNotice(),
+    evidenceCard(evidence),
+    recommendedActions([
+      { label: '查看 SRM', kind: 'deep_link', target: '/srm' },
+      { label: '查看 RFQ', kind: 'deep_link', target: '/procurement/rfq' },
+      { label: '查看采购订单', kind: 'deep_link', target: '/procurement' },
+    ]),
+  )
+  if (intentName !== 'supplier_next_actions_query') {
+    cards.splice(2, 0, supplierNextActionsCard(rows))
+  }
+  const message = intentName === 'supplier_scoring_rule_query'
+    ? `我按本地 SRM 数据解释评分规则，并列出当前排序靠前的供应商风险。${SUPPLIER_ALPHA_BOUNDARY}`
+    : intentName === 'supplier_next_actions_query'
+      ? `我整理了 SRM 下一步内部跟进事项。${SUPPLIER_ALPHA_BOUNDARY}`
+      : `我列出当前高风险供应商、RFQ 待回复和交付风险信号。${SUPPLIER_ALPHA_BOUNDARY}`
+  return {
+    provider: 'local_supplier_operational_query',
+    mode: 'read',
+    content: message,
+    message,
+    intent: { name: intentName, confidence: 0.84, slots: { supplierIds: rows.slice(0, 5).map((row) => row.supplierId) } },
+    cards,
+    evidence,
+  }
 }
 
 function buildAmbiguousResponse(intentName, resolution) {
@@ -880,6 +1115,18 @@ export function buildAiSupplierOperationalResponse(db = {}, body = {}, options =
   const message = normalizeSupplierOperationalMessage(body)
   const resolution = resolveSupplierEntities(message, db, { ...options, body })
   let intent = detectAiSupplierOperationalIntent(message, body)
+  if (['supplier_high_risk_summary_query', 'supplier_scoring_rule_query', 'supplier_next_actions_query'].includes(intent)) {
+    return {
+      ...buildSupplierModuleResponse(db, intent, options),
+      capabilityCatalog: aiSupplierOperationalCapabilityCatalog.map((item) => ({
+        ...item,
+        examples: [...item.examples],
+        requiredSlots: [...item.requiredSlots],
+        optionalSlots: [...item.optionalSlots],
+        responseCards: [...item.responseCards],
+      })),
+    }
+  }
   if (!intent && resolution.source === 'explicit_message' && resolution.status === 'resolved' && resolution.suppliers.length > 1) {
     intent = 'supplier_operational_comparison_query'
   }
