@@ -42,14 +42,14 @@ test('active supplier context returns supplier prompts', async () => {
   assert.deepEqual(await promptsFor({
     moduleId: 'srm',
     activeContext: { entityType: 'supplier', entityId: 'SUP-001' },
-  }), ['解释这个供应商', '查看风险原因', '查看 RFQ 参与'])
+  }), ['解释这个供应商', '查看供应商风险', '查看 RFQ 参与'])
 })
 
 test('active item context returns item prompts', async () => {
   assert.deepEqual(await promptsFor({
     moduleId: 'inventory',
     activeContext: { entityType: 'item', entityId: 'SKU-001' },
-  }), ['查看库存风险', '解释最近变动', '准备 PR 草稿'])
+  }), ['查看库存风险', '准备 PR 草稿', '下一步建议'])
 })
 
 test('active RFQ context returns RFQ prompts', async () => {
@@ -67,7 +67,7 @@ test('active purchase request context returns PR prompts', async () => {
 })
 
 test('module prompts apply without active context', async () => {
-  assert.deepEqual(await promptsFor({ moduleId: 'srm', activeContext: null }), ['查看高风险供应商', '解释评分规则', '下一步跟进'])
+  assert.deepEqual(await promptsFor({ moduleId: 'srm', activeContext: null }), ['查看高风险供应商', '查看供应商风险', '解释当前页面'])
   assert.deepEqual(await promptsFor({ moduleId: 'procurement' }), ['今天采购有什么要跟？', '哪些 PO 快逾期？', '哪些 RFQ 没回复？'])
   assert.deepEqual(await promptsFor({ moduleId: 'forecast' }), [
     '今天计划模块最需要处理什么？',
@@ -92,5 +92,5 @@ test('unknown module falls back to generic prompts and every result has exactly 
     const prompts = await promptsFor(input)
     assert.equal(prompts.length, 3)
   }
-  assert.deepEqual(await promptsFor({ moduleId: 'unknown' }), ['解释当前页面', '下一步建议', '查看异常'])
+  assert.deepEqual(await promptsFor({ moduleId: 'unknown' }), ['解释当前页面', '下一步建议', '从哪里开始'])
 })

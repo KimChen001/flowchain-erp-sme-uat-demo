@@ -406,6 +406,55 @@ function AiResponseCard({
           ]} />
         </CardShell>
       );
+    case "inventory_risk_summary":
+      return (
+        <CardShell title={card.title || "库存风险摘要"}>
+          <KeyValueGrid fields={[
+            ["物料数", data.itemCount],
+            ["有库存证据", data.itemsWithQuantityEvidence],
+            ["风险物料", data.riskItemCount],
+            ["库存流水", data.movementCount],
+          ]} />
+          <MiniList
+            items={arrayValue(data.topRiskItems).map((item) => {
+              const row = typeof item === "object" && item ? item as Record<string, unknown> : {};
+              return {
+                title: bestText(row.sku, row.itemId, row.name, "风险物料"),
+                reason: [
+                  hasValue(row.availableQuantity) ? `可用 ${textValue(row.availableQuantity)}` : "",
+                  row.riskLevel,
+                ].filter(hasValue).map(textValue).join(" · "),
+              };
+            })}
+            limit={3}
+          />
+        </CardShell>
+      );
+    case "planning_status_summary":
+      return (
+        <CardShell title={card.title || "计划/MRP 摘要"}>
+          <KeyValueGrid fields={[
+            ["SKU", data.sku],
+            ["物料", data.name],
+            ["例外", data.exception],
+            ["例外数", data.exceptionCount],
+            ["加急数", data.urgentCount],
+            ["计划数量", data.plannedQty],
+            ["计划金额", data.plannedAmount],
+            ["最大净需求", data.maxNetRequirement],
+            ["首个缺口周期", data.firstShortagePeriod],
+            ["MAPE", data.mape],
+            ["边界", data.reviewBoundary],
+          ]} />
+          <MiniList
+            items={arrayValue(data.plannedReleasePeriods).map((period) => ({
+              title: "计划释放周期",
+              reason: period,
+            }))}
+            limit={3}
+          />
+        </CardShell>
+      );
     case "procurement_exception_summary":
       return (
         <CardShell title={card.title || "采购异常"}>
