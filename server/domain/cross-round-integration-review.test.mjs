@@ -38,7 +38,8 @@ test('navigation evidence surfaces share canonical helper names', () => {
 
   assert.match(app, /navigationIntentFromGlobalSearchResult/)
   assert.match(app, /splitNavigationId/)
-  assert.match(aiPanel, /normalizeEvidenceLinks\(evidence, \{ source: "ai" \}\)/)
+  assert.match(aiPanel, /normalizeEvidenceLinks\(\[raw\], \{ source: "ai" \}\)/)
+  assert.match(aiPanel, /raw\.summary/)
   assert.match(aiPanel, /navigationIntentFromEvidenceLink/)
   assert.match(cockpit, /normalizeTodayCockpitTarget/)
 })

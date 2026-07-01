@@ -29,6 +29,86 @@ function amount(value = 0, currency = 'CNY') {
   return `${prefix}${toNumber(value, 0).toLocaleString()}`
 }
 
+function docLabel(type = '', id = '') {
+  const normalized = text(type).toLowerCase()
+  const nextId = text(id)
+  if (normalized === 'po' || normalized === 'purchase_order' || /^PO-/i.test(nextId)) return `采购单 ${nextId}`.trim()
+  if (normalized === 'pr' || normalized === 'purchase_request' || /^PR-/i.test(nextId)) return `采购申请 ${nextId}`.trim()
+  if (normalized === 'rfq' || /^RFQ-/i.test(nextId)) return `询价单 ${nextId}`.trim()
+  if (normalized === 'grn' || normalized === 'receiving_doc' || /^GRN-/i.test(nextId)) return `收货单 ${nextId}`.trim()
+  if (normalized === 'invoice' || normalized === 'supplier_invoice' || /^INV-/i.test(nextId)) return `发票 ${nextId}`.trim()
+  if (normalized === 'inventory_item' || /^SKU-/i.test(nextId)) return nextId
+  return nextId
+}
+
+function idFromRoute(route = '', pattern) {
+  const raw = decodeURIComponent(text(route))
+  return raw.match(pattern)?.[0] || ''
+}
+
+function businessEvidence(item = {}) {
+  const type = text(item.type || item.documentType || item.entityType, 'evidence')
+  const route = text(item.route)
+  const id = text(item.id || item.documentId || item.sku) ||
+    idFromRoute(route, /\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)
+  const status = text(item.status || item.matchStatus)
+  const rawSummary = text(item.summary || item.reason || item.nextAction || item.status || item.label)
+  const rawLabel = text(item.label || item.title || item.itemName || item.id)
+  const available = item.availableQuantity ?? item.currentStock ?? item.qty
+  const safety = item.safetyStock ?? item.min ?? item.reorderPoint
+
+  if (/^action-/i.test(id) || /^FOLLOWUP-/i.test(id) || type === 'overdue_po') {
+    const poId = idFromRoute(route, /\bPO-[A-Z0-9-]+\b/i) || text(item.documentId).match(/\bPO-[A-Z0-9-]+\b/i)?.[0] || rawLabel.match(/\bPO-[A-Z0-9-]+\b/i)?.[0] || id.match(/\bPO-[A-Z0-9-]+\b/i)?.[0] || id
+    return {
+      type: poId ? 'po' : type,
+      id: poId || id,
+      label: poId ? `${docLabel('po', poId)} 已超过预计到货日` : rawLabel,
+      status: status === 'open' ? '' : status,
+      summary: rawSummary || '需要确认供应商剩余交期。',
+      route,
+    }
+  }
+
+  if (type === 'inventory_item') {
+    const sku = id || text(item.sku)
+    return {
+      type,
+      id: sku,
+      label: sku ? `${docLabel(type, sku)} 库存风险` : rawLabel,
+      status,
+      summary: hasFiniteValue(available) || hasFiniteValue(safety)
+        ? `${sku} 可用库存 ${text(available, '—')}，安全库存 ${text(safety, '—')}。`
+        : rawSummary,
+      route,
+    }
+  }
+
+  if (type === 'rfq') {
+    return {
+      type,
+      id,
+      label: `${docLabel(type, id)} 仍在进行中`,
+      status,
+      summary: rawSummary || '需确认供应商回复与授标节奏。',
+      route,
+    }
+  }
+
+  const readable = docLabel(type, id)
+  return {
+    type,
+    id,
+    label: readable ? `${readable}${rawLabel && rawLabel !== id ? `：${rawLabel}` : ''}` : rawLabel,
+    status,
+    summary: rawSummary,
+    route,
+  }
+}
+
+function hasFiniteValue(value) {
+  return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value))
+}
+
 function readModels(data = {}, cache = {}) {
   if (!cache.aiEvidenceReuse) {
     const procurementDocuments = buildProcurementDocuments(data)
@@ -59,24 +139,47 @@ function readModels(data = {}, cache = {}) {
 
 function evidenceItems(items = []) {
   return asArray(items)
-    .flatMap((item) => asArray(item?.evidence).length ? item.evidence : [item])
+    .flatMap((item) => asArray(item?.evidence).length
+      ? asArray(item.evidence).map((evidence) => ({
+          ...evidence,
+          id: evidence.id || item.documentId || item.sku || item.id,
+          route: evidence.route || item.route,
+          summary: item.reason || evidence.summary || item.summary,
+          nextAction: item.nextAction || evidence.nextAction,
+          availableQuantity: item.availableQuantity ?? evidence.availableQuantity,
+          safetyStock: item.safetyStock ?? evidence.safetyStock,
+          reorderPoint: item.reorderPoint ?? evidence.reorderPoint,
+        }))
+      : [item])
     .filter((item) => item && (item.id || item.label || item.summary))
-    .map((item) => ({
-      type: text(item.type || item.documentType || item.entityType, 'evidence'),
-      id: text(item.id || item.documentId || item.sku),
-      label: text(item.label || item.title || item.itemName || item.id),
-      status: text(item.status || item.matchStatus),
-      summary: text(item.summary || item.reason || item.nextAction || item.status || item.label),
-      route: text(item.route),
-    }))
+    .map((item) => businessEvidence(item))
     .filter((item, index, rows) => index === rows.findIndex((candidate) => `${candidate.type}:${candidate.id}:${candidate.summary}` === `${item.type}:${item.id}:${item.summary}`))
     .slice(0, 6)
+}
+
+function targetId(item = {}) {
+  const route = text(item.route)
+  const evidence = asArray(item.evidence)[0] || {}
+  return idFromRoute(route, /\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i) ||
+    text(item.documentId || item.sku || evidence.id || item.id)
+}
+
+function actionLabel(item = {}) {
+  const id = targetId(item)
+  const route = text(item.route)
+  const module = text(item.module)
+  const type = text(item.documentType || item.type || item.target?.documentType)
+  if (/^PO-/i.test(id) || /\/po\//i.test(route) || type === 'po') return `打开 ${id || '采购单'}，查看未到货明细，并确认供应商剩余交期。`
+  if (/^RFQ-/i.test(id) || /\/rfq\//i.test(route) || type === 'rfq') return `打开 ${id || '询价单'}，确认待回复供应商和授标依据。`
+  if (/^SKU-/i.test(id) || module === 'inventory' || type === 'inventory_item') return `查看 ${id || '该 SKU'} 的库存覆盖与关联采购单。`
+  if (/^INV-/i.test(id) || type === 'invoice') return `打开 ${id || '发票'}，复核 PO、GRN 与发票差异。`
+  return text(item.nextAction || item.title || '复核证据')
 }
 
 function recommendedActions(items = []) {
   return asArray(items).slice(0, 3).map((item) => ({
     kind: item.route ? 'deep_link' : 'review',
-    label: text(item.nextAction || item.title || '复核证据'),
+    label: actionLabel(item),
     target: item.route || '',
   }))
 }
@@ -185,9 +288,15 @@ function buildTodayCockpitResponse(models) {
   const inventoryRisks = asArray(cockpit.inventoryRisks).slice(0, 3)
   const evidence = evidenceItems([...actions, ...followups, ...inventoryRisks])
   const topAction = actions[0]?.title || followups[0]?.title || inventoryRisks[0]?.nextAction || '先复核采购和库存风险证据'
+  const overduePoCount = Math.max(
+    toNumber(models.procurementSummary.overduePoCount, 0),
+    asArray(cockpit.followups).filter((item) => text(item.type) === 'overdue_po' || /\bPO-/i.test(text(item.documentId)) && /超过预计|逾期/.test(text(item.title || item.summary))).length,
+  )
+  const shownFollowupCount = Math.min(toNumber(cockpit.summary.urgentFollowupCount, 0), followups.length)
+  const shownInventoryRiskCount = Math.min(toNumber(cockpit.summary.lowStockCount, 0), inventoryRisks.length)
   return response({
     intent: 'today_cockpit_priority_query',
-    content: `今天建议先处理：${topAction}。当前有 ${cockpit.summary.urgentFollowupCount || 0} 个紧急跟进、${cockpit.summary.lowStockCount || 0} 个库存风险，开放金额 ${amount(cockpit.summary.totalOpenAmount, cockpit.summary.currency || 'CNY')}。`,
+    content: `今天建议先处理：${topAction}。当前有 ${cockpit.summary.urgentFollowupCount || 0} 个紧急跟进、${cockpit.summary.lowStockCount || 0} 个库存风险，开放金额 ${amount(cockpit.summary.totalOpenAmount, cockpit.summary.currency || 'CNY')}；下方展示其中优先级最高的 ${shownFollowupCount || followups.length} 个跟进项和 ${shownInventoryRiskCount || inventoryRisks.length} 个库存风险。`,
     evidence,
     cards: [
       {
@@ -197,7 +306,7 @@ function buildTodayCockpitResponse(models) {
           pendingPrCount: models.procurementSummary.openPrCount,
           approvedNotConvertedPrCount: models.procurementSummary.approvedNotConvertedPrCount || 0,
           pendingRfqResponseCount: models.procurementSummary.activeRfqCount,
-          overduePoCount: models.procurementSummary.overduePoCount || 0,
+          overduePoCount,
           receivingExceptionCount: models.procurementSummary.pendingReceivingCount,
           topIssues: actions.map((item) => ({ title: item.title, reason: item.reason || item.nextAction })),
         },

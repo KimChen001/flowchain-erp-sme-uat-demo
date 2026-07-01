@@ -62,7 +62,8 @@ test('AI and Today Cockpit render evidence through canonical links', () => {
   const ai = readSource('src', 'modules', 'ai-assistant', 'Panel.tsx')
   const cockpit = readSource('src', 'modules', 'overview', 'TodayCockpitPanel.tsx')
 
-  assert.match(ai, /normalizeEvidenceLinks\(evidence, \{ source: "ai" \}\)/)
+  assert.match(ai, /normalizeEvidenceLinks\(\[raw\], \{ source: "ai" \}\)/)
+  assert.match(ai, /raw\.summary/)
   assert.match(ai, /navigationIntentFromEvidenceLink\(link, \{ source: "ai" \}\)/)
   assert.match(ai, /link\.clickable && intent && onNavigate/)
   assert.match(ai, /navigationIntentFromInternalTarget\(action\.target, \{ source: "aiAction" \}\)/)

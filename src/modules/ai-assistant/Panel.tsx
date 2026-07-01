@@ -210,14 +210,23 @@ function EvidenceList({
   evidence?: AiChatCard["evidence"];
   onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 }) {
-  const links = normalizeEvidenceLinks(evidence, { source: "ai" }).slice(0, 3);
-  if (!links.length) return null;
+  const rows = (evidence || [])
+    .map((item) => {
+      const raw = typeof item === "object" && item ? item as Record<string, unknown> : {};
+      const link = normalizeEvidenceLinks([raw], { source: "ai" })[0] || null;
+      return { raw, link };
+    })
+    .filter((item) => item.link)
+    .slice(0, 3);
+  if (!rows.length) return null;
   return (
     <div className="space-y-1">
-      {links.map((link, index) => {
+      {rows.map(({ raw, link }, index) => {
+        if (!link) return null;
         const intent = navigationIntentFromEvidenceLink(link, { source: "ai" });
-        const title = [link.entityType !== "unknown" ? link.entityType : "", link.entityId].filter(Boolean).join(" · ") || link.label;
-        const detail = link.status || link.label;
+        const label = bestText(raw.label, raw.title, raw.summary, link.label, link.entityId);
+        const title = `依据：${label}`;
+        const detail = bestText(raw.summary, raw.reason, link.status && link.status !== link.label ? link.status : "");
         return (
           <div key={`${title}-${index}`} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
             {link.clickable && intent && onNavigate ? (
