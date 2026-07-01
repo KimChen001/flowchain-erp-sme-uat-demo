@@ -49,54 +49,93 @@ Treat Planning as optional guided Alpha. Do not position it as autonomous releas
 - MRP 计划释放有哪些需要审阅？
 - 这个 forecast 的 MAPE 怎么样？
 
-## Guided Test Scenarios
+## Browser UAT Smoke Paths
 
-Scenario A: Today Cockpit to AI to procurement evidence to recovery.
+Run these paths in a fresh browser tab after starting `npm run api` and `npm run dev`. Stay on demo data, use the visible AI quick prompts or type the exact prompt, and capture a screenshot for every S0, S1, or S2 failure.
+
+Pass signals for every path:
+
+- AI response is local/deterministic and does not show `provider_disabled`, raw JSON, debug metadata, or an unsupported card fallback.
+- Chinese prompts return mostly Chinese user-facing copy.
+- Evidence cards and recommended actions open internal FlowChain views or remain safely non-clickable when no route exists.
+- Recovery controls remain visible after navigation, detail focus, and back/clear-focus actions.
+- No PR, RFQ, PO, GRN, inventory movement, payment, accounting posting, master data record, or production MRP record is created.
+
+Failure categories:
+
+- AI no response / timeout.
+- `provider_disabled`.
+- unsupported card.
+- English/localization.
+- evidence link.
+- navigation/recovery.
+- ActionDraft boundary.
+- Planning explanation.
+- finance boundary confusion.
+- master data issue.
+- supplier/SRM issue.
+- typography/display.
+- performance.
+- permission/boundary confusion.
+- local runtime issue.
+
+Scenario A: Today Cockpit to AI to procurement evidence to internal navigation to recovery.
 
 1. Open Today Cockpit.
 2. Ask `今天最需要处理什么？`.
-3. Open an evidence or recommended action target.
-4. Confirm the target page keeps recovery controls visible.
+3. Confirm the answer includes procurement evidence or a procurement recommended action.
+4. Open an evidence or recommended action target.
+5. Confirm the target page keeps recovery controls visible and can return to the prior cockpit context.
 
-Scenario B: PO due or overdue to PO detail to recovery.
+Scenario B: Procurement quick prompt to PO/RFQ/PR evidence to detail to recovery.
 
-1. Ask `哪些 PO 快逾期？`.
-2. Open the recommended PO or PO list.
-3. Confirm PO status, supplier, ETA, linked PR/GRN, and recovery paths.
+1. Ask `今天采购有什么要跟？`, `哪些 PO 快逾期？`, `哪些 RFQ 没回复？`, or `哪些采购申请还没转 PO？`.
+2. Confirm the cards reference PO, RFQ, or PR evidence rather than generic text only.
+3. Open one recommended PO, RFQ, or PR detail target.
+4. Confirm status, supplier, ETA or response state, linked evidence, and recovery paths.
 
-Scenario C: RFQ pending response to RFQ detail to related PR/PO.
+Scenario C: Inventory quick prompt to inventory card to evidence to SKU focus, movement, or exception.
 
-1. Ask `哪些 RFQ 没回复？`.
-2. Open RFQ detail.
-3. Confirm pending supplier response, source PR, related PO if present, and recovery paths.
+1. Ask `查看库存风险`, `哪些库存项目需要关注？`, or `解释库存异常`.
+2. Confirm the answer distinguishes stock risk, movement-based risk, MRP/planning risk, and missing stock-balance evidence where relevant.
+3. Open one SKU, movement, or exception evidence target.
+4. Confirm SKU focus, movement detail, exception context, lots/serial context when available, and clear focus recovery.
 
-Scenario D: Inventory SKU to movements, exceptions, lots, and recovery.
+Scenario D: Inventory `准备 PR 草稿` to ActionDraft preview to disabled final confirm.
 
-1. Ask `哪些库存项目需要关注？`.
-2. Open a SKU focus target.
-3. Confirm movements, exceptions, lots/serial evidence, and clear focus recovery.
-
-Scenario E: Inventory replenishment to ActionDraft preview.
-
-1. Trigger a replenishment draft preview from Inventory.
-2. Review evidence, payload, validation, and audit boundary.
+1. Ask `准备 PR 草稿` or trigger the inventory replenishment draft preview.
+2. Review evidence, payload, validation, and audit boundary in ActionDraft Review.
 3. Try copy, simple edit, save shell if enabled, and cancel/reset.
-4. Confirm final confirm remains disabled.
+4. Confirm final confirm remains disabled and no real PR/RFQ/PO/GRN/inventory record is created.
 
-Scenario F: Planning Cockpit to Demand Forecast to MRP Plan to Replenishment Workbench.
+Scenario E: Planning Cockpit to Demand Forecast to MRP Plan to Replenishment Workbench to ActionDraft preview.
 
 1. Open Planning Cockpit.
 2. Click Demand Forecast, review forecast history, model comparison, metrics, and horizon.
 3. Open MRP Plan, review net requirement, planned receipt/release, exception, and BOM evidence.
 4. Open Replenishment Workbench and trigger ActionDraft preview only.
-5. Confirm no direct PR/RFQ/PO/GRN/inventory record is created.
+5. Confirm Planning remains split into five subviews and no production MRP or purchasing document is released.
 
-Scenario G: Planning Parameters to explain assumptions.
+Scenario F: Finance `查看待结算项` to finance cards to boundary notice to no payment/posting.
 
-1. Open Planning Parameters.
-2. Verify lead time, MOQ, batch multiple, safety stock, reorder point, supplier, buyer, and unit cost.
-3. Ask `这个 SKU 的计划参数是什么？`.
-4. Confirm AI evidence lands back in the Planning subviews and remains read-only.
+1. Ask `查看待结算项`, `解释差异原因`, or `下一步跟进`.
+2. Confirm finance cards summarize pending settlement or variance evidence without implying payment, tax filing, or accounting posting.
+3. Open any internal evidence target if present.
+4. Confirm the boundary notice is visible and no payment or accounting posting action is available.
+
+Scenario G: Master Data `检查主数据质量` to master data cards to no write action.
+
+1. Ask `检查主数据质量` or `缺少哪些默认字段？`.
+2. Confirm master data cards show evidence-backed issue counts, affected objects, and read-only next actions.
+3. Open any internal evidence target if present.
+4. Confirm no automatic correction, save, or master data mutation action is available.
+
+Scenario H: SRM `查看高风险供应商` to supplier evidence to internal navigation.
+
+1. Ask `查看高风险供应商` or `解释评分规则`.
+2. Confirm supplier cards explain risk or scoring evidence from PO, RFQ, GRN, or finance context.
+3. Open one supplier evidence or recommended action target.
+4. Confirm internal navigation works and recovery controls remain visible.
 
 ## Local Runtime Troubleshooting
 
