@@ -201,11 +201,33 @@ function actionLabel(item = {}) {
 }
 
 function recommendedActions(items = []) {
-  return asArray(items).slice(0, 3).map((item) => ({
-    kind: item.route ? 'deep_link' : 'review',
-    label: actionLabel(item),
-    target: item.route || '',
-  }))
+  return asArray(items).slice(0, 3).flatMap((item) => {
+    const id = targetId(item)
+    const route = text(item.route)
+    const type = text(item.documentType || item.type || item.target?.documentType)
+    const actions = [{
+      kind: route ? 'deep_link' : 'review',
+      label: actionLabel(item),
+      target: route,
+    }]
+    if (/^SKU-/i.test(id) || type === 'inventory_item') {
+      actions.push({
+        kind: 'draft_preview',
+        label: `预览 ${id || '该 SKU'} 补货 PR 草稿，需人工审阅后再保存。`,
+        target: '',
+        draftType: 'purchase_request_draft',
+        draftTitle: `${id || 'SKU'} 补货 PR 草稿预览`,
+        payload: {
+          itemIdOrSku: id || item.sku || item.itemId,
+          quantity: toNumber(item.reorderPoint ?? item.safetyStock ?? item.min ?? item.availableQuantity, 1) || 1,
+          reason: item.riskReason || item.reason || item.summary || 'AI 库存风险建议，仅生成审阅草稿。',
+          warehouse: item.defaultWarehouseId || item.warehouse || item.location || '',
+        },
+        originEvidence: evidenceItems([item]),
+      })
+    }
+    return actions
+  })
 }
 
 function response({ intent, confidence = 0.9, content, cards = [], evidence = [] }) {
@@ -390,9 +412,9 @@ function priorityExplanation(item = {}, models = {}) {
 function priorityItemsFromCockpit(models) {
   const cockpit = models.todayCockpit
   const source = [
-    ...asArray(cockpit.recommendedActions),
-    ...asArray(cockpit.followups).slice(0, 3),
-    ...asArray(cockpit.inventoryRisks).slice(0, 3),
+    ...asArray(cockpit.recommendedActions).map((item, sourceIndex) => ({ ...item, sourceIndex })),
+    ...asArray(cockpit.followups).slice(0, 3).map((item, sourceIndex) => ({ ...item, sourceIndex: sourceIndex + 100 })),
+    ...asArray(cockpit.inventoryRisks).slice(0, 3).map((item, sourceIndex) => ({ ...item, sourceIndex: sourceIndex + 200 })),
   ]
   const seen = new Set()
   return source
@@ -415,6 +437,7 @@ function priorityItemsFromCockpit(models) {
         status: item.status || document?.status || document?.matchStatus || document?.invoiceStatus || '',
         evidence: evidenceItems([item]),
         recommendedActions: recommendedActions([item]),
+        sourceIndex: item.sourceIndex,
       }
     })
     .filter((item) => item.id || item.title)
@@ -424,6 +447,12 @@ function priorityItemsFromCockpit(models) {
       seen.add(key)
       return true
     })
+    .sort((a, b) =>
+      b.rankScore - a.rankScore ||
+      text(a.dueDate || '9999-12-31').localeCompare(text(b.dueDate || '9999-12-31')) ||
+      toNumber(a.sourceIndex, 9999) - toNumber(b.sourceIndex, 9999) ||
+      text(a.id).localeCompare(text(b.id))
+    )
     .map((item, index) => ({ ...item, rank: index + 1 }))
     .slice(0, 6)
 }
@@ -462,6 +491,20 @@ function buildTodayCockpitResponse(models) {
   const cockpit = models.todayCockpit
   const priorityItems = priorityItemsFromCockpit(models)
   const actions = priorityItems.slice(0, 4)
+  const primaryActions = []
+  const seenActionFamilies = new Set()
+  for (const item of priorityItems) {
+    const id = text(item.id)
+    const family = /^PO-/i.test(id) ? 'po' : /^SKU-/i.test(id) ? 'sku' : /^RFQ-/i.test(id) ? 'rfq' : /^GRN-/i.test(id) ? 'grn' : item.type || id
+    if (seenActionFamilies.has(family)) continue
+    const action = item.recommendedActions.find((next) => next.kind === 'deep_link') || item.recommendedActions[0]
+    if (action) {
+      primaryActions.push(action)
+      seenActionFamilies.add(family)
+    }
+    if (primaryActions.length >= 3) break
+  }
+  const supplementalActions = actions.flatMap((item) => item.recommendedActions.filter((action) => action.kind === 'draft_preview'))
   const followups = asArray(cockpit.followups).slice(0, 3)
   const inventoryRisks = asArray(cockpit.inventoryRisks).slice(0, 3)
   const evidence = evidenceItems(actions)
@@ -497,7 +540,7 @@ function buildTodayCockpitResponse(models) {
         },
       },
       { type: 'evidence', evidence },
-      { type: 'recommended_actions', actions: actions.flatMap((item) => item.recommendedActions).slice(0, 3) },
+      { type: 'recommended_actions', actions: [...primaryActions, ...supplementalActions].slice(0, 4) },
     ],
   })
 }

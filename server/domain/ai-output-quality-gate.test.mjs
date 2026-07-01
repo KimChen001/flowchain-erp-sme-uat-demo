@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildAiEvidenceReuseResponse } from './ai-evidence-reuse.mjs'
+import { handleAiRoute } from '../routes/ai.routes.mjs'
 
 function createPilotDb() {
   return {
@@ -34,6 +35,7 @@ function createPilotDb() {
 }
 
 const INTERNAL_VISIBLE_PATTERN = /documentType|entityType|inventory_item|overdue_po|action-FOLLOWUP|tool_result|response_card|repository|debug|evidence\s*·|\bpo PO-|\brfq RFQ-|\bgrn GRN-|\binvoice INV-/i
+const UNSAFE_ACTION_PATTERN = /自动(?:提交|审批|发送|创建|下单|过账)|auto[- ]?(?:submit|approve|send|create|post)|创建 PO|提交 RFQ|发送邮件/i
 
 function visibleAiText(payload) {
   const parts = [payload.content, payload.message]
@@ -52,6 +54,60 @@ function visibleAiText(payload) {
   }
   for (const evidence of payload.evidence || []) parts.push(evidence.label, evidence.summary, evidence.status)
   return parts.filter(Boolean).join('\n')
+}
+
+function createRouteContext(body, db = createPilotDb(), helpers = {}) {
+  let response = null
+  let providerDispatchCount = 0
+  return {
+    ctx: {
+      req: { method: 'POST', body, headers: {} },
+      res: {},
+      url: new URL('/api/ai/chat', 'http://localhost'),
+      db,
+      send(_res, status, payload) {
+        response = { status, payload }
+      },
+      readBody: async (req) => req.body,
+      writeDb: async () => {},
+      event: () => {},
+      ensurePurchaseRequests: (nextDb) => nextDb.purchaseRequests || [],
+      ensureInventoryMovements: (nextDb) => nextDb.inventoryMovements || [],
+      ensureRfqs: (nextDb) => nextDb.rfqs || [],
+      ensureEvents: (nextDb) => nextDb.events || [],
+      ensureAuditLog: (nextDb) => nextDb.auditLog || [],
+      supplierPerformance: () => [],
+      supplierRecommendations: () => null,
+      supplierQuoteCount: 0,
+      openaiDispatcher: { dispatch() { providerDispatchCount += 1; throw new Error('provider should not be reached') } },
+      arkDispatcher: { dispatch() { providerDispatchCount += 1; throw new Error('provider should not be reached') } },
+      aiMaxTokens: 120,
+      ...helpers,
+    },
+    get response() {
+      return response
+    },
+    get providerDispatchCount() {
+      return providerDispatchCount
+    },
+  }
+}
+
+function withEnv(patch, fn) {
+  const keys = Object.keys(patch)
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      for (const key of keys) {
+        if (previous[key] === undefined) delete process.env[key]
+        else process.env[key] = previous[key]
+      }
+    })
 }
 
 test('R91 today priority output hides internal keys and keeps deterministic counts coherent', () => {
@@ -176,4 +232,104 @@ test('R95 broad deterministic AI prompt regression harness stays product-readabl
   assert.match(visible, /询价单 RFQ-26-0046/)
   assert.match(visible, /收货单 GRN-202605-0418/)
   assert.match(visible, /打开 PO-2026-1282|查看 SKU-00412|打开 RFQ-26-0046/)
+})
+
+test('R97 priority action flow is deterministic, object-specific, and review-first', () => {
+  const response = buildAiEvidenceReuseResponse(createPilotDb(), { moduleId: 'overview', message: '今天最需要处理什么？' }, { cache: {} })
+  const summary = response.cards.find((card) => card.type === 'procurement_followup_summary')
+  const actions = response.cards.find((card) => card.type === 'recommended_actions').actions
+  const actionText = actions.map((action) => action.label).join('\n')
+
+  assert.deepEqual(summary.data.priorityItems.map((item) => item.rank), [1, 2, 3, 4])
+  assert.equal(summary.data.priorityItems.every((item, index) => item.rank === index + 1), true)
+  assert.equal(actions.every((action) => ['deep_link', 'review', 'edit', 'draft_preview'].includes(action.kind)), true)
+  assert.match(actionText, /打开 PO-2026-1282，查看未到货明细/)
+  assert.match(actionText, /查看 SKU-00412 的库存覆盖/)
+  assert.match(actionText, /打开 RFQ-26-0046，确认待回复供应商/)
+  assert.match(actionText, /预览 SKU-00412 补货 PR 草稿，需人工审阅后再保存/)
+  assert.doesNotMatch(actionText, /复核证据|打开单据/)
+  assert.doesNotMatch(actionText, UNSAFE_ACTION_PATTERN)
+  const draft = actions.find((action) => action.kind === 'draft_preview')
+  assert.equal(draft.draftType, 'purchase_request_draft')
+  assert.equal(draft.payload.itemIdOrSku, 'SKU-00412')
+})
+
+test('R97 AI panel wires draft preview actions to review shell without unsafe submission copy', () => {
+  const source = readFileSync(new URL('../../src/modules/ai-assistant/Panel.tsx', import.meta.url), 'utf8')
+  const draftShell = readFileSync(new URL('../../src/modules/action-drafts/ActionDraftReviewShell.tsx', import.meta.url), 'utf8')
+
+  assert.match(source, /"draft_preview"/)
+  assert.match(source, /actionDraftRequestFromAction/)
+  assert.match(source, /onReviewActionDraft\?\.\(draftRequest\)/)
+  assert.match(draftShell, /不会创建、提交、发送或过账任何业务记录/)
+  assert.doesNotMatch(source, UNSAFE_ACTION_PATTERN)
+})
+
+test('R98 deterministic business prompts bypass provider even with provider keys', async () => {
+  await withEnv({
+    AI_PROVIDER_ENABLED: 'true',
+    AI_PROVIDER: 'openai',
+    OPENAI_API_KEY: 'fake-openai-key',
+    ARK_API_KEY: 'fake-ark-key',
+    DOUBAO_API_KEY: 'fake-doubao-key',
+  }, async () => {
+    for (const message of ['今天最需要处理什么？', '解释 PO-2026-1282 为什么优先', '哪些库存风险最高？', '哪些 RFQ 需要跟进？', '哪些供应商需要跟进？']) {
+      const route = createRouteContext({ moduleId: 'overview', message })
+      await handleAiRoute(route.ctx)
+      assert.equal(route.response.status, 200, message)
+      assert.equal(route.providerDispatchCount, 0, message)
+      assert.notEqual(route.response.payload.provider, 'openai', message)
+      assert.equal(/fake-openai-key|fake-ark-key|fake-doubao-key|stack|trace/i.test(JSON.stringify(route.response.payload)), false, message)
+    }
+  })
+})
+
+test('R98 unknown prompt fallback stays sanitized when provider is disabled', async () => {
+  await withEnv({
+    AI_PROVIDER_ENABLED: undefined,
+    OPENAI_API_KEY: 'fake-openai-key',
+    ARK_API_KEY: 'fake-ark-key',
+    DOUBAO_API_KEY: 'fake-doubao-key',
+  }, async () => {
+    const route = createRouteContext({ moduleId: 'overview', message: '写一首采购宣言' })
+    await handleAiRoute(route.ctx)
+    const serialized = JSON.stringify(route.response.payload)
+
+    assert.equal(route.response.status, 200)
+    assert.equal(route.response.payload.intent.name, 'provider_disabled')
+    assert.equal(route.response.payload.providerStatus, 'blocked')
+    assert.equal(/fake-openai-key|fake-ark-key|fake-doubao-key|stack|trace|SyntaxError|TypeError|```|tool_result|response_card/i.test(serialized), false)
+  })
+})
+
+test('R99 AI assistant pilot UI keeps compact business-facing states', () => {
+  const source = readFileSync(new URL('../../src/modules/ai-assistant/Panel.tsx', import.meta.url), 'utf8')
+
+  assert.match(source, /const aiEvidenceLinkClass = `max-w-full text-left \$\{typography\.compactMetadata\}/)
+  assert.match(source, /const aiActionPillClass = `rounded-full px-2\.5 py-1 \$\{typography\.compactMetadata\}/)
+  assert.match(source, /const aiBoundaryNoticeClass = `\$\{typography\.metadata\}/)
+  assert.match(source, /正在查询业务数据/)
+  assert.match(source, /AI 助手响应超时，可能是本地 API 服务未响应。可以重试，或先查看 Today Cockpit。/)
+  assert.match(source, /AI 助手暂时无法连接，请稍后再试。/)
+  assert.match(source, /当前没有匹配结果。/)
+  assert.doesNotMatch(source, /```|JSON\.stringify\(.*message|raw debug|tool_result|response_card/)
+})
+
+test('R100 AI copilot readiness checkpoint keeps core pilot contract intact', async () => {
+  const db = createPilotDb()
+  const prompts = ['今天最需要处理什么？', '解释 PO-2026-1282 为什么优先', '哪些采购单据有风险？', '哪些库存风险最高？', '哪些供应商需要跟进？']
+  const responses = prompts.map((message) => buildAiEvidenceReuseResponse(db, { moduleId: 'overview', message }, { cache: {} }))
+  const visible = responses.map(visibleAiText).join('\n')
+  const panel = readFileSync(new URL('../../src/modules/ai-assistant/Panel.tsx', import.meta.url), 'utf8')
+  const evidenceLinks = readFileSync(new URL('../../src/lib/evidenceLinks.ts', import.meta.url), 'utf8')
+
+  assert.equal(responses.every((response) => response && response.providerStatus === 'deterministic'), true)
+  assert.doesNotMatch(visible, INTERNAL_VISIBLE_PATTERN)
+  assert.doesNotMatch(visible, UNSAFE_ACTION_PATTERN)
+  assert.match(visible, /采购单 PO-2026-1282/)
+  assert.match(visible, /SKU-00412/)
+  assert.match(visible, /询价单 RFQ-26-0046/)
+  assert.match(panel, /onClick=\{\(\) => onNavigate\(intent\.activeId, intent\.focusTarget \|\| null\)\}/)
+  assert.doesNotMatch(panel, /useEffect\(\(\) => \{[\s\S]*?setMessages\(\[\]\)[\s\S]*?\}, \[moduleId\]\)/)
+  assert.match(evidenceLinks, /navigationIntentFromApiRoute/)
 })

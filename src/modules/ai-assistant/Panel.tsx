@@ -36,7 +36,15 @@ type AiChatCard = {
   title?: string;
   data?: Record<string, unknown>;
   fields?: { name?: string; reason?: string }[] | Record<string, unknown> | null;
-  actions?: { label?: string; kind?: string; target?: string }[];
+  actions?: {
+    label?: string;
+    kind?: string;
+    target?: string;
+    draftType?: string;
+    draftTitle?: string;
+    payload?: Record<string, unknown>;
+    originEvidence?: Record<string, unknown>[];
+  }[];
   evidence?: { type?: string; id?: string; label?: string; status?: string; route?: string; summary?: string }[];
   matches?: Record<string, unknown>[];
 };
@@ -283,6 +291,20 @@ function actionDraftRequestFromCard(card: AiChatCard): ActionDraftPreviewRequest
     };
   }
   return null;
+}
+
+function actionDraftRequestFromAction(action: NonNullable<AiChatCard["actions"]>[number]): ActionDraftPreviewRequest | null {
+  if (action.kind !== "draft_preview" || !action.draftType) return null;
+  return {
+    type: action.draftType,
+    title: action.draftTitle || action.label || "动作草稿预览",
+    source: "ai_assistant",
+    originEvidence: action.originEvidence || [],
+    payload: {
+      ...(action.payload || {}),
+      reason: action.payload?.reason || action.label || "AI 建议动作草稿预览，需人工审阅。",
+    },
+  };
 }
 
 function AiResponseCard({
@@ -922,16 +944,27 @@ function AiResponseCard({
         </CardShell>
       );
     case "recommended_actions": {
-      const actions = (card.actions || []).filter((action) => ["deep_link", "review", "edit"].includes(String(action.kind || "")));
+      const actions = (card.actions || []).filter((action) => ["deep_link", "review", "edit", "draft_preview"].includes(String(action.kind || "")));
       if (!actions.length) return null;
       return (
         <CardShell title="建议操作">
           <div className="flex flex-wrap gap-1.5">
-            {actions.slice(0, 3).map((action) => {
+            {actions.slice(0, 4).map((action) => {
+              const draftRequest = onReviewActionDraft ? actionDraftRequestFromAction(action) : null;
               const intent = action.kind === "deep_link"
                 ? navigationIntentFromInternalTarget(action.target, { source: "aiAction" }) || navigationIntentFromModule(action.target || "overview", { source: "aiAction" })
                 : null;
-              return intent && onNavigate ? (
+              return draftRequest ? (
+                <button
+                  key={`${action.label}-${action.kind}`}
+                  type="button"
+                  onClick={() => onReviewActionDraft?.(draftRequest)}
+                  className={aiActionLinkClass}
+                  style={{ background: "#f0f6ff", color: A.blue }}
+                >
+                  {action.label || "预览草稿"}
+                </button>
+              ) : intent && onNavigate ? (
                 <button
                   key={`${action.label}-${action.target}`}
                   type="button"
