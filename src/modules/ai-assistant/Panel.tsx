@@ -992,6 +992,20 @@ function AiResponseCard({
         </CardShell>
       );
     }
+    case "evidence_workspace":
+      return (
+        <CardShell title={card.title || "证据工作区"}>
+          <KeyValueGrid fields={[
+            ["主对象", data.primaryObject],
+          ]} />
+          <MiniList items={arrayValue(data.keyFacts).map((item) => ({ title: item }))} limit={5} />
+          <MiniList items={arrayValue(data.relatedDocuments).map((item) => ({ title: item }))} limit={4} />
+          <MiniList items={arrayValue(data.inventorySignals).map((item) => ({ title: item }))} limit={3} />
+          <MiniList items={arrayValue(data.supplierSignals).map((item) => ({ title: item }))} limit={2} />
+          <MiniList items={arrayValue(data.limitations).map((item) => ({ title: "限制", reason: item }))} limit={3} />
+          <EvidenceList evidence={card.evidence} onNavigate={onNavigate} />
+        </CardShell>
+      );
     case "evidence":
       if (!card.evidence?.length) return null;
       return (

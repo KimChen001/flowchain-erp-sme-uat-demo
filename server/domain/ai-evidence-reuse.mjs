@@ -185,7 +185,7 @@ function targetId(item = {}) {
   const route = text(item.route)
   const evidence = asArray(item.evidence)[0] || {}
   return idFromRoute(route, /\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i) ||
-    text(item.documentId || item.sku || evidence.id || item.id)
+    text(item.documentId || evidence.id || item.id || item.sku)
 }
 
 function actionLabel(item = {}) {
@@ -205,6 +205,7 @@ function recommendedActions(items = []) {
     const id = targetId(item)
     const route = text(item.route)
     const type = text(item.documentType || item.type || item.target?.documentType)
+    const itemEvidence = evidenceItems([item])
     const actions = [{
       kind: route ? 'deep_link' : 'review',
       label: actionLabel(item),
@@ -217,13 +218,62 @@ function recommendedActions(items = []) {
         target: '',
         draftType: 'purchase_request_draft',
         draftTitle: `${id || 'SKU'} 补货 PR 草稿预览`,
+        requiresHumanReview: true,
         payload: {
           itemIdOrSku: id || item.sku || item.itemId,
           quantity: toNumber(item.reorderPoint ?? item.safetyStock ?? item.min ?? item.availableQuantity, 1) || 1,
           reason: item.riskReason || item.reason || item.summary || 'AI 库存风险建议，仅生成审阅草稿。',
           warehouse: item.defaultWarehouseId || item.warehouse || item.location || '',
         },
-        originEvidence: evidenceItems([item]),
+        originEvidence: itemEvidence,
+      })
+    }
+    if (/^PO-/i.test(id) || type === 'po') {
+      actions.push({
+        kind: 'draft_preview',
+        label: `预览 ${id || '该 PO'} 供应商跟进草稿，需人工审阅后再发送。`,
+        target: '',
+        draftType: 'po_followup_draft',
+        draftTitle: `${id || 'PO'} 供应商跟进草稿预览`,
+        requiresHumanReview: true,
+        payload: {
+          poId: id,
+          message: `请确认 ${id} 剩余未到货部分的预计交期。该采购单${item.dueDate || item.expectedDate ? `预计日期为 ${item.dueDate || item.expectedDate}` : ''}，当前状态为 ${item.status || '待确认'}。`,
+          reason: item.reason || item.summary || 'AI 基于采购证据建议跟进供应商交期。',
+        },
+        originEvidence: itemEvidence,
+      })
+    }
+    if (/^RFQ-/i.test(id) || type === 'rfq') {
+      actions.push({
+        kind: 'draft_preview',
+        label: `预览 ${id || '该 RFQ'} 供应商提醒草稿，需人工审阅后再发送。`,
+        target: '',
+        draftType: 'supplier_followup_draft',
+        draftTitle: `${id || 'RFQ'} 供应商提醒草稿预览`,
+        requiresHumanReview: true,
+        payload: {
+          supplierIdOrName: item.supplierName || item.awardedSupplier || item.bestSupplier || `RFQ ${id}`,
+          message: `请确认 ${id} 的报价回复状态及预计回复时间。${item.dueDate ? `当前报价截止日期为 ${item.dueDate}。` : ''}`,
+          reason: item.reason || item.summary || 'AI 基于 RFQ 待回复证据建议跟进。',
+        },
+        originEvidence: itemEvidence,
+      })
+    }
+    if (/^GRN-/i.test(id) || type === 'grn' || type === 'receiving_doc') {
+      actions.push({
+        kind: 'draft_preview',
+        label: `预览 ${id || '该 GRN'} 收货异常跟进草稿，需人工审阅后再处理。`,
+        target: '',
+        draftType: 'po_followup_draft',
+        draftTitle: `${id || 'GRN'} 收货异常跟进草稿预览`,
+        requiresHumanReview: true,
+        payload: {
+          poId: item.relatedPo || item.poId || id,
+          message: `请复核 ${id} 的收货差异和质检状态，并确认是否影响对应 PO 的剩余交付。`,
+          reason: item.reason || item.summary || 'AI 基于收货异常证据建议内部复核。',
+        },
+        originEvidence: itemEvidence,
       })
     }
     return actions
@@ -385,6 +435,37 @@ function relatedInventoryRisksFor(document = {}, models = {}) {
     .slice(0, 3)
 }
 
+function evidenceWorkspaceFor(document = {}, models = {}, evidence = [], limitations = []) {
+  if (!document?.id) return null
+  const related = relatedDocumentsFor(document, models)
+  const inventorySignals = relatedInventoryRisksFor(document, models)
+  const facts = [
+    document.status ? `状态：${document.status}` : '',
+    document.expectedDate || document.dueDate || document.requiredDate ? `日期：${document.expectedDate || document.dueDate || document.requiredDate}` : '',
+    document.supplierName || document.supplier ? `供应商：${document.supplierName || document.supplier}` : '',
+    hasFiniteValue(document.amount) ? `金额：${amount(document.amount, document.currency || 'CNY')}` : '',
+    document.supplierCount ? `邀请供应商：${document.supplierCount} 家` : '',
+    document.respondedSupplierCount !== undefined ? `已回复：${document.respondedSupplierCount} 家` : '',
+    document.pendingSupplierCount !== undefined ? `待回复：${document.pendingSupplierCount} 家` : '',
+  ].filter(Boolean)
+  return {
+    type: 'evidence_workspace',
+    title: '证据工作区',
+    data: {
+      primaryObject: docLabel(document.documentType, document.id),
+      keyFacts: facts,
+      relatedDocuments: related,
+      inventorySignals,
+      supplierSignals: [document.supplierName || document.supplier].filter(Boolean),
+      limitations: limitations.length ? limitations : [
+        related.length ? '' : '未找到更多直接关联单据。',
+        inventorySignals.length ? '' : '未找到直接关联的库存风险。',
+      ].filter(Boolean),
+    },
+    evidence,
+  }
+}
+
 function priorityExplanation(item = {}, models = {}) {
   const id = businessIdFromItem(item)
   const document = findDocumentById(models.procurementDocuments, id)
@@ -463,6 +544,8 @@ function buildPriorityExplanationResponse(models, message = '') {
   const priority = priorities.find((item) => text(item.id).toLowerCase() === requestedId.toLowerCase()) || priorities[0]
   if (!priority) return null
   const evidence = evidenceItems([priority])
+  const document = findDocumentById(models.procurementDocuments, priority.id)
+  const workspace = evidenceWorkspaceFor(document, models, evidence)
   return response({
     intent: 'priority_explanation_query',
     content: priority.explanation,
@@ -481,9 +564,10 @@ function buildPriorityExplanationResponse(models, message = '') {
           }],
         },
       },
+      workspace,
       { type: 'evidence', evidence },
       { type: 'recommended_actions', actions: priority.recommendedActions },
-    ],
+    ].filter(Boolean),
   })
 }
 
@@ -504,7 +588,9 @@ function buildTodayCockpitResponse(models) {
     }
     if (primaryActions.length >= 3) break
   }
-  const supplementalActions = actions.flatMap((item) => item.recommendedActions.filter((action) => action.kind === 'draft_preview'))
+  const supplementalActions = actions
+    .flatMap((item) => item.recommendedActions.filter((action) => action.kind === 'draft_preview'))
+    .sort((a, b) => (a.draftType === 'purchase_request_draft' ? 0 : 1) - (b.draftType === 'purchase_request_draft' ? 0 : 1))
   const followups = asArray(cockpit.followups).slice(0, 3)
   const inventoryRisks = asArray(cockpit.inventoryRisks).slice(0, 3)
   const evidence = evidenceItems(actions)
@@ -655,6 +741,7 @@ function buildRfqFollowupResponse(models, message = '') {
     .find((item) => item.documentType === 'rfq' && (!requestedId || text(item.id).toLowerCase() === requestedId.toLowerCase()))
   if (!rfq) return null
   const evidence = evidenceItems([rfq])
+  const workspace = evidenceWorkspaceFor(rfq, models, evidence)
   const pending = toNumber(rfq.pendingSupplierCount, Math.max(0, toNumber(rfq.supplierCount, 0) - toNumber(rfq.respondedSupplierCount, 0)))
   return response({
     intent: 'rfq_followup_query',
@@ -672,9 +759,91 @@ function buildRfqFollowupResponse(models, message = '') {
           }],
         },
       },
+      workspace,
       { type: 'evidence', evidence },
       { type: 'recommended_actions', actions: recommendedActions([rfq]) },
-    ],
+    ].filter(Boolean),
+  })
+}
+
+function idsFromMessage(message = '') {
+  return [...message.matchAll(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/gi)].map((match) => match[0].toUpperCase())
+}
+
+function documentById(models = {}, id = '') {
+  return findDocumentById(models.procurementDocuments, id)
+}
+
+function inventoryById(models = {}, id = '') {
+  return asArray(models.inventoryItems).find((item) => text(item.sku).toLowerCase() === text(id).toLowerCase()) || null
+}
+
+function buildRelationshipResponse(models, message = '') {
+  if (!/关系|关联|对应|从哪个|来自|转\s*PO|后面|有关/.test(message)) return null
+  const ids = idsFromMessage(message)
+  const docs = ids.map((id) => documentById(models, id)).filter(Boolean)
+  const skus = ids.map((id) => inventoryById(models, id)).filter(Boolean)
+  const evidence = evidenceItems([...docs, ...skus.map((item) => ({ ...item, type: 'inventory_item', id: item.sku, route: `/api/inventory/items/${encodeURIComponent(item.sku)}` }))])
+  const po = docs.find((doc) => doc.documentType === 'po')
+  const pr = docs.find((doc) => doc.documentType === 'pr') || (po?.sourceRequest ? documentById(models, po.sourceRequest) : null)
+  const rfq = docs.find((doc) => doc.documentType === 'rfq') || (po?.sourceRfq ? documentById(models, po.sourceRfq) : null)
+  const grn = docs.find((doc) => doc.documentType === 'grn') || asArray(models.procurementDocuments).find((doc) => doc.documentType === 'grn' && [doc.relatedPo, doc.poId].map(text).includes(text(po?.id)))
+  const sku = skus[0] || (po ? relatedInventoryRisksFor(po, models)[0] : '')
+
+  if (po && sku) {
+    return response({
+      intent: 'relationship_reasoning_query',
+      content: `${po.id} 与 ${typeof sku === 'string' ? sku.split(' ')[0] : sku.sku} 的关系来自${pr ? `采购申请 ${pr.id}` : '当前采购链路'}：该采购链路关联库存风险，采购单当前${po.status || '待跟进'}${grn ? `，相关收货单 ${grn.id} 仍需复核` : ''}。因此该 SKU 的风险需要和 PO 剩余交期一起确认。`,
+      evidence,
+      cards: [
+        evidenceWorkspaceFor(po, models, evidence),
+        { type: 'evidence', evidence },
+        { type: 'recommended_actions', actions: recommendedActions([po]) },
+      ].filter(Boolean),
+    })
+  }
+  if (po && pr) {
+    return response({
+      intent: 'relationship_reasoning_query',
+      content: `${po.id} 来源于采购申请 ${pr.id}。当前 ${po.id} 状态为 ${po.status || '待确认'}，${pr.id} 状态为 ${pr.status || '待确认'}。`,
+      evidence,
+      cards: [evidenceWorkspaceFor(po, models, evidence), { type: 'evidence', evidence }].filter(Boolean),
+    })
+  }
+  if (rfq) {
+    const linkedPo = rfq.linkedPo || asArray(models.procurementDocuments).find((doc) => doc.documentType === 'po' && text(doc.sourceRfq) === text(rfq.id))?.id
+    return response({
+      intent: 'relationship_reasoning_query',
+      content: linkedPo
+        ? `${rfq.id} 后续已关联采购单 ${linkedPo}。${rfq.linkedPr ? `该 RFQ 来自采购申请 ${rfq.linkedPr}。` : ''}`
+        : `${rfq.id} 当前没有找到已转 PO 的证据。`,
+      evidence,
+      cards: [evidenceWorkspaceFor(rfq, models, evidence), { type: 'evidence', evidence }].filter(Boolean),
+    })
+  }
+  if (grn) {
+    const relatedPo = grn.relatedPo || grn.poId || ''
+    return response({
+      intent: 'relationship_reasoning_query',
+      content: relatedPo ? `${grn.id} 对应采购单 ${relatedPo}，当前收货状态为 ${grn.status || '待确认'}。` : `${grn.id} 当前没有找到对应 PO 的证据。`,
+      evidence,
+      cards: [evidenceWorkspaceFor(grn, models, evidence), { type: 'evidence', evidence }].filter(Boolean),
+    })
+  }
+  if (skus[0]) {
+    const related = asArray(models.procurementDocuments).find((doc) => [doc.sourceSku, doc.sku, doc.itemId].map(text).includes(text(skus[0].sku)))
+    return response({
+      intent: 'relationship_reasoning_query',
+      content: related ? `${skus[0].sku} 的风险与 ${docLabel(related.documentType, related.id)} 有关，请一起确认库存覆盖和采购交期。` : `${skus[0].sku} 当前没有找到直接关联采购单证据。`,
+      evidence,
+      cards: [{ type: 'evidence', evidence }],
+    })
+  }
+  return response({
+    intent: 'relationship_reasoning_query',
+    content: '我没有找到这几个对象之间的直接关系证据。请提供 PO、PR、RFQ、GRN 或 SKU 编号后再查询。',
+    evidence: [],
+    cards: [{ type: 'empty_state', title: '未找到关系证据', data: { reason: '缺少可验证的关联单据或库存证据。' } }],
   })
 }
 
@@ -683,6 +852,9 @@ export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {})
   if (!message) return null
   const normalized = compact(message)
   const models = readModels(data, options.cache || {})
+
+  const relationship = buildRelationshipResponse(models, message)
+  if (relationship) return relationship
 
   if (/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i.test(message) && /优先|解释/.test(message)) {
     return buildPriorityExplanationResponse(models, message)
