@@ -5,6 +5,7 @@ import { buildAiProcurementOperationalResponse } from '../domain/ai-procurement-
 import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-query.mjs'
 import { buildAiSupplierOperationalResponse } from '../domain/ai-supplier-operational-query.mjs'
 import { buildAiFinanceCollaborationResponse } from '../domain/ai-finance-collaboration-query.mjs'
+import { buildAiMasterDataQualityResponse } from '../domain/ai-master-data-quality-query.mjs'
 import { buildAiCockpitFastPathResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
 import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
 import { buildAiReadContext } from '../domain/ai-read-context.mjs'
@@ -521,6 +522,23 @@ export async function handleAiRoute(ctx) {
       }
       void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_finance_collaboration_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'finance_collaboration_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
+    const masterDataFastPath = buildAiMasterDataQualityResponse(db, body)
+    if (masterDataFastPath) {
+      const result = {
+        ...masterDataFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_master_data_quality_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name, persist: false })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'master_data_quality_fast_path', body, result })
       send(res, 200, result)
       return true
     }

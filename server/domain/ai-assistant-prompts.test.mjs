@@ -82,7 +82,6 @@ test('module prompts apply without active context', async () => {
 test('unknown module falls back to generic prompts and every result has exactly three prompts', async () => {
   const cases = [
     { moduleId: 'unknown' },
-    { moduleId: 'master-data' },
     { moduleId: 'finance' },
     { moduleId: 'reports' },
     { moduleId: 'imports' },
@@ -93,4 +92,5 @@ test('unknown module falls back to generic prompts and every result has exactly 
     assert.equal(prompts.length, 3)
   }
   assert.deepEqual(await promptsFor({ moduleId: 'unknown' }), ['解释当前页面', '下一步建议', '从哪里开始'])
+  assert.deepEqual(await promptsFor({ moduleId: 'master-data' }), ['检查主数据质量', '缺少哪些默认字段？', '下一步建议'])
 })

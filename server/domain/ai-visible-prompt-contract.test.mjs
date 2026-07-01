@@ -44,8 +44,8 @@ const visiblePromptContract = Object.freeze([
   { surface: 'forecast', input: { moduleId: 'forecast' }, prompts: ['今天计划模块最需要处理什么？', '哪些 SKU 有 MRP 例外？', 'MRP 计划释放有哪些需要审阅？', '这个 forecast 的 MAPE 怎么样？', '哪些补货建议需要转成草稿？', '这个 SKU 的计划参数是什么？'], classification: 'supported_deterministic', modules: ['planning'] },
   { surface: 'srm', input: { moduleId: 'srm' }, prompts: ['查看高风险供应商', '解释评分规则', '下一步跟进'], classification: 'supported_deterministic', modules: ['supplier'] },
   { surface: 'finance', input: { moduleId: 'finance' }, prompts: ['查看待结算项', '解释差异原因', '下一步跟进'], classification: 'supported_deterministic', modules: ['finance'] },
-  { surface: 'master_data', input: { moduleId: 'master_data' }, prompts: ['解释当前页面', '下一步建议', '从哪里开始'], classification: 'supported_boundary_response', modules: ['masterData'] },
-  { surface: 'master-data', input: { moduleId: 'master-data' }, prompts: ['解释当前页面', '下一步建议', '从哪里开始'], classification: 'supported_boundary_response', modules: ['masterData'] },
+  { surface: 'master_data', input: { moduleId: 'master_data' }, prompts: ['检查主数据质量', '缺少哪些默认字段？', '下一步建议'], classification: 'supported_deterministic', modules: ['masterData'] },
+  { surface: 'master-data', input: { moduleId: 'master-data' }, prompts: ['检查主数据质量', '缺少哪些默认字段？', '下一步建议'], classification: 'supported_deterministic', modules: ['masterData'] },
   { surface: 'reports', input: { moduleId: 'reports' }, prompts: ['解释当前页面', '下一步建议', '从哪里开始'], classification: 'supported_boundary_response', modules: ['reports'] },
   { surface: 'imports', input: { moduleId: 'imports' }, prompts: ['解释当前页面', '下一步建议', '从哪里开始'], classification: 'supported_boundary_response', modules: ['imports'] },
   { surface: 'active:supplier', input: { moduleId: 'srm', activeContext: { entityType: 'supplier', entityId: 'SUP-001', entityLabel: 'ABC Components' } }, prompts: ['解释这个供应商', '查看供应商风险', '查看 RFQ 参与'], classification: 'supported_deterministic', modules: ['supplier', 'rfq'] },
@@ -55,6 +55,7 @@ const visiblePromptContract = Object.freeze([
 ])
 
 function promptClassification(entry, message) {
+  if (entry.surface === 'master_data' || entry.surface === 'master-data') return entry.classification
   return ['解释当前页面', '下一步建议', '从哪里开始'].includes(message)
     ? 'supported_boundary_response'
     : entry.classification
@@ -86,6 +87,10 @@ const deterministicReturnedCardTypes = Object.freeze([
   'inventory_movement_summary',
   'inventory_replenishment_summary',
   'inventory_status',
+  'master_data_boundary_notice',
+  'master_data_missing_fields_summary',
+  'master_data_next_actions',
+  'master_data_quality_summary',
   'missing_fields',
   'planning_status_summary',
   'po_overdue_summary',

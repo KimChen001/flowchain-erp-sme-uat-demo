@@ -623,6 +623,49 @@ function AiResponseCard({
           ]} />
         </CardShell>
       );
+    case "master_data_quality_summary":
+      return (
+        <CardShell title={card.title || "主数据质量摘要"}>
+          <KeyValueGrid fields={[
+            ["物料", data.itemCount],
+            ["供应商", data.supplierCount],
+            ["仓库/库位", data.warehouseCount],
+            ["付款条款", data.paymentTermCount],
+            ["税码", data.taxCodeCount],
+            ["质量信号", data.issueCount],
+            ["高优先级", data.highIssueCount],
+            ["中优先级", data.mediumIssueCount],
+          ]} />
+        </CardShell>
+      );
+    case "master_data_missing_fields_summary":
+      return (
+        <CardShell title={card.title || "缺少默认字段"}>
+          <KeyValueGrid fields={[["缺失/待确认", data.missingFieldCount]]} />
+          <MiniList
+            items={arrayValue(data.topIssues).map((issue) => {
+              const row = typeof issue === "object" && issue ? issue as Record<string, unknown> : {};
+              return {
+                title: bestText(row.label, row.entityId, row.field),
+                reason: [row.field, row.severity, row.reason].filter(hasValue).map(textValue).join(" · "),
+              };
+            })}
+            limit={6}
+          />
+        </CardShell>
+      );
+    case "master_data_next_actions":
+      return (
+        <CardShell title={card.title || "主数据下一步"}>
+          <MiniList items={arrayValue(data.actions).map((action) => ({ title: textValue(action) }))} limit={5} />
+        </CardShell>
+      );
+    case "master_data_boundary_notice":
+      return (
+        <CardShell title={card.title || "主数据 Alpha 边界"}>
+          <p className="text-sm text-slate-600">{textValue(data.message || card.title)}</p>
+        </CardShell>
+      );
     case "planning_status_summary":
       return (
         <CardShell title={card.title || "计划/MRP 摘要"}>
