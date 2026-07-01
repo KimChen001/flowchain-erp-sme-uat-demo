@@ -158,6 +158,8 @@ Scenario H: SRM `查看高风险供应商` to supplier evidence to internal navi
 
 ## Issue Capture Template
 
+Use `docs/alpha-feedback-template.md` for structured pilot feedback. The short form below is acceptable for quick triage notes.
+
 - Tester:
 - Date/time:
 - Browser/device:
