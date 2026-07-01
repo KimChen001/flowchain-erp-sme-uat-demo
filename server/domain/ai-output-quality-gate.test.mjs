@@ -39,7 +39,14 @@ function visibleAiText(payload) {
   const parts = [payload.content, payload.message]
   for (const card of payload.cards || []) {
     parts.push(card.title)
-    for (const issue of card.data?.topIssues || []) parts.push(issue.title, issue.reason)
+    for (const key of ['topIssues', 'topItems', 'topRfqs', 'topPurchaseOrders', 'topExceptions', 'priorityItems']) {
+      for (const item of card.data?.[key] || []) {
+        parts.push(item.title, item.reason, item.explanation, item.sourceDocument, item.status, item.dueDate)
+        for (const related of item.relatedDocuments || []) parts.push(related)
+        for (const evidence of item.evidence || []) parts.push(evidence.label, evidence.summary, evidence.status)
+        for (const action of item.recommendedActions || []) parts.push(action.label)
+      }
+    }
     for (const evidence of card.evidence || []) parts.push(evidence.label, evidence.summary, evidence.status)
     for (const action of card.actions || []) parts.push(action.label)
   }
@@ -108,4 +115,65 @@ test('R93 non-today deterministic prompts use business-readable labels globally'
   assert.match(visible, /询价单 RFQ-26-0046/)
   assert.match(visible, /收货单 GRN-202605-0418/)
   assert.match(visible, /SKU-00412.*库存|库存.*SKU-00412/)
+})
+
+test('R94 today priority uses structured deterministic priority items', () => {
+  const response = buildAiEvidenceReuseResponse(createPilotDb(), { moduleId: 'overview', message: '今天最需要处理什么？' }, { cache: {} })
+  const summary = response.cards.find((card) => card.type === 'procurement_followup_summary')
+  const priorityItems = summary.data.priorityItems
+
+  assert.ok(Array.isArray(priorityItems))
+  assert.ok(priorityItems.length >= 3)
+  assert.deepEqual(priorityItems.map((item) => item.rank), priorityItems.map((_, index) => index + 1))
+  for (const item of priorityItems.slice(0, 3)) {
+    assert.ok(item.rank)
+    assert.ok(item.severity)
+    assert.ok(item.reason)
+    assert.ok(item.explanation)
+    assert.ok(item.sourceDocument)
+    assert.ok(Array.isArray(item.evidence))
+    assert.ok(Array.isArray(item.recommendedActions))
+  }
+  assert.equal(summary.data.topIssues[0].title, priorityItems[0].sourceDocument)
+  assert.equal(summary.data.topIssues[0].reason, priorityItems[0].explanation)
+})
+
+test('R94 PO priority explanation is deterministic and source-backed', () => {
+  const response = buildAiEvidenceReuseResponse(createPilotDb(), { moduleId: 'overview', message: '解释 PO-2026-1282 为什么优先' }, { cache: {} })
+  const visible = visibleAiText(response)
+
+  assert.equal(response.intent.name, 'priority_explanation_query')
+  assert.equal(response.provider, 'local')
+  assert.equal(response.providerStatus, 'deterministic')
+  assert.match(response.content, /PO-2026-1282/)
+  assert.match(response.content, /2026-05-25/)
+  assert.match(response.content, /部分到货/)
+  assert.match(response.content, /确认未到货明细|供应商剩余交期/)
+  assert.doesNotMatch(visible, INTERNAL_VISIBLE_PATTERN)
+})
+
+test('R95 broad deterministic AI prompt regression harness stays product-readable', () => {
+  const prompts = [
+    '今天最需要处理什么？',
+    '解释 PO-2026-1282 为什么优先',
+    '哪些采购单据有风险？',
+    '哪些 RFQ 需要跟进？',
+    '哪些库存风险最高？',
+    'SKU-00412 为什么风险高？',
+    '哪些供应商需要跟进？',
+    '有没有收货异常？',
+    '待审批 PR 有哪些？',
+    '待转 PO 的 PR 有哪些？',
+  ]
+  const responses = prompts.map((message) => buildAiEvidenceReuseResponse(createPilotDb(), { moduleId: 'overview', message }, { cache: {} }))
+  const visible = responses.map(visibleAiText).join('\n')
+
+  assert.equal(responses.every(Boolean), true)
+  assert.equal(responses.every((response) => response.provider === 'local' && response.providerStatus === 'deterministic'), true)
+  assert.doesNotMatch(visible, INTERNAL_VISIBLE_PATTERN)
+  assert.match(visible, /采购单 PO-2026-1282/)
+  assert.match(visible, /SKU-00412/)
+  assert.match(visible, /询价单 RFQ-26-0046/)
+  assert.match(visible, /收货单 GRN-202605-0418/)
+  assert.match(visible, /打开 PO-2026-1282|查看 SKU-00412|打开 RFQ-26-0046/)
 })

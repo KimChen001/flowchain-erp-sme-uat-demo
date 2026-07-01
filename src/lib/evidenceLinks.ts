@@ -284,6 +284,35 @@ function actionFocus(params: URLSearchParams) {
   return undefined;
 }
 
+function navigationIntentFromApiRoute(url: URL, options: { source?: string } = {}) {
+  const parts = url.pathname.replace(/^\/+/, "").split("/").filter(Boolean);
+  if (parts[0] !== "api") return null;
+  if (parts[1] === "procurement" && parts[2] === "documents") {
+    const type = decodeURIComponent(parts[3] || "");
+    const entityId = decodeURIComponent(parts[4] || "");
+    const target = targetForType(type);
+    if (target && entityId) {
+      return navigationIntentFromModule(target.moduleId, {
+        focusTarget: { entityType: target.entityType, entityId },
+        source: options.source,
+      });
+    }
+  }
+  if (parts[1] === "inventory" && parts[2] === "items" && parts[3]) {
+    return navigationIntentFromModule("inventory", {
+      focusTarget: { entityType: "inventory_item", entityId: decodeURIComponent(parts[3]) },
+      source: options.source,
+    });
+  }
+  if (parts[1] === "inventory" && parts[2] === "exceptions") {
+    return navigationIntentFromModule("inventory:exceptions", { source: options.source });
+  }
+  if (parts[1] === "inventory" && parts[2] === "movements") {
+    return navigationIntentFromModule("inventory:movements", { source: options.source });
+  }
+  return null;
+}
+
 export function navigationIntentFromInternalTarget(target: unknown, options: {
   source?: string;
 } = {}): CanonicalNavigationIntent | null {
@@ -296,6 +325,8 @@ export function navigationIntentFromInternalTarget(target: unknown, options: {
     return null;
   }
   if (url.origin !== "https://flowchain.local") return null;
+  const apiIntent = navigationIntentFromApiRoute(url, options);
+  if (apiIntent) return apiIntent;
   const [pathModule = "overview"] = url.pathname.replace(/^\/+/, "").split("/");
   const baseModule = pathModule === "receiving" ? "procurement" : pathModule || "overview";
   const view = pathModule === "receiving" ? "receiving" : actionView(baseModule, url.searchParams.get("view") || "");

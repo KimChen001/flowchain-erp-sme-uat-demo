@@ -316,13 +316,157 @@ function findInventoryItem(items = [], message = '') {
   ) || null
 }
 
+function businessIdFromItem(item = {}) {
+  const id = targetId(item)
+  return id.match(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)?.[0] || id
+}
+
+function severityLabel(value = '') {
+  const rank = priorityRank(value)
+  if (rank >= 3) return '高'
+  if (rank === 2) return '中'
+  if (rank === 1) return '低'
+  return '待评估'
+}
+
+function findDocumentById(documents = [], id = '') {
+  return asArray(documents).find((item) => text(item.id).toLowerCase() === text(id).toLowerCase()) || null
+}
+
+function relatedDocumentsFor(document = {}, models = {}) {
+  document = document || {}
+  const related = []
+  const docId = text(document.id)
+  if (document.sourceRequest) related.push(docLabel('pr', document.sourceRequest))
+  if (document.sourceRfq) related.push(docLabel('rfq', document.sourceRfq))
+  if (document.relatedPo) related.push(docLabel('po', document.relatedPo))
+  if (document.relatedGrn) related.push(docLabel('grn', document.relatedGrn))
+  for (const candidate of asArray(models.procurementDocuments)) {
+    if (!docId || candidate.id === docId) continue
+    const values = [candidate.sourceRequest, candidate.sourceRfq, candidate.relatedPo, candidate.relatedGrn, candidate.poId, candidate.purchaseOrderId]
+    if (values.some((value) => text(value) === docId)) related.push(docLabel(candidate.documentType, candidate.id))
+  }
+  return [...new Set(related.filter(Boolean))].slice(0, 4)
+}
+
+function relatedInventoryRisksFor(document = {}, models = {}) {
+  document = document || {}
+  const relatedIds = [document.sourceSku, document.sku, document.itemId, document.itemName].map(text).filter(Boolean)
+  if (document.sourceRequest) {
+    const request = findDocumentById(models.procurementDocuments, document.sourceRequest)
+    relatedIds.push(text(request?.sourceSku), text(request?.sku), text(request?.itemName))
+  }
+  return asArray(models.inventoryItems)
+    .filter((item) => relatedIds.some((value) => value && [item.sku, item.itemName, item.id].map(text).includes(value)))
+    .filter((item) => ['缺货', '低库存', '不足', '预警', '异常'].includes(item.status) || ['高', '中'].includes(item.riskLevel))
+    .map((item) => `${item.sku} ${item.status || item.riskLevel}`)
+    .slice(0, 3)
+}
+
+function priorityExplanation(item = {}, models = {}) {
+  const id = businessIdFromItem(item)
+  const document = findDocumentById(models.procurementDocuments, id)
+  const status = text(item.status || document?.status || document?.matchStatus || document?.invoiceStatus)
+  const dueDate = text(item.dueDate || document?.expectedDate || document?.dueDate || document?.requiredDate || document?.date)
+  const reason = text(item.reason || item.summary || item.message || item.nextAction)
+  const action = actionLabel(item)
+  const amountText = hasFiniteValue(document?.amount) ? `金额 ${amount(document.amount, document.currency || 'CNY')}` : ''
+  const receiving = relatedDocumentsFor(document, models).filter((value) => /收货单/.test(value)).join('、')
+  const inventory = relatedInventoryRisksFor(document, models).join('、')
+  const signals = [
+    dueDate ? `预计/要求日期 ${dueDate}` : '',
+    status ? `当前状态 ${status}` : '',
+    amountText,
+    receiving ? `关联${receiving}` : '',
+    inventory ? `关联库存风险 ${inventory}` : '',
+    reason,
+  ].filter(Boolean)
+  if (/^PO-/i.test(id)) {
+    return `${id} 被列为优先事项，主要因为${signals.join('，')}。建议先确认未到货明细、供应商剩余交期和相关 SKU 库存覆盖。`
+  }
+  return `${docLabel(item.documentType || item.type, id) || text(item.title)} 被列为优先事项，主要因为${signals.join('，')}。建议${action.replace(/^打开\s*/, '').replace(/^查看\s*/, '')}`
+}
+
+function priorityItemsFromCockpit(models) {
+  const cockpit = models.todayCockpit
+  const source = [
+    ...asArray(cockpit.recommendedActions),
+    ...asArray(cockpit.followups).slice(0, 3),
+    ...asArray(cockpit.inventoryRisks).slice(0, 3),
+  ]
+  const seen = new Set()
+  return source
+    .map((item) => {
+      const id = businessIdFromItem(item)
+      const document = findDocumentById(models.procurementDocuments, id)
+      return {
+        ...item,
+        id: id || item.id,
+        type: item.documentType || item.type || document?.documentType || item.target?.entityType || '',
+        severity: severityLabel(item.priority || item.severity || document?.riskLevel),
+        rankScore: priorityRank(item.priority || item.severity || document?.riskLevel),
+        title: item.title || docLabel(document?.documentType || item.type, id),
+        reason: item.reason || item.summary || item.message || item.nextAction,
+        explanation: priorityExplanation(item, models),
+        sourceDocument: docLabel(document?.documentType || item.documentType || item.type, id),
+        relatedDocuments: relatedDocumentsFor(document, models),
+        amount: document?.amount ?? item.amount,
+        dueDate: item.dueDate || document?.expectedDate || document?.dueDate || document?.requiredDate || '',
+        status: item.status || document?.status || document?.matchStatus || document?.invoiceStatus || '',
+        evidence: evidenceItems([item]),
+        recommendedActions: recommendedActions([item]),
+      }
+    })
+    .filter((item) => item.id || item.title)
+    .filter((item) => {
+      const key = item.id || item.title
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .map((item, index) => ({ ...item, rank: index + 1 }))
+    .slice(0, 6)
+}
+
+function buildPriorityExplanationResponse(models, message = '') {
+  const priorities = priorityItemsFromCockpit(models)
+  const requestedId = message.match(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)?.[0] || ''
+  const priority = priorities.find((item) => text(item.id).toLowerCase() === requestedId.toLowerCase()) || priorities[0]
+  if (!priority) return null
+  const evidence = evidenceItems([priority])
+  return response({
+    intent: 'priority_explanation_query',
+    content: priority.explanation,
+    evidence,
+    cards: [
+      {
+        type: 'priority_explanation',
+        title: `${priority.sourceDocument || priority.title} 优先级说明`,
+        data: {
+          priorityItems: [priority],
+          topIssues: [{
+            title: priority.sourceDocument || priority.title,
+            reason: priority.explanation,
+            rank: priority.rank,
+            severity: priority.severity,
+          }],
+        },
+      },
+      { type: 'evidence', evidence },
+      { type: 'recommended_actions', actions: priority.recommendedActions },
+    ],
+  })
+}
+
 function buildTodayCockpitResponse(models) {
   const cockpit = models.todayCockpit
-  const actions = asArray(cockpit.recommendedActions).slice(0, 4)
+  const priorityItems = priorityItemsFromCockpit(models)
+  const actions = priorityItems.slice(0, 4)
   const followups = asArray(cockpit.followups).slice(0, 3)
   const inventoryRisks = asArray(cockpit.inventoryRisks).slice(0, 3)
-  const evidence = evidenceItems([...actions, ...followups, ...inventoryRisks])
-  const topAction = actions[0]?.title || followups[0]?.title || inventoryRisks[0]?.nextAction || '先复核采购和库存风险证据'
+  const evidence = evidenceItems(actions)
+  const topPriority = priorityItems[0]
+  const topAction = topPriority?.title || followups[0]?.title || inventoryRisks[0]?.nextAction || '先复核采购和库存风险证据'
   const overduePoCount = Math.max(
     toNumber(models.procurementSummary.overduePoCount, 0),
     asArray(cockpit.followups).filter((item) => text(item.type) === 'overdue_po' || /\bPO-/i.test(text(item.documentId)) && /超过预计|逾期/.test(text(item.title || item.summary))).length,
@@ -331,7 +475,7 @@ function buildTodayCockpitResponse(models) {
   const shownInventoryRiskCount = Math.min(toNumber(cockpit.summary.lowStockCount, 0), inventoryRisks.length)
   return response({
     intent: 'today_cockpit_priority_query',
-    content: `今天建议先处理：${topAction}。当前有 ${cockpit.summary.urgentFollowupCount || 0} 个紧急跟进、${cockpit.summary.lowStockCount || 0} 个库存风险，开放金额 ${amount(cockpit.summary.totalOpenAmount, cockpit.summary.currency || 'CNY')}；下方展示其中优先级最高的 ${shownFollowupCount || followups.length} 个跟进项和 ${shownInventoryRiskCount || inventoryRisks.length} 个库存风险。`,
+    content: `今天建议先处理：${topAction}。${topPriority?.explanation || '该事项在当前采购、库存和 RFQ 信号中排序最高。'}当前有 ${cockpit.summary.urgentFollowupCount || 0} 个紧急跟进、${cockpit.summary.lowStockCount || 0} 个库存风险，开放金额 ${amount(cockpit.summary.totalOpenAmount, cockpit.summary.currency || 'CNY')}；下方展示其中优先级最高的 ${shownFollowupCount || followups.length} 个跟进项和 ${shownInventoryRiskCount || inventoryRisks.length} 个库存风险。`,
     evidence,
     cards: [
       {
@@ -343,11 +487,17 @@ function buildTodayCockpitResponse(models) {
           pendingRfqResponseCount: models.procurementSummary.activeRfqCount,
           overduePoCount,
           receivingExceptionCount: models.procurementSummary.pendingReceivingCount,
-          topIssues: actions.map((item) => ({ title: item.title, reason: item.reason || item.nextAction })),
+          priorityItems,
+          topIssues: actions.map((item) => ({
+            title: item.sourceDocument || item.title,
+            reason: item.explanation,
+            rank: item.rank,
+            severity: item.severity,
+          })),
         },
       },
       { type: 'evidence', evidence },
-      { type: 'recommended_actions', actions: recommendedActions(actions) },
+      { type: 'recommended_actions', actions: actions.flatMap((item) => item.recommendedActions).slice(0, 3) },
     ],
   })
 }
@@ -462,11 +612,15 @@ export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {})
   const normalized = compact(message)
   const models = readModels(data, options.cache || {})
 
+  if (/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i.test(message) && /优先|解释/.test(message)) {
+    return buildPriorityExplanationResponse(models, message)
+  }
+
   if (/供应商|supplier/i.test(message) && /跟进|follow|风险|关注/.test(message) && !/\bSUP-[A-Z0-9-]+\b/i.test(message)) {
     return buildSupplierFollowupResponse(models)
   }
 
-  if (/采购|单据|三单|发票|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|差异|跟进|逾期|问题|为什么|原因|优先/.test(message)) {
+  if (/采购|单据|三单|发票|收货|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|待审批|待转|差异|跟进|逾期|问题|为什么|原因|优先|有哪些/.test(message)) {
     return buildProcurementRiskResponse(models)
   }
 
@@ -488,7 +642,7 @@ export function buildAiCockpitFastPathResponse(data = {}, body = {}, options = {
   const isCockpitContext = !moduleId || moduleId === 'overview' || moduleId === 'today-cockpit'
   const cockpitPrompt = (
     (/今天|今日|today/.test(message) && /处理|关注|跟进|优先|工作台/.test(message)) ||
-    (/采购|单据|三单|发票|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|差异|跟进|逾期|问题|为什么|原因|优先/.test(message)) ||
+    (/采购|单据|三单|发票|收货|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|待审批|待转|差异|跟进|逾期|问题|为什么|原因|优先|有哪些/.test(message)) ||
     (/库存|sku|物料|inventory|stock|shortage/i.test(message) && /风险|关注|为什么|原因|缺货|低库存|补货|够不够/.test(message)) ||
     (/供应商|supplier/i.test(message) && /跟进|follow|风险|关注/.test(message) && !/\bSUP-[A-Z0-9-]+\b/i.test(message))
   )
