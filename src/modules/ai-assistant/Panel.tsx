@@ -483,6 +483,87 @@ function AiResponseCard({
           <MiniList items={arrayValue(data.topItems)} limit={3} />
         </CardShell>
       );
+    case "finance_pending_settlement_summary":
+      return (
+        <CardShell title={card.title || "待结算协同摘要"}>
+          <KeyValueGrid fields={[
+            ["发票数", data.invoiceCount],
+            ["待协同", data.pendingSettlementCount],
+            ["待协同金额", data.pendingAmount],
+            ["差异发票", data.varianceInvoiceCount],
+            ["三单差异", data.threeWayVarianceCount],
+          ]} />
+          <MiniList
+            items={arrayValue(data.topInvoices).map((invoice) => {
+              const row = typeof invoice === "object" && invoice ? invoice as Record<string, unknown> : {};
+              return {
+                title: bestText(row.invoiceId, row.supplier, "发票"),
+                reason: bestText(row.reason, row.matchStatus, row.invoiceStatus),
+              };
+            })}
+            limit={3}
+          />
+        </CardShell>
+      );
+    case "finance_variance_summary":
+      return (
+        <CardShell title={card.title || "财务差异摘要"}>
+          <KeyValueGrid fields={[
+            ["差异发票", data.varianceInvoiceCount],
+            ["差异金额", data.totalVarianceAmount],
+          ]} />
+          <MiniList
+            items={arrayValue(data.topVariances).map((item) => {
+              const row = typeof item === "object" && item ? item as Record<string, unknown> : {};
+              return {
+                title: bestText(row.invoiceId, row.supplier, "差异发票"),
+                reason: bestText(row.reason, row.matchStatus, row.invoiceStatus),
+              };
+            })}
+            limit={3}
+          />
+        </CardShell>
+      );
+    case "finance_next_actions":
+      return (
+        <CardShell title={card.title || "财务下一步"}>
+          <MiniList items={arrayValue(data.actions)} limit={3} />
+          <KeyValueGrid fields={[
+            ["禁用动作", arrayValue(data.blockedActions).join("、")],
+          ]} />
+        </CardShell>
+      );
+    case "three_way_match_summary":
+      return (
+        <CardShell title={card.title || "三单匹配摘要"}>
+          <KeyValueGrid fields={[
+            ["匹配数", data.matchCount],
+            ["差异数", data.varianceCount],
+          ]} />
+          <MiniList
+            items={arrayValue(data.topMatches).map((item) => {
+              const row = typeof item === "object" && item ? item as Record<string, unknown> : {};
+              return {
+                title: bestText(row.matchId, row.invoice, "三单匹配"),
+                reason: [row.status, row.reason, hasValue(row.varianceAmount) ? `差异 ${textValue(row.varianceAmount)}` : ""].filter(hasValue).map(textValue).join(" · "),
+              };
+            })}
+            limit={3}
+          />
+        </CardShell>
+      );
+    case "finance_boundary_notice":
+      return (
+        <CardShell title={card.title || "财务协同边界"}>
+          <KeyValueGrid fields={[
+            ["边界", data.boundary],
+            ["付款执行", data.paymentExecution],
+            ["会计过账", data.accountingPosting],
+            ["税务申报", data.taxFiling],
+            ["最终审批", data.finalApproval],
+          ]} />
+        </CardShell>
+      );
     case "planning_status_summary":
       return (
         <CardShell title={card.title || "计划/MRP 摘要"}>

@@ -251,6 +251,10 @@ const ACTION_VIEW_ALIASES: Record<string, string> = {
   item: "overview",
   suppliers: "master",
   supplier: "master",
+  invoices: "invoices",
+  payables: "payables",
+  settlement: "settlement",
+  reconciliation: "reconciliation",
 };
 
 const ACTION_FOCUS_PARAMS: Array<{ key: string; entityType: string }> = [
@@ -261,6 +265,7 @@ const ACTION_FOCUS_PARAMS: Array<{ key: string; entityType: string }> = [
   { key: "itemId", entityType: "inventory_item" },
   { key: "sku", entityType: "inventory_item" },
   { key: "supplierId", entityType: "supplier" },
+  { key: "invoiceId", entityType: "supplier_invoice" },
 ];
 
 function actionView(moduleId: string, view = "") {

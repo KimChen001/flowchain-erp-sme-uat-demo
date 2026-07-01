@@ -43,7 +43,7 @@ const visiblePromptContract = Object.freeze([
   { surface: 'inventory', input: { moduleId: 'inventory' }, prompts: ['查看库存风险', '解释库存异常', '准备 PR 草稿'], classification: 'supported_deterministic', modules: ['inventory', 'actionDraft'] },
   { surface: 'forecast', input: { moduleId: 'forecast' }, prompts: ['今天计划模块最需要处理什么？', '哪些 SKU 有 MRP 例外？', 'MRP 计划释放有哪些需要审阅？', '这个 forecast 的 MAPE 怎么样？', '哪些补货建议需要转成草稿？', '这个 SKU 的计划参数是什么？'], classification: 'supported_deterministic', modules: ['planning'] },
   { surface: 'srm', input: { moduleId: 'srm' }, prompts: ['查看高风险供应商', '查看供应商风险', '解释当前页面'], classification: 'supported_deterministic', modules: ['supplier'] },
-  { surface: 'finance', input: { moduleId: 'finance' }, prompts: ['解释当前页面', '下一步建议', '从哪里开始'], classification: 'supported_boundary_response', modules: ['finance'] },
+  { surface: 'finance', input: { moduleId: 'finance' }, prompts: ['查看待结算项', '解释差异原因', '下一步跟进'], classification: 'supported_deterministic', modules: ['finance'] },
   { surface: 'master_data', input: { moduleId: 'master_data' }, prompts: ['解释当前页面', '下一步建议', '从哪里开始'], classification: 'supported_boundary_response', modules: ['masterData'] },
   { surface: 'master-data', input: { moduleId: 'master-data' }, prompts: ['解释当前页面', '下一步建议', '从哪里开始'], classification: 'supported_boundary_response', modules: ['masterData'] },
   { surface: 'reports', input: { moduleId: 'reports' }, prompts: ['解释当前页面', '下一步建议', '从哪里开始'], classification: 'supported_boundary_response', modules: ['reports'] },
@@ -77,6 +77,10 @@ const deterministicReturnedCardTypes = Object.freeze([
   'confidence_summary',
   'empty_state',
   'evidence',
+  'finance_boundary_notice',
+  'finance_next_actions',
+  'finance_pending_settlement_summary',
+  'finance_variance_summary',
   'inventory_risk_summary',
   'inventory_exception_summary',
   'inventory_movement_summary',
@@ -108,6 +112,7 @@ const deterministicReturnedCardTypes = Object.freeze([
   'supplier_rfq_summary',
   'supplier_status',
   'stock_balance_gap_summary',
+  'three_way_match_summary',
 ])
 
 function createDb() {

@@ -4,6 +4,7 @@ import { buildAiChatStatusResponse, normalizeAiChatMessage } from '../domain/ai-
 import { buildAiProcurementOperationalResponse } from '../domain/ai-procurement-operational-query.mjs'
 import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-query.mjs'
 import { buildAiSupplierOperationalResponse } from '../domain/ai-supplier-operational-query.mjs'
+import { buildAiFinanceCollaborationResponse } from '../domain/ai-finance-collaboration-query.mjs'
 import { buildAiCockpitFastPathResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
 import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
 import { buildAiReadContext } from '../domain/ai-read-context.mjs'
@@ -508,6 +509,23 @@ export async function handleAiRoute(ctx) {
     if (!body.question) return send(res, 400, { error: 'question is required' })
 
     let branchStartedAt = Date.now()
+    const financeFastPath = buildAiFinanceCollaborationResponse(db, body)
+    if (financeFastPath) {
+      const result = {
+        ...financeFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_finance_collaboration_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'finance_collaboration_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
     const procurementFastPath = buildAiProcurementOperationalResponse(db, body, { ensurePurchaseRequests, ensureRfqs })
     if (procurementFastPath) {
       const result = {
@@ -712,6 +730,22 @@ export async function handleAiRoute(ctx) {
       }
       void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_chat_status_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
       logAiTiming({ startedAt, branchStartedAt, branch: 'deferred_procurement_exception', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
+    const financeCollaborationQuery = buildAiFinanceCollaborationResponse(db, body)
+    if (financeCollaborationQuery) {
+      const result = {
+        ...financeCollaborationQuery,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_finance_collaboration_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'finance_collaboration', body, result })
       send(res, 200, result)
       return true
     }
