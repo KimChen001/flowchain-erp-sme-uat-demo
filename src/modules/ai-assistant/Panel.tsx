@@ -68,6 +68,7 @@ const aiEvidenceTitleClass = `${typography.compactMetadata} font-medium truncate
 const aiEvidenceMetaClass = `${typography.compactMetadata} truncate`;
 const aiActionPillClass = `rounded-full px-2.5 py-1 ${typography.compactMetadata} font-medium`;
 const aiActionLinkClass = `${aiActionPillClass} hover:underline`;
+const aiBoundaryNoticeClass = `${typography.metadata} text-slate-600`;
 
 function hasValue(value: unknown) {
   return value !== undefined && value !== null && value !== "";
@@ -450,7 +451,7 @@ function AiResponseCard({
     case "supplier_boundary_notice":
       return (
         <CardShell title={card.title || "SRM Alpha 边界"}>
-          <p className="text-sm text-slate-600">{textValue(data.message || card.title)}</p>
+          <p className={aiBoundaryNoticeClass}>{textValue(data.message || card.title)}</p>
         </CardShell>
       );
     case "inventory_status":
@@ -663,7 +664,7 @@ function AiResponseCard({
     case "master_data_boundary_notice":
       return (
         <CardShell title={card.title || "主数据 Alpha 边界"}>
-          <p className="text-sm text-slate-600">{textValue(data.message || card.title)}</p>
+          <p className={aiBoundaryNoticeClass}>{textValue(data.message || card.title)}</p>
         </CardShell>
       );
     case "planning_status_summary":
