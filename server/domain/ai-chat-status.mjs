@@ -644,17 +644,17 @@ function buildProcurementExceptionResponse(db = {}, message = '', options = {}) 
   ].slice(0, 8)
   const totalIssueCount = overduePos.length + pendingPrs.length + pendingRfqs.length + receivingIssues.length
   const evidence = [
-    { type: 'purchase_order', id: 'purchase_orders', summary: `${purchaseOrders.length} purchase orders inspected.` },
-    { type: 'purchase_request', id: 'purchase_requests', summary: `${purchaseRequests.length} purchase requests inspected.` },
-    { type: 'rfq', id: 'rfqs', summary: `${rfqs.length} RFQs inspected.` },
-    { type: 'receiving', id: 'receiving_docs', summary: `${receivingDocs.length} receiving documents inspected.` },
+    { type: 'purchase_order', id: 'purchase_orders', summary: `已检查 ${purchaseOrders.length} 张采购订单。` },
+    { type: 'purchase_request', id: 'purchase_requests', summary: `已检查 ${purchaseRequests.length} 张采购申请。` },
+    { type: 'rfq', id: 'rfqs', summary: `已检查 ${rfqs.length} 个 RFQ。` },
+    { type: 'receiving', id: 'receiving_docs', summary: `已检查 ${receivingDocs.length} 张收货单。` },
   ]
-  if (!totalIssueCount) evidence.push({ type: 'empty_state', id: 'procurement_exceptions', summary: 'No procurement exceptions were found in current data.' })
+  if (!totalIssueCount) evidence.push({ type: 'empty_state', id: 'procurement_exceptions', summary: '当前数据没有发现采购异常。' })
 
   return {
     message: totalIssueCount
-      ? `I found ${totalIssueCount} procurement items that may need follow-up.`
-      : 'No procurement exceptions are visible in the current data.',
+      ? `我找到 ${totalIssueCount} 项可能需要跟进的采购事项。`
+      : '当前数据没有发现采购异常。',
     intent: {
       name: 'procurement_exception_query',
       confidence: /overdue|逾期|po\b|purchase order/i.test(message) ? 0.9 : 0.82,

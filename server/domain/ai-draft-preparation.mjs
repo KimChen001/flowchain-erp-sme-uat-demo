@@ -452,7 +452,7 @@ function buildPurchaseRequestDraft(db = {}, body = {}, options = {}) {
     priorityId: common.priority.priorityConfidence,
   }
   return {
-    message: missing.length ? 'I prepared a purchase request draft, but it needs review before it can be saved or submitted.' : 'I prepared a purchase request draft for review.',
+    message: missing.length ? '我准备了采购申请草稿，但仍需人工复核后才能保存或提交。' : '我准备了可复核的采购申请草稿。',
     intent: {
       name: 'prepare_purchase_request_draft',
       confidence: common.item && common.quantity !== null ? 0.86 : 0.68,
@@ -464,13 +464,13 @@ function buildPurchaseRequestDraft(db = {}, body = {}, options = {}) {
       },
     },
     cards: [
-      { type: 'pr_draft', title: 'Purchase Request Draft', reviewRequired: true, data },
+      { type: 'pr_draft', title: '采购申请草稿', reviewRequired: true, data },
       { type: 'missing_fields', fields: missing },
       confidenceSummary(fields),
       ...ambiguousCards(common.itemResolution, supplierResolution),
       recommendedActions([
-        { label: 'Review draft', kind: 'review' },
-        { label: 'Edit draft fields', kind: 'edit' },
+        { label: '复核草稿', kind: 'review' },
+        { label: '编辑草稿字段', kind: 'edit' },
       ]),
     ],
     evidence: common.evidence,
@@ -521,7 +521,7 @@ function buildRfqDraft(db = {}, body = {}, options = {}) {
     quotationDeadline: 'missing',
   }
   return {
-    message: missing.length ? 'I prepared an RFQ draft, but it needs review before it can be saved or sent.' : 'I prepared an RFQ draft for review.',
+    message: missing.length ? '我准备了 RFQ 草稿，但仍需人工复核后才能保存或发送。' : '我准备了可复核的 RFQ 草稿。',
     intent: {
       name: 'prepare_rfq_draft',
       confidence: common.item && common.quantity !== null ? 0.84 : 0.66,
@@ -533,12 +533,12 @@ function buildRfqDraft(db = {}, body = {}, options = {}) {
       },
     },
     cards: [
-      { type: 'rfq_draft', title: 'RFQ Draft', reviewRequired: true, data },
+      { type: 'rfq_draft', title: 'RFQ 草稿', reviewRequired: true, data },
       { type: 'missing_fields', fields: missing },
       confidenceSummary(fields),
       ...ambiguousCards(common.itemResolution, { raw: suppliers.raw, matches: suppliers.matches }),
       recommendedActions([
-        { label: 'Review draft', kind: 'review' },
+        { label: '复核草稿', kind: 'review' },
         { label: 'Edit supplier list', kind: 'edit' },
       ]),
     ],

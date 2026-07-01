@@ -400,7 +400,7 @@ test('procurement exception query uses helper-provided purchase requests when av
   assert.equal(response.intent.name, 'procurement_exception_query')
   assert.equal(response.cards[0].data.pendingPrCount, 1)
   assert.ok(response.cards[0].data.topIssues.some((issue) => issue.id === 'PR-HELPER-001'))
-  assert.ok(response.evidence.some((item) => item.type === 'purchase_request' && item.summary.includes('2 purchase requests')))
+  assert.ok(response.evidence.some((item) => item.type === 'purchase_request' && item.summary.includes('已检查 2 张采购申请')))
 })
 
 test('route passes helper-based purchase request access into status query', async () => {

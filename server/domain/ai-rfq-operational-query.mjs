@@ -387,11 +387,11 @@ function buildRfqResponseQuery(db = {}, message = '', options = {}) {
   const pending = pendingRfqSummary(openRfqs, db)
   const evidence = pending.length
     ? pending.slice(0, 5).map((rfq) => ({ type: 'rfq', id: rfq.rfqId, summary: 'RFQ has pending supplier response.' }))
-    : [{ type: 'empty_state', id: 'rfq_responses', summary: 'No pending RFQ supplier responses found.' }]
+    : [{ type: 'empty_state', id: 'rfq_responses', summary: '当前没有发现 RFQ 供应商待回复。' }]
   return {
     message: pending.length
-      ? `I found ${pending.length} RFQs waiting for supplier responses.`
-      : 'No RFQs with pending supplier responses are visible in the current data.',
+      ? `我找到 ${pending.length} 个仍在等待供应商回复的 RFQ。`
+      : '当前数据没有发现供应商待回复的 RFQ。',
     intent: { name: 'rfq_response_query', confidence: 0.84, slots: { rfqId: null, supplier: null } },
     cards: [
       {
@@ -426,7 +426,7 @@ function buildSupplierParticipationQuery(db = {}, message = '', options = {}) {
   }
   if (supplier.matches.length > 1) {
     return {
-      message: 'I found more than one supplier match. Please choose a supplier id to continue.',
+      message: '我找到多个供应商匹配项，请选择供应商 ID 后继续。',
       intent: { name: 'supplier_rfq_participation_query', confidence: 0.62, slots: { supplier: 'ambiguous' } },
       cards: [
         { type: 'ambiguous_match', field: 'supplier', matches: supplier.matches.slice(0, 5).map((item) => ({ supplierId: item.id, name: item.name })) },
@@ -467,7 +467,7 @@ function buildSupplierParticipationQuery(db = {}, message = '', options = {}) {
     { type: 'supplier_master', id: matchedSupplier.id, summary: 'Matched supplier from Master Data.' },
     ...(related.length
       ? [{ type: 'rfq', id: related[0] ? rfqIdFor(related[0]) : '', summary: `${related.length} RFQ records reference this supplier.` }]
-      : [{ type: 'empty_state', id: matchedSupplier.id, summary: 'No RFQ participation found for this supplier.' }]),
+      : [{ type: 'empty_state', id: matchedSupplier.id, summary: '当前没有发现该供应商的 RFQ 参与记录。' }]),
   ]
   return {
     message: related.length
