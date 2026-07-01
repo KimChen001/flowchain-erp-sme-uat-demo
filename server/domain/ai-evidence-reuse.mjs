@@ -37,6 +37,7 @@ function docLabel(type = '', id = '') {
   if (normalized === 'rfq' || /^RFQ-/i.test(nextId)) return `询价单 ${nextId}`.trim()
   if (normalized === 'grn' || normalized === 'receiving_doc' || /^GRN-/i.test(nextId)) return `收货单 ${nextId}`.trim()
   if (normalized === 'invoice' || normalized === 'supplier_invoice' || /^INV-/i.test(nextId)) return `发票 ${nextId}`.trim()
+  if (normalized === 'threewaymatch' || /^MATCH-/i.test(nextId)) return `三单匹配 ${nextId}`.trim()
   if (normalized === 'inventory_item' || /^SKU-/i.test(nextId)) return nextId
   return nextId
 }
@@ -49,15 +50,38 @@ function idFromRoute(route = '', pattern) {
 function businessEvidence(item = {}) {
   const type = text(item.type || item.documentType || item.entityType, 'evidence')
   const route = text(item.route)
-  const id = text(item.id || item.documentId || item.sku) ||
-    idFromRoute(route, /\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)
+  const rawId = text(item.id || item.documentId || item.sku)
+  const businessId = idFromRoute(route, /\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i) ||
+    rawId.match(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)?.[0] ||
+    rawId
+  const id = /^action-|^FOLLOWUP-/i.test(rawId) ? businessId : rawId || businessId
   const status = text(item.status || item.matchStatus)
   const rawSummary = text(item.summary || item.reason || item.nextAction || item.status || item.label)
   const rawLabel = text(item.label || item.title || item.itemName || item.id)
   const available = item.availableQuantity ?? item.currentStock ?? item.qty
   const safety = item.safetyStock ?? item.min ?? item.reorderPoint
 
-  if (/^action-/i.test(id) || /^FOLLOWUP-/i.test(id) || type === 'overdue_po') {
+  if (/^action-/i.test(rawId) || /^FOLLOWUP-/i.test(rawId) || type === 'overdue_po') {
+    if (/^RFQ-/i.test(id)) {
+      return {
+        type: 'rfq',
+        id,
+        label: `${docLabel('rfq', id)} 待供应商回复`,
+        status: status === 'open' ? '' : status,
+        summary: rawSummary || '需确认供应商回复与授标节奏。',
+        route,
+      }
+    }
+    if (/^INV-/i.test(id)) {
+      return {
+        type: 'invoice',
+        id,
+        label: `${docLabel('invoice', id)} 存在匹配差异`,
+        status: status === 'open' ? '' : status,
+        summary: rawSummary || '需复核 PO、GRN 与发票差异。',
+        route,
+      }
+    }
     const poId = idFromRoute(route, /\bPO-[A-Z0-9-]+\b/i) || text(item.documentId).match(/\bPO-[A-Z0-9-]+\b/i)?.[0] || rawLabel.match(/\bPO-[A-Z0-9-]+\b/i)?.[0] || id.match(/\bPO-[A-Z0-9-]+\b/i)?.[0] || id
     return {
       type: poId ? 'po' : type,
@@ -242,6 +266,17 @@ function procurementIssueType(document = {}) {
   return 'procurement_followup'
 }
 
+function procurementIssueTitle(document = {}) {
+  const readable = docLabel(document.documentType, document.id)
+  const issueType = procurementIssueType(document)
+  if (issueType === 'overdue_purchase_order') return `${readable} 已逾期`
+  if (issueType === 'pending_purchase_request') return `${readable} 待处理`
+  if (issueType === 'pending_rfq') return `${readable} 待回复`
+  if (issueType === 'receiving_exception') return `${readable} 收货异常`
+  if (issueType === 'invoice_match_exception') return `${readable} 存在匹配差异`
+  return `${readable} 需要跟进`
+}
+
 function topInventoryRisks(items = [], exceptions = []) {
   const itemRisks = items
     .filter((item) => ['缺货', '低库存', '不足', '预警', '异常'].includes(item.status) || ['高', '中'].includes(item.riskLevel))
@@ -341,7 +376,7 @@ function buildProcurementRiskResponse(models) {
           receivingIssueCount,
           topIssues: riskyDocuments.slice(0, 3).map((item) => ({
             type: procurementIssueType(item),
-            title: `${item.documentType} ${item.id}`,
+            title: procurementIssueTitle(item),
             reason: item.exceptionReason || item.blockingReason || item.status || item.matchStatus,
           })),
         },
@@ -431,7 +466,7 @@ export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {})
     return buildSupplierFollowupResponse(models)
   }
 
-  if (/采购|单据|三单|发票|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|差异|跟进|逾期|问题/.test(message)) {
+  if (/采购|单据|三单|发票|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|差异|跟进|逾期|问题|为什么|原因|优先/.test(message)) {
     return buildProcurementRiskResponse(models)
   }
 
@@ -453,7 +488,7 @@ export function buildAiCockpitFastPathResponse(data = {}, body = {}, options = {
   const isCockpitContext = !moduleId || moduleId === 'overview' || moduleId === 'today-cockpit'
   const cockpitPrompt = (
     (/今天|今日|today/.test(message) && /处理|关注|跟进|优先|工作台/.test(message)) ||
-    (/采购|单据|三单|发票|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|差异|跟进|逾期|问题/.test(message)) ||
+    (/采购|单据|三单|发票|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|差异|跟进|逾期|问题|为什么|原因|优先/.test(message)) ||
     (/库存|sku|物料|inventory|stock|shortage/i.test(message) && /风险|关注|为什么|原因|缺货|低库存|补货|够不够/.test(message)) ||
     (/供应商|supplier/i.test(message) && /跟进|follow|风险|关注/.test(message) && !/\bSUP-[A-Z0-9-]+\b/i.test(message))
   )

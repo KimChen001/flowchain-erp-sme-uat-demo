@@ -33,6 +33,8 @@ function createPilotDb() {
   }
 }
 
+const INTERNAL_VISIBLE_PATTERN = /documentType|entityType|inventory_item|overdue_po|action-FOLLOWUP|tool_result|response_card|repository|debug|evidence\s*·|\bpo PO-|\brfq RFQ-|\bgrn GRN-|\binvoice INV-/i
+
 function visibleAiText(payload) {
   const parts = [payload.content, payload.message]
   for (const card of payload.cards || []) {
@@ -56,7 +58,8 @@ test('R91 today priority output hides internal keys and keeps deterministic coun
   assert.match(visible, /采购单 PO-2026-1282 已超过预计到货日/)
   assert.match(visible, /SKU-00412.*库存/)
   assert.match(visible, /询价单 RFQ-26-0046/)
-  assert.doesNotMatch(visible, /action-FOLLOWUP|overdue_po|inventory_item|supplier_boundary_notice|master_data_boundary_notice|tool_result|response_card|repository|debug|evidence\s*·/i)
+  assert.doesNotMatch(visible, INTERNAL_VISIBLE_PATTERN)
+  assert.doesNotMatch(visible, /supplier_boundary_notice|master_data_boundary_notice/i)
 })
 
 test('R91 suggested actions are object-linked business actions', () => {
@@ -75,4 +78,34 @@ test('R91 AI evidence UI renders business labels instead of entity type keys', (
   assert.match(source, /const title = `依据：\$\{label\}`/)
   assert.match(source, /raw\.summary/)
   assert.doesNotMatch(source, /link\.entityType[^\\n]+link\.entityId/)
+})
+
+test('R92 AI panel preserves chat state across module and evidence navigation', () => {
+  const source = readFileSync(new URL('../../src/modules/ai-assistant/Panel.tsx', import.meta.url), 'utf8')
+
+  assert.doesNotMatch(source, /module-change/)
+  assert.doesNotMatch(source, /useEffect\(\(\) => \{[\s\S]*?setMessages\(\[\]\)[\s\S]*?\}, \[moduleId\]\)/)
+  assert.doesNotMatch(source, /useEffect\(\(\) => \{[\s\S]*?setInput\(""\)[\s\S]*?\}, \[moduleId\]\)/)
+  assert.doesNotMatch(source, /useEffect\(\(\) => \{[\s\S]*?setAsking\(false\)[\s\S]*?\}, \[moduleId\]\)/)
+  assert.ok((source.match(/onClick=\{\(\) => onNavigate\(intent\.activeId, intent\.focusTarget \|\| null\)\}/g) || []).length >= 2)
+  assert.match(source, /requestInFlightRef\.current = false/)
+})
+
+test('R93 non-today deterministic prompts use business-readable labels globally', () => {
+  const prompts = [
+    '哪些采购单据有风险？',
+    '哪些 RFQ 需要跟进？',
+    '哪些库存风险最高？',
+    '哪些供应商需要跟进？',
+    '解释 PO-2026-1282 为什么优先',
+  ]
+  const visible = prompts
+    .map((message) => visibleAiText(buildAiEvidenceReuseResponse(createPilotDb(), { moduleId: 'overview', message }, { cache: {} })))
+    .join('\n')
+
+  assert.doesNotMatch(visible, INTERNAL_VISIBLE_PATTERN)
+  assert.match(visible, /采购单 PO-2026-1282/)
+  assert.match(visible, /询价单 RFQ-26-0046/)
+  assert.match(visible, /收货单 GRN-202605-0418/)
+  assert.match(visible, /SKU-00412.*库存|库存.*SKU-00412/)
 })

@@ -1036,7 +1036,7 @@ export default function FloatingAiAssistant({
   const requestInFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
-  const abortReasonRef = useRef<"timeout" | "superseded" | "module-change" | null>(null);
+  const abortReasonRef = useRef<"timeout" | "superseded" | "unmount" | null>(null);
 
   useEffect(() => {
     if (openSignal) setOpen(true);
@@ -1048,18 +1048,8 @@ export default function FloatingAiAssistant({
   }, [messages, open, asking]);
 
   useEffect(() => {
-    abortReasonRef.current = "module-change";
-    abortRef.current?.abort();
-    abortRef.current = null;
-    requestInFlightRef.current = false;
-    setMessages([]);
-    setInput("");
-    setAsking(false);
-  }, [moduleId]);
-
-  useEffect(() => {
     return () => {
-      abortReasonRef.current = "module-change";
+      abortReasonRef.current = "unmount";
       abortRef.current?.abort();
     };
   }, []);
@@ -1131,7 +1121,7 @@ export default function FloatingAiAssistant({
         { role: "assistant", content, cards: response.cards },
       ]);
     } catch (error) {
-      if (requestSeqRef.current !== requestId || abortReasonRef.current === "module-change" || abortReasonRef.current === "superseded") return;
+      if (requestSeqRef.current !== requestId || abortReasonRef.current === "unmount" || abortReasonRef.current === "superseded") return;
       if (import.meta.env.DEV) {
         console.warn("AI assistant request failed", {
           elapsedMs: Math.round(performance.now() - requestStartedAt),
