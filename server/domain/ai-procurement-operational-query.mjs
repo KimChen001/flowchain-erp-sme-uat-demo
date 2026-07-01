@@ -323,25 +323,25 @@ function emptyStateCard(title, reason) {
 
 function buildMissingIdResponse(intentName, field, label, target = '/procurement') {
   return {
-    message: `Please provide a ${label} id for this read-only lookup.`,
+    message: `请提供 ${label} ID，我会只读查询对应记录。`,
     intent: { name: intentName, confidence: 0.64, slots: { [field]: null } },
     cards: [
-      missingFieldCard(field, `No ${label} id was provided.`),
-      recommendedActions([{ label: 'Open procurement workbench', kind: 'deep_link', target }]),
+      missingFieldCard(field, `缺少 ${label} ID。`),
+      recommendedActions([{ label: '打开采购工作台', kind: 'deep_link', target }]),
     ],
-    evidence: [{ type: 'missing_field', id: field, summary: `${label} id is required for this lookup.` }],
+    evidence: [{ type: 'missing_field', id: field, summary: `本次查询需要 ${label} ID。` }],
   }
 }
 
 function buildNotFoundResponse(intentName, field, id, label, target = '/procurement') {
   return {
-    message: `I could not find ${label} ${id}.`,
+    message: `我没有找到 ${label} ${id}。`,
     intent: { name: intentName, confidence: 0.72, slots: { [field]: id } },
     cards: [
-      emptyStateCard(`${label} not found`, `No ${label} record matched ${id}.`),
-      recommendedActions([{ label: 'Open procurement workbench', kind: 'deep_link', target }]),
+      emptyStateCard(`未找到 ${label}`, `没有记录匹配 ${id}。`),
+      recommendedActions([{ label: '打开采购工作台', kind: 'deep_link', target }]),
     ],
-    evidence: [{ type: label.toLowerCase().replace(/\s+/g, '_'), id, summary: `No ${label} record matched the requested id.` }],
+    evidence: [{ type: label.toLowerCase().replace(/\s+/g, '_'), id, summary: `没有记录匹配该 ${label} ID。` }],
   }
 }
 
@@ -352,20 +352,20 @@ function buildPrStatusResponse(db = {}, message = '', options = {}) {
   if (!prId) return buildMissingIdResponse('pr_status_query', 'prId', 'PR', '/procurement?view=requests')
   const pr = findPr(requests, prId)
   if (!pr) return buildNotFoundResponse('pr_status_query', 'prId', prId, 'PR', '/procurement?view=requests')
-  const evidence = [{ type: 'purchase_request', id: prIdFor(pr), summary: 'Matched purchase request record.' }]
+  const evidence = [{ type: 'purchase_request', id: prIdFor(pr), summary: '已匹配采购申请记录。' }]
   const contextEvidence = activeContextEvidence(resolution.context, 'purchase_request')
   if (contextEvidence) evidence.push(contextEvidence)
-  if (linkedPoForPr(db, pr)) evidence.push({ type: 'purchase_order', id: linkedPoForPr(db, pr), summary: 'Linked PO found for this PR.' })
-  if (linkedRfqForPr(db, pr, options)) evidence.push({ type: 'rfq', id: linkedRfqForPr(db, pr, options), summary: 'Linked RFQ found for this PR.' })
+  if (linkedPoForPr(db, pr)) evidence.push({ type: 'purchase_order', id: linkedPoForPr(db, pr), summary: '已找到该 PR 关联的 PO。' })
+  if (linkedRfqForPr(db, pr, options)) evidence.push({ type: 'rfq', id: linkedRfqForPr(db, pr, options), summary: '已找到该 PR 关联的 RFQ。' })
   return {
-    message: `${prIdFor(pr)} is ${pr.status || 'unknown status'}.`,
+    message: `${prIdFor(pr)} 当前状态为 ${pr.status || '未知状态'}。`,
     intent: { name: 'pr_status_query', confidence: 0.88, slots: { prId: prIdFor(pr) } },
     cards: [
       { type: 'pr_status', title: prIdFor(pr), data: topPrFields(db, pr, options) },
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'Open PR', kind: 'deep_link', target: `/procurement?view=requests&prId=${encodeURIComponent(prIdFor(pr))}` },
-        { label: 'Open procurement workbench', kind: 'deep_link', target: '/procurement?view=requests' },
+        { label: '打开 PR', kind: 'deep_link', target: `/procurement?view=requests&prId=${encodeURIComponent(prIdFor(pr))}` },
+        { label: '打开采购工作台', kind: 'deep_link', target: '/procurement?view=requests' },
       ]),
     ],
     evidence,
@@ -376,12 +376,12 @@ function prConversionReason(db = {}, pr = {}, options = {}) {
   const linkedPo = linkedPoForPr(db, pr)
   const linkedRfq = linkedRfqForPr(db, pr, options)
   const status = String(pr.status || '')
-  if (linkedPo) return { canConvert: false, blockedReason: 'Already converted to PO.', nextStep: 'Review the linked PO.' }
-  if (/待审批|草稿|pending|draft/i.test(status)) return { canConvert: false, blockedReason: `PR status is ${status || 'not approved'}.`, nextStep: 'Review and approve manually before conversion.' }
-  if (/已驳回|已取消|rejected|cancelled|canceled/i.test(status)) return { canConvert: false, blockedReason: `PR status is ${status}.`, nextStep: 'Review the PR outcome before taking any new action.' }
-  if (linkedRfq) return { canConvert: false, blockedReason: 'PR is linked to an RFQ that should be reviewed before conversion.', nextStep: 'Review RFQ result and convert manually if ready.' }
-  if (/已批准|approved/i.test(status)) return { canConvert: true, blockedReason: null, nextStep: 'Review supplier and convert manually if ready.' }
-  return { canConvert: false, blockedReason: `PR status is ${status || 'unknown'}.`, nextStep: 'Review PR status and sourcing evidence.' }
+  if (linkedPo) return { canConvert: false, blockedReason: '该 PR 已关联 PO。', nextStep: '复核已关联 PO。' }
+  if (/待审批|草稿|pending|draft/i.test(status)) return { canConvert: false, blockedReason: `PR 状态为 ${status || '未批准'}。`, nextStep: '人工审批后再评估是否转换。' }
+  if (/已驳回|已取消|rejected|cancelled|canceled/i.test(status)) return { canConvert: false, blockedReason: `PR 状态为 ${status}。`, nextStep: '先复核 PR 处理结果，再决定是否发起新动作。' }
+  if (linkedRfq) return { canConvert: false, blockedReason: '该 PR 已关联 RFQ，应先复核询价结果。', nextStep: '复核 RFQ 结果，准备好后人工转换。' }
+  if (/已批准|approved/i.test(status)) return { canConvert: true, blockedReason: null, nextStep: '复核供应商后人工转换。' }
+  return { canConvert: false, blockedReason: `PR 状态为 ${status || '未知'}。`, nextStep: '复核 PR 状态和寻源证据。' }
 }
 
 function buildPrConversionStatusResponse(db = {}, message = '', options = {}) {
@@ -392,18 +392,18 @@ function buildPrConversionStatusResponse(db = {}, message = '', options = {}) {
     const pr = findPr(requests, prId)
     if (!pr) return buildNotFoundResponse('pr_conversion_status_query', 'prId', prId, 'PR', '/procurement?view=requests')
     const conversion = prConversionReason(db, pr, options)
-    const evidence = [{ type: 'purchase_request', id: prIdFor(pr), summary: 'Matched purchase request record.' }]
+    const evidence = [{ type: 'purchase_request', id: prIdFor(pr), summary: '已匹配采购申请记录。' }]
     const contextEvidence = activeContextEvidence(resolution.context, 'purchase_request')
     if (contextEvidence) evidence.push(contextEvidence)
     return {
       message: conversion.canConvert
-        ? `${prIdFor(pr)} is approved and has no linked PO in current data.`
-        : `${prIdFor(pr)} is not ready for PO conversion: ${conversion.blockedReason}`,
+        ? `${prIdFor(pr)} 已批准，当前数据中未关联 PO。`
+        : `${prIdFor(pr)} 尚不适合转换为 PO：${conversion.blockedReason}`,
       intent: { name: 'pr_conversion_status_query', confidence: 0.86, slots: { prId: prIdFor(pr) } },
       cards: [
         {
           type: 'pr_conversion_status',
-          title: 'PR Conversion Status',
+          title: 'PR 转 PO 状态',
           data: {
             prId: prIdFor(pr),
             status: pr.status || '',
@@ -413,7 +413,7 @@ function buildPrConversionStatusResponse(db = {}, message = '', options = {}) {
           },
         },
         evidenceCard(evidence),
-        recommendedActions([{ label: 'Review PR', kind: 'review', target: `/procurement?view=requests&prId=${encodeURIComponent(prIdFor(pr))}` }]),
+        recommendedActions([{ label: '复核 PR', kind: 'review', target: `/procurement?view=requests&prId=${encodeURIComponent(prIdFor(pr))}` }]),
       ],
       evidence,
     }
@@ -432,7 +432,7 @@ function buildPrConversionStatusResponse(db = {}, message = '', options = {}) {
     cards: [
       {
         type: 'pr_conversion_summary',
-        title: 'PRs Pending Conversion',
+        title: '待转 PO 的 PR',
         data: {
           approvedNotConvertedCount: approvedNotConverted.length,
           pendingApprovalCount: pendingApproval.length,
@@ -446,7 +446,7 @@ function buildPrConversionStatusResponse(db = {}, message = '', options = {}) {
       },
       ...(!approvedNotConverted.length && !pendingApproval.length ? [emptyStateCard('暂无 PR 转 PO 积压', '当前没有发现待转换记录。')] : []),
       evidenceCard(evidence),
-      recommendedActions([{ label: 'Review PRs', kind: 'deep_link', target: '/procurement?view=requests' }]),
+      recommendedActions([{ label: '复核 PR', kind: 'deep_link', target: '/procurement?view=requests' }]),
     ],
     evidence,
   }
@@ -460,20 +460,20 @@ function buildPoStatusResponse(db = {}, message = '', options = {}) {
   const docs = receivingDocsForPo(receivingDocsFor(db), poIdFor(po))
   const data = poStatusData(po, docs, options.now)
   const evidence = [
-    { type: 'purchase_order', id: poIdFor(po), summary: 'Matched purchase order record.' },
+    { type: 'purchase_order', id: poIdFor(po), summary: '已匹配采购订单记录。' },
     docs.length
       ? { type: 'receiving', id: docs[0] ? receivingIdFor(docs[0]) : '', summary: `${docs.length} 张收货单关联到该 PO。` }
       : { type: 'limited_data', id: poIdFor(po), summary: '未找到关联收货单。' },
   ]
   return {
-    message: `${poIdFor(po)} is ${po.status || 'unknown status'}.`,
+    message: `${poIdFor(po)} 当前状态为 ${po.status || '未知状态'}。`,
     intent: { name: 'po_status_query', confidence: 0.88, slots: { poId: poIdFor(po) } },
     cards: [
       { type: 'po_status', title: poIdFor(po), data },
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'Open PO', kind: 'deep_link', target: `/procurement?view=orders&poId=${encodeURIComponent(poIdFor(po))}` },
-        { label: 'Open receiving workbench', kind: 'deep_link', target: '/procurement?view=receiving' },
+        { label: '打开 PO', kind: 'deep_link', target: `/procurement?view=orders&poId=${encodeURIComponent(poIdFor(po))}` },
+        { label: '打开收货工作台', kind: 'deep_link', target: '/procurement?view=receiving' },
       ]),
     ],
     evidence,
@@ -499,7 +499,7 @@ function buildPoOverdueResponse(db = {}, _message = '', options = {}) {
   const overdue = rows.filter((row) => row.riskLevel === 'high')
   const dueSoon = rows.filter((row) => row.riskLevel === 'medium')
   const evidence = rows.length
-    ? rows.slice(0, 5).map((row) => ({ type: 'purchase_order', id: poIdFor(row.po), summary: `PO requires follow-up with ${row.riskLevel} risk.` }))
+    ? rows.slice(0, 5).map((row) => ({ type: 'purchase_order', id: poIdFor(row.po), summary: `该 PO 需要跟进，风险等级 ${row.riskLevel}。` }))
     : [{ type: 'empty_state', id: 'po_followup', summary: '当前没有发现逾期或临期未结 PO。' }]
   return {
     message: rows.length
@@ -509,7 +509,7 @@ function buildPoOverdueResponse(db = {}, _message = '', options = {}) {
     cards: [
       {
         type: 'po_overdue_summary',
-        title: 'PO Follow-up Summary',
+        title: 'PO 跟进摘要',
         data: {
           overdueCount: overdue.length,
           dueSoonCount: dueSoon.length,
@@ -522,9 +522,9 @@ function buildPoOverdueResponse(db = {}, _message = '', options = {}) {
           })),
         },
       },
-      ...(rows.length ? [] : [emptyStateCard('No PO follow-up needed', 'No open PO is overdue or due within the near-term window.')]),
+      ...(rows.length ? [] : [emptyStateCard('暂无 PO 跟进事项', '当前没有发现逾期或临期未结 PO。')]),
       evidenceCard(evidence),
-      recommendedActions([{ label: 'Review PO', kind: 'deep_link', target: '/procurement?view=orders' }]),
+      recommendedActions([{ label: '复核 PO', kind: 'deep_link', target: '/procurement?view=orders' }]),
     ],
     evidence,
   }
@@ -548,7 +548,7 @@ function buildReceivingStatusResponse(db = {}, message = '', options = {}) {
       cards: [
         { type: 'receiving_status', title: receivingIdFor(doc), data: receivingStatusData(doc, po) },
         evidenceCard(evidence),
-        recommendedActions([{ label: 'Review receiving', kind: 'review', target: `/procurement?view=receiving&receivingId=${encodeURIComponent(receivingIdFor(doc))}` }]),
+        recommendedActions([{ label: '复核收货单', kind: 'review', target: `/procurement?view=receiving&receivingId=${encodeURIComponent(receivingIdFor(doc))}` }]),
       ],
       evidence,
     }
@@ -563,25 +563,25 @@ function buildReceivingStatusResponse(db = {}, message = '', options = {}) {
         message: `${poIdFor(po)} 当前数据中没有关联收货单。`,
         intent: { name: 'receiving_status_query', confidence: 0.78, slots: { receivingId: null, poId: poIdFor(po) } },
         cards: [
-          { type: 'receiving_status', title: 'Receiving Status', data: { ...poStatusData(po, [], options.now), receivingId: null, poId: poIdFor(po), exception: false } },
+          { type: 'receiving_status', title: '收货状态', data: { ...poStatusData(po, [], options.now), receivingId: null, poId: poIdFor(po), exception: false } },
           evidenceCard(evidence),
-          recommendedActions([{ label: 'Open receiving workbench', kind: 'deep_link', target: '/procurement?view=receiving' }]),
+          recommendedActions([{ label: '打开收货工作台', kind: 'deep_link', target: '/procurement?view=receiving' }]),
         ],
         evidence,
       }
     }
     const primary = linkedDocs.find((doc) => doc.status === '异常处理') || linkedDocs[0]
     const evidence = [
-      { type: 'purchase_order', id: poIdFor(po), summary: 'Matched purchase order record.' },
+      { type: 'purchase_order', id: poIdFor(po), summary: '已匹配采购订单记录。' },
       { type: 'receiving', id: receivingIdFor(primary), summary: `${linkedDocs.length} 张收货单关联到该 PO。` },
     ]
     return {
       message: `${poIdFor(po)} 有 ${linkedDocs.length} 张关联收货单。`,
       intent: { name: 'receiving_status_query', confidence: 0.84, slots: { receivingId: receivingIdFor(primary), poId: poIdFor(po) } },
       cards: [
-        { type: 'receiving_status', title: 'Receiving Status', data: receivingStatusData(primary, po) },
+        { type: 'receiving_status', title: '收货状态', data: receivingStatusData(primary, po) },
         evidenceCard(evidence),
-        recommendedActions([{ label: 'Open receiving workbench', kind: 'deep_link', target: '/procurement?view=receiving' }]),
+        recommendedActions([{ label: '打开收货工作台', kind: 'deep_link', target: '/procurement?view=receiving' }]),
       ],
       evidence,
     }
@@ -610,7 +610,7 @@ function buildReceivingExceptionResponse(db = {}) {
     cards: [
       {
         type: 'receiving_exception_summary',
-        title: 'Receiving Exceptions',
+        title: '收货异常',
         data: {
           exceptionCount: rows.length,
           openExceptionCount: rows.filter((doc) => !isTerminalStatus(doc.status)).length,
@@ -625,7 +625,7 @@ function buildReceivingExceptionResponse(db = {}) {
       },
       ...(rows.length ? [] : [emptyStateCard('暂无收货异常', '当前没有收货单显示异常证据。')]),
       evidenceCard(evidence),
-      recommendedActions([{ label: 'Open receiving workbench', kind: 'deep_link', target: '/procurement?view=receiving' }]),
+      recommendedActions([{ label: '打开收货工作台', kind: 'deep_link', target: '/procurement?view=receiving' }]),
     ],
     evidence,
   }
@@ -640,14 +640,14 @@ function buildFollowupSummaryResponse(db = {}, message = '', options = {}) {
   const poRows = poFollowupRows(db, options.now)
   const receivingExceptions = receivingExceptionRows(db)
   const topIssues = [
-    ...poRows.map((row) => ({ type: row.riskLevel === 'high' ? 'po_overdue' : 'po_due_soon', id: poIdFor(row.po), summary: `${poIdFor(row.po)} requires follow-up.` })),
+    ...poRows.map((row) => ({ type: row.riskLevel === 'high' ? 'po_overdue' : 'po_due_soon', id: poIdFor(row.po), summary: `${poIdFor(row.po)} 需要跟进。` })),
     ...receivingExceptions.map((doc) => ({ type: 'receiving_exception', id: receivingIdFor(doc), summary: `${receivingIdFor(doc)} 存在收货异常证据。` })),
-    ...approvedNotConverted.map((pr) => ({ type: 'pr_pending_conversion', id: prIdFor(pr), summary: `${prIdFor(pr)} is approved without a linked PO.` })),
-    ...pendingPrs.map((pr) => ({ type: 'pr_pending_approval', id: prIdFor(pr), summary: `${prIdFor(pr)} is still pending approval.` })),
+    ...approvedNotConverted.map((pr) => ({ type: 'pr_pending_conversion', id: prIdFor(pr), summary: `${prIdFor(pr)} 已批准但未关联 PO。` })),
+    ...pendingPrs.map((pr) => ({ type: 'pr_pending_approval', id: prIdFor(pr), summary: `${prIdFor(pr)} 仍待审批。` })),
   ].slice(0, 6)
   const evidence = [
-    { type: 'purchase_request', id: 'purchase_requests', summary: `${requests.length} PRs inspected.` },
-    { type: 'purchase_order', id: 'purchase_orders', summary: `${purchaseOrdersFor(db).length} POs inspected.` },
+    { type: 'purchase_request', id: 'purchase_requests', summary: `已检查 ${requests.length} 张 PR。` },
+    { type: 'purchase_order', id: 'purchase_orders', summary: `已检查 ${purchaseOrdersFor(db).length} 张 PO。` },
     { type: 'receiving', id: 'receiving_docs', summary: `已检查 ${receivingDocsFor(db).length} 张收货单。` },
   ]
   if (!topIssues.length) evidence.push({ type: 'empty_state', id: 'procurement_followup', summary: '当前没有发现需要立即跟进的采购事项。' })
@@ -659,7 +659,7 @@ function buildFollowupSummaryResponse(db = {}, message = '', options = {}) {
     cards: [
       {
         type: 'procurement_followup_summary',
-        title: 'Procurement Follow-up',
+        title: '采购跟进摘要',
         data: {
           pendingPrCount: pendingPrs.length,
           approvedNotConvertedPrCount: approvedNotConverted.length,
@@ -671,7 +671,7 @@ function buildFollowupSummaryResponse(db = {}, message = '', options = {}) {
       },
       ...(topIssues.length ? [] : [emptyStateCard('暂无采购跟进事项', '当前没有发现需要立即处理的 PR、PO、RFQ 或收货异常。')]),
       evidenceCard(evidence),
-      recommendedActions([{ label: 'Open procurement workbench', kind: 'deep_link', target: '/procurement' }]),
+      recommendedActions([{ label: '打开采购工作台', kind: 'deep_link', target: '/procurement' }]),
     ],
     evidence,
   }

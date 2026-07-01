@@ -326,16 +326,16 @@ function evidenceForPriority(priority) {
       type: 'priority_reference',
       id: '',
       summary: priority.prioritySource === 'user_input_unmapped'
-        ? 'Priority signal was captured but not mapped to a configured priority level.'
-        : 'No priority reference was available.',
+        ? '已捕捉优先级信号，但未映射到已配置优先级。'
+        : '当前没有可用优先级参考。',
     }
   }
   return {
     type: 'priority_reference',
     id: priority.priorityId,
     summary: priority.prioritySource === 'tenant_priority_mapping'
-      ? 'Priority was mapped from tenant priority configuration.'
-      : 'Priority was mapped from default reference configuration and should be reviewed.',
+      ? '优先级来自租户优先级配置。'
+      : '优先级来自默认参考配置，仍需人工复核。',
   }
 }
 
@@ -416,11 +416,11 @@ function buildPurchaseRequestDraft(db = {}, body = {}, options = {}) {
   if (supplier) common.evidence.push({ type: 'supplier_master', id: supplier.id, summary: supplierResolution.source === 'item_preferred_supplier' ? 'Supplier inferred from matched item preferred supplier.' : 'Matched supplier from Master Data.' })
   if (supplierResolution.matches.length > 1) common.evidence.push({ type: 'ambiguous_match', id: 'supplier', summary: `${supplierResolution.matches.length} supplier master records matched.` })
   const missing = []
-  if (!common.item) missing.push(missingField('item', common.itemResolution.matches.length > 1 ? 'Multiple item matches need review.' : 'No item master match was found.'))
-  if (common.quantity === null) missing.push(missingField('quantity', 'No quantity was provided.'))
-  if (!common.dueDate.value) missing.push(missingField('requiredDate', 'No required date was provided.'))
-  if (!supplier) missing.push(missingField('preferredSupplierId', supplierResolution.matches.length > 1 ? 'Multiple supplier matches need review.' : 'No reliable supplier was available.'))
-  if (!common.priority.priorityId) missing.push(missingField('priorityId', 'Priority signal was not mapped to a configured priority level.'))
+  if (!common.item) missing.push(missingField('item', common.itemResolution.matches.length > 1 ? '多个物料匹配项需要人工复核。' : '未匹配到物料主数据。'))
+  if (common.quantity === null) missing.push(missingField('quantity', '缺少数量。'))
+  if (!common.dueDate.value) missing.push(missingField('requiredDate', '缺少需求日期。'))
+  if (!supplier) missing.push(missingField('preferredSupplierId', supplierResolution.matches.length > 1 ? '多个供应商匹配项需要人工复核。' : '没有可靠供应商候选。'))
+  if (!common.priority.priorityId) missing.push(missingField('priorityId', '优先级信号未映射到已配置优先级。'))
   const data = {
     draftType: 'purchase_request',
     status: missing.length ? 'needs_review' : 'ready_for_review',
@@ -482,14 +482,14 @@ function buildRfqDraft(db = {}, body = {}, options = {}) {
   const suppliers = rfqSupplierCandidates(db, common.message, common.item)
   const payment = paymentTermsFor(db, suppliers.matches.length === 1 ? suppliers.matches[0] : null)
   const missing = []
-  if (!common.item) missing.push(missingField('item', common.itemResolution.matches.length > 1 ? 'Multiple item matches need review.' : 'No item master match was found.'))
-  if (common.quantity === null) missing.push(missingField('quantity', 'No quantity was provided.'))
-  if (!common.dueDate.value) missing.push(missingField('targetDeliveryDate', 'No target delivery date was provided.'))
-  if (!suppliers.candidates.length) missing.push(missingField('supplierCandidates', 'No supplier candidates were available from Master Data.'))
-  missing.push(missingField('quotationDeadline', 'No quotation deadline was provided.'))
-  if (!common.priority.priorityId) missing.push(missingField('priorityId', 'Priority signal was not mapped to a configured priority level.'))
-  if (suppliers.candidates.length) common.evidence.push({ type: 'supplier_master', id: suppliers.candidates[0].supplierId, summary: `${suppliers.candidates.length} supplier candidate(s) came from Master Data.` })
-  if (payment.paymentTermsId) common.evidence.push({ type: 'payment_terms', id: payment.paymentTermsId, summary: `Payment terms source is ${payment.paymentTermsSource}.` })
+  if (!common.item) missing.push(missingField('item', common.itemResolution.matches.length > 1 ? '多个物料匹配项需要人工复核。' : '未匹配到物料主数据。'))
+  if (common.quantity === null) missing.push(missingField('quantity', '缺少数量。'))
+  if (!common.dueDate.value) missing.push(missingField('targetDeliveryDate', '缺少目标交付日期。'))
+  if (!suppliers.candidates.length) missing.push(missingField('supplierCandidates', '主数据中没有可用供应商候选。'))
+  missing.push(missingField('quotationDeadline', '缺少报价截止日期。'))
+  if (!common.priority.priorityId) missing.push(missingField('priorityId', '优先级信号未映射到已配置优先级。'))
+  if (suppliers.candidates.length) common.evidence.push({ type: 'supplier_master', id: suppliers.candidates[0].supplierId, summary: `${suppliers.candidates.length} 个供应商候选来自主数据。` })
+  if (payment.paymentTermsId) common.evidence.push({ type: 'payment_terms', id: payment.paymentTermsId, summary: `付款条款来源：${payment.paymentTermsSource}。` })
   const data = {
     draftType: 'rfq',
     status: missing.length ? 'needs_review' : 'ready_for_review',
@@ -539,7 +539,7 @@ function buildRfqDraft(db = {}, body = {}, options = {}) {
       ...ambiguousCards(common.itemResolution, { raw: suppliers.raw, matches: suppliers.matches }),
       recommendedActions([
         { label: '复核草稿', kind: 'review' },
-        { label: 'Edit supplier list', kind: 'edit' },
+        { label: '编辑供应商列表', kind: 'edit' },
       ]),
     ],
     evidence: common.evidence,

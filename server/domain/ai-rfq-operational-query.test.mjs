@@ -179,7 +179,7 @@ test('RFQ not found returns empty state behavior', () => {
 
   assert.equal(response.intent.name, 'rfq_status_query')
   assert.ok(response.cards.some((card) => card.type === 'empty_state'))
-  assert.match(response.message, /could not find/i)
+  assert.match(response.message, /没有找到 RFQ/)
 })
 
 test('general pending RFQ response prompt returns response summary', () => {

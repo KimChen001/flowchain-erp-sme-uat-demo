@@ -545,7 +545,7 @@ function buildPoSummary(db = {}, supplier = {}, now = new Date()) {
   return {
     card: {
       type: 'supplier_related_po_summary',
-      title: 'Related POs',
+      title: '关联 PO',
       data: {
         supplierId: supplier.supplierId,
         totalPoCount: orders.length,
@@ -566,8 +566,8 @@ function buildPoSummary(db = {}, supplier = {}, now = new Date()) {
       },
     },
     evidence: orders.length
-      ? [{ type: 'purchase_order', id: orders[0] ? poIdFor(orders[0]) : '', summary: `${orders.length} related purchase orders found.` }]
-      : [{ type: 'limited_data', id: supplier.supplierId, summary: 'No related purchase orders were found.' }],
+      ? [{ type: 'purchase_order', id: orders[0] ? poIdFor(orders[0]) : '', summary: `找到 ${orders.length} 张关联采购订单。` }]
+      : [{ type: 'limited_data', id: supplier.supplierId, summary: '未找到关联采购订单。' }],
   }
 }
 
@@ -586,7 +586,7 @@ function buildInvoiceSummary(db = {}, supplier = {}) {
     hasReliableData: invoices.length || statements.length || creditMemos.length,
     card: {
       type: 'supplier_invoice_summary',
-      title: 'Invoice and reconciliation',
+      title: '发票与对账',
       data: {
         supplierId: supplier.supplierId,
         invoiceCount: invoices.length,
@@ -604,10 +604,10 @@ function buildInvoiceSummary(db = {}, supplier = {}) {
       },
     },
     evidence: invoices.length
-      ? [{ type: 'supplier_invoice', id: invoices[0] ? invoiceIdFor(invoices[0]) : '', summary: `${invoices.length} supplier invoices found.` }]
+      ? [{ type: 'supplier_invoice', id: invoices[0] ? invoiceIdFor(invoices[0]) : '', summary: `找到 ${invoices.length} 张供应商发票。` }]
       : statements.length
-        ? [{ type: 'supplier_reconciliation', id: statements[0]?.id || statements[0]?.statementNo || '', summary: `${statements.length} reconciliation statements found.` }]
-        : [{ type: 'limited_data', id: supplier.supplierId, summary: 'Invoice and reconciliation data is not available for this supplier.' }],
+        ? [{ type: 'supplier_reconciliation', id: statements[0]?.id || statements[0]?.statementNo || '', summary: `找到 ${statements.length} 张对账单。` }]
+        : [{ type: 'limited_data', id: supplier.supplierId, summary: '当前供应商缺少可用发票与对账数据。' }],
   }
 }
 
@@ -620,7 +620,7 @@ function buildContractSummary(db = {}, supplier = {}, now = new Date()) {
     hasReliableData: contracts.length > 0,
     card: {
       type: 'supplier_contract_summary',
-      title: 'Contracts',
+      title: '合同',
       data: {
         supplierId: supplier.supplierId,
         activeContractCount: active.length,
@@ -637,8 +637,8 @@ function buildContractSummary(db = {}, supplier = {}, now = new Date()) {
       },
     },
     evidence: contracts.length
-      ? [{ type: 'contract', id: contracts[0]?.id || contracts[0]?.contractId || '', summary: `${contracts.length} contracts found.` }]
-      : [{ type: 'limited_data', id: supplier.supplierId, summary: 'Contract data is not available for this supplier.' }],
+      ? [{ type: 'contract', id: contracts[0]?.id || contracts[0]?.contractId || '', summary: `找到 ${contracts.length} 条合同记录。` }]
+      : [{ type: 'limited_data', id: supplier.supplierId, summary: '当前供应商缺少可用合同数据。' }],
   }
 }
 
@@ -654,7 +654,7 @@ function buildInventorySummary(db = {}, supplier = {}) {
     hasReliableData: items.length > 0,
     card: {
       type: 'supplier_inventory_risk_summary',
-      title: 'Inventory risk',
+      title: '库存风险',
       data: {
         supplierId: supplier.supplierId,
         relatedItemCount: items.length,
@@ -670,8 +670,8 @@ function buildInventorySummary(db = {}, supplier = {}) {
       },
     },
     evidence: items.length
-      ? [{ type: 'item_master', id: items[0]?.id || items[0]?.sku || '', summary: `${items.length} related items found through supplier references.` }]
-      : [{ type: 'limited_data', id: supplier.supplierId, summary: 'No reliable item-to-supplier inventory link was found.' }],
+      ? [{ type: 'item_master', id: items[0]?.id || items[0]?.sku || '', summary: `通过供应商引用找到 ${items.length} 个关联物料。` }]
+      : [{ type: 'limited_data', id: supplier.supplierId, summary: '未找到可靠的物料-供应商库存关联。' }],
   }
 }
 
@@ -693,7 +693,7 @@ function buildRfqSummary(db = {}, supplier = {}) {
     hasReliableData: rfqs.length > 0,
     card: {
       type: 'supplier_rfq_summary',
-      title: 'RFQ participation',
+      title: 'RFQ 参与',
       data: {
         supplierId: supplier.supplierId,
         totalRfqCount: rfqs.length,
@@ -708,8 +708,8 @@ function buildRfqSummary(db = {}, supplier = {}) {
       },
     },
     evidence: rfqs.length
-      ? [{ type: 'rfq', id: rfqs[0]?.id || rfqs[0]?.rfq || '', summary: `${rfqs.length} RFQ records reference this supplier.` }]
-      : [{ type: 'limited_data', id: supplier.supplierId, summary: 'No RFQ participation was found for this supplier.' }],
+      ? [{ type: 'rfq', id: rfqs[0]?.id || rfqs[0]?.rfq || '', summary: `${rfqs.length} 个 RFQ 记录引用该供应商。` }]
+      : [{ type: 'limited_data', id: supplier.supplierId, summary: '未找到该供应商的 RFQ 参与记录。' }],
   }
 }
 
@@ -955,7 +955,7 @@ function supplierNextActionsCard(rows = []) {
 function buildSupplierModuleResponse(db = {}, intentName = 'supplier_high_risk_summary_query', options = {}) {
   const rows = buildModuleSupplierRows(db, options)
   const evidence = [
-    { type: 'supplier_master', id: 'supplier_risk_summary', summary: `${rows.length} supplier candidates evaluated from local SRM and procurement context.` },
+    { type: 'supplier_master', id: 'supplier_risk_summary', summary: `已基于本地 SRM 和采购上下文评估 ${rows.length} 个供应商候选。` },
     { type: 'limited_data', id: 'supplier_alpha_boundary', summary: SUPPLIER_ALPHA_BOUNDARY },
   ]
   const cards = []
@@ -993,28 +993,28 @@ function buildSupplierModuleResponse(db = {}, intentName = 'supplier_high_risk_s
 
 function buildAmbiguousResponse(intentName, resolution) {
   const matches = uniqueCandidates(resolution.mentions.flatMap((mention) => mention.matches))
-  const evidence = [{ type: 'supplier_master', id: '', summary: `${matches.length} supplier candidates matched the request.` }]
+  const evidence = [{ type: 'supplier_master', id: '', summary: `${matches.length} 个供应商候选匹配当前请求。` }]
   return {
-    message: 'I found more than one supplier match. Please provide a supplier id to continue.',
+    message: '我找到多个供应商匹配项，请提供供应商 ID 后继续。',
     intent: { name: intentName, confidence: 0.62, slots: { supplierIds: ['ambiguous'] } },
     cards: [
       ambiguousCard(matches),
       evidenceCard(evidence),
-      recommendedActions([{ label: 'Review suppliers', kind: 'deep_link', target: '/srm' }]),
+      recommendedActions([{ label: '复核供应商', kind: 'deep_link', target: '/srm' }]),
     ],
     evidence,
   }
 }
 
 function buildMissingResponse(intentName) {
-  const evidence = [{ type: 'supplier_master', id: '', summary: 'No supplier was resolved from the message or active context.' }]
+  const evidence = [{ type: 'supplier_master', id: '', summary: '当前消息和活动上下文中未解析出供应商。' }]
   return {
-    message: 'Please provide a supplier name or supplier id for this read-only lookup.',
+    message: '请提供供应商名称或供应商 ID，我会只读查询对应记录。',
     intent: { name: intentName, confidence: 0.58, slots: { supplierIds: [] } },
     cards: [
-      missingFieldCard('supplier', 'No supplier was resolved from the message or active context.'),
+      missingFieldCard('supplier', '当前消息和活动上下文中未解析出供应商。'),
       evidenceCard(evidence),
-      recommendedActions([{ label: 'Review suppliers', kind: 'deep_link', target: '/srm' }]),
+      recommendedActions([{ label: '复核供应商', kind: 'deep_link', target: '/srm' }]),
     ],
     evidence,
   }
@@ -1025,7 +1025,7 @@ function buildSummaryResponse(db = {}, supplier = {}, resolution = {}, body = {}
   const sectionData = buildSections(db, supplier, options)
   const summary = supplierSummaryCard(supplier, sectionData)
   const evidence = [
-    { type: 'supplier_master', id: supplier.supplierId, summary: `Resolved supplier ${supplier.supplierName}.` },
+    { type: 'supplier_master', id: supplier.supplierId, summary: `已解析供应商 ${supplier.supplierName}。` },
     ...(resolution.context ? [activeContextEvidence(resolution.context, 'supplier')].filter(Boolean) : []),
     ...sectionData.po.evidence,
     ...sectionData.invoice.evidence,
@@ -1042,9 +1042,9 @@ function buildSummaryResponse(db = {}, supplier = {}, resolution = {}, body = {}
     ...(sectionData.rfq.hasReliableData ? [sectionData.rfq.card] : []),
     evidenceCard(evidence),
     recommendedActions([
-      { label: 'Open supplier', kind: 'deep_link', target: `/srm?supplierId=${encodeURIComponent(supplier.supplierId)}` },
-      { label: 'Review procurement', kind: 'deep_link', target: `/procurement?supplierId=${encodeURIComponent(supplier.supplierId)}` },
-      { label: 'Review inventory', kind: 'deep_link', target: `/inventory?supplierId=${encodeURIComponent(supplier.supplierId)}` },
+      { label: '打开供应商', kind: 'deep_link', target: `/srm?supplierId=${encodeURIComponent(supplier.supplierId)}` },
+      { label: '复核采购', kind: 'deep_link', target: `/procurement?supplierId=${encodeURIComponent(supplier.supplierId)}` },
+      { label: '复核库存', kind: 'deep_link', target: `/inventory?supplierId=${encodeURIComponent(supplier.supplierId)}` },
     ]),
   ]
   return {
@@ -1080,8 +1080,8 @@ function buildComparisonResponse(db = {}, suppliers = [], resolution = {}, body 
   const limited = suppliers.slice(0, 3)
   const rows = limited.map((supplier) => comparisonRow(db, supplier, options))
   const evidence = [
-    { type: 'supplier_master', id: 'supplier_comparison', summary: `${limited.length} suppliers resolved for comparison.` },
-    ...(suppliers.length > 3 ? [{ type: 'limited_data', id: 'supplier_limit', summary: 'Comparison is limited to the first three resolved suppliers.' }] : []),
+    { type: 'supplier_master', id: 'supplier_comparison', summary: `已解析 ${limited.length} 个供应商用于对比。` },
+    ...(suppliers.length > 3 ? [{ type: 'limited_data', id: 'supplier_limit', summary: '对比仅展示前三个已解析供应商。' }] : []),
   ]
   return {
     message: `我对比了 ${limited.map((supplier) => supplier.supplierName).join('、')} 的 PO、发票、合同和库存风险。`,
@@ -1098,9 +1098,9 @@ function buildComparisonResponse(db = {}, suppliers = [], resolution = {}, body 
       },
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'Open suppliers', kind: 'deep_link', target: '/srm' },
-        { label: 'Review procurement', kind: 'deep_link', target: '/procurement' },
-        { label: 'Review inventory', kind: 'deep_link', target: '/inventory' },
+        { label: '打开供应商', kind: 'deep_link', target: '/srm' },
+        { label: '复核采购', kind: 'deep_link', target: '/procurement' },
+        { label: '复核库存', kind: 'deep_link', target: '/inventory' },
       ]),
     ],
     evidence,
@@ -1138,7 +1138,7 @@ export function buildAiSupplierOperationalResponse(db = {}, body = {}, options =
     return {
       provider: 'local_supplier_operational_query',
       mode: 'read',
-      content: 'I found more than one supplier match. Please provide a supplier id to continue.',
+      content: '我找到多个供应商匹配项，请提供供应商 ID 后继续。',
       ...buildAmbiguousResponse(intent, resolution),
       capabilityCatalog: aiSupplierOperationalCapabilityCatalog.map((item) => ({
         ...item,
@@ -1153,7 +1153,7 @@ export function buildAiSupplierOperationalResponse(db = {}, body = {}, options =
     return {
       provider: 'local_supplier_operational_query',
       mode: 'read',
-      content: 'Please provide a supplier name or supplier id for this read-only lookup.',
+      content: '请提供供应商名称或供应商 ID，我会只读查询对应记录。',
       ...buildMissingResponse(intent),
       capabilityCatalog: aiSupplierOperationalCapabilityCatalog.map((item) => ({
         ...item,

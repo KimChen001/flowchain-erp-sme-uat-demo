@@ -284,25 +284,25 @@ export function detectAiRfqOperationalIntent(message = '') {
 
 function buildMissingRfqIdResponse(intentName = 'rfq_status_query') {
   return {
-    message: 'Please provide an RFQ id so I can look up the RFQ record.',
+    message: '请提供 RFQ ID，我会只读查询该询价记录。',
     intent: { name: intentName, confidence: 0.66, slots: { rfqId: null } },
     cards: [
-      missingFieldCard('rfqId', 'No RFQ id was provided.'),
-      recommendedActions([{ label: 'Review RFQs', kind: 'deep_link', target: '/procurement?view=rfqs' }]),
+      missingFieldCard('rfqId', '缺少 RFQ ID。'),
+      recommendedActions([{ label: '复核 RFQ', kind: 'deep_link', target: '/procurement?view=rfqs' }]),
     ],
-    evidence: [{ type: 'rfq', id: '', summary: 'RFQ id is required for this lookup.' }],
+    evidence: [{ type: 'rfq', id: '', summary: '本次查询需要 RFQ ID。' }],
   }
 }
 
 function buildRfqNotFoundResponse(rfqId = '', intentName = 'rfq_status_query') {
   return {
-    message: `I could not find RFQ ${rfqId}.`,
+    message: `我没有找到 RFQ ${rfqId}。`,
     intent: { name: intentName, confidence: 0.74, slots: { rfqId } },
     cards: [
-      emptyStateCard('RFQ not found', `No RFQ record matched ${rfqId}.`),
-      recommendedActions([{ label: 'Review RFQs', kind: 'deep_link', target: '/procurement?view=rfqs' }]),
+      emptyStateCard('未找到 RFQ', `没有 RFQ 记录匹配 ${rfqId}。`),
+      recommendedActions([{ label: '复核 RFQ', kind: 'deep_link', target: '/procurement?view=rfqs' }]),
     ],
-    evidence: [{ type: 'rfq', id: rfqId, summary: 'No RFQ record matched the requested id.' }],
+    evidence: [{ type: 'rfq', id: rfqId, summary: '没有 RFQ 记录匹配该 ID。' }],
   }
 }
 
@@ -315,21 +315,21 @@ function buildRfqStatusResponse(db = {}, message = '', options = {}) {
   if (!rfq) return buildRfqNotFoundResponse(rfqId)
   const stats = responseStats(rfq)
   const evidence = [
-    { type: 'rfq', id: rfqIdFor(rfq), summary: 'Matched RFQ record.' },
-    { type: 'supplier_response_evidence', id: rfqIdFor(rfq), summary: stats.source === 'response_records' ? 'Supplier response status came from response records.' : 'Supplier response status came from RFQ summary fields.' },
+    { type: 'rfq', id: rfqIdFor(rfq), summary: '已匹配 RFQ 记录。' },
+    { type: 'supplier_response_evidence', id: rfqIdFor(rfq), summary: stats.source === 'response_records' ? '供应商回复状态来自回复明细。' : '供应商回复状态来自 RFQ 汇总字段。' },
   ]
   const contextEvidence = activeContextEvidence(resolution.context, 'rfq')
   if (contextEvidence) evidence.push(contextEvidence)
-  if (stats.source === 'missing_response_detail') evidence.push({ type: 'limited_data', id: rfqIdFor(rfq), summary: 'RFQ response details are not available in current data.' })
+  if (stats.source === 'missing_response_detail') evidence.push({ type: 'limited_data', id: rfqIdFor(rfq), summary: '当前数据缺少 RFQ 回复明细。' })
   return {
-    message: `${rfqIdFor(rfq)} is ${normalizeStatus(rfq.status)}.`,
+    message: `${rfqIdFor(rfq)} 当前状态为 ${normalizeStatus(rfq.status)}。`,
     intent: { name: 'rfq_status_query', confidence: 0.88, slots: { rfqId: rfqIdFor(rfq) } },
     cards: [
       { type: 'rfq_status', title: rfqIdFor(rfq), data: rfqStatusData(db, rfq) },
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'Open RFQ', kind: 'deep_link', target: `/procurement?view=rfqs&rfqId=${encodeURIComponent(rfqIdFor(rfq))}` },
-        { label: 'Open procurement workbench', kind: 'deep_link', target: '/procurement?view=rfqs' },
+        { label: '打开 RFQ', kind: 'deep_link', target: `/procurement?view=rfqs&rfqId=${encodeURIComponent(rfqIdFor(rfq))}` },
+        { label: '打开采购工作台', kind: 'deep_link', target: '/procurement?view=rfqs' },
       ]),
     ],
     evidence,
@@ -359,18 +359,18 @@ function buildRfqResponseQuery(db = {}, message = '', options = {}) {
     if (!rfq) return buildRfqNotFoundResponse(rfqId, 'rfq_response_query')
     const stats = responseStats(rfq)
     const evidence = [
-      { type: 'rfq', id: rfqIdFor(rfq), summary: 'Matched RFQ record.' },
-      { type: 'supplier_response_evidence', id: rfqIdFor(rfq), summary: stats.source === 'response_records' ? 'Supplier response status came from response records.' : 'Supplier response status came from RFQ summary fields.' },
+      { type: 'rfq', id: rfqIdFor(rfq), summary: '已匹配 RFQ 记录。' },
+      { type: 'supplier_response_evidence', id: rfqIdFor(rfq), summary: stats.source === 'response_records' ? '供应商回复状态来自回复明细。' : '供应商回复状态来自 RFQ 汇总字段。' },
     ]
     const contextEvidence = activeContextEvidence(resolution.context, 'rfq')
     if (contextEvidence) evidence.push(contextEvidence)
     return {
-      message: `${rfqIdFor(rfq)} has ${stats.pendingSupplierCount} pending supplier responses.`,
+      message: `${rfqIdFor(rfq)} 还有 ${stats.pendingSupplierCount} 个供应商回复待确认。`,
       intent: { name: 'rfq_response_query', confidence: 0.86, slots: { rfqId: rfqIdFor(rfq), supplier: null } },
       cards: [
         {
           type: 'rfq_response_summary',
-          title: `${rfqIdFor(rfq)} Supplier Responses`,
+          title: `${rfqIdFor(rfq)} 供应商回复`,
           data: {
             totalOpenRfqs: isOpenRfq(rfq) ? 1 : 0,
             rfqsWithPendingResponses: stats.pendingSupplierCount > 0 ? 1 : 0,
@@ -378,7 +378,7 @@ function buildRfqResponseQuery(db = {}, message = '', options = {}) {
           },
         },
         evidenceCard(evidence),
-        recommendedActions([{ label: 'Review pending supplier responses', kind: 'deep_link', target: `/procurement?view=rfqs&rfqId=${encodeURIComponent(rfqIdFor(rfq))}` }]),
+        recommendedActions([{ label: '复核供应商回复', kind: 'deep_link', target: `/procurement?view=rfqs&rfqId=${encodeURIComponent(rfqIdFor(rfq))}` }]),
       ],
       evidence,
     }
@@ -386,7 +386,7 @@ function buildRfqResponseQuery(db = {}, message = '', options = {}) {
   const openRfqs = rfqs.filter(isOpenRfq)
   const pending = pendingRfqSummary(openRfqs, db)
   const evidence = pending.length
-    ? pending.slice(0, 5).map((rfq) => ({ type: 'rfq', id: rfq.rfqId, summary: 'RFQ has pending supplier response.' }))
+    ? pending.slice(0, 5).map((rfq) => ({ type: 'rfq', id: rfq.rfqId, summary: 'RFQ 仍有供应商待回复。' }))
     : [{ type: 'empty_state', id: 'rfq_responses', summary: '当前没有发现 RFQ 供应商待回复。' }]
   return {
     message: pending.length
@@ -396,16 +396,16 @@ function buildRfqResponseQuery(db = {}, message = '', options = {}) {
     cards: [
       {
         type: 'rfq_response_summary',
-        title: 'Pending RFQ Responses',
+        title: 'RFQ 待回复摘要',
         data: {
           totalOpenRfqs: openRfqs.length,
           rfqsWithPendingResponses: pending.length,
           topPendingRfqs: pending.slice(0, 5),
         },
       },
-      ...(pending.length ? [] : [emptyStateCard('No pending RFQ responses', 'No open RFQ currently shows pending supplier responses.')]),
+      ...(pending.length ? [] : [emptyStateCard('暂无 RFQ 待回复', '当前未结 RFQ 没有显示供应商待回复。')]),
       evidenceCard(evidence),
-      recommendedActions([{ label: 'Review RFQs', kind: 'deep_link', target: '/procurement?view=rfqs' }]),
+      recommendedActions([{ label: '复核 RFQ', kind: 'deep_link', target: '/procurement?view=rfqs' }]),
     ],
     evidence,
   }
@@ -415,13 +415,13 @@ function buildSupplierParticipationQuery(db = {}, message = '', options = {}) {
   const supplier = supplierMatches(db, message)
   if (!supplier.raw) {
     return {
-      message: 'Please provide a supplier name or supplier id to review RFQ participation.',
+      message: '请提供供应商名称或供应商 ID，我会只读复核 RFQ 参与记录。',
       intent: { name: 'supplier_rfq_participation_query', confidence: 0.62, slots: { supplier: null } },
       cards: [
-        missingFieldCard('supplier', 'No supplier was provided.'),
-        recommendedActions([{ label: 'Review RFQs', kind: 'deep_link', target: '/procurement?view=rfqs' }]),
+        missingFieldCard('supplier', '缺少供应商。'),
+        recommendedActions([{ label: '复核 RFQ', kind: 'deep_link', target: '/procurement?view=rfqs' }]),
       ],
-      evidence: [{ type: 'supplier_master', id: '', summary: 'Supplier is required for participation lookup.' }],
+      evidence: [{ type: 'supplier_master', id: '', summary: 'RFQ 参与查询需要供应商。' }],
     }
   }
   if (supplier.matches.length > 1) {
@@ -430,20 +430,20 @@ function buildSupplierParticipationQuery(db = {}, message = '', options = {}) {
       intent: { name: 'supplier_rfq_participation_query', confidence: 0.62, slots: { supplier: 'ambiguous' } },
       cards: [
         { type: 'ambiguous_match', field: 'supplier', matches: supplier.matches.slice(0, 5).map((item) => ({ supplierId: item.id, name: item.name })) },
-        recommendedActions([{ label: 'Review supplier', kind: 'deep_link', target: '/srm?view=suppliers' }]),
+        recommendedActions([{ label: '复核供应商', kind: 'deep_link', target: '/srm?view=suppliers' }]),
       ],
       evidence: [{ type: 'supplier_master', id: '', summary: `${supplier.matches.length} supplier master records matched.` }],
     }
   }
   if (!supplier.matches.length) {
     return {
-      message: 'I could not find that supplier in Master Data.',
+      message: '我没有在供应商主数据中找到该供应商。',
       intent: { name: 'supplier_rfq_participation_query', confidence: 0.68, slots: { supplier: supplier.raw } },
       cards: [
-        emptyStateCard('Supplier not found', 'No supplier master record matched the requested supplier.'),
-        recommendedActions([{ label: 'Review supplier', kind: 'deep_link', target: '/srm?view=suppliers' }]),
+        emptyStateCard('未找到供应商', '没有供应商主数据匹配当前输入。'),
+        recommendedActions([{ label: '复核供应商', kind: 'deep_link', target: '/srm?view=suppliers' }]),
       ],
-      evidence: [{ type: 'supplier_master', id: supplier.raw, summary: 'No supplier master match.' }],
+      evidence: [{ type: 'supplier_master', id: supplier.raw, summary: '未匹配到供应商主数据。' }],
     }
   }
   const matchedSupplier = supplier.matches[0]
@@ -464,23 +464,23 @@ function buildSupplierParticipationQuery(db = {}, message = '', options = {}) {
     recentRfqs,
   }
   const evidence = [
-    { type: 'supplier_master', id: matchedSupplier.id, summary: 'Matched supplier from Master Data.' },
+    { type: 'supplier_master', id: matchedSupplier.id, summary: '已匹配供应商主数据。' },
     ...(related.length
-      ? [{ type: 'rfq', id: related[0] ? rfqIdFor(related[0]) : '', summary: `${related.length} RFQ records reference this supplier.` }]
+      ? [{ type: 'rfq', id: related[0] ? rfqIdFor(related[0]) : '', summary: `${related.length} 个 RFQ 记录引用该供应商。` }]
       : [{ type: 'empty_state', id: matchedSupplier.id, summary: '当前没有发现该供应商的 RFQ 参与记录。' }]),
   ]
   return {
     message: related.length
-      ? `${matchedSupplier.name} is referenced in ${related.length} RFQs.`
-      : `${matchedSupplier.name} has no visible RFQ participation in current data.`,
+      ? `${matchedSupplier.name} 被 ${related.length} 个 RFQ 引用。`
+      : `当前数据没有显示 ${matchedSupplier.name} 的 RFQ 参与记录。`,
     intent: { name: 'supplier_rfq_participation_query', confidence: 0.84, slots: { supplier: matchedSupplier.id } },
     cards: [
-      { type: 'supplier_rfq_participation', title: `${matchedSupplier.name} RFQ Participation`, data },
-      ...(related.length ? [] : [emptyStateCard('No RFQ participation', 'No RFQ records reference this supplier.')]),
+      { type: 'supplier_rfq_participation', title: `${matchedSupplier.name} RFQ 参与`, data },
+      ...(related.length ? [] : [emptyStateCard('暂无 RFQ 参与', '当前没有 RFQ 记录引用该供应商。')]),
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'Review supplier', kind: 'deep_link', target: `/srm?view=supplier&supplierId=${encodeURIComponent(matchedSupplier.id)}` },
-        { label: 'Review RFQs', kind: 'deep_link', target: '/procurement?view=rfqs' },
+        { label: '复核供应商', kind: 'deep_link', target: `/srm?view=supplier&supplierId=${encodeURIComponent(matchedSupplier.id)}` },
+        { label: '复核 RFQ', kind: 'deep_link', target: '/procurement?view=rfqs' },
       ]),
     ],
     evidence,

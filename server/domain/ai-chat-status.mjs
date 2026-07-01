@@ -326,20 +326,20 @@ function buildPlanningStatusResponse(db = {}, message = '', options = {}) {
   const mape = forecastPlan?.metrics?.mape ?? forecastPlan?.metrics?.MAPE ?? null
   const primaryTarget = planningViewForMessage(message)
   const evidence = [
-    { type: 'mrp_plan', id: row?.sku || 'mrp_plan', moduleId: 'forecast:mrp', label: row?.name || 'MRP plan', summary: `${mrpPlan.summary?.exceptionCount || 0} MRP exceptions inspected across ${mrpPlan.summary?.skuCount || 0} SKUs.` },
+    { type: 'mrp_plan', id: row?.sku || 'mrp_plan', moduleId: 'forecast:mrp', label: row?.name || 'MRP 计划', summary: `已检查 ${mrpPlan.summary?.exceptionCount || 0} 条 MRP 例外，覆盖 ${mrpPlan.summary?.skuCount || 0} 个 SKU。` },
     forecastPlan
-      ? { type: 'forecast_plan', id: forecastPlan.id || forecastPlan.sku || row?.sku || 'forecast_plan', moduleId: 'forecast:demand', label: forecastPlan.name || forecastPlan.sku || row?.name, summary: `Forecast method ${forecastPlan.method || 'unknown'} with MAPE ${mape ?? 'not available'}.` }
-      : { type: 'forecast_plan', id: 'forecast_plans', moduleId: 'forecast:demand', summary: 'No saved forecast plan is available; MRP still uses current read model inputs.' },
+      ? { type: 'forecast_plan', id: forecastPlan.id || forecastPlan.sku || row?.sku || 'forecast_plan', moduleId: 'forecast:demand', label: forecastPlan.name || forecastPlan.sku || row?.name, summary: `预测方法 ${forecastPlan.method || '未知'}，MAPE ${mape ?? '暂无'}。` }
+      : { type: 'forecast_plan', id: 'forecast_plans', moduleId: 'forecast:demand', summary: '当前没有保存的 forecast 方案；MRP 仍使用只读模型输入。' },
     row?.bomSources?.length
-      ? { type: 'bom_source', id: row.sku, moduleId: 'forecast:mrp', label: 'BOM source evidence', summary: row.bomSources.map((source) => `${source.parentName || source.parent}:${source.demand}`).slice(0, 3).join(' | ') }
-      : { type: 'bom_source', id: row?.sku || 'static_bom', moduleId: 'forecast:mrp', summary: 'No dependent BOM source was found for the selected row.' },
+      ? { type: 'bom_source', id: row.sku, moduleId: 'forecast:mrp', label: 'BOM 来源证据', summary: row.bomSources.map((source) => `${source.parentName || source.parent}:${source.demand}`).slice(0, 3).join(' | ') }
+      : { type: 'bom_source', id: row?.sku || 'static_bom', moduleId: 'forecast:mrp', summary: '当前选中行没有找到下阶 BOM 来源。' },
   ]
-  if (row?.sourceMetadata) evidence.push({ type: 'planning_source', id: row.sku, moduleId: 'forecast:parameters', summary: `Generated from ${row.sourceMetadata.generatedFrom}; persistence ${row.sourceMetadata.persistence}.` })
+  if (row?.sourceMetadata) evidence.push({ type: 'planning_source', id: row.sku, moduleId: 'forecast:parameters', summary: `计划来源：${row.sourceMetadata.generatedFrom}；持久化口径：${row.sourceMetadata.persistence}。` })
 
   return {
     message: row
-      ? `${row.sku} has MRP exception ${row.exception}. Planned receipt is ${Number(row.totalPlannedReceipt || 0).toLocaleString()} ${row.unit || ''}; ${urgent ? 'lead time or projected availability requires urgent review.' : 'review planned release timing before any PR/PO action.'}`
-      : 'No MRP row is available in the current planning read model.',
+      ? `${row.sku} 当前有 MRP 例外「${row.exception || '待复核'}」，计划收货 ${Number(row.totalPlannedReceipt || 0).toLocaleString()} ${row.unit || ''}；这是只读计划证据，不创建 PR/PO，${urgent ? '需人工复核提前期或预计可用量。' : '需人工复核计划释放时点。'}`
+      : '当前计划只读模型没有可用 MRP 行，请先复核需求预测、BOM 和计划参数。',
     intent: {
       name: 'planning_status_query',
       confidence: /MRP|forecast|预测|MAPE|计划释放|例外/i.test(message) ? 0.9 : 0.76,
@@ -352,7 +352,7 @@ function buildPlanningStatusResponse(db = {}, message = '', options = {}) {
     cards: [
       {
         type: 'planning_status_summary',
-        title: row ? `${row.sku} Forecast/MRP read-only summary` : 'Forecast/MRP read-only summary',
+        title: row ? `${row.sku} 预测/MRP 只读摘要` : '预测/MRP 只读摘要',
         data: {
           sku: row?.sku || '',
           name: row?.name || '',
@@ -374,9 +374,9 @@ function buildPlanningStatusResponse(db = {}, message = '', options = {}) {
       },
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'Open matching Planning view', kind: 'deep_link', target: primaryTarget },
-        { label: 'Review MRP exceptions', kind: 'deep_link', target: 'forecast:mrp' },
-        { label: 'Preview ActionDraft replenishment', kind: 'deep_link', target: 'forecast:replenishment' },
+        { label: '打开对应计划视图', kind: 'deep_link', target: primaryTarget },
+        { label: '复核 MRP 例外', kind: 'deep_link', target: 'forecast:mrp' },
+        { label: '预览补货草稿', kind: 'deep_link', target: 'forecast:replenishment' },
       ]),
     ],
     evidence,
@@ -389,25 +389,25 @@ function buildSupplierStatusResponse(db = {}, message = '', options = {}) {
   if (matches.length === 0) {
     const missing = {
       type: 'missing_fields',
-      fields: [{ name: 'supplier', reason: 'No matching supplier was found in Master Data.' }],
+      fields: [{ name: 'supplier', reason: '供应商主数据中没有匹配记录。' }],
     }
     return {
-      message: 'I could not find that supplier in Master Data. Please provide a supplier id or a more specific supplier name.',
+      message: '我没有在供应商主数据中找到该供应商，请提供供应商 ID 或更明确的供应商名称。',
       intent,
-      cards: [missing, recommendedActions([{ label: 'View suppliers', kind: 'deep_link', target: '/srm?view=suppliers' }])],
-      evidence: [{ type: 'supplier_master', id: '', summary: 'No supplier master match.' }],
+      cards: [missing, recommendedActions([{ label: '查看供应商主数据', kind: 'deep_link', target: '/srm?view=suppliers' }])],
+      evidence: [{ type: 'supplier_master', id: '', summary: '未匹配到供应商主数据。' }],
     }
   }
   if (matches.length > 1) {
     return {
-      message: 'I found more than one supplier match. Please choose a supplier id to continue.',
+      message: '我找到多个供应商匹配项，请选择供应商 ID 后继续。',
       intent: { ...intent, confidence: 0.64, slots: { supplier: slot || 'ambiguous' } },
       cards: [
         {
           type: 'ambiguous_match',
           matches: matches.slice(0, 5).map((supplier) => ({ supplierId: supplier.id, name: supplier.name })),
         },
-        recommendedActions([{ label: 'View suppliers', kind: 'deep_link', target: '/srm?view=suppliers' }]),
+        recommendedActions([{ label: '查看供应商主数据', kind: 'deep_link', target: '/srm?view=suppliers' }]),
       ],
       evidence: [{ type: 'supplier_master', id: '', summary: `${matches.length} supplier master records matched.` }],
     }
@@ -449,15 +449,15 @@ function buildSupplierStatusResponse(db = {}, message = '', options = {}) {
   if (receivingIssues.length) evidence.push({ type: 'receiving', id: receivingIssues[0].grn || receivingIssues[0].id || '', summary: `${receivingIssues.length} related receiving issues found.` })
 
   return {
-    message: `${supplier.name} is ${supplier.status}. Risk is ${supplier.risk}, with score ${supplier.score || 'not available'}.`,
+    message: `${supplier.name} 当前状态为 ${supplier.status || '未知状态'}，风险为 ${supplier.risk || '未标注'}，评分为 ${supplier.score || '暂无评分'}。`,
     intent: { ...intent, slots: { supplier: supplier.id } },
     cards: [
       { type: 'supplier_status', title: supplier.name, data },
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'View supplier', kind: 'deep_link', target: `/srm?view=supplier&supplierId=${encodeURIComponent(supplier.id)}` },
-        { label: 'Review open purchase orders', kind: 'deep_link', target: `/procurement?view=purchase-orders&supplierId=${encodeURIComponent(supplier.id)}` },
-        { label: 'Review supplier performance', kind: 'deep_link', target: `/srm?view=performance&supplierId=${encodeURIComponent(supplier.id)}` },
+        { label: '查看供应商', kind: 'deep_link', target: `/srm?view=supplier&supplierId=${encodeURIComponent(supplier.id)}` },
+        { label: '复核未结 PO', kind: 'deep_link', target: `/procurement?view=purchase-orders&supplierId=${encodeURIComponent(supplier.id)}` },
+        { label: '查看供应商绩效', kind: 'deep_link', target: `/srm?view=performance&supplierId=${encodeURIComponent(supplier.id)}` },
       ]),
     ],
     evidence,
@@ -608,36 +608,36 @@ function buildProcurementExceptionResponse(db = {}, message = '', options = {}) 
     ...overduePos.map((po) => ({
       type: 'overdue_purchase_order',
       id: purchaseOrderId(po),
-      title: `${purchaseOrderId(po)} is overdue`,
+      title: `${purchaseOrderId(po)} 已逾期`,
       severity: po.priority === '高' ? 'high' : 'medium',
-      reason: 'Expected delivery date has passed.',
+      reason: '预计交付日期已过。',
       relatedSupplierId: poSupplierId(po),
       relatedItemIds: asArray(po.lines).map((line) => line.itemId || line.sku).filter(Boolean),
     })),
     ...receivingIssues.map((doc) => ({
       type: 'receiving_issue',
       id: doc.grn || doc.id || '',
-      title: `${doc.grn || doc.id || 'Receiving document'} needs follow-up`,
+      title: `${doc.grn || doc.id || '收货单'} 需要跟进`,
       severity: doc.status === '异常处理' ? 'high' : 'medium',
-      reason: doc.status === '异常处理' ? 'Receiving document is in exception handling.' : 'Receiving document includes rejected quantity.',
+      reason: doc.status === '异常处理' ? '收货单处于异常处理状态。' : '收货单包含拒收数量。',
       relatedSupplierId: doc.supplierId || '',
       relatedItemIds: asArray(doc.lines).map((line) => line.itemId || line.sku).filter(Boolean),
     })),
     ...pendingPrs.slice(0, 3).map((pr) => ({
       type: 'pending_purchase_request',
       id: pr.pr || pr.id || '',
-      title: `${pr.pr || pr.id || 'Purchase request'} is pending`,
+      title: `${pr.pr || pr.id || '采购申请'} 待处理`,
       severity: pr.priority === '高' ? 'high' : 'medium',
-      reason: `Purchase request status is ${pr.status || 'open'}.`,
+      reason: `采购申请状态为 ${pr.status || '未结'}。`,
       relatedSupplierId: pr.supplierId || '',
       relatedItemIds: [pr.itemId || pr.sourceSku || pr.sku].filter(Boolean),
     })),
     ...pendingRfqs.slice(0, 3).map((rfq) => ({
       type: 'pending_rfq',
       id: rfq.id || rfq.rfq || '',
-      title: `${rfq.id || rfq.rfq || 'RFQ'} is pending`,
+      title: `${rfq.id || rfq.rfq || 'RFQ'} 待处理`,
       severity: isPastDate(rfq.due, options.now) ? 'high' : 'medium',
-      reason: `RFQ status is ${rfq.status || 'open'}.`,
+      reason: `RFQ 状态为 ${rfq.status || '未结'}。`,
       relatedSupplierId: '',
       relatedItemIds: [rfq.itemId || rfq.sku || rfq.sourceSku].filter(Boolean),
     })),
@@ -665,7 +665,7 @@ function buildProcurementExceptionResponse(db = {}, message = '', options = {}) 
     cards: [
       {
         type: 'procurement_exception_summary',
-        title: 'Procurement exception summary',
+        title: '采购异常摘要',
         data: {
           totalIssueCount,
           overduePoCount: overduePos.length,
@@ -677,10 +677,10 @@ function buildProcurementExceptionResponse(db = {}, message = '', options = {}) 
       },
       evidenceCard(evidence),
       recommendedActions([
-        { label: 'View overdue POs', kind: 'deep_link', target: '/procurement?view=purchase-orders&filter=overdue' },
-        { label: 'Review pending PRs', kind: 'deep_link', target: '/procurement?view=purchase-requests&filter=pending' },
-        { label: 'Review RFQs', kind: 'deep_link', target: '/procurement?view=rfqs&filter=pending' },
-        { label: 'Review receiving issues', kind: 'deep_link', target: '/receiving?filter=issues' },
+        { label: '查看逾期 PO', kind: 'deep_link', target: '/procurement?view=purchase-orders&filter=overdue' },
+        { label: '复核待处理 PR', kind: 'deep_link', target: '/procurement?view=purchase-requests&filter=pending' },
+        { label: '复核 RFQ', kind: 'deep_link', target: '/procurement?view=rfqs&filter=pending' },
+        { label: '复核收货异常', kind: 'deep_link', target: '/receiving?filter=issues' },
       ]),
     ],
     evidence,
