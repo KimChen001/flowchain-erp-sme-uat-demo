@@ -142,10 +142,16 @@ Scenario H: SRM `查看高风险供应商` to supplier evidence to internal navi
 - Confirm current HEAD with `git log -1 --oneline`.
 - Start the API with `npm run api`.
 - Start the frontend with `npm run dev`.
+- Open `/api/health` first. Expected safe fields include `ok`, `service`, `mode`, `port`, `persistenceMode`, `timestamp`, `diagnostics.healthCheck`, `diagnostics.aiChat`, and current demo counts.
+- If the frontend loads but API calls fail, confirm the Vite proxy target: `SCM_API_PROXY_TARGET` should point at the API port that is actually running.
+- If port `8787` is occupied by a stale local API, stop only that known stale Node process or run the API on another port, for example `SCM_API_PORT=8788`, then start Vite with `SCM_API_PROXY_TARGET=http://127.0.0.1:8788`.
+- If manually testing Chinese prompts from PowerShell, send a UTF-8 byte body instead of a plain string body so request text is not garbled.
+- If a browser tab shows old behavior after pulling latest code, hard refresh or open a new tab before recording a failure.
 - Open browser Network and inspect `/api/ai/chat`.
 - `200` means the route returned a handled response; inspect cards, evidence, and action targets.
 - `404` usually means the API server is not serving the expected route or the frontend is pointing at the wrong target.
 - `500` means inspect the API terminal first; restart after pulling latest code.
+- AI timeout means check `npm run api`, `/api/health`, proxy target, stale port, and current HEAD. Do not enable any external provider for the alpha pilot.
 - Pending or cancelled requests often mean the frontend request was aborted, the dev server refreshed, or the API process is stuck.
 - Restart the API after pulling latest code.
 - Do not test while Codex is mid-run or while files are being edited.

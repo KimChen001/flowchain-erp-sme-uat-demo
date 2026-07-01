@@ -875,8 +875,16 @@ export function createScmServer() {
     if (req.method === 'GET' && url.pathname === '/api/health') {
       return send(res, 200, {
         ok: true,
+        service: 'flowchain-scm-api',
+        mode: 'local-dev',
+        port,
         persistenceMode,
         timestamp: new Date().toISOString(),
+        diagnostics: {
+          healthCheck: '/api/health',
+          aiChat: '/api/ai/chat',
+          dataSource: 'scm-demo',
+        },
         purchaseOrders: db.purchaseOrders.length,
         purchaseRequests: ensurePurchaseRequests(db).length,
         inventoryMovements: ensureInventoryMovements(db).length,

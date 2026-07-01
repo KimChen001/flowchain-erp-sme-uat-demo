@@ -22,7 +22,8 @@ test('AI assistant UI has duplicate request guard, abort, and timeout fallback',
   assert.match(aiPanelSource, /askAi\(message\.retryPrompt \|\| ""\)/)
   assert.match(aiPanelSource, /重试/)
   assert.match(aiPanelSource, /disabled=\{asking\}/)
-  assert.match(aiPanelSource, /Check npm run api, npm run dev, \/api\/health, and current HEAD/)
+  assert.match(aiPanelSource, /Check npm run api, \/api\/health, SCM_API_PROXY_TARGET, stale node on 8787/)
+  assert.match(aiPanelSource, /UTF-8 byte bodies for PowerShell Chinese prompt tests/)
 })
 
 test('global focus recovery renders return and clear focus controls', () => {

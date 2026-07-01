@@ -1128,7 +1128,7 @@ export default function FloatingAiAssistant({
           timeout: timeoutHit || abortReasonRef.current === "timeout",
           name: error instanceof Error ? error.name : "unknown",
           healthCheck: "/api/health",
-          devHint: "Check npm run api, npm run dev, /api/health, and current HEAD with git rev-parse --short HEAD.",
+          devHint: "Check npm run api, /api/health, SCM_API_PROXY_TARGET, stale node on 8787, current HEAD with git rev-parse --short HEAD, browser refresh, and UTF-8 byte bodies for PowerShell Chinese prompt tests.",
         });
       }
       setMessages((current) => [
