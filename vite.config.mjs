@@ -34,7 +34,7 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
     proxy: {
-      '/api': 'http://127.0.0.1:8787',
+      '/api': process.env.SCM_API_PROXY_TARGET || 'http://127.0.0.1:8787',
     },
   },
   build: {
