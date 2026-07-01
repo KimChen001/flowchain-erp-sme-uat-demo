@@ -7,6 +7,7 @@ import { buildAiSupplierOperationalResponse } from '../domain/ai-supplier-operat
 import { buildAiFinanceCollaborationResponse } from '../domain/ai-finance-collaboration-query.mjs'
 import { buildAiMasterDataQualityResponse } from '../domain/ai-master-data-quality-query.mjs'
 import { buildAiCockpitFastPathResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
+import { buildAiSessionGroundedResponse } from '../domain/ai-session-grounding.mjs'
 import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
 import { buildAiReadContext } from '../domain/ai-read-context.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
@@ -510,6 +511,22 @@ export async function handleAiRoute(ctx) {
     if (!body.question) return send(res, 400, { error: 'question is required' })
 
     let branchStartedAt = Date.now()
+    const sessionGrounded = buildAiSessionGroundedResponse(db, body, { cache: {} })
+    if (sessionGrounded) {
+      const result = {
+        ...sessionGrounded,
+        fastPath: 'session_grounding',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: Date.now() - branchStartedAt,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_session_grounding_query', summary: `AI answered ${result.intent.name} via ${result.provider}`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'session_grounding', body, result })
+      return send(res, 200, result)
+    }
+
+    branchStartedAt = Date.now()
     const financeFastPath = buildAiFinanceCollaborationResponse(db, body)
     if (financeFastPath) {
       const result = {

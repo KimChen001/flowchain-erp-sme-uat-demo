@@ -649,6 +649,35 @@ function buildSupplierFollowupResponse(models) {
   })
 }
 
+function buildRfqFollowupResponse(models, message = '') {
+  const requestedId = message.match(/\bRFQ-[A-Z0-9-]+\b/i)?.[0] || ''
+  const rfq = asArray(models.procurementDocuments)
+    .find((item) => item.documentType === 'rfq' && (!requestedId || text(item.id).toLowerCase() === requestedId.toLowerCase()))
+  if (!rfq) return null
+  const evidence = evidenceItems([rfq])
+  const pending = toNumber(rfq.pendingSupplierCount, Math.max(0, toNumber(rfq.supplierCount, 0) - toNumber(rfq.respondedSupplierCount, 0)))
+  return response({
+    intent: 'rfq_followup_query',
+    content: `${rfq.id} 当前状态为 ${rfq.status || '进行中'}，已邀请 ${toNumber(rfq.supplierCount, 0)} 家供应商，已回复 ${toNumber(rfq.respondedSupplierCount, 0)} 家，仍有 ${pending} 家待回复。${rfq.dueDate ? `报价截止日期为 ${rfq.dueDate}。` : ''}${rfq.linkedPr ? `该 RFQ 来自采购申请 ${rfq.linkedPr}。` : ''}${rfq.linkedPo ? `后续已关联采购单 ${rfq.linkedPo}。` : ''}建议先确认待回复供应商和授标依据。`,
+    evidence,
+    cards: [
+      {
+        type: 'procurement_followup_summary',
+        title: `${docLabel('rfq', rfq.id)} 跟进`,
+        data: {
+          pendingRfqResponseCount: pending,
+          topIssues: [{
+            title: docLabel('rfq', rfq.id),
+            reason: `${pending} 家供应商待回复${rfq.dueDate ? `，截止 ${rfq.dueDate}` : ''}`,
+          }],
+        },
+      },
+      { type: 'evidence', evidence },
+      { type: 'recommended_actions', actions: recommendedActions([rfq]) },
+    ],
+  })
+}
+
 export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {}) {
   const message = text(body.question || body.message || body.prompt || body.text)
   if (!message) return null
@@ -657,6 +686,10 @@ export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {})
 
   if (/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i.test(message) && /优先|解释/.test(message)) {
     return buildPriorityExplanationResponse(models, message)
+  }
+
+  if (/\bRFQ-[A-Z0-9-]+\b/i.test(message) && /跟进|回复|报价|供应商|授标|pending|response/i.test(message)) {
+    return buildRfqFollowupResponse(models, message)
   }
 
   if (/供应商|supplier/i.test(message) && /跟进|follow|风险|关注/.test(message) && !/\bSUP-[A-Z0-9-]+\b/i.test(message)) {

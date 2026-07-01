@@ -150,7 +150,9 @@ test('R92 AI panel preserves chat state across module and evidence navigation', 
   assert.doesNotMatch(source, /useEffect\(\(\) => \{[\s\S]*?setMessages\(\[\]\)[\s\S]*?\}, \[moduleId\]\)/)
   assert.doesNotMatch(source, /useEffect\(\(\) => \{[\s\S]*?setInput\(""\)[\s\S]*?\}, \[moduleId\]\)/)
   assert.doesNotMatch(source, /useEffect\(\(\) => \{[\s\S]*?setAsking\(false\)[\s\S]*?\}, \[moduleId\]\)/)
-  assert.ok((source.match(/onClick=\{\(\) => onNavigate\(intent\.activeId, intent\.focusTarget \|\| null\)\}/g) || []).length >= 2)
+  assert.match(source, /function AiResponseCard/)
+  assert.match(source, /minimizeAfterNavigate/)
+  assert.match(source, /onNavigate\(intent\.activeId, intent\.focusTarget \|\| null\)/)
   assert.match(source, /requestInFlightRef\.current = false/)
 })
 

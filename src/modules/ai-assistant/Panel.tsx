@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, MessageCircle, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import {
@@ -56,6 +56,14 @@ type AiChatResponse = {
   timingMs?: number;
   modelMs?: number;
   externalMs?: number;
+};
+
+type AiSessionGrounding = {
+  lastIntent?: string;
+  lastPrimaryEntity?: { type?: string; id?: string; label?: string } | null;
+  lastEvidenceIds?: string[];
+  lastVisibleBusinessIds?: Record<string, string[]>;
+  activeContext?: ActiveContext | null;
 };
 
 const PAGE_LABELS: Record<string, string> = {
@@ -1015,6 +1023,55 @@ function AiResponseCard({
   }
 }
 
+function businessTypeFromId(id = "") {
+  if (/^PO-/i.test(id)) return "po";
+  if (/^PR-/i.test(id)) return "pr";
+  if (/^RFQ-/i.test(id)) return "rfq";
+  if (/^GRN-/i.test(id)) return "grn";
+  if (/^INV-/i.test(id)) return "invoice";
+  if (/^SKU-/i.test(id)) return "sku";
+  return "";
+}
+
+function collectBusinessIdsFromCards(cards: AiChatCard[] = []) {
+  const grouped: Record<string, string[]> = {};
+  const push = (id: unknown) => {
+    const value = String(id ?? "").trim().toUpperCase();
+    const type = businessTypeFromId(value);
+    if (!type) return;
+    grouped[type] = grouped[type] || [];
+    if (!grouped[type].includes(value)) grouped[type].push(value);
+  };
+  for (const card of cards) {
+    for (const evidence of card.evidence || []) push(evidence.id);
+    for (const action of card.actions || []) {
+      push(String(action.target || "").match(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)?.[0]);
+      for (const evidence of action.originEvidence || []) push(evidence.id);
+    }
+    const data = card.data || {};
+    Object.values(data).forEach((value) => {
+      if (typeof value === "string") push(value.match(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)?.[0]);
+    });
+  }
+  return grouped;
+}
+
+function buildSessionGrounding(messages: AiChatMessage[], activeContext: ActiveContext | null): AiSessionGrounding {
+  const assistant = [...messages].reverse().find((message) => message.role === "assistant" && message.cards?.length);
+  const cards = assistant?.cards || [];
+  const lastVisibleBusinessIds = collectBusinessIdsFromCards(cards);
+  const lastEvidenceIds = Object.values(lastVisibleBusinessIds).flat().slice(0, 12);
+  const primaryType = Object.keys(lastVisibleBusinessIds).find((type) => lastVisibleBusinessIds[type]?.length === 1);
+  const primaryId = primaryType ? lastVisibleBusinessIds[primaryType]?.[0] : "";
+  return {
+    lastIntent: cards[0]?.type,
+    lastPrimaryEntity: primaryId ? { type: primaryType, id: primaryId, label: primaryId } : null,
+    lastEvidenceIds,
+    lastVisibleBusinessIds,
+    activeContext,
+  };
+}
+
 function AiResponseCards({
   cards = [],
   onNavigate,
@@ -1066,6 +1123,8 @@ export default function FloatingAiAssistant({
   const [slowRequest, setSlowRequest] = useState(false);
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const restoreButtonRef = useRef<HTMLButtonElement>(null);
   const requestInFlightRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const requestSeqRef = useRef(0);
@@ -1074,6 +1133,13 @@ export default function FloatingAiAssistant({
   useEffect(() => {
     if (openSignal) setOpen(true);
   }, [openSignal]);
+
+  const minimizeAssistant = () => setOpen(false);
+  const restoreAssistant = () => setOpen(true);
+  const minimizeAfterNavigate = (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => {
+    onNavigate?.(moduleId, focusTarget || null);
+    minimizeAssistant();
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -1088,6 +1154,27 @@ export default function FloatingAiAssistant({
   }, []);
 
   useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (panelRef.current?.contains(target) || restoreButtonRef.current?.contains(target)) return;
+      const element = target instanceof Element ? target : null;
+      if (element?.closest('[role="dialog"], [data-ai-ignore-outside-minimize="true"]')) return;
+      minimizeAssistant();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") minimizeAssistant();
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!asking) {
       setSlowRequest(false);
       return;
@@ -1097,6 +1184,7 @@ export default function FloatingAiAssistant({
   }, [asking]);
 
   const currentContext = cleanActiveContext(activeContext);
+  const sessionGrounding = useMemo(() => buildSessionGrounding(messages, currentContext), [messages, currentContext]);
   const quickPrompts = getContextualQuickPrompts({ moduleId, activeContext: currentContext });
   const contextLabel = currentContext
     ? currentContext.entityLabel || currentContext.entityId
@@ -1133,6 +1221,7 @@ export default function FloatingAiAssistant({
           moduleId,
           question: message,
           message,
+          sessionGrounding,
           ...(context ? { activeContext: context } : {}),
         }),
       });
@@ -1189,6 +1278,7 @@ export default function FloatingAiAssistant({
     <div className="fixed right-5 bottom-5 z-40 pointer-events-none">
       {open && (
         <div
+          ref={panelRef}
           className="pointer-events-auto mb-3 w-[min(380px,calc(100vw-2rem))] rounded-2xl bg-white shadow-2xl overflow-hidden"
           style={{ border: `1px solid ${A.border}` }}
         >
@@ -1203,10 +1293,10 @@ export default function FloatingAiAssistant({
               </div>
             </div>
             <button
-              onClick={() => setOpen(false)}
+              onClick={minimizeAssistant}
               className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100"
               style={{ color: A.gray1 }}
-              aria-label="关闭 AI 助手"
+              aria-label="最小化 AI 助手"
             >
               <X size={15} />
             </button>
@@ -1230,7 +1320,7 @@ export default function FloatingAiAssistant({
                   }}
                 >
                   <div className="whitespace-pre-wrap">{message.content}</div>
-                  {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />}
+                  {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={minimizeAfterNavigate} onReviewActionDraft={onReviewActionDraft} />}
                   {message.role === "assistant" && message.retryPrompt ? (
                     <button
                       type="button"
@@ -1301,10 +1391,11 @@ export default function FloatingAiAssistant({
       )}
 
       <button
-        onClick={() => setOpen((value) => !value)}
+        ref={restoreButtonRef}
+        onClick={() => open ? minimizeAssistant() : restoreAssistant()}
         className="pointer-events-auto h-12 rounded-full pl-4 pr-5 flex items-center gap-2 text-sm font-semibold text-white shadow-xl hover:shadow-2xl transition-shadow"
         style={{ background: A.blue }}
-        aria-label="打开 AI 助手"
+        aria-label={open ? "最小化 AI 助手" : "展开 AI 助手"}
       >
         <MessageCircle size={18} />
         AI 助手
