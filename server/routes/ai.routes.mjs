@@ -310,6 +310,14 @@ function shouldRunInventoryStatusBeforeReadContext(body = {}, statusFastPath = n
     /库存|缺货|断货|补货|仓库|物料|sku|item|inventory|stock|shortage/i.test(question)
 }
 
+function shouldRunInventoryBeforeProcurement(body = {}, statusFastPath = null) {
+  if (!shouldRunInventoryStatusBeforeReadContext(body, statusFastPath)) return false
+  const moduleId = String(body.moduleId || body.activeContext?.module || '')
+  const question = String(body.question || '')
+  return moduleId === 'inventory' ||
+    /SKU[-\w]*|库存|缺货|断货|补货|仓库|物料|inventory|stock|shortage/i.test(question)
+}
+
 function safeAuditText(value = '', fallback = 'ai') {
   const text = String(value || fallback)
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
@@ -500,6 +508,7 @@ function providerFailureResponse({ body, db, ctx }) {
 
 export async function handleAiRoute(ctx) {
   const { req, res, url, db, send, readBody, writeDb, event, repositories, ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs } = ctx
+  const dataMode = ctx.dataMode || db?.__dataMode || ''
 
   if (req.method === 'GET' && url.pathname === '/api/ai/tools') {
     send(res, 200, { tools: getAiToolRegistry() })
@@ -579,6 +588,29 @@ export async function handleAiRoute(ctx) {
       }
       void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_data_limitation_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name, persist: false })
       logAiTiming({ startedAt, branchStartedAt, branch: 'data_limitation_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
+    const statusBeforeProcurement = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
+    if (
+      !compoundCandidate &&
+      !repositoryBackedReadContext &&
+      dataMode === 'user' &&
+      statusBeforeProcurement?.intent?.name === 'inventory_status_query' &&
+      shouldRunInventoryBeforeProcurement(body, statusBeforeProcurement)
+    ) {
+      const result = {
+        ...statusBeforeProcurement,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_status_fast_path', summary: `AI answered ${result.intent.name} before procurement routing`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'inventory_status_before_procurement', body, result })
       send(res, 200, result)
       return true
     }
@@ -693,7 +725,7 @@ export async function handleAiRoute(ctx) {
     }
 
     branchStartedAt = Date.now()
-    const statusFastPath = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
+    const statusFastPath = statusBeforeProcurement || buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
     if (
       !compoundCandidate &&
       (
