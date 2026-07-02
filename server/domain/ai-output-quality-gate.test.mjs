@@ -298,8 +298,10 @@ test('R98 unknown prompt fallback stays sanitized when provider is disabled', as
     const serialized = JSON.stringify(route.response.payload)
 
     assert.equal(route.response.status, 200)
-    assert.equal(route.response.payload.intent.name, 'provider_disabled')
-    assert.equal(route.response.payload.providerStatus, 'blocked')
+    assert.equal(route.response.payload.intent.name, 'unknown_guided_fallback')
+    assert.equal(route.response.payload.providerStatus, 'deterministic')
+    assert.equal(route.response.payload.status, 'guided_fallback')
+    assert.match(serialized, /今日优先事项|库存风险|供应商跟进/)
     assert.equal(/fake-openai-key|fake-ark-key|fake-doubao-key|stack|trace|SyntaxError|TypeError|```|tool_result|response_card/i.test(serialized), false)
   })
 })

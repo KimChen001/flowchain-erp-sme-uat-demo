@@ -192,8 +192,9 @@ test('system harness validates AI safety, timeout fast path, and sanitized fallb
     const fallback = routeContext('POST', '/api/ai/chat', createDb(), { message: 'write a poetic sourcing manifesto' })
     await handleAiRoute(fallback.ctx)
     assert.equal(fallback.response.status, 200)
-    assert.equal(fallback.response.payload.intent.name, 'provider_disabled')
-    assert.equal(fallback.response.payload.providerStatus, 'blocked')
+    assert.equal(fallback.response.payload.intent.name, 'unknown_guided_fallback')
+    assert.equal(fallback.response.payload.providerStatus, 'deterministic')
+    assert.equal(fallback.response.payload.status, 'guided_fallback')
     expectCleanPayload(fallback.response.payload)
   } finally {
     for (const [key, value] of Object.entries(previous)) {

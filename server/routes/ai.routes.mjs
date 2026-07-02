@@ -11,6 +11,7 @@ import { buildAiSessionGroundedResponse } from '../domain/ai-session-grounding.m
 import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
 import { buildAiReadContext } from '../domain/ai-read-context.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
+import { buildUnknownGuidedFallbackResponse, classifyAiBusinessIntent, isTechnicalProviderDiagnosticPrompt } from '../domain/ai-business-intent-router.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
 import {
   ensureMarketPrices,
@@ -898,9 +899,27 @@ export async function handleAiRoute(ctx) {
     const providerSafety = getAiProviderSafetyState()
     if (!providerSafety.enabled) {
       branchStartedAt = Date.now()
-      const result = providerDisabledResponse({ startedAt, branchStartedAt, body })
-      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_chat_provider_blocked', summary: `AI provider fallback blocked for ${body.moduleId || 'unknown'}`, entity: body.moduleId || 'ai' })
-      logAiTiming({ startedAt, branchStartedAt, branch: 'provider_disabled', body, result })
+      const intentRoute = classifyAiBusinessIntent(body)
+      const technicalDiagnostic = isTechnicalProviderDiagnosticPrompt(body.question)
+      const result = technicalDiagnostic
+        ? providerDisabledResponse({ startedAt, branchStartedAt, body })
+        : {
+            ...buildUnknownGuidedFallbackResponse(body, intentRoute),
+            timingMs: Date.now() - startedAt,
+            externalMs: 0,
+            modelMs: Date.now() - branchStartedAt,
+          }
+      void recordAiEventBestEffort({
+        db,
+        event,
+        writeDb,
+        repositories,
+        action: technicalDiagnostic ? 'ai_chat_provider_blocked' : 'ai_guided_fallback',
+        summary: technicalDiagnostic ? `AI provider fallback blocked for ${body.moduleId || 'unknown'}` : `AI guided unknown ${body.moduleId || 'unknown'} question`,
+        entity: body.moduleId || 'ai',
+        persist: technicalDiagnostic,
+      })
+      logAiTiming({ startedAt, branchStartedAt, branch: technicalDiagnostic ? 'provider_disabled' : 'guided_fallback', body, result })
       return send(res, 200, result)
     }
 

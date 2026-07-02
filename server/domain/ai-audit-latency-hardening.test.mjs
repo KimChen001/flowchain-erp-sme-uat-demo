@@ -106,7 +106,7 @@ test('draft preparation response survives audit persistence failure', async () =
   assert.equal(JSON.stringify(route.response.payload).includes('audit unavailable'), false)
 })
 
-test('provider disabled fallback is still safe when audit write fails', async () => {
+test('guided fallback is still safe when audit write fails', async () => {
   await withEnv({
     AI_PROVIDER_ENABLED: undefined,
     OPENAI_API_KEY: 'fake-openai-key',
@@ -119,8 +119,9 @@ test('provider disabled fallback is still safe when audit write fails', async ()
     await handleAiRoute(route.ctx)
 
     assert.equal(route.response.status, 200)
-    assert.equal(route.response.payload.providerStatus, 'blocked')
-    assert.equal(route.response.payload.intent.name, 'provider_disabled')
+    assert.equal(route.response.payload.providerStatus, 'deterministic')
+    assert.equal(route.response.payload.intent.name, 'unknown_guided_fallback')
+    assert.equal(route.response.payload.status, 'guided_fallback')
     assert.equal(JSON.stringify(route.response.payload).includes('fake-openai-key'), false)
     assert.equal(JSON.stringify(route.response.payload).includes('audit storage unavailable'), false)
   })

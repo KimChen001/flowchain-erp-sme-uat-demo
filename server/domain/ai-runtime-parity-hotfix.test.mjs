@@ -197,3 +197,40 @@ test('R121-HF data limitation prompts have deterministic evidence-quality answer
     assert.match(text, /发票|三单|match/i)
   }
 })
+
+test('R132 broad attention prompts route to deterministic business overview', async () => {
+  for (const message of [
+    '有什么需要我注意的？',
+    '我现在要看什么？',
+    '当前有什么问题？',
+    '有什么风险？',
+    '有没有什么异常？',
+    '有什么需要跟进？',
+  ]) {
+    const payload = await ask(message)
+    assertCleanRuntimeOutput(payload, message)
+    assert.match(payload.intent.name, /attention_overview_query|today_cockpit_priority_query/)
+    const text = visibleText(payload)
+    assert.match(text, /PO-2026-1282/)
+    assert.match(text, /SKU-00412/)
+    assert.match(text, /RFQ-26-0046/)
+    assert.match(text, /数据限制|ETA|GRN|质检|需求预测|三单/)
+    assert.ok(actions(payload).some((action) => /打开 PO-\d|查看 SKU-|打开 RFQ-/.test(action.label)), message)
+  }
+})
+
+test('R133 unknown input returns guided business fallback instead of provider-disabled wording', async () => {
+  const payload = await ask('写一首采购宣言')
+  const text = visibleText(payload)
+
+  assert.equal(payload.intent.name, 'unknown_guided_fallback')
+  assert.equal(payload.providerStatus, 'deterministic')
+  assert.equal(payload.status, 'guided_fallback')
+  assert.doesNotMatch(text, /外部 AI Provider|未启用|provider_disabled|debug|api key/i)
+  assert.match(text, /今日优先事项/)
+  assert.match(text, /库存风险/)
+  assert.match(text, /供应商跟进/)
+  assert.match(text, /RFQ 回复/)
+  assert.match(text, /收货异常/)
+  assert.match(text, /数据不完整项/)
+})

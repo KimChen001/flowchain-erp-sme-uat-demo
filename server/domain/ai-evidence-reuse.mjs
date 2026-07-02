@@ -6,6 +6,7 @@ import {
 } from './procurement-read-model.mjs'
 import { buildTodayCockpit } from './today-cockpit-read-model.mjs'
 import { retrieveAiSopGuidance } from './ai-sop-retrieval.mjs'
+import { classifyAiBusinessIntent, isBroadAttentionPrompt } from './ai-business-intent-router.mjs'
 
 function text(value, fallback = '') {
   const next = String(value ?? '').trim()
@@ -686,6 +687,30 @@ function buildTodayCockpitResponse(models) {
   })
 }
 
+function buildAttentionOverviewResponse(models) {
+  const result = buildTodayCockpitResponse(models)
+  const limitationFacts = [
+    '数据限制：供应商 ETA、GRN/质检结论、需求预测和三单匹配证据仍需人工复核。',
+  ]
+  const summary = result.cards.find((card) => card.type === 'procurement_followup_summary')
+  if (summary?.data) {
+    summary.title = '当前需要注意的事项'
+    summary.data.limitations = [...new Set([...(summary.data.limitations || []), ...limitationFacts])]
+  }
+  result.intent = { ...result.intent, name: 'attention_overview_query', confidence: 0.88 }
+  result.aiBusinessIntent = {
+    intent: 'attention_overview_query',
+    confidence: 0.88,
+    entities: [],
+    routeReason: 'broad_attention_overview',
+    needsClarification: false,
+    modelPolicy: 'deterministic_only',
+  }
+  result.content = `${result.content} ${limitationFacts[0]}`
+  result.message = result.content
+  return result
+}
+
 function buildProcurementRiskResponse(models) {
   const riskyDocuments = topProcurementRiskDocuments(models.procurementDocuments)
   const followups = asArray(models.procurementFollowups).slice(0, 5)
@@ -1018,6 +1043,7 @@ export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {})
   if (!message) return null
   const normalized = compact(message)
   const models = readModels(data, options.cache || {})
+  const intentRoute = classifyAiBusinessIntent({ ...body, question: message })
 
   const dataLimitations = buildAiDataLimitationResponse(data, body, options)
   if (dataLimitations) return dataLimitations
@@ -1048,6 +1074,10 @@ export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {})
     return buildInventoryRiskResponse(models, normalized)
   }
 
+  if (intentRoute.intent === 'attention_overview_query' || isBroadAttentionPrompt(message)) {
+    return buildAttentionOverviewResponse(models)
+  }
+
   if (/今天|今日|today/.test(message) && /处理|关注|跟进|优先|工作台/.test(message)) {
     return buildTodayCockpitResponse(models)
   }
@@ -1061,6 +1091,7 @@ export function buildAiCockpitFastPathResponse(data = {}, body = {}, options = {
   const moduleId = text(body.moduleId || body.activeContext?.module)
   const isCockpitContext = !moduleId || moduleId === 'overview' || moduleId === 'today-cockpit'
   const cockpitPrompt = (
+    isBroadAttentionPrompt(message) ||
     (/今天|今日|today/.test(message) && /处理|关注|跟进|优先|工作台/.test(message)) ||
     (/采购|单据|三单|发票|收货|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|待审批|待转|差异|跟进|逾期|问题|为什么|原因|优先|有哪些/.test(message)) ||
     (/库存|sku|物料|inventory|stock|shortage/i.test(message) && /风险|关注|为什么|原因|缺货|低库存|补货|够不够/.test(message)) ||
