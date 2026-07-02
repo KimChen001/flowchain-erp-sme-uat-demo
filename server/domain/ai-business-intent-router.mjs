@@ -1,3 +1,5 @@
+import { modelPolicyForAiIntent, routeAiModelPolicy } from './ai-model-router.mjs'
+
 function text(value, fallback = '') {
   const next = String(value ?? '').trim()
   return next || fallback
@@ -77,21 +79,15 @@ function sessionEntities(body = {}) {
   return entities.filter((item) => item.id)
 }
 
-function modelPolicyFor(intent) {
-  if (intent === AI_BUSINESS_INTENT_TAXONOMY.unknownGuidedFallback) return 'guided_fallback'
-  if (intent === AI_BUSINESS_INTENT_TAXONOMY.draftPreview) return 'deterministic_only'
-  if (intent === AI_BUSINESS_INTENT_TAXONOMY.sopGuidance) return 'deterministic_only'
-  return 'deterministic_only'
-}
-
 function route(intent, confidence, entities, routeReason, options = {}) {
+  const normalizedIntent = normalizeAiIntentName(intent)
   return {
-    intent: normalizeAiIntentName(intent),
+    intent: normalizedIntent,
     confidence,
     entities,
     routeReason,
     needsClarification: Boolean(options.needsClarification),
-    modelPolicy: options.modelPolicy || modelPolicyFor(normalizeAiIntentName(intent)),
+    modelPolicy: options.modelPolicy || modelPolicyForAiIntent(normalizedIntent),
   }
 }
 
@@ -161,6 +157,7 @@ export function buildUnknownGuidedFallbackResponse(body = {}, classification = c
     status: 'guided_fallback',
     intent: { name: AI_BUSINESS_INTENT_TAXONOMY.unknownGuidedFallback, confidence: classification.confidence, slots: {} },
     aiBusinessIntent: classification,
+    aiModelRoute: routeAiModelPolicy(classification),
     message,
     content: message,
     cards: [
