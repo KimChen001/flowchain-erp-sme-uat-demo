@@ -5,6 +5,8 @@ import { Modal, Card, Chip, KpiCard, A } from "../../components/ui";
 import { DocumentActionBar, DocumentEvidencePanel, DocumentHeader, DocumentLinesTable, DocumentShell, DocumentStatusTimeline, DocumentTotals, statusTone, type TimelineStep } from "../../components/document/DocumentShell";
 import { SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/demo-data";
 import { getInvoiceLinkedDocuments } from "../../domain/procurement/document-links";
+import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
+import { makeInvoiceInsight, type ContextualAiAction } from "../../domain/contextual-ai";
 import { calculateInvoiceMatch, getInvoiceVarianceSummary, isInvoicePayableReady, supplierInvoiceExportRows } from "../../domain/procurement/invoice-matching";
 import { calculateInvoiceTaxSummary, calculateLineTax, getTaxVarianceSummary } from "../../domain/finance/tax";
 import { exportRowsToCsv } from "../../lib/data-export";
@@ -72,6 +74,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
   const [search, setSearch] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<SupplierInvoice | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
+  const [invoiceInsight, setInvoiceInsight] = useState<ContextualAIInsight | null>(null);
   const isProcurementMode = mode === "procurement";
 
   const visibleInvoices = useMemo(() => {
@@ -196,6 +199,30 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
     }));
     exportRowsToCsv(`supplier-invoice-detail-${invoice.invoiceNumber}.csv`, [...headerRows, ...lineRows]);
     toast.success("导出文件已生成", { description: "供应商发票详情" });
+  }
+
+  function openInvoiceInsight(invoice: SupplierInvoice, trigger: string) {
+    const snapshot = calculateInvoiceMatch(invoice, purchaseOrders, receivingDocs, invoices);
+    setInvoiceInsight({
+      ...makeInvoiceInsight({
+        invoiceNumber: invoice.invoiceNumber,
+        supplier: invoice.supplier,
+        po: invoice.relatedPo,
+        grn: invoice.relatedGrn,
+        matchStatus: snapshot.matchStatus,
+        varianceType: snapshot.varianceType,
+        varianceAmount: snapshot.varianceAmount,
+      }),
+      trigger,
+    });
+  }
+
+  function handleInvoiceInsightAction(action: ContextualAiAction) {
+    if (action.intent === "preview_invoice_resolution_note") {
+      toast("Resolution note preview only", { description: `${action.sourceEntityId} · no auto-approve, no payment, no AP posting.` });
+      return;
+    }
+    toast(action.label, { description: "Contextual insight only. mutationAllowed: false." });
   }
 
   const selectedSnapshot = selectedInvoice
@@ -394,6 +421,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
               ]}
               columns={5}
             />
+            <ContextualAIInsightPanel insight={invoiceInsight} onClose={() => setInvoiceInsight(null)} onAction={handleInvoiceInsightAction} />
             <DocumentEvidencePanel
               linkedDocuments={getInvoiceLinkedDocuments(selectedInvoice, purchaseOrders, receivingDocs)}
               onNavigate={onNavigate}
@@ -412,6 +440,25 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
               ]}
             />
             <DocumentActionBar>
+              <button onClick={() => openInvoiceInsight(selectedInvoice, "Explain matching failure")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>Explain matching failure</button>
+              <button onClick={() => openInvoiceInsight(selectedInvoice, "Trace PO/GRN/Invoice difference")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>Trace PO/GRN/Invoice difference</button>
+              <button onClick={() => openInvoiceInsight(selectedInvoice, "Check receiving impact")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>Check receiving impact</button>
+              <button onClick={() => handleInvoiceInsightAction({
+                id: `preview_invoice_resolution_note:supplier_invoice:${selectedInvoice.invoiceNumber}`,
+                label: `Preview resolution note for ${selectedInvoice.invoiceNumber}`,
+                intent: "preview_invoice_resolution_note",
+                sourceModule: isProcurementMode ? "procurement" : "finance",
+                sourceEntityType: "supplier_invoice",
+                sourceEntityId: selectedInvoice.invoiceNumber,
+                sourceRoute: isProcurementMode ? "procurement:invoices" : "finance:invoices",
+                linkedRecords: [
+                  ...(selectedInvoice.relatedPo ? [{ type: "purchase_order", id: selectedInvoice.relatedPo }] : []),
+                  ...(selectedInvoice.relatedGrn ? [{ type: "grn", id: selectedInvoice.relatedGrn }] : []),
+                ],
+                allowedOutputType: "draft_preview",
+                requiresReview: true,
+                mutationAllowed: false,
+              })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>Preview resolution note</button>
               <button onClick={() => runMatch(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>运行匹配</button>
               <button onClick={() => approve(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
               {!isProcurementMode && <button onClick={() => postToAp(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>过账到应付</button>}

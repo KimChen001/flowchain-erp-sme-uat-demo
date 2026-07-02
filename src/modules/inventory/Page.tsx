@@ -18,6 +18,8 @@ import {
 import InventoryMovementLedger from "./InventoryMovementLedger";
 import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
 import { buildInventoryExceptionDocuments } from "../../domain/inventory/exceptions";
+import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
+import { makeSkuInsight, type ContextualAiAction } from "../../domain/contextual-ai";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import {
@@ -1177,6 +1179,7 @@ function InventoryLanding({
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const [selectedSku, setSelectedSku] = useState("");
+  const [skuInsight, setSkuInsight] = useState<ContextualAIInsight | null>(null);
   const plannedItems = items.map((item) => ({ ...item, plan: inventoryPlan(item) }));
   const riskItems = plannedItems.filter((item) => item.status !== "正常" || item.plan.suggestedQty > 0);
   const exceptionDocs = buildInventoryExceptionDocuments();
@@ -1184,6 +1187,7 @@ function InventoryLanding({
   const topException = exceptionDocs.find((doc) => doc.status !== "已关闭") || exceptionDocs[0];
   const frozenLot = lots.find((lot) => lot.status === "冻结" || lot.status === "近效期");
   const selectedItem = items.find((item) => item.sku === selectedSku) ?? null;
+  const selectedPlannedItem = plannedItems.find((item) => item.sku === selectedSku) ?? null;
   const selectedMovements = selectedItem
     ? INVENTORY_MOVEMENT_LEDGER.filter((movement) => movement.sku === selectedItem.sku).slice(0, 3)
     : [];
@@ -1193,6 +1197,9 @@ function InventoryLanding({
   const selectedLots = selectedItem
     ? lots.filter((lot) => lot.sku === selectedItem.sku).slice(0, 3)
     : [];
+  const selectedRiskReason = selectedPlannedItem
+    ? `可用库存 ${selectedPlannedItem.plan.projectedAvailable}，安全库存 ${selectedPlannedItem.min}，ROP ${selectedPlannedItem.plan.reorderPoint}，建议补货 ${selectedPlannedItem.plan.suggestedQty} ${selectedPlannedItem.plan.unit}`
+    : "";
   const transferExceptions = TRANSFERS.filter((transfer) => ["在途", "待审批"].includes(transfer.status));
   const frozenCount = lots.filter((lot) => lot.status === "冻结").length;
 
@@ -1226,6 +1233,34 @@ function InventoryLanding({
     });
     return () => onActiveContextChange?.(null);
   }, [selectedItem?.sku, selectedItem?.name, onActiveContextChange]);
+
+  function openSkuInsight(trigger: string) {
+    if (!selectedPlannedItem) return;
+    setSkuInsight(makeSkuInsight({
+      sku: selectedPlannedItem.sku,
+      name: selectedPlannedItem.name,
+      currentStock: selectedPlannedItem.plan.projectedAvailable,
+      safetyStock: selectedPlannedItem.min,
+      reorderPoint: selectedPlannedItem.plan.reorderPoint,
+      suggestedQty: selectedPlannedItem.plan.suggestedQty,
+      supplier: selectedPlannedItem.plan.supplier,
+      movements: selectedMovements.map((movement) => movement.movementId),
+      exceptions: selectedExceptions.map((doc) => doc.id),
+    }));
+    setSkuInsight((current) => current ? { ...current, trigger } : current);
+  }
+
+  function handleSkuInsightAction(action: ContextualAiAction) {
+    if (action.intent === "preview_replenishment_draft" && selectedPlannedItem) {
+      if (!onReviewActionDraft) {
+        toast.warning("草稿预览暂不可用", { description: "当前页面未连接草稿审阅壳。" });
+        return;
+      }
+      onReviewActionDraft(inventoryDraftRequest(selectedPlannedItem));
+      return;
+    }
+    toast(action.label, { description: "Contextual insight only. mutationAllowed: false." });
+  }
 
   return (
     <div className="space-y-4">
@@ -1263,6 +1298,18 @@ function InventoryLanding({
                 <span>异常单据 {selectedExceptions.length}</span>
                 <span>批次 {selectedLots.length}</span>
               </div>
+              {selectedPlannedItem && (
+                <div className="mt-2 grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-3">
+                  <div className="rounded-lg px-2.5 py-2" style={{ background: A.gray6 }}>
+                    <div style={{ color: A.gray2 }}>风险等级</div>
+                    <div className="font-semibold" style={{ color: selectedPlannedItem.plan.priority === "高" ? A.red : A.label }}>{selectedPlannedItem.plan.priority}</div>
+                  </div>
+                  <div className="rounded-lg px-2.5 py-2 sm:col-span-2" style={{ background: A.gray6 }}>
+                    <div style={{ color: A.gray2 }}>原因</div>
+                    <div className="font-semibold truncate" style={{ color: A.label }}>{selectedRiskReason}</div>
+                  </div>
+                </div>
+              )}
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedMovements.map((movement) => (
                   <span key={movement.movementId} className="rounded-md px-2 py-1 text-[10px] tabular-nums" style={{ background: A.gray6, color: A.blue }}>
@@ -1291,6 +1338,25 @@ function InventoryLanding({
               ]}
             />
           </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button onClick={() => openSkuInsight("Explain shortage")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>Explain shortage for {selectedItem.sku}</button>
+            <button onClick={() => openSkuInsight("Check incoming supply")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>Check incoming supply</button>
+            <button onClick={() => openSkuInsight("Find related POs/RFQs/GRNs")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>Find related POs/RFQs/GRNs</button>
+            <button onClick={() => selectedPlannedItem && handleSkuInsightAction({
+              id: `preview_replenishment_draft:inventory_item:${selectedItem.sku}`,
+              label: `Preview replenishment PR draft for ${selectedItem.sku}`,
+              intent: "preview_replenishment_draft",
+              sourceModule: "inventory",
+              sourceEntityType: "inventory_item",
+              sourceEntityId: selectedItem.sku,
+              sourceRoute: "inventory",
+              linkedRecords: [],
+              allowedOutputType: "draft_preview",
+              requiresReview: true,
+              mutationAllowed: false,
+            })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>Preview replenishment PR draft</button>
+          </div>
+          <ContextualAIInsightPanel insight={skuInsight} onClose={() => setSkuInsight(null)} onAction={handleSkuInsightAction} />
         </Card>
       )}
 

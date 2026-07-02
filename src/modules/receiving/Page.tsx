@@ -27,6 +27,8 @@ import {
   type TimelineStep,
 } from "../../components/document/DocumentShell";
 import { getGrnLinkedDocuments } from "../../domain/procurement/document-links";
+import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
+import { makeGrnInsight, type ContextualAiAction } from "../../domain/contextual-ai";
 import {
   tableMinLgClass,
   tableMinMdClass,
@@ -445,6 +447,7 @@ function ReceivingOps({
   const [selectedGrnId, setSelectedGrnId] = useState(receivingDocs[0]?.grn ?? "");
   const [showGrnDetail, setShowGrnDetail] = useState(false);
   const [erpDocOpen, setErpDocOpen] = useState(false);
+  const [grnInsight, setGrnInsight] = useState<ContextualAIInsight | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -534,6 +537,32 @@ function ReceivingOps({
     toast.warning(`异常处理需要退货/冲销流程：${action}`, {
       description: `${grnId} 已过账数据不能直接改为已入库，避免重复加库存。`,
     });
+  }
+
+  function openGrnInsight(grn: ReceivingDoc, trigger: string) {
+    const lines = grnLinesOf(grn);
+    const receivedQty = lines.reduce((sum, line) => sum + toNumber(line.receivedQty), 0) || Number(grn.items || 0);
+    const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0) || Number(grn.failed || 0);
+    setGrnInsight({
+      ...makeGrnInsight({
+        grn: grn.grn,
+        po: grn.po,
+        supplier: grn.supplier,
+        status: grn.status,
+        receivedQty,
+        rejectedQty,
+        invoices: SUPPLIER_INVOICES.filter((invoice) => invoice.relatedGrn === grn.grn || invoice.relatedPo === grn.po).map((invoice) => invoice.invoiceNumber),
+      }),
+      trigger,
+    });
+  }
+
+  function handleGrnInsightAction(action: ContextualAiAction) {
+    if (action.intent === "preview_exception_note") {
+      toast("Exception handling note preview only", { description: `${action.sourceEntityId} · no auto-close, no receiving post, no inventory mutation.` });
+      return;
+    }
+    toast(action.label, { description: "Contextual insight only. mutationAllowed: false." });
   }
 
   return (
@@ -763,6 +792,27 @@ function ReceivingOps({
                   <div className="text-base font-semibold tabular-nums mt-0.5" style={{ color: label === "拒收数量" && Number(value) > 0 ? A.red : A.label }}>{Number(value).toLocaleString()}</div>
                 </div>
               ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button onClick={() => openGrnInsight(selectedGrn, "Explain receiving exception")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>Explain receiving exception</button>
+              <button onClick={() => openGrnInsight(selectedGrn, "Check invoice impact")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>Check invoice impact</button>
+              <button onClick={() => openGrnInsight(selectedGrn, "Trace PO/GRN relationship")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>Trace PO/GRN relationship</button>
+              <button onClick={() => handleGrnInsightAction({
+                id: `preview_exception_note:receiving_doc:${selectedGrn.grn}`,
+                label: `Preview exception handling note for ${selectedGrn.grn}`,
+                intent: "preview_exception_note",
+                sourceModule: "receiving",
+                sourceEntityType: "receiving_doc",
+                sourceEntityId: selectedGrn.grn,
+                sourceRoute: "receiving",
+                linkedRecords: [{ type: "purchase_order", id: selectedGrn.po }],
+                allowedOutputType: "draft_preview",
+                requiresReview: true,
+                mutationAllowed: false,
+              })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>Preview exception handling note</button>
+            </div>
+            <div className="mt-4">
+              <ContextualAIInsightPanel insight={grnInsight} onClose={() => setGrnInsight(null)} onAction={handleGrnInsightAction} />
             </div>
 
             <div className="grid grid-cols-5 gap-4 mt-4">

@@ -35,6 +35,8 @@ import { TrackShipmentModal } from "./components/TrackShipmentModal";
 import { lineStatusLabel, poLinesOf, poTotals, toNumber } from "../../domain/purchasing/helpers";
 import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
 import { getPoLinkedDocuments } from "../../domain/procurement/document-links";
+import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
+import { makePoInsight, poDelayedRisk, type ContextualAiAction } from "../../domain/contextual-ai";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   defaultPurchaseOrderWorkbenchFilters,
@@ -124,6 +126,7 @@ export default function PurchasingOrdersPage({
   const [viewMode, setViewMode] = useState<PurchaseOrderViewMode>("list");
   const [newOpen, setNewOpen] = useState(false);
   const [trackOpen, setTrackOpen] = useState(false);
+  const [poInsight, setPoInsight] = useState<ContextualAIInsight | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -264,6 +267,43 @@ export default function PurchasingOrdersPage({
     toast.success("导出文件已生成");
   }
 
+  function buildSelectedPoInsight() {
+    if (!selectedPO) return null;
+    const totals = poTotals(selectedPO);
+    return makePoInsight({
+      po: selectedPO.po,
+      supplier: selectedPO.supplier,
+      status: selectedPO.status,
+      eta: selectedPO.eta,
+      orderedQty: totals.totalOrderedQty,
+      receivedQty: totals.totalReceivedQty,
+      sourceRequest: selectedPO.sourceRequest,
+      sourceRfq: selectedPO.sourceRfq,
+      grns: receivingDocs.filter((item) => item.po === selectedPO.po).map((item) => item.grn),
+      invoices: SUPPLIER_INVOICES.filter((item) => item.relatedPo === selectedPO.po).map((item) => item.invoiceNumber),
+    });
+  }
+
+  function openPoInsight(trigger: string) {
+    const insight = buildSelectedPoInsight();
+    if (!insight) return;
+    setPoInsight({ ...insight, trigger });
+  }
+
+  function handlePoInsightAction(action: ContextualAiAction) {
+    if (action.intent === "preview_supplier_followup_draft" && selectedPO) {
+      toast("Supplier follow-up draft preview only", {
+        description: `${selectedPO.po} · no auto-send, no PO mutation. Review in supplier workflow before recording.`,
+      });
+      return;
+    }
+    toast(action.label, { description: "Contextual insight only. mutationAllowed: false." });
+  }
+
+  const selectedPODelayRisk = selectedPO
+    ? poDelayedRisk(selectedPO.eta, selectedPO.status, selectedPOTotals.totalOrderedQty, selectedPOTotals.totalReceivedQty)
+    : null;
+
   const detailContent = selectedPO && (
     <DocumentShell
       title="采购订单"
@@ -285,9 +325,11 @@ export default function PurchasingOrdersPage({
           { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
           { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
           { label: "来源 SKU", value: selectedPO.sourceSku || "—", helper: selectedPO.sourceName },
+          { label: "延迟风险", value: selectedPODelayRisk?.delayed ? "逾期/延迟" : "未触发", tone: selectedPODelayRisk?.delayed ? "danger" : "success", helper: selectedPODelayRisk?.reason },
           { label: "金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
         ]}
       />
+      <ContextualAIInsightPanel insight={poInsight} onClose={() => setPoInsight(null)} onAction={handlePoInsightAction} />
       <DocumentStatusTimeline steps={poTimeline(selectedPO)} />
       <DocumentLinesTable
         rows={selectedPOLines.length ? selectedPOLines : [{
@@ -333,6 +375,7 @@ export default function PurchasingOrdersPage({
         evidence={[
           { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
           { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
+          { label: "关系缺口", value: selectedPO.sourceRfq ? "RFQ linked" : "No linked RFQ found in current data", tone: selectedPO.sourceRfq ? "success" : "warning" },
           { label: "审批快照", value: selectedPO.approvalSnapshot?.createdAt ? new Date(selectedPO.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—" },
           { label: "关联 GRN", value: receivingDocs.filter((item) => item.po === selectedPO.po).length },
           { label: "关联发票", value: SUPPLIER_INVOICES.filter((item) => item.relatedPo === selectedPO.po).length },
@@ -357,6 +400,22 @@ export default function PurchasingOrdersPage({
         {selectedPO.status === "已审批" && <button onClick={() => send(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>下发至供应商</button>}
         {(selectedPO.status === "已发出" || selectedPO.status === "部分到货" || selectedPO.status === "已完成") && <button onClick={() => setTrackOpen(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>跟踪发货</button>}
         {!["已完成", "已取消"].includes(selectedPO.status) && <button onClick={() => cancel(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>取消订单</button>}
+        <button onClick={() => openPoInsight("Explain PO delay")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>Explain delay for {selectedPO.po}</button>
+        <button onClick={() => openPoInsight("Check affected inventory")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>Check affected inventory</button>
+        <button onClick={() => openPoInsight("Trace receiving status")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>Trace receiving status</button>
+        <button onClick={() => handlePoInsightAction({
+          id: `preview_supplier_followup_draft:purchase_order:${selectedPO.po}`,
+          label: `Preview supplier follow-up draft for ${selectedPO.po}`,
+          intent: "preview_supplier_followup_draft",
+          sourceModule: "procurement",
+          sourceEntityType: "purchase_order",
+          sourceEntityId: selectedPO.po,
+          sourceRoute: "procurement:orders",
+          linkedRecords: [],
+          allowedOutputType: "draft_preview",
+          requiresReview: true,
+          mutationAllowed: false,
+        })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>Preview supplier follow-up draft</button>
         <button onClick={() => toast("发票协同位于采购管理", { description: "请打开采购管理的发票协同视图查看关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票协同</button>
         <button onClick={() => exportPoDetail(selectedPO)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
       </DocumentActionBar>
