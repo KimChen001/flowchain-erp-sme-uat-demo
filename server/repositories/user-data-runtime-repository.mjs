@@ -44,9 +44,12 @@ function recordsFromSnapshot(snapshot = {}) {
   return Object.fromEntries(USER_DATA_ARRAY_KEYS.map((key) => [key, clone(Array.isArray(records[key]) ? records[key] : [])]))
 }
 
-export function createInMemoryUserDataRuntimeRepository({ seed = [] } = {}) {
-  const batches = new Map()
-  const datasets = new Map()
+export function createInMemoryUserDataRuntimeRepository({ seed = [], state } = {}) {
+  const store = state || { batches: new Map(), datasets: new Map() }
+  const batches = store.batches instanceof Map ? store.batches : new Map(store.batches || [])
+  const datasets = store.datasets instanceof Map ? store.datasets : new Map(store.datasets || [])
+  store.batches = batches
+  store.datasets = datasets
 
   function activeDataset(scope = {}) {
     const normalizedScope = assertScope(scope)

@@ -8,7 +8,7 @@ import { createDbAuditLogRepository } from './db-audit-log-repository.mjs'
 import { createDbMasterDataRepository } from './db-master-data-repository.mjs'
 import { createDbProcurementReadRepository } from './db-procurement-read-repository.mjs'
 import { createDbInventoryReadRepository } from './db-inventory-read-repository.mjs'
-import { createDisabledUserDataRuntimeRepository } from './user-data-runtime-repository.mjs'
+import { createDisabledUserDataRuntimeRepository, createInMemoryUserDataRuntimeRepository } from './user-data-runtime-repository.mjs'
 
 export const PERSISTENCE_MODES = Object.freeze({
   json: 'json',
@@ -34,7 +34,17 @@ function createAiConversationRepository() {
   }
 }
 
-export function createJsonRepositoryRegistry({ db = {} } = {}) {
+function isUserImportCommitEnabled(env = process.env) {
+  return env.FLOWCHAIN_ENABLE_USER_IMPORT_COMMIT === 'true'
+}
+
+function createUserDataRuntimeRepository({ db = {}, env = process.env } = {}) {
+  if (!isUserImportCommitEnabled(env)) return createDisabledUserDataRuntimeRepository()
+  if (!db.__userDataRuntimeState) db.__userDataRuntimeState = { batches: new Map(), datasets: new Map() }
+  return createInMemoryUserDataRuntimeRepository({ state: db.__userDataRuntimeState })
+}
+
+export function createJsonRepositoryRegistry({ db = {}, env = process.env } = {}) {
   return {
     mode: PERSISTENCE_MODES.json,
     masterData: createJsonMasterDataRepository(db),
@@ -43,7 +53,7 @@ export function createJsonRepositoryRegistry({ db = {} } = {}) {
     actionDrafts: createJsonActionDraftRepository(db),
     auditLog: createAuditLogRepository(db),
     aiConversation: createAiConversationRepository(),
-    userDataRuntime: createDisabledUserDataRuntimeRepository(),
+    userDataRuntime: createUserDataRuntimeRepository({ db, env }),
   }
 }
 
@@ -56,12 +66,12 @@ export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, p
     actionDrafts: createDbActionDraftRepository({ db, env, prisma }),
     auditLog: createDbAuditLogRepository({ env, prisma }),
     aiConversation: createAiConversationRepository(),
-    userDataRuntime: createDisabledUserDataRuntimeRepository(),
+    userDataRuntime: createUserDataRuntimeRepository({ db, env }),
   }
 }
 
 export function createRepositoryRegistry({ db = {}, env = process.env } = {}) {
   const mode = getPersistenceMode(env)
   if (mode === PERSISTENCE_MODES.database) return createDatabaseRepositoryRegistry({ db, env })
-  return createJsonRepositoryRegistry({ db })
+  return createJsonRepositoryRegistry({ db, env })
 }

@@ -1,4 +1,7 @@
-import { normalizeUserDataImportPayload } from '../domain/user-data-contract.mjs'
+import { createHash } from 'node:crypto'
+import { USER_DATA_ARRAY_KEYS, normalizeUserDataImportPayload } from '../domain/user-data-contract.mjs'
+
+const ENABLE_USER_IMPORT_COMMIT_FLAG = 'FLOWCHAIN_ENABLE_USER_IMPORT_COMMIT'
 
 function invalidJsonPayload() {
   return {
@@ -30,11 +33,111 @@ function compactPreviewPayload(result) {
       source: result.normalizedSnapshot.source,
       recordCounts: result.normalizedSnapshot.recordCounts,
     },
+    auditPreview: {
+      action: 'user_import_previewed',
+      module: 'user-data',
+      entity: { type: 'userDataPreview', id: result.normalizedSnapshot.previewId },
+      metadata: {
+        scope: result.normalizedSnapshot.scope,
+        recordCounts: result.recordCounts,
+        validationSummary: result.normalizedSnapshot.validationSummary,
+      },
+    },
     normalizedPreviewCounts: result.recordCounts,
     importPreview: result.importPreview,
     writesFiles: false,
     writesDb: false,
     overwritesDemoData: false,
+  }
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]))
+}
+
+function stableStringify(value) {
+  return JSON.stringify(stableValue(value))
+}
+
+function snapshotHash(snapshot = {}) {
+  const body = {
+    version: snapshot.version,
+    scope: snapshot.scope,
+    datasetId: snapshot.datasetId,
+    recordCounts: snapshot.recordCounts,
+    normalizedRecords: snapshot.normalizedRecords,
+  }
+  return createHash('sha256').update(stableStringify(body)).digest('hex')
+}
+
+function commitFeatureEnabled() {
+  return process.env[ENABLE_USER_IMPORT_COMMIT_FLAG] === 'true'
+}
+
+function text(value = '') {
+  return String(value ?? '').trim()
+}
+
+function idOf(recordType, row = {}) {
+  if (recordType === 'purchaseOrders') return text(row.po || row.poId || row.id)
+  if (recordType === 'purchaseRequests') return text(row.pr || row.prId || row.id)
+  if (recordType === 'rfqs') return text(row.id || row.rfqId)
+  if (recordType === 'products') return text(row.sku || row.itemSku || row.id)
+  if (recordType === 'suppliers') return text(row.id || row.supplierId || row.name)
+  if (recordType === 'receivingDocs') return text(row.grn || row.grnId || row.id)
+  if (recordType === 'supplierInvoices') return text(row.invoiceNumber || row.invoiceId || row.id)
+  if (recordType === 'inventoryMovements') return text(row.movementId || row.id || row.sourceDocument)
+  if (recordType === 'inventoryExceptions') return text(row.id || row.exceptionId || row.sku)
+  return text(row.id)
+}
+
+function addCommitIssue(issues, code, message, path) {
+  issues.push({ code, message, path, severity: 'error' })
+}
+
+function validateCommitSnapshot(snapshot = {}) {
+  const issues = []
+  const records = snapshot.normalizedRecords || {}
+  const unknownTypes = Object.keys(records).filter((key) => !USER_DATA_ARRAY_KEYS.includes(key))
+  unknownTypes.forEach((key) => addCommitIssue(issues, 'unsupported_record_type', `Unsupported record type ${key}.`, `normalizedSnapshot.normalizedRecords.${key}`))
+
+  for (const recordType of USER_DATA_ARRAY_KEYS) {
+    const rows = Array.isArray(records[recordType]) ? records[recordType] : []
+    const seen = new Set()
+    rows.forEach((row, index) => {
+      const id = idOf(recordType, row)
+      if (!id) addCommitIssue(issues, 'missing_required_item_id', `${recordType} record is missing required identifier.`, `${recordType}[${index}]`)
+      if (id && seen.has(id)) addCommitIssue(issues, 'duplicate_record_id', `${recordType} contains duplicate record id ${id}.`, `${recordType}[${index}]`)
+      if (id) seen.add(id)
+      if (recordType === 'products' && !text(row.sku || row.itemSku)) addCommitIssue(issues, 'missing_required_item_id', 'Product is missing SKU.', `${recordType}[${index}].sku`)
+      if (recordType === 'purchaseRequests' && !text(row.sourceSku || row.sku || row.itemSku)) addCommitIssue(issues, 'missing_required_item_id', 'Purchase request is missing SKU.', `${recordType}[${index}].sourceSku`)
+      if (recordType === 'purchaseOrders') {
+        if (!text(row.supplier || row.supplierName)) addCommitIssue(issues, 'missing_supplier_reference', 'Purchase order is missing supplier reference.', `${recordType}[${index}].supplier`)
+        ;(Array.isArray(row.lines) ? row.lines : []).forEach((line, lineIndex) => {
+          if (!text(line.sku || line.itemSku)) addCommitIssue(issues, 'invalid_po_line_item_reference', 'PO line is missing item reference.', `${recordType}[${index}].lines[${lineIndex}].sku`)
+          if (line.quantity !== undefined && typeof line.quantity !== 'number') addCommitIssue(issues, 'invalid_quantity', 'PO line quantity must be numeric.', `${recordType}[${index}].lines[${lineIndex}].quantity`)
+        })
+      }
+    })
+  }
+
+  return issues
+}
+
+async function recordAuditBestEffort(repositories = {}, entry = {}) {
+  try {
+    if (repositories.auditLog?.recordAuditEntry) return await repositories.auditLog.recordAuditEntry(entry)
+  } catch {}
+  return null
+}
+
+function commitDisabledPayload(result, db) {
+  return {
+    ...blockedCommitPayload(result, db),
+    featureFlag: ENABLE_USER_IMPORT_COMMIT_FLAG,
+    commitFeatureEnabled: false,
   }
 }
 
@@ -102,7 +205,7 @@ function blockedCommitPayload(result, db) {
 }
 
 export async function handleUserDataRoute(ctx) {
-  const { req, res, url, send, readBody, db } = ctx
+  const { req, res, url, send, readBody, db, repositories = {} } = ctx
 
   if (req.method === 'POST' && url.pathname === '/api/user-data/import/commit') {
     let body
@@ -114,7 +217,24 @@ export async function handleUserDataRoute(ctx) {
     }
 
     const before = JSON.stringify(db)
-    const result = normalizeUserDataImportPayload(body, { importedAt: new Date().toISOString() })
+    const snapshot = body?.normalizedSnapshot
+    const result = snapshot
+      ? {
+          ok: snapshot.validationSummary?.ok !== false,
+          recordCounts: snapshot.recordCounts || {},
+          warnings: [],
+          errors: [],
+          metadata: {
+            sourceName: snapshot.source?.sourceName || 'user-import',
+            previewId: snapshot.previewId,
+            datasetId: snapshot.datasetId,
+            normalizedSnapshotHash: snapshot.normalizedSnapshotHash,
+            scope: snapshot.scope,
+          },
+          normalizedSnapshot: snapshot,
+          importPreview: {},
+        }
+      : normalizeUserDataImportPayload(body, { importedAt: new Date().toISOString() })
     if (JSON.stringify(db) !== before) {
       send(res, 500, {
         ok: false,
@@ -128,7 +248,100 @@ export async function handleUserDataRoute(ctx) {
       return true
     }
 
-    send(res, result.ok ? 501 : 422, blockedCommitPayload(result, db))
+    if (!commitFeatureEnabled()) {
+      send(res, result.ok ? 501 : 422, commitDisabledPayload(result, db))
+      return true
+    }
+
+    const errors = []
+    if (!snapshot) addCommitIssue(errors, 'missing_preview_snapshot', 'Commit requires a normalized preview snapshot.', 'normalizedSnapshot')
+    if (body?.confirmCommit !== true) addCommitIssue(errors, 'missing_confirmation', 'Commit requires confirmCommit=true after user review.', 'confirmCommit')
+    const providedHash = text(body?.normalizedSnapshotHash || snapshot?.normalizedSnapshotHash)
+    const computedHash = snapshot ? snapshotHash(snapshot) : ''
+    if (snapshot && (!providedHash || providedHash !== computedHash)) addCommitIssue(errors, 'snapshot_hash_mismatch', 'Normalized snapshot hash does not match preview snapshot.', 'normalizedSnapshotHash')
+    if (snapshot?.validationSummary?.ok === false) addCommitIssue(errors, 'validation_failed', 'Commit rejected because preview validation failed.', 'normalizedSnapshot.validationSummary')
+    if (snapshot?.validationSummary?.warningCount > 0 && body?.acceptWarnings !== true) addCommitIssue(errors, 'warnings_require_acknowledgement', 'Commit with warnings requires acceptWarnings=true.', 'acceptWarnings')
+    if (snapshot) errors.push(...validateCommitSnapshot(snapshot))
+
+    if (errors.length) {
+      await recordAuditBestEffort(repositories, {
+        source: 'system',
+        module: 'user-data',
+        action: 'user_import_commit_rejected',
+        entity: { type: 'userDataPreview', id: snapshot?.previewId || 'missing-preview' },
+        summary: 'User data import commit rejected by validation boundary.',
+        tenantId: snapshot?.scope?.tenantId,
+        metadata: {
+          scope: snapshot?.scope || null,
+          previewId: snapshot?.previewId || null,
+          datasetId: snapshot?.datasetId || null,
+          recordCounts: snapshot?.recordCounts || {},
+          validationSummary: snapshot?.validationSummary || {},
+          featureFlag: ENABLE_USER_IMPORT_COMMIT_FLAG,
+          commitFeatureEnabled: true,
+          errors,
+        },
+      })
+      send(res, 422, {
+        ok: false,
+        commitAccepted: false,
+        errors,
+        warnings: [],
+        recordCounts: snapshot?.recordCounts || {},
+        writesFiles: false,
+        writesDb: false,
+        overwritesDemoData: false,
+      })
+      return true
+    }
+
+    const repository = repositories.userDataRuntime
+    const importBatch = await repository.createImportBatch({
+      scope: snapshot.scope,
+      datasetId: snapshot.datasetId,
+      snapshotHash: snapshot.normalizedSnapshotHash,
+      recordCounts: snapshot.recordCounts,
+      validationSummary: snapshot.validationSummary,
+      status: 'committed',
+    })
+    const persisted = await repository.persistNormalizedRecords({
+      scope: snapshot.scope,
+      datasetId: importBatch.datasetId,
+      importBatchId: importBatch.importBatchId,
+      normalizedSnapshot: snapshot,
+      snapshotHash: snapshot.normalizedSnapshotHash,
+      validationSummary: snapshot.validationSummary,
+    })
+    const auditEvent = await recordAuditBestEffort(repositories, {
+      source: 'system',
+      module: 'user-data',
+      action: 'user_import_committed',
+      entity: { type: 'userDataImportBatch', id: importBatch.importBatchId },
+      summary: 'User data import committed into scoped runtime repository.',
+      tenantId: snapshot.scope.tenantId,
+      metadata: {
+        scope: snapshot.scope,
+        importBatchId: importBatch.importBatchId,
+        datasetId: importBatch.datasetId,
+        recordCounts: snapshot.recordCounts,
+        validationSummary: snapshot.validationSummary,
+        featureFlag: ENABLE_USER_IMPORT_COMMIT_FLAG,
+        commitFeatureEnabled: true,
+      },
+    })
+
+    send(res, 201, {
+      ok: true,
+      commitAccepted: true,
+      importBatchId: importBatch.importBatchId,
+      datasetId: importBatch.datasetId,
+      recordCounts: persisted.recordCounts,
+      validationSummary: snapshot.validationSummary,
+      auditEventId: auditEvent?.id || null,
+      writesFiles: false,
+      writesDb: true,
+      overwritesDemoData: false,
+    })
     return true
   }
 
