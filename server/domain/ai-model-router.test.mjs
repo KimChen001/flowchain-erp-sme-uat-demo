@@ -7,9 +7,12 @@ import {
   AI_MODEL_POLICY_DEFINITIONS,
   maybeUseLlmForDraftPolish,
   maybeUseLlmForWording,
+  maybeDecomposeCompoundQueryWithModel,
+  maybeRewriteCompoundQueryWithModel,
   maybeUseSmallModelForIntent,
   modelPolicyForAiIntent,
   routeAiModelPolicy,
+  validateCompoundQueryRewrite,
 } from './ai-model-router.mjs'
 import { classifyAiBusinessIntent } from './ai-business-intent-router.mjs'
 import { handleAiRoute } from '../routes/ai.routes.mjs'
@@ -73,11 +76,71 @@ test('R137 model policy taxonomy defines deterministic optional provider and fal
     'llm_draft_optional',
     'provider_disabled',
     'guided_fallback',
+    'compound_decomposition_shadow',
+    'intent_classification_shadow',
+    'query_rewrite_shadow',
   ]) {
-    assert.equal(AI_MODEL_POLICIES[policy.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())] || policy, policy)
     assert.ok(AI_MODEL_POLICY_DEFINITIONS[policy], policy)
     assert.equal(AI_MODEL_POLICY_DEFINITIONS[policy].modelMayRun, false, policy)
   }
+})
+
+test('R147 shadow decomposition defaults to no-op and cannot override deterministic subqueries', async () => {
+  const deterministicSubQueries = [
+    { text: '今天有什么需要我做的', intent: 'today_cockpit_priority_query' },
+    { text: '订单还有多少没有收货', intent: 'receiving_gap_query' },
+  ]
+  const shadow = await maybeDecomposeCompoundQueryWithModel({
+    query: '今天有什么需要我做的，订单还有多少没有收货？',
+    deterministicSubQueries,
+    OPENAI_API_KEY: 'fake',
+  })
+
+  assert.equal(shadow.usedModel, false)
+  assert.equal(shadow.provider, 'none')
+  assert.equal(shadow.modelPolicy, 'compound_decomposition_shadow')
+  assert.equal(shadow.deterministicFallback, true)
+  assert.deepEqual(shadow.deterministicSubQueries, deterministicSubQueries)
+  assert.deepEqual(shadow.modelSubQueries, [])
+  assert.equal(shadow.providerCallsAllowed, false)
+})
+
+test('R148 query rewrite shadow defaults to no-op and validates unsafe rewrites', async () => {
+  const rewrite = await maybeRewriteCompoundQueryWithModel({
+    query: '订单还有多少没有收货？',
+    OPENAI_API_KEY: 'fake',
+    ARK_API_KEY: 'fake',
+  })
+
+  assert.equal(rewrite.usedModel, false)
+  assert.equal(rewrite.provider, 'none')
+  assert.equal(rewrite.modelPolicy, 'query_rewrite_shadow')
+  assert.equal(rewrite.originalQuery, '订单还有多少没有收货？')
+  assert.equal(rewrite.rewrittenQuery, '订单还有多少没有收货？')
+  assert.equal(rewrite.rewriteAccepted, false)
+  assert.equal(rewrite.providerCallsAllowed, false)
+
+  const unsafeId = validateCompoundQueryRewrite({
+    originalQuery: '订单还有多少没有收货？',
+    rewrite: '请查询 PO-9999 并直接发送催货邮件',
+  })
+  assert.equal(unsafeId.accepted, false)
+  assert.deepEqual(unsafeId.introducedIds, ['PO-9999'])
+  assert.equal(unsafeId.actionExecution, true)
+
+  const unsafeNumber = validateCompoundQueryRewrite({
+    originalQuery: '哪些供应商有风险？',
+    rewrite: '哪些供应商有 3 个高风险订单？',
+  })
+  assert.equal(unsafeNumber.accepted, false)
+  assert.deepEqual(unsafeNumber.introducedNumbers, ['3'])
+
+  const safeWithSessionId = validateCompoundQueryRewrite({
+    originalQuery: '刚才那个 PO 还有多少没收货？',
+    rewrite: 'PO-2026-1282 还有多少没收货？',
+    sessionGrounding: { lastVisibleBusinessIds: { po: ['PO-2026-1282'] } },
+  })
+  assert.equal(safeWithSessionId.accepted, true)
 })
 
 test('R137 business fact intents stay deterministic and forbidden facts are explicit', () => {
