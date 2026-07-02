@@ -21,6 +21,9 @@
     "db:migrate": "prisma migrate dev",
     "db:seed:dry-run": "node scripts/seed-db.mjs --dry-run",
     "db:seed:master-data": "node scripts/seed-master-data.mjs --dry-run",
+    "demo:seed:dry-run": "node scripts/demo-data-dry-run.mjs seed",
+    "demo:clear:dry-run": "node scripts/demo-data-dry-run.mjs clear",
+    "demo:reset:dry-run": "node scripts/demo-data-dry-run.mjs reset",
     "db:studio": "prisma studio"
   },
   "dependencies": {
