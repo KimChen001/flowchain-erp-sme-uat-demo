@@ -1,4 +1,5 @@
 import { buildTodayCockpit } from './today-cockpit-read-model.mjs'
+import { buildUserDataScope } from './user-data-contract.mjs'
 
 function isRepositoryAvailable(repository, methods = []) {
   return repository && methods.every((method) => typeof repository[method] === 'function')
@@ -36,6 +37,29 @@ async function readMasterData(repository) {
 export async function buildAiReadContext(db = {}, ctx = {}) {
   const repositories = ctx.repositories || {}
   const dataMode = ctx.dataMode || db.__dataMode || 'test'
+  let userDataRuntime = null
+  let contextDb = db
+
+  if (dataMode === 'user' && isRepositoryAvailable(repositories.userDataRuntime, ['getAIReadableContext'])) {
+    const scope = buildUserDataScope(ctx.userDataScope || ctx.scope || {})
+    const userContext = await repositories.userDataRuntime.getAIReadableContext(scope)
+    userDataRuntime = userContext
+      ? {
+          active: true,
+          scope,
+          datasetId: userContext.datasetId,
+          importBatchId: userContext.importBatchId,
+          recordCounts: userContext.recordCounts,
+        }
+      : {
+          active: false,
+          scope,
+          reason: 'no_active_user_dataset',
+          recordCounts: {},
+        }
+    if (userContext?.db) contextDb = userContext.db
+  }
+
   const [procurement, inventory, masterData] = await Promise.all([
     readProcurement(repositories.procurementRead),
     readInventory(repositories.inventoryRead),
@@ -58,15 +82,16 @@ export async function buildAiReadContext(db = {}, ctx = {}) {
       inventoryExceptions: inventory?.inventoryExceptions || [],
       inventorySummary: inventory?.inventorySummary || {},
     }
-    aiEvidenceReuse.todayCockpit = buildTodayCockpit(db, aiEvidenceReuse)
+    aiEvidenceReuse.todayCockpit = buildTodayCockpit(contextDb, aiEvidenceReuse)
     cache.aiEvidenceReuse = aiEvidenceReuse
   }
 
   return {
-    db,
+    db: contextDb,
     dataMode,
     cache,
     repositoryBacked,
+    userDataRuntime,
     masterData: masterData || null,
   }
 }
