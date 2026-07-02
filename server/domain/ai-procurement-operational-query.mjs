@@ -473,6 +473,22 @@ function buildPoStatusResponse(db = {}, message = '', options = {}) {
       evidenceCard(evidence),
       recommendedActions([
         { label: '打开 PO', kind: 'deep_link', target: `/procurement?view=orders&poId=${encodeURIComponent(poIdFor(po))}` },
+        {
+          label: `预览 ${poIdFor(po)} 供应商跟进草稿，需人工审阅后再发送。`,
+          kind: 'draft_preview',
+          target: '',
+          draftType: 'po_followup_draft',
+          draftTitle: `${poIdFor(po)} 供应商跟进草稿预览`,
+          requiresHumanReview: true,
+          payload: {
+            poId: poIdFor(po),
+            message: `请确认 ${poIdFor(po)} 剩余未到货部分的预计交期。当前状态为 ${po.status || '待确认'}。`,
+            reason: data.receivingStatus === 'partial'
+              ? 'AI 基于采购订单部分到货状态建议跟进供应商剩余交期。'
+              : 'AI 基于采购订单状态建议跟进供应商交付计划。',
+          },
+          originEvidence: evidence,
+        },
         { label: '打开收货工作台', kind: 'deep_link', target: '/procurement?view=receiving' },
       ]),
     ],

@@ -55,6 +55,27 @@ async function clickEvidence(page: Page, businessId: string) {
   await evidence.click();
 }
 
+async function openDraftPreview(page: Page, draftType: string) {
+  const action = page.locator(`[data-testid="ai-action-draft-preview"][data-draft-type="${draftType}"]`).first();
+  await expect(action).toBeVisible();
+  await action.click();
+  const shell = page.getByTestId("action-draft-review-shell");
+  await expect(shell).toBeVisible();
+  await expect(shell).toContainText("不会创建");
+  await expect(shell).toContainText("不会提交");
+  await expect(shell).toContainText("不会发送");
+  await expect(shell).toContainText("人工");
+  return shell;
+}
+
+async function closeDraftPreview(page: Page) {
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(page.getByTestId("action-draft-review-shell")).toBeHidden();
+  if (await page.getByTestId("ai-assistant-toggle").isVisible().catch(() => false)) {
+    await restoreAssistant(page);
+  }
+}
+
 test.describe("AI Copilot browser UAT", () => {
   test("R122 answers Today priority with product-readable evidence and actions", async ({ page }) => {
     await openLoggedInApp(page);
@@ -140,5 +161,40 @@ test.describe("AI Copilot browser UAT", () => {
     const assistant = await askAssistant(page, "这个 PO 为什么优先？");
     await expect(assistant).toContainText(/需要确认|还是|请.*PO/);
     await expect(assistant).not.toContainText("PO-2026-1282 被列为优先事项");
+  });
+
+  test("R127 SKU risk draft preview opens review shell without creating business records", async ({ page }) => {
+    await openLoggedInApp(page);
+    await openAssistant(page);
+    const assistant = await askAssistant(page, "SKU-00412 为什么风险高？");
+
+    await expect(assistant).toContainText("SKU-00412");
+    await expect(assistant).toContainText(/预览.*补货 PR 草稿|补货 PR 草稿/);
+
+    const shell = await openDraftPreview(page, "purchase_request_draft");
+    await expect(shell).toContainText("SKU-00412");
+    await expect(shell).toContainText("ActionDraft");
+    await expect(page.getByRole("button", { name: "确认提交" })).toBeDisabled();
+
+    await closeDraftPreview(page);
+    await expect(page.getByTestId("ai-assistant-panel")).toBeVisible();
+    await expect(page.getByTestId("ai-assistant-messages")).toContainText("SKU-00412");
+  });
+
+  test("R128 PO and RFQ follow-up draft previews stay review-first", async ({ page }) => {
+    await openLoggedInApp(page);
+    await openAssistant(page);
+
+    await askAssistant(page, "解释 PO-2026-1282 为什么优先");
+    let shell = await openDraftPreview(page, "po_followup_draft");
+    await expect(shell).toContainText("PO-2026-1282");
+    await expect(page.getByRole("button", { name: "确认提交" })).toBeDisabled();
+    await closeDraftPreview(page);
+
+    await askAssistant(page, "RFQ-26-0046 需要怎么跟进？");
+    shell = await openDraftPreview(page, "supplier_followup_draft");
+    await expect(shell).toContainText("RFQ-26-0046");
+    await expect(shell).toContainText(/不会创建|不会发送/);
+    await expect(page.getByRole("button", { name: "确认提交" })).toBeDisabled();
   });
 });

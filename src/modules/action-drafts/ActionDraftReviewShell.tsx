@@ -229,7 +229,7 @@ export function ActionDraftReviewShell({
       ) : error ? (
         <div className="rounded-lg border px-4 py-5 text-[12px] leading-5" style={{ borderColor: "#ffd6d6", background: "#fff1f0", color: A.red }}>{error}</div>
       ) : activeDraft ? (
-        <div className="space-y-4">
+        <div className="space-y-4" data-testid="action-draft-review-shell">
           <section className="rounded-lg px-3 py-3 text-[12px] leading-5" style={{ background: "#f0f6ff", color: A.blue, border: `0.5px solid ${A.blue}30` }}>
             <div className="flex items-start gap-2">
               <ShieldCheck size={15} className="mt-0.5 shrink-0" />
@@ -237,6 +237,9 @@ export function ActionDraftReviewShell({
                 <div className="font-semibold">预览 / 保存边界</div>
                 <div className="mt-1" style={{ color: A.sub }}>
                   当前工作区只允许审阅、复制、编辑简单字段和保存 ActionDraft 壳；不会创建 PR、RFQ、PO、GRN 或库存事务，最终确认仍未实现。
+                </div>
+                <div className="mt-1" style={{ color: A.sub }}>
+                  人工审阅后才可保存草稿；不会创建、不会提交、不会发送或过账任何业务记录。
                 </div>
               </div>
             </div>

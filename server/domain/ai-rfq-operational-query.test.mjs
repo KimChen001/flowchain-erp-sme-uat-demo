@@ -199,6 +199,10 @@ test('RFQ-specific response prompt returns response summary for one RFQ', () => 
   assert.equal(response.intent.slots.rfqId, 'RFQ-1001')
   assert.equal(response.cards[0].data.rfqsWithPendingResponses, 1)
   assert.ok(response.evidence.some((item) => item.type === 'supplier_response_evidence'))
+  const actions = response.cards.find((card) => card.type === 'recommended_actions')?.actions || []
+  const draft = actions.find((action) => action.kind === 'draft_preview' && action.draftType === 'supplier_followup_draft')
+  assert.equal(draft?.requiresHumanReview, true)
+  assert.equal(draft?.payload?.supplierIdOrName, 'RFQ RFQ-1001')
 })
 
 test('RFQ response query resolves RFQ id from active context', () => {

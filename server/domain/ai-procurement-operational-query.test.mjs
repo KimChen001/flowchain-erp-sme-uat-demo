@@ -288,6 +288,10 @@ test('explicit PO id returns po_status_query and not found/missing are safe', as
   assert.equal(route.response.payload.cards[0].type, 'po_status')
   assert.equal(route.response.payload.cards[0].data.poId, 'PO-1001')
   assert.equal(route.response.payload.cards[0].data.receivingStatus, 'partial')
+  const actions = route.response.payload.cards.find((card) => card.type === 'recommended_actions')?.actions || []
+  const followupDraft = actions.find((action) => action.kind === 'draft_preview' && action.draftType === 'po_followup_draft')
+  assert.equal(followupDraft?.requiresHumanReview, true)
+  assert.equal(followupDraft?.payload?.poId, 'PO-1001')
 
   const missing = buildAiProcurementOperationalResponse(db, { message: '这个 PO 现在什么状态？' })
   const notFound = buildAiProcurementOperationalResponse(db, { message: 'PO-404 status' })

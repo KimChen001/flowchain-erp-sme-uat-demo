@@ -189,6 +189,28 @@ function recommendedActions(actions = []) {
   return { type: 'recommended_actions', actions }
 }
 
+function supplierFollowupDraftAction(rfq = {}, stats = responseStats(rfq)) {
+  const rfqId = rfqIdFor(rfq)
+  const pending = stats.pendingSupplierCount
+  return {
+    label: `预览 ${rfqId || '该 RFQ'} 供应商提醒草稿，需人工审阅后再发送。`,
+    kind: 'draft_preview',
+    target: '',
+    draftType: 'supplier_followup_draft',
+    draftTitle: `${rfqId || 'RFQ'} 供应商提醒草稿预览`,
+    requiresHumanReview: true,
+    payload: {
+      supplierIdOrName: rfq.supplierName || rfq.awardedSupplier || rfq.bestSupplier || `RFQ ${rfqId}`,
+      message: `请确认 ${rfqId} 的报价回复状态及预计回复时间。${dueDateFor(rfq) ? `当前报价截止日期为 ${dueDateFor(rfq)}。` : ''}${pending ? `仍有 ${pending} 家供应商待回复。` : ''}`,
+      reason: 'AI 基于 RFQ 待回复证据建议跟进供应商。',
+    },
+    originEvidence: [
+      { type: 'rfq', id: rfqId, summary: '已匹配 RFQ 记录。' },
+      { type: 'supplier_response_evidence', id: rfqId, summary: stats.source === 'response_records' ? '供应商回复状态来自回复明细。' : '供应商回复状态来自 RFQ 汇总字段。' },
+    ],
+  }
+}
+
 function missingFieldCard(name, reason) {
   return { type: 'missing_fields', fields: [{ name, reason }] }
 }
@@ -329,6 +351,7 @@ function buildRfqStatusResponse(db = {}, message = '', options = {}) {
       evidenceCard(evidence),
       recommendedActions([
         { label: '打开 RFQ', kind: 'deep_link', target: `/procurement?view=rfqs&rfqId=${encodeURIComponent(rfqIdFor(rfq))}` },
+        supplierFollowupDraftAction(rfq, stats),
         { label: '打开采购工作台', kind: 'deep_link', target: '/procurement?view=rfqs' },
       ]),
     ],
@@ -378,7 +401,10 @@ function buildRfqResponseQuery(db = {}, message = '', options = {}) {
           },
         },
         evidenceCard(evidence),
-        recommendedActions([{ label: '复核供应商回复', kind: 'deep_link', target: `/procurement?view=rfqs&rfqId=${encodeURIComponent(rfqIdFor(rfq))}` }]),
+        recommendedActions([
+          { label: '复核供应商回复', kind: 'deep_link', target: `/procurement?view=rfqs&rfqId=${encodeURIComponent(rfqIdFor(rfq))}` },
+          supplierFollowupDraftAction(rfq, stats),
+        ]),
       ],
       evidence,
     }
