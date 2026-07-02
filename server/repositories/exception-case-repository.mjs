@@ -1,9 +1,15 @@
 import {
-  EXCEPTION_CASE_STATUSES,
   createExceptionCaseDraft,
   normalizeExceptionCase,
   validateExceptionCase,
 } from '../domain/exception-case-model.mjs'
+import {
+  assertExceptionCaseTransition,
+  buildResolutionPayload,
+  normalizeCaseNote,
+  validateExceptionCaseFieldUpdate,
+  workflowAuditEntry,
+} from '../domain/exception-case-workflow.mjs'
 
 function scopeKey(scope = {}) {
   return [
@@ -70,6 +76,10 @@ export function createInMemoryExceptionCaseRepository({ db = {} } = {}) {
         ...fields,
         auditMetadata: { ...(fields.auditMetadata || {}), confirmation: 'user_confirmed', sourceTrigger: input.sourceTrigger || fields.sourceTrigger },
         notes: fields.notes || [],
+        auditTrail: [
+          ...(fields.auditTrail || []),
+          workflowAuditEntry('exception_case_created', fields, input, { status: fields.status || 'open' }),
+        ],
       })
       listFor(state, scope).unshift(item)
       return item
@@ -99,14 +109,13 @@ export function createInMemoryExceptionCaseRepository({ db = {} } = {}) {
         error.code = 'EXCEPTION_CASE_NOTE_CONFIRMATION_REQUIRED'
         throw error
       }
-      const note = {
-        noteId: noteInput.noteId || `NOTE-${Date.now()}`,
-        body: String(noteInput.body || '').trim(),
-        author: noteInput.author || 'current_user',
-        createdAt: noteInput.createdAt || new Date().toISOString(),
-        source: noteInput.source || 'user_confirmed_note',
+      const note = normalizeCaseNote(noteInput)
+      rows[index] = {
+        ...rows[index],
+        notes: [...(rows[index].notes || []), note],
+        auditTrail: [...(rows[index].auditTrail || []), workflowAuditEntry('exception_case_note_added', rows[index], noteInput, { noteType: note.noteType })],
+        updatedAt: note.createdAt,
       }
-      rows[index] = { ...rows[index], notes: [...(rows[index].notes || []), note], updatedAt: note.createdAt }
       return rows[index]
     },
     updateCaseStatus: async (scope = {}, caseId = '', statusInput = {}) => {
@@ -114,19 +123,51 @@ export function createInMemoryExceptionCaseRepository({ db = {} } = {}) {
       const rows = listFor(state, scope)
       const index = rows.findIndex((item) => item.caseId === caseId)
       if (index < 0) return null
-      if (!EXCEPTION_CASE_STATUSES.includes(statusInput.status)) {
-        const error = new Error('Invalid exception case status.')
+      const current = rows[index]
+      const transition = assertExceptionCaseTransition(current.status, statusInput.status, statusInput)
+      const resolution = statusInput.status === 'closed' ? buildResolutionPayload(statusInput, current) : current.resolution
+      const note = statusInput.note || statusInput.reason || statusInput.resolutionNote
+        ? normalizeCaseNote({ ...statusInput, body: statusInput.note || statusInput.reason || statusInput.resolutionNote, noteType: statusInput.status === 'closed' ? 'resolution' : 'system' })
+        : null
+      rows[index] = {
+        ...current,
+        status: statusInput.status,
+        resolution,
+        notes: note ? [...(current.notes || []), note] : current.notes,
+        auditTrail: [
+          ...(current.auditTrail || []),
+          workflowAuditEntry(statusInput.status === 'closed' ? 'exception_case_closed' : 'exception_case_status_changed', current, statusInput, {
+            previousStatus: transition.from,
+            nextStatus: transition.to,
+          }),
+        ],
+        updatedAt: statusInput.timestamp || new Date().toISOString(),
+      }
+      return rows[index]
+    },
+    updateCaseFields: async (scope = {}, caseId = '', updateInput = {}) => {
+      const state = ensureState(db)
+      const rows = listFor(state, scope)
+      const index = rows.findIndex((item) => item.caseId === caseId)
+      if (index < 0) return null
+      const validation = validateExceptionCaseFieldUpdate(updateInput)
+      if (!validation.ok) {
+        const error = new Error(`Invalid exception case field update: ${validation.errors.join(', ')}`)
         error.status = 400
-        error.code = 'EXCEPTION_CASE_STATUS_INVALID'
+        error.code = validation.errors.includes('confirmation_required')
+          ? 'EXCEPTION_CASE_UPDATE_CONFIRMATION_REQUIRED'
+          : 'EXCEPTION_CASE_FIELD_UPDATE_INVALID'
+        error.validation = validation
         throw error
       }
-      if ((statusInput.status === 'closed' || statusInput.status === 'resolved') && statusInput.confirm !== true && statusInput.explicitConfirmation !== true) {
-        const error = new Error('Explicit user confirmation is required to resolve or close a case.')
-        error.status = 400
-        error.code = 'EXCEPTION_CASE_CLOSE_CONFIRMATION_REQUIRED'
-        throw error
+      const fields = updateInput.fields || updateInput
+      const allowed = Object.fromEntries(Object.entries(fields).filter(([key]) => ['owner', 'dueDate', 'severity'].includes(key)))
+      rows[index] = {
+        ...rows[index],
+        ...allowed,
+        auditTrail: [...(rows[index].auditTrail || []), workflowAuditEntry('exception_case_fields_updated', rows[index], updateInput, { fields: Object.keys(allowed) })],
+        updatedAt: updateInput.timestamp || new Date().toISOString(),
       }
-      rows[index] = { ...rows[index], status: statusInput.status, updatedAt: new Date().toISOString() }
       return rows[index]
     },
     findDuplicateCase: async (scope = {}, fields = {}) => {

@@ -115,7 +115,7 @@ test('R233 repository is scoped, confirmation-gated, non-destructive, and duplic
   assert.equal((await repo.listCases(scopeB)).length, 0)
   const draft = await repo.previewCaseDraft(scopeA, { caseType: 'sku_shortage', sourceEntityType: 'sku', sourceEntityId: 'SKU-00412', title: 'Duplicate draft' })
   assert.equal(draft.duplicateWarning.caseId, created.caseId)
-  await assert.rejects(() => repo.updateCaseStatus(scopeA, created.caseId, { status: 'closed' }), /confirmation/i)
+  await assert.rejects(() => repo.updateCaseStatus(scopeA, created.caseId, { status: 'closed' }), /not allowed/i)
   await assert.rejects(() => repo.addCaseNote(scopeA, created.caseId, { body: 'note' }), /confirmation/i)
   const withNote = await repo.addCaseNote(scopeA, created.caseId, { confirm: true, body: 'reviewed note' })
   assert.equal(withNote.notes.length, 1)

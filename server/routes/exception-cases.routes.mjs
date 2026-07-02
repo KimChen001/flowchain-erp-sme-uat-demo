@@ -1,5 +1,7 @@
 import { buildCaseNoteDraft, buildExceptionCaseDraftFromEvidence } from '../domain/exception-case-draft-builder.mjs'
+import { buildExceptionWorkflowDraft, exceptionCaseAuditPolicyEntry } from '../domain/exception-case-workflow.mjs'
 import { createInMemoryExceptionCaseRepository } from '../repositories/exception-case-repository.mjs'
+import { recordDatabaseAuditBestEffort } from '../domain/audit-policy.mjs'
 
 function repository(ctx) {
   return ctx.repositories?.exceptionCases || createInMemoryExceptionCaseRepository({ db: ctx.db })
@@ -60,6 +62,7 @@ export async function handleExceptionCasesRoute(ctx) {
     try {
       const item = await repo.createCase(scopeFrom(ctx, body), body)
       ctx.event?.(ctx.db, 'exception_case_created', `Exception case ${item.caseId} created after user confirmation`, item.caseId)
+      await recordDatabaseAuditBestEffort(ctx, exceptionCaseAuditPolicyEntry('exception_case_created', item, body, { nextStatus: item.status }))
       send(res, 201, { case: item, created: true, createsBusinessDocument: false })
     } catch (error) {
       sendError(send, res, error)
@@ -76,6 +79,8 @@ export async function handleExceptionCasesRoute(ctx) {
         send(res, 404, { error: 'Exception case not found.' })
         return true
       }
+      ctx.event?.(ctx.db, 'exception_case_note_added', `Exception case note added after confirmation`, caseId)
+      await recordDatabaseAuditBestEffort(ctx, exceptionCaseAuditPolicyEntry('exception_case_note_added', item, body))
       send(res, 200, { case: item, noteSaved: true })
     } catch (error) {
       sendError(send, res, error)
@@ -92,7 +97,27 @@ export async function handleExceptionCasesRoute(ctx) {
         send(res, 404, { error: 'Exception case not found.' })
         return true
       }
+      ctx.event?.(ctx.db, 'exception_case_status_changed', `Exception case ${caseId} status changed to ${item.status}`, caseId)
+      await recordDatabaseAuditBestEffort(ctx, exceptionCaseAuditPolicyEntry(item.status === 'closed' ? 'exception_case_closed' : 'exception_case_status_changed', item, body, { nextStatus: item.status }))
       send(res, 200, { case: item, statusUpdated: true })
+    } catch (error) {
+      sendError(send, res, error)
+    }
+    return true
+  }
+
+  if (req.method === 'PATCH' && /^\/api\/exception-cases\/[^/]+$/.test(url.pathname)) {
+    const body = await readBody(req)
+    const caseId = decodeURIComponent(url.pathname.split('/').pop())
+    try {
+      const item = await repo.updateCaseFields(scopeFrom(ctx, body), caseId, body)
+      if (!item) {
+        send(res, 404, { error: 'Exception case not found.' })
+        return true
+      }
+      ctx.event?.(ctx.db, 'exception_case_fields_updated', `Exception case ${caseId} fields updated after confirmation`, caseId)
+      await recordDatabaseAuditBestEffort(ctx, exceptionCaseAuditPolicyEntry('exception_case_fields_updated', item, body))
+      send(res, 200, { case: item, updated: true })
     } catch (error) {
       sendError(send, res, error)
     }
@@ -103,6 +128,18 @@ export async function handleExceptionCasesRoute(ctx) {
     const body = await readBody(req)
     const caseId = decodeURIComponent(url.pathname.split('/').at(-2))
     send(res, 200, { draft: buildCaseNoteDraft({ ...body, caseId }), previewOnly: true })
+    return true
+  }
+
+  if (req.method === 'POST' && /^\/api\/exception-cases\/[^/]+\/workflow-draft$/.test(url.pathname)) {
+    const body = await readBody(req)
+    const caseId = decodeURIComponent(url.pathname.split('/').at(-2))
+    const item = await repo.getCaseById(scopeFrom(ctx, body), caseId)
+    if (!item) {
+      send(res, 404, { error: 'Exception case not found.' })
+      return true
+    }
+    send(res, 200, { draft: buildExceptionWorkflowDraft({ ...body, case: item }), previewOnly: true, mutationAllowed: false })
     return true
   }
 

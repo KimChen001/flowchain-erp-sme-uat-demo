@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Clipboard, FileClock, Link2, Plus, Save, Search, X } from "lucide-react";
+import { CheckCircle2, Clipboard, FileClock, Link2, Plus, Save, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { A, Card, Chip, inputStyle } from "../../components/ui";
 import { typography } from "../../components/ui/typography";
@@ -25,6 +25,8 @@ type ExceptionCase = {
   aiDiagnosisSummary?: string;
   recommendedReviewFirstActions?: string[];
   notes?: { noteId?: string; body?: string; author?: string; createdAt?: string }[];
+  resolution?: { resolutionSummary?: string; rootCause?: string; actionTaken?: string; remainingRisk?: string; confirmedAt?: string };
+  auditTrail?: { action?: string; actor?: string; timestamp?: string; summary?: string }[];
   auditMetadata?: Record<string, unknown>;
   updatedAt?: string;
 };
@@ -102,6 +104,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<ExceptionCaseDraft | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  const [workflowDraft, setWorkflowDraft] = useState("");
 
   async function loadCases() {
     setLoading(true);
@@ -235,7 +238,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
                   const severity = severityStyle(item.severity);
                   const status = statusStyle(item.status);
                   return (
-                    <tr key={item.caseId} className="cursor-pointer hover:bg-blue-50/40" onClick={() => { setSelected(item); setNoteDraft(""); }} style={{ borderBottom: `1px solid ${A.border}` }}>
+                    <tr key={item.caseId} className="cursor-pointer hover:bg-blue-50/40" onClick={() => { setSelected(item); setNoteDraft(""); setWorkflowDraft(""); }} style={{ borderBottom: `1px solid ${A.border}` }}>
                       <td className={`px-4 py-3 ${typography.tableLink}`} style={{ color: A.blue }}>{item.caseId}<div className={typography.metadata} style={{ color: A.label }}>{item.title}</div></td>
                       <td className={`px-4 py-3 ${typography.tableCell}`}>{caseTypeLabel(item.caseType)}</td>
                       <td className="px-4 py-3"><Chip label={item.severity} color={severity.color} bg={severity.bg} /></td>
@@ -282,7 +285,43 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
         </Card>
       )}
 
-      {selected && <CaseDetail item={selected} noteDraft={noteDraft} setNoteDraft={setNoteDraft} onPreviewNote={previewNote} onSaveNote={saveNote} onNavigate={onNavigate} />}
+      {selected && (
+        <CaseDetail
+          item={selected}
+          noteDraft={noteDraft}
+          workflowDraft={workflowDraft}
+          setNoteDraft={setNoteDraft}
+          onPreviewNote={previewNote}
+          onPreviewWorkflowDraft={async (item, draftType) => {
+            const payload = await apiJson<{ draft: { body: string; mutationAllowed: boolean } }>(`/api/exception-cases/${encodeURIComponent(item.caseId)}/workflow-draft`, {
+              method: "POST",
+              body: JSON.stringify({ draftType }),
+            });
+            if (payload.draft.mutationAllowed) throw new Error("Workflow draft boundary is unsafe.");
+            setWorkflowDraft(payload.draft.body);
+          }}
+          onSaveNote={saveNote}
+          onUpdateFields={async (item, fields) => {
+            const payload = await apiJson<{ case: ExceptionCase }>(`/api/exception-cases/${encodeURIComponent(item.caseId)}`, {
+              method: "PATCH",
+              body: JSON.stringify({ confirm: true, fields, actor: "current_user" }),
+            });
+            setSelected(payload.case);
+            setCases((current) => current.map((row) => row.caseId === payload.case.caseId ? payload.case : row));
+            toast.success("Case fields updated", { description: item.caseId });
+          }}
+          onChangeStatus={async (item, status, payloadFields = {}) => {
+            const payload = await apiJson<{ case: ExceptionCase }>(`/api/exception-cases/${encodeURIComponent(item.caseId)}/status`, {
+              method: "POST",
+              body: JSON.stringify({ confirm: true, status, actor: "current_user", ...payloadFields }),
+            });
+            setSelected(payload.case);
+            setCases((current) => current.map((row) => row.caseId === payload.case.caseId ? payload.case : row));
+            toast.success("Case status updated", { description: `${item.caseId} -> ${status}` });
+          }}
+          onNavigate={onNavigate}
+        />
+      )}
     </div>
   );
 }
@@ -299,19 +338,38 @@ function DraftMetric({ label, value }: { label: string; value: string }) {
 function CaseDetail({
   item,
   noteDraft,
+  workflowDraft,
   setNoteDraft,
   onPreviewNote,
+  onPreviewWorkflowDraft,
   onSaveNote,
+  onUpdateFields,
+  onChangeStatus,
   onNavigate,
 }: {
   item: ExceptionCase;
   noteDraft: string;
+  workflowDraft: string;
   setNoteDraft: (value: string) => void;
   onPreviewNote: (item: ExceptionCase) => void;
+  onPreviewWorkflowDraft: (item: ExceptionCase, draftType: string) => void;
   onSaveNote: (item: ExceptionCase) => void;
+  onUpdateFields: (item: ExceptionCase, fields: Partial<Pick<ExceptionCase, "owner" | "dueDate" | "severity">>) => void;
+  onChangeStatus: (item: ExceptionCase, status: string, payload?: Record<string, unknown>) => void;
   onNavigate?: Props["onNavigate"];
 }) {
   const links = (item.linkedRecords || []).map((record) => resolveBusinessLinkedRecord(record));
+  const [owner, setOwner] = useState(item.owner || "");
+  const [dueDate, setDueDate] = useState(formatDate(item.dueDate) === "—" ? "" : formatDate(item.dueDate));
+  const [severity, setSeverity] = useState(item.severity);
+  const [resolutionNote, setResolutionNote] = useState(item.resolution?.resolutionSummary || "");
+  const nextStatuses = allowedNextStatuses(item.status);
+  useEffect(() => {
+    setOwner(item.owner || "");
+    setDueDate(formatDate(item.dueDate) === "—" ? "" : formatDate(item.dueDate));
+    setSeverity(item.severity);
+    setResolutionNote(item.resolution?.resolutionSummary || "");
+  }, [item.caseId, item.owner, item.dueDate, item.severity, item.resolution?.resolutionSummary]);
   return (
     <Card className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -368,6 +426,53 @@ function CaseDetail({
         </div>
       </section>
 
+      <section className="mt-5 rounded-md border p-4" style={{ borderColor: A.border }}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className={typography.subsectionTitle} style={{ color: A.label }}>Workflow controls</h3>
+            <p className={typography.metadata} style={{ color: A.sub }}>Updates are user-confirmed and recorded on the case audit trail. Linked business records are not changed.</p>
+          </div>
+          <Chip label={`Current: ${item.status}`} {...statusStyle(item.status)} />
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-[1fr_160px_150px_auto]">
+          <input value={owner} onChange={(event) => setOwner(event.target.value)} placeholder="Owner" style={inputStyle} />
+          <input value={dueDate} onChange={(event) => setDueDate(event.target.value)} type="date" style={inputStyle} />
+          <select value={severity} onChange={(event) => setSeverity(event.target.value as ExceptionCase["severity"])} style={inputStyle}>
+            {["critical", "high", "medium", "low"].map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <button onClick={() => onUpdateFields(item, { owner, dueDate, severity })} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton}`} style={{ background: A.blue }}>
+            <Save size={14} /> Update fields
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {nextStatuses.map((status) => (
+            <button
+              key={status}
+              onClick={() => onChangeStatus(item, status, { reason: `Move case to ${status}` })}
+              className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`}
+              style={{ background: status === "cancelled" ? "#fff1f0" : "#f0f6ff", color: status === "cancelled" ? A.red : A.blue }}
+            >
+              {statusLabel(status)}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto_auto]">
+          <textarea value={resolutionNote} onChange={(event) => setResolutionNote(event.target.value)} placeholder="Resolution note required before Close Case" rows={2} style={{ ...inputStyle, height: "auto", resize: "vertical" }} />
+          <button onClick={() => onPreviewWorkflowDraft(item, "resolution_note")} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: "#f0f6ff", color: A.blue }}>
+            <FileClock size={14} /> Resolution draft
+          </button>
+          <button
+            onClick={() => onChangeStatus(item, "closed", { resolutionNote, rootCause: "User reviewed case evidence", actionTaken: "Resolution confirmed in case workflow", remainingRisk: "Monitor recurrence" })}
+            disabled={item.status !== "resolved" || !resolutionNote.trim()}
+            className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton} disabled:cursor-not-allowed disabled:opacity-60`}
+            style={{ background: A.green }}
+          >
+            <CheckCircle2 size={14} /> Close Case
+          </button>
+        </div>
+        {workflowDraft && <p className={`${typography.metadata} mt-3 rounded-md p-3`} style={{ background: A.gray6, color: A.label }}>{workflowDraft}</p>}
+      </section>
+
       <section className="mt-5 grid gap-4 lg:grid-cols-2">
         <div>
           <h3 className={typography.subsectionTitle} style={{ color: A.label }}>AI diagnosis and actions</h3>
@@ -381,6 +486,7 @@ function CaseDetail({
           <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>Data limitations: {(item.dataLimitations || []).join(", ") || "None"}</p>
           <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>Audit source: {String(item.auditMetadata?.sourceTrigger || "user_confirmed")}</p>
           {(item.notes || []).map((note) => <p key={note.noteId} className={`${typography.metadata} mt-2 rounded-md p-2`} style={{ background: A.gray6, color: A.label }}>{note.body}</p>)}
+          {(item.auditTrail || []).map((entry, index) => <p key={`${entry.action}-${index}`} className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>{entry.action} · {formatDate(entry.timestamp)}</p>)}
         </div>
       </section>
 
@@ -388,6 +494,9 @@ function CaseDetail({
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => onPreviewNote(item)} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: "#f0f6ff", color: A.blue }}>
             <FileClock size={14} /> Preview follow-up note
+          </button>
+          <button onClick={() => onPreviewWorkflowDraft(item, "supplier_followup_note")} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: "#fff8f0", color: A.orange }}>
+            <FileClock size={14} /> Supplier follow-up draft
           </button>
           <button onClick={() => navigator.clipboard?.writeText(item.summary)} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: A.gray6, color: A.sub }}>
             <Clipboard size={14} /> Copy summary
@@ -404,4 +513,27 @@ function CaseDetail({
       </div>
     </Card>
   );
+}
+
+function allowedNextStatuses(status: string) {
+  const map: Record<string, string[]> = {
+    open: ["in_review", "waiting_supplier", "waiting_internal", "cancelled"],
+    in_review: ["waiting_supplier", "waiting_internal", "resolved", "cancelled"],
+    waiting_supplier: ["in_review", "cancelled"],
+    waiting_internal: ["in_review", "cancelled"],
+    resolved: [],
+  };
+  return map[status] || [];
+}
+
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    in_review: "Move to In Review",
+    waiting_supplier: "Mark Waiting Supplier",
+    waiting_internal: "Mark Waiting Internal",
+    resolved: "Mark Resolved",
+    cancelled: "Cancel Case",
+    closed: "Close Case",
+  };
+  return labels[status] || status;
 }
