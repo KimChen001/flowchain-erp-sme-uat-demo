@@ -35,6 +35,7 @@ async function readMasterData(repository) {
 
 export async function buildAiReadContext(db = {}, ctx = {}) {
   const repositories = ctx.repositories || {}
+  const dataMode = ctx.dataMode || db.__dataMode || 'test'
   const [procurement, inventory, masterData] = await Promise.all([
     readProcurement(repositories.procurementRead),
     readInventory(repositories.inventoryRead),
@@ -63,6 +64,7 @@ export async function buildAiReadContext(db = {}, ctx = {}) {
 
   return {
     db,
+    dataMode,
     cache,
     repositoryBacked,
     masterData: masterData || null,

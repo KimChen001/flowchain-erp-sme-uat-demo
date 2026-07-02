@@ -13,6 +13,11 @@ import {
   recordDatabaseAuditBestEffort,
 } from '../domain/audit-policy.mjs'
 import {
+  createEmptyDataset,
+  resolveFlowchainDataMode,
+  shouldReadDemoData,
+} from '../domain/data-mode.mjs'
+import {
   isDatabaseModeWriteBlocked,
   sendDatabaseModeMutationBlocked,
 } from '../domain/route-classification.mjs'
@@ -71,10 +76,16 @@ const webDispatcher = webProxyUrl ? new ProxyAgent(webProxyUrl) : undefined
 const aiMaxTokens = Number(process.env.AI_MAX_TOKENS || 520)
 
 async function readDb() {
-  return jsonDb.read()
+  const dataMode = resolveFlowchainDataMode(process.env)
+  if (!shouldReadDemoData(dataMode)) return createEmptyDataset({ mode: dataMode.mode })
+  const db = await jsonDb.read()
+  db.__dataMode = dataMode.mode
+  return db
 }
 
 async function writeDb(db) {
+  const dataMode = resolveFlowchainDataMode(process.env)
+  if (!dataMode.writable) return
   await jsonDb.write(db)
 }
 
@@ -870,6 +881,7 @@ export function createScmServer() {
     const url = new URL(req.url || '/', `http://localhost:${port}`)
     const db = await readDb()
     const persistenceMode = getPersistenceMode(process.env)
+    const dataMode = resolveFlowchainDataMode(process.env)
     const repositories = createRepositoryRegistry({ db, env: process.env })
 
     if (req.method === 'GET' && url.pathname === '/api/health') {
@@ -883,7 +895,8 @@ export function createScmServer() {
         diagnostics: {
           healthCheck: '/api/health',
           aiChat: '/api/ai/chat',
-          dataSource: 'scm-demo',
+          dataMode: dataMode.mode,
+          dataSource: dataMode.dataSource,
         },
         purchaseOrders: db.purchaseOrders.length,
         purchaseRequests: ensurePurchaseRequests(db).length,
@@ -992,6 +1005,7 @@ export function createScmServer() {
       ensureInventoryMovements, ensureSopCycles, supplierPerformance, supplierRecommendations,
       ensureEvents, ensureAuditLog,
       openaiDispatcher, arkDispatcher, aiMaxTokens,
+      dataMode: dataMode.mode,
       supplierQuoteCount: Object.keys(supplierQuotes).length,
     }
 
