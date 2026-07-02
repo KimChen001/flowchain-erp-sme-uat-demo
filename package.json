@@ -12,6 +12,7 @@
     "test": "node --test server/domain/*.test.mjs",
     "test:browser": "playwright test",
     "test:browser:ai": "playwright test tests/browser/ai-copilot.spec.ts",
+    "test:browser:ai:empty": "node scripts/browser-uat-ai-empty.mjs",
     "test:harness": "node --test server/domain/system-harness-product-review.test.mjs",
     "test:contracts": "node --test server/domain/json-adapter-contracts.test.mjs",
     "test:db": "node --test server/domain/db-test-harness.test.mjs",
