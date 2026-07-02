@@ -8,6 +8,7 @@ import { buildAiFinanceCollaborationResponse } from '../domain/ai-finance-collab
 import { buildAiMasterDataQualityResponse } from '../domain/ai-master-data-quality-query.mjs'
 import { buildAiCockpitFastPathResponse, buildAiDataLimitationResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
 import { buildAiSessionGroundedResponse } from '../domain/ai-session-grounding.mjs'
+import { buildAiCompoundQueryResponse, detectCompoundBusinessQuery } from '../domain/ai-compound-query.mjs'
 import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
 import { buildAiReadContext } from '../domain/ai-read-context.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
@@ -564,9 +565,10 @@ export async function handleAiRoute(ctx) {
     branchStartedAt = Date.now()
     const repositoryBackedReadContext = hasRepositoryBackedAiReadContext(repositories)
     const fastPathModuleId = String(body.moduleId || body.activeContext?.module || '').trim().toLowerCase()
+    const compoundCandidate = detectCompoundBusinessQuery(body)
 
     const dataLimitationFastPath = buildAiDataLimitationResponse(db, body, { cache: {} })
-    if (dataLimitationFastPath) {
+    if (!compoundCandidate && dataLimitationFastPath) {
       const result = {
         ...dataLimitationFastPath,
         fastPath: 'pre_read_context',
@@ -583,7 +585,7 @@ export async function handleAiRoute(ctx) {
 
     branchStartedAt = Date.now()
     const procurementFastPath = buildAiProcurementOperationalResponse(db, body, { ensurePurchaseRequests, ensureRfqs })
-    if (procurementFastPath) {
+    if (!compoundCandidate && procurementFastPath) {
       const result = {
         ...procurementFastPath,
         fastPath: 'pre_read_context',
@@ -602,6 +604,7 @@ export async function handleAiRoute(ctx) {
     const supplierFollowupFastPath = buildAiEvidenceReuseResponse(db, body, { cache: {} })
     if (
       !repositoryBackedReadContext &&
+      !compoundCandidate &&
       supplierFollowupFastPath?.intent?.name === 'supplier_followup_query' &&
       !['srm', 'supplier'].includes(fastPathModuleId)
     ) {
@@ -621,7 +624,7 @@ export async function handleAiRoute(ctx) {
 
     branchStartedAt = Date.now()
     const supplierFastPath = buildAiSupplierOperationalResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs })
-    if (supplierFastPath && (!repositoryBackedReadContext || ['srm', 'supplier'].includes(fastPathModuleId))) {
+    if (!compoundCandidate && supplierFastPath && (!repositoryBackedReadContext || ['srm', 'supplier'].includes(fastPathModuleId))) {
       const result = {
         ...supplierFastPath,
         fastPath: 'pre_read_context',
@@ -638,7 +641,7 @@ export async function handleAiRoute(ctx) {
 
     branchStartedAt = Date.now()
     const rfqFastPath = buildAiRfqOperationalResponse(db, body, { ensureRfqs })
-    if (rfqFastPath) {
+    if (!compoundCandidate && rfqFastPath) {
       const result = {
         ...rfqFastPath,
         fastPath: 'pre_read_context',
@@ -654,7 +657,7 @@ export async function handleAiRoute(ctx) {
     }
 
     branchStartedAt = Date.now()
-    if (!repositoryBackedReadContext) {
+    if (!compoundCandidate && !repositoryBackedReadContext) {
       const cockpitFastPath = buildAiCockpitFastPathResponse(db, body, { cache: {} })
       if (cockpitFastPath) {
         const result = {
@@ -675,8 +678,11 @@ export async function handleAiRoute(ctx) {
     branchStartedAt = Date.now()
     const statusFastPath = buildAiChatStatusResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements })
     if (
-      (!repositoryBackedReadContext && shouldRunInventoryStatusBeforeReadContext(body, statusFastPath)) ||
-      statusFastPath?.intent?.name === 'planning_status_query'
+      !compoundCandidate &&
+      (
+        (!repositoryBackedReadContext && shouldRunInventoryStatusBeforeReadContext(body, statusFastPath)) ||
+        statusFastPath?.intent?.name === 'planning_status_query'
+      )
     ) {
       const result = {
         ...statusFastPath,
@@ -696,7 +702,7 @@ export async function handleAiRoute(ctx) {
     const draftFastPath = buildAiDraftPreparationResponse(db, body, {
       authorization: req.headers.authorization || '',
     })
-    if (draftFastPath) {
+    if (!compoundCandidate && draftFastPath) {
       const result = {
         ...draftFastPath,
         fastPath: 'pre_read_context',
@@ -714,6 +720,27 @@ export async function handleAiRoute(ctx) {
 
     const aiReadContext = await buildAiReadContext(db, ctx)
     const readModelCache = aiReadContext.cache
+
+    branchStartedAt = Date.now()
+    const compoundQuery = buildAiCompoundQueryResponse(db, body, {
+      cache: readModelCache,
+      ensurePurchaseRequests,
+      ensureInventoryMovements,
+      ensureRfqs,
+    })
+    if (compoundQuery) {
+      const result = {
+        ...compoundQuery,
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_compound_query', summary: `AI answered compound query with ${result.subIntents?.length || 0} sub-intents`, entity: result.intent.name, persist: false })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'compound_query', body, result })
+      send(res, 200, result)
+      return true
+    }
 
     branchStartedAt = Date.now()
     const cockpitFastPathQuery = buildAiCockpitFastPathResponse(db, body, { cache: readModelCache })

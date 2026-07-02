@@ -27,6 +27,7 @@ export const AI_BUSINESS_INTENT_TAXONOMY = Object.freeze({
   inventoryRisk: 'inventory_status_query',
   rfqFollowup: 'rfq_followup_query',
   supplierFollowup: 'supplier_followup_query',
+  receivingGap: 'receiving_gap_query',
   receivingException: 'receiving_exception_query',
   prStatus: 'pr_status_query',
   relationshipReasoning: 'relationship_reasoning_query',
@@ -34,6 +35,7 @@ export const AI_BUSINESS_INTENT_TAXONOMY = Object.freeze({
   sopGuidance: 'sop_retrieval_query',
   draftPreview: 'draft_preview_query',
   entityLookup: 'entity_lookup_query',
+  compoundBusiness: 'compound_business_query',
   unknownGuidedFallback: 'unknown_guided_fallback',
 })
 
@@ -41,6 +43,7 @@ export const AI_INTENT_ALIASES = Object.freeze({
   today_priority_query: AI_BUSINESS_INTENT_TAXONOMY.todayPriority,
   procurement_risk_query: AI_BUSINESS_INTENT_TAXONOMY.procurementRisk,
   inventory_risk_query: AI_BUSINESS_INTENT_TAXONOMY.inventoryRisk,
+  procurement_receiving_gap_query: AI_BUSINESS_INTENT_TAXONOMY.receivingGap,
   sop_guidance_query: AI_BUSINESS_INTENT_TAXONOMY.sopGuidance,
   prepare_purchase_request_draft: AI_BUSINESS_INTENT_TAXONOMY.draftPreview,
   prepare_rfq_draft: AI_BUSINESS_INTENT_TAXONOMY.draftPreview,
@@ -94,7 +97,7 @@ function route(intent, confidence, entities, routeReason, options = {}) {
 function hasBroadAttentionIntent(message = '') {
   const normalized = compact(message)
   if (!normalized) return false
-  const hasAttentionVerb = /注意|要看|先看|优先|关注|提醒|跟进|风险|异常|问题|情况|怎么样|overview|attention|risk|issue/.test(message)
+  const hasAttentionVerb = /注意|要看|先看|优先|关注|提醒|跟进|风险|异常|问题|情况|怎么样|需要.*做|待办|overview|attention|risk|issue/.test(message)
   const hasBroadScope = /有什么|有哪些|有没有|当前|现在|今天|今日|整体|全局|哪里|什么/.test(message)
   const isSpecificDomain = /采购|库存|供应商|RFQ|询价|收货|GRN|发票|PO|PR|SKU|数据|SOP|规则|草稿/i.test(message)
   return hasAttentionVerb && hasBroadScope && !isSpecificDomain && normalized.length <= 48
@@ -131,6 +134,7 @@ export function classifyAiBusinessIntent(body = {}) {
   if (/SOP|规则|流程|通常|一般|怎么处理|应该/.test(message)) return route(AI_BUSINESS_INTENT_TAXONOMY.sopGuidance, 0.86, entities, 'sop_guidance_task')
   if (/供应商|supplier/i.test(message) && /跟进|follow|风险|关注|推荐|建议/.test(message)) return route(AI_BUSINESS_INTENT_TAXONOMY.supplierFollowup, 0.88, entities, 'supplier_followup_task')
   if (/RFQ|询价/i.test(message) && /跟进|回复|报价|供应商|授标|pending|response/i.test(message)) return route(AI_BUSINESS_INTENT_TAXONOMY.rfqFollowup, 0.88, entities, 'rfq_followup_task')
+  if (/(?:订单|采购单|PO|po|收货|到货|未收|没收|剩余|还有多少)/.test(message) && /(?:没有收货|未收货|没收货|没收|还没到货|未到货|部分到货|剩余.*(?:收货|到货)|收货数量)/.test(message)) return route(AI_BUSINESS_INTENT_TAXONOMY.receivingGap, 0.88, entities, 'receiving_gap_task')
   if (/收货|GRN|质检|入库|receiving/i.test(message) && /异常|问题|风险|待处理|跟进/.test(message)) return route(AI_BUSINESS_INTENT_TAXONOMY.receivingException, 0.86, entities, 'receiving_exception_task')
   if (/PR|采购申请/i.test(message) && /状态|待审批|转换|转.*PO|进度|status/i.test(message)) return route(AI_BUSINESS_INTENT_TAXONOMY.prStatus, 0.86, entities, 'pr_status_task')
   if (/采购|单据|三单|发票|收货|po|pr|rfq|grn|procurement|purchase/i.test(message) && /风险|异常|待处理|待审批|待转|差异|跟进|逾期|问题|为什么|原因|优先|有哪些/.test(message)) return route(AI_BUSINESS_INTENT_TAXONOMY.procurementRisk, 0.86, entities, 'procurement_risk_task')
