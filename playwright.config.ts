@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const appPort = Number(process.env.PLAYWRIGHT_APP_PORT || 5173);
-const apiPort = Number(process.env.PLAYWRIGHT_API_PORT || 8787);
+const appPort = Number(process.env.PLAYWRIGHT_APP_PORT || 15173);
+const apiPort = Number(process.env.PLAYWRIGHT_API_PORT || 18787);
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -25,15 +25,15 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "node server/index.mjs",
+      command: "node scripts/browser-uat-api.mjs",
       url: `http://127.0.0.1:${apiPort}/api/health`,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 30_000,
     },
     {
-      command: `npm run dev -- --host 127.0.0.1 --port ${appPort}`,
+      command: "node scripts/browser-uat-vite.mjs",
       url: `http://127.0.0.1:${appPort}`,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 30_000,
     },
   ],

@@ -239,10 +239,21 @@ function EvidenceList({
     <div className="space-y-1">
       {rows.map(({ raw, link }, index) => {
         if (!link) return null;
-        const intent = navigationIntentFromEvidenceLink(link, { source: "ai" });
         const rawLabel = bestText(raw.label, raw.title, raw.summary, link.label);
         const businessId = visibleBusinessId(link.entityId, raw.id, raw.documentId, raw.label, raw.title, raw.summary, link.label);
         const displayId = businessId || link.entityId;
+        const fallbackFocusTarget = focusTargetFromBusinessId(businessId);
+        const navigableLink = fallbackFocusTarget && !link.clickable
+          ? {
+              ...link,
+              clickable: true,
+              entityId: businessId,
+              entityType: fallbackFocusTarget.entityType,
+              moduleId: moduleIdForBusinessId(businessId),
+              focusTarget: fallbackFocusTarget,
+            }
+          : link;
+        const intent = navigationIntentFromEvidenceLink(navigableLink, { source: "ai" });
         const label = displayId && rawLabel && !rawLabel.includes(displayId)
           ? `${displayId} · ${rawLabel}`
           : bestText(rawLabel, link.entityId);
@@ -250,7 +261,7 @@ function EvidenceList({
         const detail = bestText(raw.summary, raw.reason, link.status && link.status !== link.label ? link.status : "");
         return (
           <div key={`${title}-${index}`} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-            {link.clickable && intent && onNavigate ? (
+            {navigableLink.clickable && intent && onNavigate ? (
               <button
                 type="button"
                 onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)}
@@ -1072,6 +1083,28 @@ function businessTypeFromId(id = "") {
   return "";
 }
 
+function focusTargetFromBusinessId(id = ""): CanonicalFocusTarget | null {
+  const type = businessTypeFromId(id);
+  if (type === "po") return { entityType: "purchase_order", entityId: id };
+  if (type === "pr") return { entityType: "purchase_request", entityId: id };
+  if (type === "rfq") return { entityType: "rfq", entityId: id };
+  if (type === "grn") return { entityType: "receiving_doc", entityId: id };
+  if (type === "invoice") return { entityType: "supplier_invoice", entityId: id };
+  if (type === "sku") return { entityType: "inventory_item", entityId: id };
+  return null;
+}
+
+function moduleIdForBusinessId(id = "") {
+  const type = businessTypeFromId(id);
+  if (type === "po") return "procurement:orders";
+  if (type === "pr") return "procurement:requests";
+  if (type === "rfq") return "procurement:rfq";
+  if (type === "grn") return "procurement:receiving";
+  if (type === "invoice") return "procurement:invoices";
+  if (type === "sku") return "inventory";
+  return "overview";
+}
+
 function visibleBusinessId(...values: unknown[]) {
   for (const value of values) {
     const found = String(value ?? "").match(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)?.[0];
@@ -1090,10 +1123,16 @@ function collectBusinessIdsFromCards(cards: AiChatCard[] = []) {
     if (!grouped[type].includes(value)) grouped[type].push(value);
   };
   for (const card of cards) {
-    for (const evidence of card.evidence || []) push(evidence.id);
+    for (const evidence of card.evidence || []) {
+      push(evidence.id);
+      push(visibleBusinessId(evidence.id, evidence.route, evidence.label, evidence.summary));
+    }
     for (const action of card.actions || []) {
       push(String(action.target || "").match(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)?.[0]);
-      for (const evidence of action.originEvidence || []) push(evidence.id);
+      for (const evidence of action.originEvidence || []) {
+        push(evidence.id);
+        push(visibleBusinessId(evidence.id, evidence.route, evidence.label, evidence.summary));
+      }
     }
     const data = card.data || {};
     Object.values(data).forEach((value) => {
@@ -1103,6 +1142,25 @@ function collectBusinessIdsFromCards(cards: AiChatCard[] = []) {
   return grouped;
 }
 
+function primaryEntityFromCards(cards: AiChatCard[] = []) {
+  for (const card of cards) {
+    const data = card.data || {};
+    const priorityItems = arrayValue(data.priorityItems);
+    const firstPriority = priorityItems.find((item) => item && typeof item === "object") as Record<string, unknown> | undefined;
+    const priorityId = firstPriority
+      ? visibleBusinessId(firstPriority.id, firstPriority.sourceDocument, firstPriority.title, firstPriority.reason, firstPriority.explanation)
+      : "";
+    if (priorityId) return { type: businessTypeFromId(priorityId), id: priorityId, label: priorityId };
+  }
+  for (const card of cards) {
+    for (const evidence of card.evidence || []) {
+      const id = visibleBusinessId(evidence.id, evidence.route, evidence.label, evidence.summary);
+      if (id) return { type: businessTypeFromId(id), id, label: id };
+    }
+  }
+  return null;
+}
+
 function buildSessionGrounding(messages: AiChatMessage[], activeContext: ActiveContext | null): AiSessionGrounding {
   const assistant = [...messages].reverse().find((message) => message.role === "assistant" && message.cards?.length);
   const cards = assistant?.cards || [];
@@ -1110,9 +1168,10 @@ function buildSessionGrounding(messages: AiChatMessage[], activeContext: ActiveC
   const lastEvidenceIds = Object.values(lastVisibleBusinessIds).flat().slice(0, 12);
   const primaryType = Object.keys(lastVisibleBusinessIds).find((type) => lastVisibleBusinessIds[type]?.length === 1);
   const primaryId = primaryType ? lastVisibleBusinessIds[primaryType]?.[0] : "";
+  const primaryEntity = primaryEntityFromCards(cards);
   return {
     lastIntent: cards[0]?.type,
-    lastPrimaryEntity: primaryId ? { type: primaryType, id: primaryId, label: primaryId } : null,
+    lastPrimaryEntity: primaryEntity || (primaryId ? { type: primaryType, id: primaryId, label: primaryId } : null),
     lastEvidenceIds,
     lastVisibleBusinessIds,
     activeContext,

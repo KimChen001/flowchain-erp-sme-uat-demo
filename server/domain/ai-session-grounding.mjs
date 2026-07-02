@@ -41,12 +41,17 @@ function requestedEntityType(message = '') {
 function candidatesForType(grounding = {}, type = '') {
   const normalized = compactEntityType(type)
   const visible = grounding.lastVisibleBusinessIds || {}
-  const candidates = [...asArray(visible[normalized])]
+  const visibleCandidates = [...new Set(asArray(visible[normalized]).map((item) => text(item).toUpperCase()).filter(Boolean))]
   const active = grounding.activeContext || {}
-  if (compactEntityType(active.entityType) === normalized && active.entityId) candidates.push(active.entityId)
   const primary = grounding.lastPrimaryEntity || {}
-  if (compactEntityType(primary.type) === normalized && primary.id) candidates.push(primary.id)
-  return [...new Set(candidates.map((item) => text(item).toUpperCase()).filter(Boolean))]
+  const activeId = compactEntityType(active.entityType) === normalized && active.entityId ? text(active.entityId).toUpperCase() : ''
+  const primaryId = compactEntityType(primary.type) === normalized && primary.id ? text(primary.id).toUpperCase() : ''
+  if (activeId) {
+    if (visibleCandidates.length && !visibleCandidates.includes(activeId)) return [...new Set([...visibleCandidates, activeId])]
+    return [activeId]
+  }
+  if (primaryId) return [primaryId]
+  return visibleCandidates
 }
 
 function rewriteMessageForEntity(message = '', type = '', id = '') {

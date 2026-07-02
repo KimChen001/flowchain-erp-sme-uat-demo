@@ -189,6 +189,15 @@ function targetId(item = {}) {
     text(item.documentId || evidence.id || item.id || item.sku)
 }
 
+function businessFamilyForId(id = '', fallback = '') {
+  if (/^PO-/i.test(id)) return 'po'
+  if (/^PR-/i.test(id)) return 'pr'
+  if (/^RFQ-/i.test(id)) return 'rfq'
+  if (/^GRN-/i.test(id)) return 'grn'
+  if (/^SKU-/i.test(id)) return 'sku'
+  return fallback || id
+}
+
 function actionLabel(item = {}) {
   const id = targetId(item)
   const route = text(item.route)
@@ -597,7 +606,7 @@ function buildTodayCockpitResponse(models) {
   const seenActionFamilies = new Set()
   for (const item of priorityItems) {
     const id = text(item.id)
-    const family = /^PO-/i.test(id) ? 'po' : /^SKU-/i.test(id) ? 'sku' : /^RFQ-/i.test(id) ? 'rfq' : /^GRN-/i.test(id) ? 'grn' : item.type || id
+    const family = businessFamilyForId(id, item.type)
     if (seenActionFamilies.has(family)) continue
     const action = item.recommendedActions.find((next) => next.kind === 'deep_link') || item.recommendedActions[0]
     if (action) {
@@ -611,7 +620,16 @@ function buildTodayCockpitResponse(models) {
     .sort((a, b) => (a.draftType === 'purchase_request_draft' ? 0 : 1) - (b.draftType === 'purchase_request_draft' ? 0 : 1))
   const followups = asArray(cockpit.followups).slice(0, 3)
   const inventoryRisks = asArray(cockpit.inventoryRisks).slice(0, 3)
-  const evidence = evidenceItems(actions)
+  const evidenceSourceItems = []
+  const seenEvidenceFamilies = new Set()
+  for (const item of priorityItems) {
+    const family = businessFamilyForId(text(item.id), item.type)
+    if (!family || seenEvidenceFamilies.has(family)) continue
+    evidenceSourceItems.push(item)
+    seenEvidenceFamilies.add(family)
+    if (evidenceSourceItems.length >= 4) break
+  }
+  const evidence = evidenceItems(evidenceSourceItems.length ? evidenceSourceItems : actions)
   const topPriority = priorityItems[0]
   const topAction = topPriority?.title || followups[0]?.title || inventoryRisks[0]?.nextAction || '先复核采购和库存风险证据'
   const overduePoCount = Math.max(
