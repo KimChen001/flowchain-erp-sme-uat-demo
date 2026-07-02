@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 export const USER_DATA_ARRAY_KEYS = Object.freeze([
   'purchaseOrders',
   'purchaseRequests',
@@ -54,6 +56,16 @@ function text(value) {
 
 function cloneRow(row) {
   return JSON.parse(JSON.stringify(row || {}))
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]))
+}
+
+function stableStringify(value) {
+  return JSON.stringify(stableValue(value))
 }
 
 function coerceNumber(value) {
@@ -224,6 +236,44 @@ export function buildUserDataRecordCounts(data = {}) {
   return Object.fromEntries(USER_DATA_ARRAY_KEYS.map((key) => [key, asArray(data[key]).length]))
 }
 
+export function buildUserDataScope(input = {}) {
+  const root = asObject(input)
+  const scope = asObject(root.scope)
+  return {
+    tenantId: text(scope.tenantId || root.tenantId) || 'tenant-flowchain-sme',
+    userId: text(scope.userId || root.userId) || 'user-local',
+  }
+}
+
+export function buildNormalizedUserDataSnapshot(normalizedData = {}, options = {}) {
+  const scope = buildUserDataScope(options.scope || options)
+  const recordCounts = buildUserDataRecordCounts(normalizedData)
+  const datasetId = text(options.datasetId) || `uds-${scope.tenantId}-${scope.userId}`
+  const previewId = text(options.previewId) || `udp-${createHash('sha256').update(stableStringify({ scope, recordCounts, normalizedData })).digest('hex').slice(0, 16)}`
+  const snapshotBody = {
+    version: 1,
+    scope,
+    datasetId,
+    recordCounts,
+    normalizedRecords: stableValue(Object.fromEntries(USER_DATA_ARRAY_KEYS.map((key) => [key, asArray(normalizedData[key])]))),
+  }
+  const normalizedSnapshotHash = createHash('sha256').update(stableStringify(snapshotBody)).digest('hex')
+  return {
+    ...snapshotBody,
+    previewId,
+    normalizedSnapshotHash,
+    validationSummary: {
+      ok: Boolean(options.ok),
+      warningCount: asArray(options.warnings).length,
+      errorCount: asArray(options.errors).length,
+    },
+    source: {
+      sourceName: text(options.sourceName) || 'user-import',
+      rowCounts: recordCounts,
+    },
+  }
+}
+
 export function buildUserDataImportPreview(normalizedData = {}, { limit = 5 } = {}) {
   return {
     purchaseOrders: asArray(normalizedData.purchaseOrders).slice(0, limit).map((row) => ({ id: text(row.po || row.poId || row.id), supplier: text(row.supplier || row.supplierName), status: text(row.status) })),
@@ -246,16 +296,33 @@ export function normalizeUserDataImportPayload(payload = {}, options = {}) {
   const errors = issues.filter((issue) => issue.severity === 'error')
   const warnings = issues.filter((issue) => issue.severity !== 'error')
   const importedAt = options.importedAt || new Date().toISOString()
+  const scope = buildUserDataScope({ ...asObject(payload), ...options.scope })
+  const sourceName = text(asObject(payload).sourceName) || 'user-import'
+  const normalizedSnapshot = buildNormalizedUserDataSnapshot(normalizedData, {
+    scope,
+    sourceName,
+    ok: errors.length === 0,
+    warnings,
+    errors,
+    datasetId: options.datasetId || asObject(payload).datasetId,
+    previewId: options.previewId || asObject(payload).previewId,
+  })
   return {
     ok: errors.length === 0,
     normalizedData,
+    normalizedSnapshot,
+    scope,
     recordCounts,
     warnings,
     errors,
     metadata: {
-      sourceName: text(asObject(payload).sourceName) || 'user-import',
+      sourceName,
       importedAt,
       dryRun: true,
+      previewId: normalizedSnapshot.previewId,
+      datasetId: normalizedSnapshot.datasetId,
+      normalizedSnapshotHash: normalizedSnapshot.normalizedSnapshotHash,
+      scope,
       recordCounts,
       warnings,
       errors,

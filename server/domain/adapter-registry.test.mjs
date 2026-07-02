@@ -37,7 +37,7 @@ test('repository registry defaults to JSON without DATABASE_URL', () => {
   const db = createDb()
   const registry = createRepositoryRegistry({ db, env: {} })
   assert.equal(registry.mode, 'json')
-  assert.deepEqual(Object.keys(registry), ['mode', 'masterData', 'inventoryRead', 'procurementRead', 'actionDrafts', 'auditLog', 'aiConversation'])
+  assert.deepEqual(Object.keys(registry), ['mode', 'masterData', 'inventoryRead', 'procurementRead', 'actionDrafts', 'auditLog', 'aiConversation', 'userDataRuntime'])
 })
 
 test('JSON repository registry exposes expected groups and delegates to current read models', () => {
@@ -53,6 +53,7 @@ test('JSON repository registry exposes expected groups and delegates to current 
   assert.equal(registry.procurementRead.normalizeDocumentType('purchase-order'), 'po')
   assert.equal(registry.actionDrafts.getSchema().previewOnly, true)
   assert.equal(registry.aiConversation.implemented, false)
+  assert.equal(registry.userDataRuntime.adapter, 'disabled-user-data-runtime-v1')
   assert.deepEqual(db, before)
 })
 
@@ -99,6 +100,7 @@ test('database mode registry uses migrated DB adapters', async () => {
   assert.equal(registry.auditLog.adapter, 'db-audit-log-v1')
   assert.equal(registry.procurementRead.adapter, 'db-procurement-read-v1')
   assert.equal(registry.inventoryRead.adapter, 'db-inventory-read-v1')
+  assert.equal(registry.userDataRuntime.adapter, 'disabled-user-data-runtime-v1')
   await assert.rejects(
     () => registry.inventoryRead.getItem('A100'),
     (error) => error.message === DATABASE_CONFIG_ERROR && error.code === 'FLOWCHAIN_DATABASE_CONFIG_MISSING'

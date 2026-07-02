@@ -8,6 +8,7 @@ import { createDbAuditLogRepository } from './db-audit-log-repository.mjs'
 import { createDbMasterDataRepository } from './db-master-data-repository.mjs'
 import { createDbProcurementReadRepository } from './db-procurement-read-repository.mjs'
 import { createDbInventoryReadRepository } from './db-inventory-read-repository.mjs'
+import { createDisabledUserDataRuntimeRepository } from './user-data-runtime-repository.mjs'
 
 export const PERSISTENCE_MODES = Object.freeze({
   json: 'json',
@@ -42,6 +43,7 @@ export function createJsonRepositoryRegistry({ db = {} } = {}) {
     actionDrafts: createJsonActionDraftRepository(db),
     auditLog: createAuditLogRepository(db),
     aiConversation: createAiConversationRepository(),
+    userDataRuntime: createDisabledUserDataRuntimeRepository(),
   }
 }
 
@@ -54,6 +56,7 @@ export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, p
     actionDrafts: createDbActionDraftRepository({ db, env, prisma }),
     auditLog: createDbAuditLogRepository({ env, prisma }),
     aiConversation: createAiConversationRepository(),
+    userDataRuntime: createDisabledUserDataRuntimeRepository(),
   }
 }
 
