@@ -6,7 +6,10 @@ import {
   Database,
   Download,
   FileSpreadsheet,
+  Lock,
   RefreshCw,
+  RotateCcw,
+  ShieldCheck,
   Upload,
 } from "lucide-react";
 import { exportRowsToCsv } from "../../lib/data-export";
@@ -58,7 +61,79 @@ type ImportConfig = {
 };
 type ImportsPanelProps = {
   onNavigate?: (moduleId: string) => void;
-  initialView?: "templates" | "validation" | "failed";
+  initialView?: "templates" | "validation" | "failed" | "user-data";
+};
+
+type UserDataIssue = {
+  code?: string;
+  message?: string;
+  path?: string;
+  severity?: "error" | "warning" | string;
+};
+
+type UserDataPreview = {
+  ok?: boolean;
+  dryRun?: boolean;
+  recordCounts?: Record<string, number>;
+  warnings?: UserDataIssue[];
+  errors?: UserDataIssue[];
+  metadata?: Record<string, unknown>;
+  normalizedSnapshot?: {
+    version?: string;
+    previewId?: string;
+    datasetId?: string;
+    scope?: { tenantId?: string; userId?: string };
+    normalizedSnapshotHash?: string;
+    validationSummary?: Record<string, unknown>;
+    source?: Record<string, unknown>;
+    recordCounts?: Record<string, number>;
+  };
+  normalizedRecords?: Record<string, unknown[]>;
+  auditPreview?: Record<string, unknown>;
+  writesFiles?: boolean;
+  writesDb?: boolean;
+  overwritesDemoData?: boolean;
+  featureFlag?: string;
+  commitFeatureEnabled?: boolean;
+};
+
+type UserDataActionResponse = {
+  ok?: boolean;
+  commitAccepted?: boolean;
+  deactivated?: boolean;
+  status?: string;
+  datasetId?: string;
+  importBatchId?: string;
+  recordCounts?: Record<string, number>;
+  affectedRecordCounts?: Record<string, number>;
+  validationSummary?: Record<string, unknown>;
+  auditEventId?: string | null;
+  featureFlag?: string;
+  commitFeatureEnabled?: boolean;
+  writesFiles?: boolean;
+  writesDb?: boolean;
+  overwritesDemoData?: boolean;
+  errors?: UserDataIssue[];
+  warnings?: UserDataIssue[];
+};
+
+type UserDataStatus = {
+  ok?: boolean;
+  active?: boolean;
+  scope?: { tenantId?: string; userId?: string };
+  dataset?: {
+    active?: boolean;
+    datasetId?: string;
+    importBatchId?: string;
+    recordCounts?: Record<string, number>;
+    validationSummary?: Record<string, unknown>;
+    snapshotHash?: string;
+    createdAt?: string;
+  } | null;
+  message?: string;
+  writesFiles?: boolean;
+  writesDb?: boolean;
+  overwritesDemoData?: boolean;
 };
 
 const FILTERS = ["全部", "采购", "库存", "预测", "主数据"] as const;
@@ -698,6 +773,81 @@ function createBatchId(index: number) {
   return `IMP-${ymd}-${String(index + 1).padStart(3, "0")}`;
 }
 
+const USER_DATA_SCOPE = { tenantId: "tenant-flowchain-sme", userId: "browser-import-user" };
+const USER_IMPORT_SAMPLES = {
+  valid: {
+    sourceName: "ui-user-data-valid-sample",
+    tenantId: USER_DATA_SCOPE.tenantId,
+    userId: USER_DATA_SCOPE.userId,
+    purchaseOrders: [{ poId: "PO-UI-IMPORT-0001", supplierName: "杭州精密组件", eta: "2026-07-16", amount: "18500", status: "已发出", sourceRequest: "PR-UI-IMPORT-0001", sourceRfq: "RFQ-UI-IMPORT-0001", lines: [{ itemSku: "SKU-UI-IMPORT-0001", name: "导入轴承组件", quantity: "24", received: "6" }] }],
+    purchaseRequests: [{ prId: "PR-UI-IMPORT-0001", itemSku: "SKU-UI-IMPORT-0001", quantity: "24", priority: "高", status: "已批准", requiredDate: "2026-07-18", linkedPo: "PO-UI-IMPORT-0001" }],
+    rfqs: [{ rfqId: "RFQ-UI-IMPORT-0001", prId: "PR-UI-IMPORT-0001", suppliers: "3", quoted: "2", due: "2026-07-12", status: "进行中", bestSupplier: "杭州精密组件" }],
+    products: [{ itemSku: "SKU-UI-IMPORT-0001", itemName: "导入轴承组件", currentStock: "4", safetyStock: "12", reorderPoint: "18", riskLevel: "高", supplierName: "杭州精密组件" }],
+    suppliers: [{ supplierId: "SUP-UI-IMPORT-0001", supplierName: "杭州精密组件", riskStatus: "中风险", score: "82", openPoCount: "1", onTimeDelivery: "86", qualityScore: "90" }],
+    receivingDocs: [{ grnId: "GRN-UI-IMPORT-0001", poId: "PO-UI-IMPORT-0001", supplierName: "杭州精密组件", status: "部分收货", items: "6", passed: "6", failed: "0" }],
+    supplierInvoices: [{ invoiceNumber: "INV-UI-IMPORT-0001", poId: "PO-UI-IMPORT-0001", grnId: "GRN-UI-IMPORT-0001", supplierName: "杭州精密组件", amount: "18500", matchStatus: "待匹配" }],
+  },
+  warning: {
+    sourceName: "ui-user-data-warning-sample",
+    tenantId: USER_DATA_SCOPE.tenantId,
+    userId: USER_DATA_SCOPE.userId,
+    purchaseOrders: [{ poId: "PO-UI-IMPORT-0002", supplierName: "宁波电子科技", eta: "2026-07-20", amount: "9200", lines: [{ itemSku: "SKU-UI-IMPORT-MISSING", quantity: "8" }] }],
+    products: [{ itemSku: "SKU-UI-IMPORT-0002", itemName: "导入控制板", currentStock: "7", safetyStock: "10", reorderPoint: "15" }],
+    suppliers: [{ supplierId: "SUP-UI-IMPORT-0002", supplierName: "宁波电子科技", riskStatus: "低风险" }],
+  },
+  invalid: {
+    sourceName: "ui-user-data-invalid-sample",
+    tenantId: USER_DATA_SCOPE.tenantId,
+    userId: USER_DATA_SCOPE.userId,
+    purchaseOrders: [{ poId: "", supplierName: "", eta: "bad-date", lines: [{ itemSku: "", quantity: "not-a-number" }] }],
+    products: [{ itemSku: "", itemName: "缺少 SKU 物料", currentStock: "not-a-number" }],
+  },
+} as const;
+
+const USER_IMPORT_SAMPLE_OPTIONS = [
+  { label: "有效样例", value: "valid" },
+  { label: "警告样例", value: "warning" },
+  { label: "错误样例", value: "invalid" },
+] as const;
+
+type UserImportSampleKey = keyof typeof USER_IMPORT_SAMPLES;
+
+function stringifySample(key: UserImportSampleKey) {
+  return JSON.stringify(USER_IMPORT_SAMPLES[key], null, 2);
+}
+
+function recordCountTotal(counts?: Record<string, number>) {
+  return Object.values(counts || {}).reduce((sum, count) => sum + Number(count || 0), 0);
+}
+
+function issueMessage(issue: UserDataIssue) {
+  return [issue.code, issue.path, issue.message].filter(Boolean).join(" · ") || "未命名校验项";
+}
+
+function hasBlockingErrors(preview?: UserDataPreview | null) {
+  return Boolean((preview?.errors || []).length || preview?.ok === false);
+}
+
+function classifiedIssues(preview?: UserDataPreview | null) {
+  const all = [...(preview?.errors || []), ...(preview?.warnings || [])];
+  const byCode = (patterns: RegExp[]) => all.filter((issue) => patterns.some((pattern) => pattern.test(String(issue.code || issue.message || issue.path || ""))));
+  return {
+    unsupported: byCode([/unsupported_record_type/i]),
+    missing: byCode([/missing|reference|unknown/i]),
+    duplicates: byCode([/duplicate/i]),
+  };
+}
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return { ok: false, errors: [{ code: "invalid_response", message: text, path: "response" }] } as T;
+  }
+}
+
 export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelProps) {
   const [selectedId, setSelectedId] = useState<ImportTypeId>("supplierQuotes");
   const [moduleFilter, setModuleFilter] = useState<typeof FILTERS[number]>("全部");
@@ -707,6 +857,20 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
   const [showErrorsOnly, setShowErrorsOnly] = useState(false);
   const [applied, setApplied] = useState<Record<ImportTypeId, ImportedRow[]>>({} as Record<ImportTypeId, ImportedRow[]>);
   const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [userSampleKey, setUserSampleKey] = useState<UserImportSampleKey>("valid");
+  const [userPayloadText, setUserPayloadText] = useState(() => stringifySample("valid"));
+  const [userPreview, setUserPreview] = useState<UserDataPreview | null>(null);
+  const [userPreviewStatus, setUserPreviewStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [userPreviewError, setUserPreviewError] = useState("");
+  const [confirmUserCommit, setConfirmUserCommit] = useState(false);
+  const [acceptUserWarnings, setAcceptUserWarnings] = useState(false);
+  const [userCommitResponse, setUserCommitResponse] = useState<UserDataActionResponse | null>(null);
+  const [userCommitStatus, setUserCommitStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [userDatasetStatus, setUserDatasetStatus] = useState<UserDataStatus | null>(null);
+  const [userDatasetStatusState, setUserDatasetStatusState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [userDeactivateResponse, setUserDeactivateResponse] = useState<UserDataActionResponse | null>(null);
+  const [userDeactivateStatus, setUserDeactivateStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const fileRef = useRef<HTMLInputElement | null>(null);
   const sectionLabel = initialView === "templates"
     ? "模板管理"
@@ -723,6 +887,9 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
   const warningRows = results.filter((row) => row.warnings.length > 0);
   const previewRows = (showErrorsOnly ? invalidRows : results).slice(0, 50);
   const appliedTotal = Object.values(applied).reduce((sum, rows) => sum + rows.length, 0);
+  const userIssueGroups = classifiedIssues(userPreview);
+  const userCanCommit = Boolean(userPreview?.normalizedSnapshot?.normalizedSnapshotHash && !hasBlockingErrors(userPreview) && confirmUserCommit && ((userPreview?.warnings || []).length === 0 || acceptUserWarnings));
+  const activeImportBatchId = userDatasetStatus?.dataset?.importBatchId || userCommitResponse?.importBatchId || "";
   const groupedForecast = useMemo(() => {
     const rows = applied.forecastDemand || [];
     const counts = new Map<string, number>();
@@ -733,6 +900,10 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
   useEffect(() => {
     setShowErrorsOnly(initialView === "failed");
   }, [initialView]);
+
+  useEffect(() => {
+    void refreshUserDatasetStatus();
+  }, []);
 
   function validateRows(rows: CsvRow[]) {
     setResults(rows.map((row, index) => {
@@ -819,6 +990,125 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
     toast.success("导入批次已应用", { description: `${validRows.length} 行有效数据已加入导入工作区` });
   }
 
+  function switchUserSample(next: string) {
+    const key = next as UserImportSampleKey;
+    setUserSampleKey(key);
+    setUserPayloadText(stringifySample(key));
+    setUserPreview(null);
+    setUserPreviewError("");
+    setUserCommitResponse(null);
+    setConfirmUserCommit(false);
+    setAcceptUserWarnings(false);
+  }
+
+  async function previewUserData() {
+    let payload: unknown;
+    try {
+      payload = JSON.parse(userPayloadText);
+    } catch {
+      setUserPreviewStatus("error");
+      setUserPreviewError("JSON 格式无效，无法进行 dry-run 预览。");
+      toast.error("用户数据 JSON 格式无效");
+      return;
+    }
+    setUserPreviewStatus("loading");
+    setUserPreviewError("");
+    setUserCommitResponse(null);
+    setConfirmUserCommit(false);
+    setAcceptUserWarnings(false);
+    try {
+      const response = await fetch("/api/user-data/import/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await readJsonResponse<UserDataPreview>(response);
+      setUserPreview(body);
+      setUserPreviewStatus(response.ok ? "success" : "error");
+      if (response.ok) toast.success("用户数据 dry-run 预览完成");
+      else setUserPreviewError((body.errors || []).map(issueMessage).join("；") || "预览未通过校验。");
+    } catch (error) {
+      setUserPreviewStatus("error");
+      setUserPreviewError(error instanceof Error ? error.message : "预览请求失败");
+    }
+  }
+
+  async function commitUserData() {
+    const snapshot = userPreview?.normalizedSnapshot;
+    if (!snapshot?.normalizedSnapshotHash) {
+      toast.warning("请先完成有效的 dry-run 预览");
+      return;
+    }
+    setUserCommitStatus("loading");
+    setUserCommitResponse(null);
+    try {
+      const response = await fetch("/api/user-data/import/commit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          normalizedSnapshot: snapshot,
+          normalizedSnapshotHash: snapshot.normalizedSnapshotHash,
+          scope: snapshot.scope || USER_DATA_SCOPE,
+          confirmCommit: true,
+          ...((userPreview?.warnings || []).length ? { acceptWarnings: true } : {}),
+        }),
+      });
+      const body = await readJsonResponse<UserDataActionResponse>(response);
+      setUserCommitResponse(body);
+      setUserCommitStatus(response.ok && body.commitAccepted ? "success" : "error");
+      if (response.ok && body.commitAccepted) {
+        toast.success("用户数据已提交到 scoped runtime");
+        await refreshUserDatasetStatus();
+      } else {
+        toast.message("Commit 当前不可用或被后端拒绝");
+      }
+    } catch (error) {
+      setUserCommitStatus("error");
+      setUserCommitResponse({ ok: false, errors: [{ code: "commit_request_failed", message: error instanceof Error ? error.message : "Commit 请求失败", path: "commit" }], writesFiles: false, writesDb: false, overwritesDemoData: false });
+    }
+  }
+
+  async function refreshUserDatasetStatus() {
+    setUserDatasetStatusState("loading");
+    try {
+      const params = new URLSearchParams(USER_DATA_SCOPE);
+      const response = await fetch(`/api/user-data/active-dataset?${params.toString()}`);
+      const body = await readJsonResponse<UserDataStatus>(response);
+      setUserDatasetStatus(body);
+      setUserDatasetStatusState(response.ok ? "success" : "error");
+    } catch (error) {
+      setUserDatasetStatusState("error");
+      setUserDatasetStatus({ ok: false, active: false, message: error instanceof Error ? error.message : "Active dataset 状态读取失败", scope: USER_DATA_SCOPE });
+    }
+  }
+
+  async function deactivateUserDataset() {
+    if (!activeImportBatchId) {
+      toast.warning("没有可停用的 active import batch");
+      return;
+    }
+    setUserDeactivateStatus("loading");
+    setUserDeactivateResponse(null);
+    try {
+      const response = await fetch("/api/user-data/import/deactivate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: USER_DATA_SCOPE, importBatchId: activeImportBatchId, confirmDeactivate: true }),
+      });
+      const body = await readJsonResponse<UserDataActionResponse>(response);
+      setUserDeactivateResponse(body);
+      setUserDeactivateStatus(response.ok && body.deactivated ? "success" : "error");
+      if (response.ok && body.deactivated) {
+        setConfirmDeactivate(false);
+        toast.success("用户数据集已非破坏性停用");
+        await refreshUserDatasetStatus();
+      }
+    } catch (error) {
+      setUserDeactivateStatus("error");
+      setUserDeactivateResponse({ ok: false, errors: [{ code: "deactivate_request_failed", message: error instanceof Error ? error.message : "Deactivate 请求失败", path: "deactivate" }], writesFiles: false, writesDb: false, overwritesDemoData: false });
+    }
+  }
+
   return (
     <div className="space-y-5">
       <Card className="p-5">
@@ -857,6 +1147,224 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
         <KpiCard label="失败行处理" value={String(invalidRows.length)} sub={`${warningRows.length} 行警告`} icon={AlertCircle} color={invalidRows.length ? A.red : A.orange} />
         <KpiCard label="已应用" value={String(appliedTotal)} sub={`${batches.length} 个批次`} icon={Database} color={A.teal} />
       </div>
+
+      <Card className="p-5">
+        <div data-testid="user-data-import-panel">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "#f0faf4", color: A.green }}>
+                <ShieldCheck size={17} />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: A.label }}>用户数据导入预览</h2>
+                <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>Review-first scoped runtime import · dry-run 默认不写文件、不写 DB、不覆盖 demo 数据</p>
+              </div>
+            </div>
+          </div>
+          <button onClick={refreshUserDatasetStatus}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5"
+            style={{ background: A.gray6, color: A.blue }}>
+            <RefreshCw size={13} /> 刷新 active dataset
+          </button>
+        </div>
+
+        <div className="grid grid-cols-[1.05fr_0.95fr] gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <SegmentedControl options={[...USER_IMPORT_SAMPLE_OPTIONS]} value={userSampleKey} onChange={switchUserSample} />
+              <button data-testid="user-data-preview-button" onClick={previewUserData} disabled={userPreviewStatus === "loading"}
+                className="text-xs px-3 py-2 rounded-xl font-medium text-white disabled:cursor-not-allowed"
+                style={{ background: userPreviewStatus === "loading" ? A.gray3 : A.blue }}>
+                {userPreviewStatus === "loading" ? "预览中" : "运行 dry-run 预览"}
+              </button>
+            </div>
+            <textarea
+              value={userPayloadText}
+              onChange={(event) => setUserPayloadText(event.target.value)}
+              spellCheck={false}
+              className={`${inputStyle} min-h-[300px] font-mono text-[11px] leading-5`}
+              aria-label="用户数据 JSON payload"
+            />
+            {userPreviewError && (
+              <div className="rounded-xl p-3 text-[11px] leading-5" style={{ background: "#fff1f0", color: A.red }}>
+                {userPreviewError}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-4 gap-2" data-testid="user-data-preview-result">
+              {[
+                ["Dry-run", userPreview?.dryRun ? "true" : "—", userPreview?.dryRun ? A.green : A.gray2],
+                ["Records", recordCountTotal(userPreview?.recordCounts), A.blue],
+                ["Warnings", userPreview?.warnings?.length || 0, (userPreview?.warnings?.length || 0) ? A.orange : A.green],
+                ["Errors", userPreview?.errors?.length || 0, (userPreview?.errors?.length || 0) ? A.red : A.green],
+              ].map(([label, value, color]) => (
+                <div key={String(label)} className="rounded-lg p-2" style={{ background: A.gray6 }}>
+                  <div className="text-[9px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="text-sm font-semibold tabular-nums truncate" style={{ color: String(color) }}>{String(value)}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl p-3 space-y-2" style={{ background: A.gray6 }}>
+              <div className="flex flex-wrap gap-1.5">
+                <Chip label={`writesFiles: ${String(userPreview?.writesFiles ?? false)}`} color={A.green} bg="#f0faf4" />
+                <Chip label={`writesDb: ${String(userPreview?.writesDb ?? false)}`} color={A.green} bg="#f0faf4" />
+                <Chip label={`overwritesDemoData: ${String(userPreview?.overwritesDemoData ?? false)}`} color={A.green} bg="#f0faf4" />
+              </div>
+              <div className="text-[11px] leading-5" style={{ color: A.sub }}>
+                Preview is dry-run only. No business data has been changed. Persistence requires explicit user confirmation and backend feature gate.
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3" style={{ background: "#f0f6ff" }}>
+              <div className="text-[10px] font-semibold mb-1" style={{ color: A.blue }}>Snapshot metadata</div>
+              <div className="grid grid-cols-2 gap-2 text-[10px] leading-5">
+                <span style={{ color: A.gray1 }}>Preview: {userPreview?.normalizedSnapshot?.previewId || "—"}</span>
+                <span style={{ color: A.gray1 }}>Dataset: {userPreview?.normalizedSnapshot?.datasetId || "—"}</span>
+                <span style={{ color: A.gray1 }}>Tenant: {userPreview?.normalizedSnapshot?.scope?.tenantId || USER_DATA_SCOPE.tenantId}</span>
+                <span style={{ color: A.gray1 }}>User: {userPreview?.normalizedSnapshot?.scope?.userId || USER_DATA_SCOPE.userId}</span>
+              </div>
+              <div data-testid="user-data-snapshot-hash" className="mt-2 text-[10px] font-mono break-all" style={{ color: A.label }}>
+                Hash: {userPreview?.normalizedSnapshot?.normalizedSnapshotHash || "—"}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              {[
+                ["Passed", userPreview?.ok && !hasBlockingErrors(userPreview) ? "Safe to review" : "Pending / blocked", userPreview?.ok && !hasBlockingErrors(userPreview) ? A.green : A.gray2],
+                ["Warnings", `${userPreview?.warnings?.length || 0} require acknowledgement later`, (userPreview?.warnings?.length || 0) ? A.orange : A.green],
+                ["Blocking errors", `${userPreview?.errors?.length || 0} block commit`, (userPreview?.errors?.length || 0) ? A.red : A.green],
+                ["Unsupported records", String(userIssueGroups.unsupported.length), userIssueGroups.unsupported.length ? A.red : A.green],
+                ["Missing references", String(userIssueGroups.missing.length), userIssueGroups.missing.length ? A.orange : A.green],
+                ["Duplicate ids", String(userIssueGroups.duplicates.length), userIssueGroups.duplicates.length ? A.orange : A.green],
+              ].map(([label, value, color]) => (
+                <div key={String(label)} className="rounded-lg p-2" style={{ background: A.gray6 }}>
+                  <div className="text-[9px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="text-[11px] font-semibold" style={{ color: String(color) }}>{String(value)}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
+              <div className="text-[10px] font-semibold mb-2" style={{ color: A.label }}>Record counts</div>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(userPreview?.recordCounts || {}).filter(([, count]) => count > 0).map(([key, count]) => (
+                  <Chip key={key} label={`${key}: ${count}`} color={A.blue} bg={A.white} />
+                ))}
+                {recordCountTotal(userPreview?.recordCounts) === 0 && <span className="text-[11px]" style={{ color: A.gray2 }}>等待 dry-run 预览</span>}
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
+              <div className="text-[10px] font-semibold mb-1" style={{ color: A.label }}>Audit preview</div>
+              <div className="text-[10px] leading-5" style={{ color: A.sub }}>
+                Action: {String(userPreview?.auditPreview?.action || "—")} · Entity: {String((userPreview?.auditPreview?.entity as { id?: string } | undefined)?.id || "—")}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4 mt-4">
+          <div className="rounded-xl p-4" style={{ background: "#fff8f0" }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Lock size={14} style={{ color: A.orange }} />
+              <div className="text-xs font-semibold" style={{ color: A.label }}>Commit availability</div>
+            </div>
+            <div className="text-[11px] leading-5 mb-3" style={{ color: A.sub }}>
+              Commit is disabled by default. When enabled, this panel still requires review confirmation and warning acknowledgement before sending a snapshot.
+            </div>
+            <label className="flex items-start gap-2 text-[11px] leading-5 mb-2" style={{ color: A.gray1 }}>
+              <input type="checkbox" checked={confirmUserCommit} onChange={(event) => setConfirmUserCommit(event.target.checked)} />
+              I reviewed dataset id, scope, record counts, validation summary, warnings, errors and audit preview.
+            </label>
+            <label className="flex items-start gap-2 text-[11px] leading-5 mb-3" style={{ color: (userPreview?.warnings || []).length ? A.orange : A.gray2 }}>
+              <input type="checkbox" checked={acceptUserWarnings} disabled={(userPreview?.warnings || []).length === 0} onChange={(event) => setAcceptUserWarnings(event.target.checked)} />
+              Acknowledge warnings before commit when warnings exist.
+            </label>
+            <button data-testid="user-data-commit-button" onClick={commitUserData} disabled={!userCanCommit || userCommitStatus === "loading"}
+              className="w-full text-xs px-3 py-2 rounded-xl font-medium disabled:cursor-not-allowed"
+              style={{ background: userCanCommit ? A.blue : A.gray5, color: userCanCommit ? A.white : A.gray2 }}>
+              {hasBlockingErrors(userPreview) ? "Commit unavailable: blocking errors" : "Review-first commit"}
+            </button>
+            <div data-testid="user-data-commit-status" className="mt-3 text-[10px] leading-5" style={{ color: userCommitResponse?.commitAccepted ? A.green : A.gray1 }}>
+              {userCommitResponse
+                ? userCommitResponse.commitAccepted
+                  ? `Committed ${userCommitResponse.importBatchId || "import batch"} · audit ${userCommitResponse.auditEventId || "—"}`
+                  : `Commit disabled/rejected · ${userCommitResponse.featureFlag || "FLOWCHAIN_ENABLE_USER_IMPORT_COMMIT"} · writesDb: ${String(userCommitResponse.writesDb ?? false)}`
+                : "Commit disabled in this environment until backend feature flag is enabled."}
+            </div>
+          </div>
+
+          <div className="rounded-xl p-4" style={{ background: A.gray6 }} data-testid="user-data-active-status">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-xs font-semibold" style={{ color: A.label }}>Active user dataset</div>
+              <Chip label={userDatasetStatus?.active ? "active" : "no active"} color={userDatasetStatus?.active ? A.green : A.gray1} bg={userDatasetStatus?.active ? "#f0faf4" : A.white} />
+            </div>
+            <div className="text-[11px] leading-5" style={{ color: A.sub }}>
+              {userDatasetStatusState === "loading" ? "读取中..." : userDatasetStatus?.message || (userDatasetStatus?.active ? "Scoped persisted dataset is available." : "No active user dataset. AI user mode may not have persisted user data to read.")}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] leading-5">
+              <span style={{ color: A.gray1 }}>Dataset: {userDatasetStatus?.dataset?.datasetId || "—"}</span>
+              <span style={{ color: A.gray1 }}>Batch: {userDatasetStatus?.dataset?.importBatchId || "—"}</span>
+              <span style={{ color: A.gray1 }}>Tenant: {userDatasetStatus?.scope?.tenantId || USER_DATA_SCOPE.tenantId}</span>
+              <span style={{ color: A.gray1 }}>User: {userDatasetStatus?.scope?.userId || USER_DATA_SCOPE.userId}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Object.entries(userDatasetStatus?.dataset?.recordCounts || {}).filter(([, count]) => count > 0).map(([key, count]) => (
+                <Chip key={key} label={`${key}: ${count}`} color={A.green} bg={A.white} />
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl p-4" style={{ background: "#f0f6ff" }} data-testid="user-data-ai-provenance">
+            <div className="text-xs font-semibold mb-2" style={{ color: A.label }}>AI data provenance</div>
+            <div className="text-[11px] leading-5" style={{ color: A.sub }}>
+              {userDatasetStatus?.active
+                ? `Data source: persisted user dataset · ${userDatasetStatus.dataset?.datasetId || "dataset"} · batch ${userDatasetStatus.dataset?.importBatchId || "—"}`
+                : "Data limitation: No active user dataset found."}
+            </div>
+            <div className="mt-3 rounded-lg p-2 text-[10px] leading-5" style={{ background: A.white, color: A.gray1 }}>
+              AI remains read-only. It may organize evidence, impact, recommended review-first actions and linked records, but cannot submit, approve, pay, post, send, or mutate business records.
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl p-4" style={{ background: "#fff1f0" }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <RotateCcw size={14} style={{ color: A.red }} />
+                <div className="text-xs font-semibold" style={{ color: A.label }}>Deactivate / rollback review</div>
+              </div>
+              <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>
+                Non-destructive imported dataset management only. This is not a business transaction reversal and does not physically delete imported records.
+              </div>
+            </div>
+            <div className="min-w-[320px]">
+              <label className="flex items-start gap-2 text-[11px] leading-5 mb-2" style={{ color: A.gray1 }}>
+                <input type="checkbox" checked={confirmDeactivate} disabled={!activeImportBatchId} onChange={(event) => setConfirmDeactivate(event.target.checked)} />
+                I reviewed the active import batch and want to mark it inactive.
+              </label>
+              <button data-testid="user-data-deactivate-button" onClick={deactivateUserDataset} disabled={!activeImportBatchId || !confirmDeactivate || userDeactivateStatus === "loading"}
+                className="w-full text-xs px-3 py-2 rounded-xl font-medium disabled:cursor-not-allowed"
+                style={{ background: activeImportBatchId && confirmDeactivate ? A.red : A.gray5, color: activeImportBatchId && confirmDeactivate ? A.white : A.gray2 }}>
+                Deactivate active dataset
+              </button>
+              <div className="mt-2 text-[10px] leading-5" style={{ color: userDeactivateResponse?.deactivated ? A.green : A.gray1 }}>
+                {userDeactivateResponse
+                  ? userDeactivateResponse.deactivated
+                    ? `Inactive ${userDeactivateResponse.importBatchId || activeImportBatchId} · audit ${userDeactivateResponse.auditEventId || "—"} · writesDb: ${String(userDeactivateResponse.writesDb ?? false)}`
+                    : `Deactivate rejected · ${(userDeactivateResponse.errors || []).map(issueMessage).join("；") || "feature gate disabled"}`
+                  : "Deactivate also requires backend feature flag and explicit confirmation."}
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </Card>
 
       <Card className="p-4">
         <div className="flex items-center justify-between gap-4 mb-3">

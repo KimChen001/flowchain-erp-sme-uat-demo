@@ -152,6 +152,33 @@ function inactiveRejectedPayload(errors = []) {
   }
 }
 
+function compactActiveDatasetPayload(scope = {}, dataset = null) {
+  const normalizedScope = {
+    tenantId: text(scope.tenantId) || 'tenant-flowchain-sme',
+    userId: text(scope.userId) || 'user-local',
+  }
+  return {
+    ok: true,
+    active: Boolean(dataset?.active),
+    scope: normalizedScope,
+    dataset: dataset
+      ? {
+          active: Boolean(dataset.active),
+          datasetId: dataset.datasetId,
+          importBatchId: dataset.importBatchId,
+          recordCounts: dataset.recordCounts || {},
+          validationSummary: dataset.validationSummary || {},
+          snapshotHash: dataset.snapshotHash || null,
+          createdAt: dataset.createdAt || null,
+        }
+      : null,
+    message: dataset ? 'Active user dataset found.' : 'No active user dataset',
+    writesFiles: false,
+    writesDb: false,
+    overwritesDemoData: false,
+  }
+}
+
 function compactRecords(result, limit = 5) {
   const data = result.normalizedData || {}
   return {
@@ -217,6 +244,16 @@ function blockedCommitPayload(result, db) {
 
 export async function handleUserDataRoute(ctx) {
   const { req, res, url, send, readBody, db, repositories = {} } = ctx
+
+  if (req.method === 'GET' && url.pathname === '/api/user-data/active-dataset') {
+    const scope = {
+      tenantId: text(url.searchParams.get('tenantId')),
+      userId: text(url.searchParams.get('userId')),
+    }
+    const dataset = await repositories.userDataRuntime?.getActiveDataset?.(scope)
+    send(res, 200, compactActiveDatasetPayload(scope, dataset))
+    return true
+  }
 
   if (req.method === 'POST' && url.pathname === '/api/user-data/import/deactivate') {
     let body
