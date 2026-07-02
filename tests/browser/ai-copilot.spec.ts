@@ -39,6 +39,13 @@ async function expectCleanAssistantOutput(assistant: Locator) {
   await expect(assistant).not.toContainText(/"\s*:/);
 }
 
+async function expectRuntimeHotfixGate(assistant: Locator) {
+  await expectCleanAssistantOutput(assistant);
+  await expect(assistant).not.toContainText(/外部 AI Provider|未启用外部|provider_disabled|api key/i);
+  await expect(assistant).not.toContainText(/打开采购单据并确认责任人与截止日期|复核库存覆盖与再订货点|确认待回复供应商、最佳报价和授标依据/);
+  await expect(assistant).not.toContainText(/逾期\s*PO\s*[=:：]?\s*0/);
+}
+
 async function askTodayPriority(page: Page) {
   await openAssistant(page);
   const assistant = await askAssistant(page, "今天最需要处理什么？");
@@ -129,6 +136,10 @@ test.describe("AI Copilot browser UAT", () => {
   test("R122 answers Today priority with product-readable evidence and actions", async ({ page }) => {
     await openLoggedInApp(page);
     const assistant = await askTodayPriority(page);
+    await expectRuntimeHotfixGate(assistant);
+    await expect(assistant).toContainText(/打开 PO-2026-1282|打开 PO/);
+    await expect(assistant).toContainText(/查看 SKU-00412|查看 SKU/);
+    await expect(assistant).toContainText(/打开 RFQ-26-0046|打开 RFQ/);
 
     for (const forbidden of [
       "action-FOLLOWUP",
@@ -142,6 +153,61 @@ test.describe("AI Copilot browser UAT", () => {
     }
     await expect(assistant).not.toContainText(/\{\s*"/);
     await expect(assistant).not.toContainText(/"\s*:/);
+  });
+
+  test("R139 mirrors runtime hotfix gates for Today priority in browser", async ({ page }) => {
+    await openLoggedInApp(page);
+    const assistant = await askTodayPriority(page);
+
+    await expectRuntimeHotfixGate(assistant);
+    await expect(assistant).toContainText("PO-2026-1282");
+    await expect(assistant).toContainText("SKU-00412");
+    await expect(assistant).toContainText("RFQ-26-0046");
+    await expect(assistant).toContainText(/打开 PO-2026-1282|打开 PO/);
+    await expect(assistant).toContainText(/查看 SKU-00412|查看 SKU/);
+    await expect(assistant).toContainText(/打开 RFQ-26-0046|打开 RFQ/);
+  });
+
+  test("R139 supplier overview prompts stay overview-routed in browser", async ({ page }) => {
+    await openLoggedInApp(page);
+    await openAssistant(page);
+
+    for (const prompt of ["有什么供应商我需要注意的么？", "供应商这边，你有什么推荐？"]) {
+      const assistant = await askAssistant(page, prompt);
+      await expectRuntimeHotfixGate(assistant);
+      await expect(assistant).toContainText(/供应商|跟进|风险/);
+      await expect(assistant).not.toContainText(/供应商主数据中没有匹配记录|请提供供应商名称|请提供供应商 ID|输入供应商/);
+    }
+  });
+
+  test("R139 data limitation prompts stay deterministic in browser", async ({ page }) => {
+    await openLoggedInApp(page);
+    await openAssistant(page);
+
+    for (const prompt of ["什么数据会比较有限，我需要重点关注？", "AI 现在有哪些地方不确定？"]) {
+      const assistant = await askAssistant(page, prompt);
+      await expectRuntimeHotfixGate(assistant);
+      await expect(assistant).not.toContainText(/供应商主数据中没有匹配记录|请提供供应商名称|请提供供应商 ID/);
+      await expect(assistant).toContainText(/RFQ|回复|报价/);
+      await expect(assistant).toContainText(/ETA|交期|未到货/);
+      await expect(assistant).toContainText(/GRN|质检|收货/);
+      await expect(assistant).toContainText(/库存|预测|需求/);
+      await expect(assistant).toContainText(/发票|三单/);
+    }
+  });
+
+  test("R139 broad attention prompt returns object-specific overview in browser", async ({ page }) => {
+    await openLoggedInApp(page);
+    await openAssistant(page);
+
+    const assistant = await askAssistant(page, "有什么需要我注意的？");
+    await expectRuntimeHotfixGate(assistant);
+    await expect(assistant).toContainText("PO-2026-1282");
+    await expect(assistant).toContainText("SKU-00412");
+    await expect(assistant).toContainText("RFQ-26-0046");
+    await expect(assistant).toContainText(/打开 PO-2026-1282|打开 PO/);
+    await expect(assistant).toContainText(/查看 SKU-00412|查看 SKU/);
+    await expect(assistant).toContainText(/打开 RFQ-26-0046|打开 RFQ/);
   });
 
   test("R123 minimize and restore preserve the AI answer", async ({ page }) => {
