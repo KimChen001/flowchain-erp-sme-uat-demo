@@ -1,5 +1,17 @@
 import { normalizeUserDataImportPayload } from '../domain/user-data-contract.mjs'
 
+function invalidJsonPayload() {
+  return {
+    ok: false,
+    errors: [{ code: 'invalid_json', message: 'Request body must be valid JSON.', path: 'body', severity: 'error' }],
+    warnings: [],
+    recordCounts: {},
+    writesFiles: false,
+    writesDb: false,
+    overwritesDemoData: false,
+  }
+}
+
 function compactPreviewPayload(result) {
   return {
     ok: result.ok,
@@ -57,20 +69,65 @@ function compactRecords(result, limit = 5) {
   }
 }
 
+function blockedCommitPayload(result, db) {
+  const dataMode = db?.__dataMode || 'demo'
+  return {
+    ok: false,
+    commitAccepted: false,
+    dryRunRequired: true,
+    storageReady: false,
+    dataMode,
+    recordCounts: result.recordCounts,
+    warnings: result.warnings,
+    errors: result.ok
+      ? [{ code: 'user_import_commit_disabled', message: 'User data import commit is disabled until scoped durable user storage is available.', path: 'commit', severity: 'error' }]
+      : result.errors,
+    metadata: result.metadata,
+    normalizedPreviewCounts: result.recordCounts,
+    importPreview: result.importPreview,
+    writesFiles: false,
+    writesDb: false,
+    overwritesDemoData: false,
+  }
+}
+
 export async function handleUserDataRoute(ctx) {
   const { req, res, url, send, readBody, db } = ctx
+
+  if (req.method === 'POST' && url.pathname === '/api/user-data/import/commit') {
+    let body
+    try {
+      body = await readBody(req)
+    } catch {
+      send(res, 400, invalidJsonPayload())
+      return true
+    }
+
+    const before = JSON.stringify(db)
+    const result = normalizeUserDataImportPayload(body, { importedAt: new Date().toISOString() })
+    if (JSON.stringify(db) !== before) {
+      send(res, 500, {
+        ok: false,
+        errors: [{ code: 'commit_boundary_mutation_detected', message: 'Import commit boundary attempted to mutate runtime data.', path: 'db', severity: 'error' }],
+        warnings: [],
+        recordCounts: {},
+        writesFiles: false,
+        writesDb: false,
+        overwritesDemoData: false,
+      })
+      return true
+    }
+
+    send(res, result.ok ? 501 : 422, blockedCommitPayload(result, db))
+    return true
+  }
 
   if (req.method === 'POST' && (url.pathname === '/api/user-data/import/dry-run' || url.pathname === '/api/user-data/import/preview')) {
     let body
     try {
       body = await readBody(req)
     } catch {
-      send(res, 400, {
-        ok: false,
-        errors: [{ code: 'invalid_json', message: 'Request body must be valid JSON.', path: 'body', severity: 'error' }],
-        warnings: [],
-        recordCounts: {},
-      })
+      send(res, 400, invalidJsonPayload())
       return true
     }
 
