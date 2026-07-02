@@ -141,6 +141,17 @@ function commitDisabledPayload(result, db) {
   }
 }
 
+function inactiveRejectedPayload(errors = []) {
+  return {
+    ok: false,
+    deactivated: false,
+    errors,
+    writesFiles: false,
+    writesDb: false,
+    overwritesDemoData: false,
+  }
+}
+
 function compactRecords(result, limit = 5) {
   const data = result.normalizedData || {}
   return {
@@ -206,6 +217,80 @@ function blockedCommitPayload(result, db) {
 
 export async function handleUserDataRoute(ctx) {
   const { req, res, url, send, readBody, db, repositories = {} } = ctx
+
+  if (req.method === 'POST' && url.pathname === '/api/user-data/import/deactivate') {
+    let body
+    try {
+      body = await readBody(req)
+    } catch {
+      send(res, 400, invalidJsonPayload())
+      return true
+    }
+
+    const errors = []
+    const scope = {
+      tenantId: text(body?.scope?.tenantId || body?.tenantId),
+      userId: text(body?.scope?.userId || body?.userId),
+    }
+    const importBatchId = text(body?.importBatchId)
+    if (!commitFeatureEnabled()) addCommitIssue(errors, 'user_import_deactivate_disabled', `Deactivate requires ${ENABLE_USER_IMPORT_COMMIT_FLAG}=true.`, ENABLE_USER_IMPORT_COMMIT_FLAG)
+    if (!scope.tenantId || !scope.userId) addCommitIssue(errors, 'missing_scope', 'Deactivate requires tenantId and userId scope.', 'scope')
+    if (!importBatchId) addCommitIssue(errors, 'missing_import_batch_id', 'Deactivate requires importBatchId.', 'importBatchId')
+    if (body?.confirmDeactivate !== true) addCommitIssue(errors, 'missing_confirmation', 'Deactivate requires confirmDeactivate=true.', 'confirmDeactivate')
+    if (errors.length) {
+      send(res, 422, inactiveRejectedPayload(errors))
+      return true
+    }
+
+    const before = JSON.stringify(db)
+    const deactivated = await repositories.userDataRuntime?.markImportBatchInactive?.(scope, importBatchId)
+    if (JSON.stringify(db) !== before) {
+      send(res, 500, inactiveRejectedPayload([{ code: 'deactivate_boundary_mutation_detected', message: 'Deactivate mutated runtime business data.', path: 'db', severity: 'error' }]))
+      return true
+    }
+    if (!deactivated) {
+      await recordAuditBestEffort(repositories, {
+        source: 'system',
+        module: 'user-data',
+        action: 'user_import_deactivate_rejected',
+        entity: { type: 'userDataImportBatch', id: importBatchId },
+        summary: 'User data import deactivate rejected by scoped lookup.',
+        tenantId: scope.tenantId,
+        metadata: { scope, importBatchId, featureFlag: ENABLE_USER_IMPORT_COMMIT_FLAG },
+      })
+      send(res, 404, inactiveRejectedPayload([{ code: 'import_batch_not_found', message: 'No active import batch was found for this tenant/user scope.', path: 'importBatchId', severity: 'error' }]))
+      return true
+    }
+
+    const auditEvent = await recordAuditBestEffort(repositories, {
+      source: 'system',
+      module: 'user-data',
+      action: 'user_import_deactivated',
+      entity: { type: 'userDataImportBatch', id: importBatchId },
+      summary: 'User imported dataset marked inactive.',
+      tenantId: scope.tenantId,
+      metadata: {
+        scope,
+        importBatchId,
+        datasetId: deactivated.datasetId,
+        recordCounts: deactivated.recordCounts,
+        featureFlag: ENABLE_USER_IMPORT_COMMIT_FLAG,
+      },
+    })
+    send(res, 200, {
+      ok: true,
+      deactivated: true,
+      status: 'inactive',
+      datasetId: deactivated.datasetId,
+      importBatchId,
+      affectedRecordCounts: deactivated.recordCounts,
+      auditEventId: auditEvent?.id || null,
+      writesFiles: false,
+      writesDb: true,
+      overwritesDemoData: false,
+    })
+    return true
+  }
 
   if (req.method === 'POST' && url.pathname === '/api/user-data/import/commit') {
     let body
