@@ -256,6 +256,16 @@ function sectionTitleFor(intent = '') {
   return '业务问题'
 }
 
+function followUpLabelFor(intent = '') {
+  if (intent === AI_BUSINESS_INTENT_TAXONOMY.inventoryRisk) return '展开库存风险'
+  if (intent === AI_BUSINESS_INTENT_TAXONOMY.rfqFollowup) return '查看 RFQ 回复'
+  if (intent === AI_BUSINESS_INTENT_TAXONOMY.dataLimitation) return '展开数据限制'
+  if (intent === AI_BUSINESS_INTENT_TAXONOMY.procurementRisk) return '展开采购异常'
+  if (intent === AI_BUSINESS_INTENT_TAXONOMY.supplierFollowup) return '展开供应商风险'
+  if (intent === AI_BUSINESS_INTENT_TAXONOMY.receivingGap) return '展开未收货订单'
+  return '继续展开'
+}
+
 function collectActions(response = {}) {
   return asArray(response.cards).find((card) => card.type === 'recommended_actions')?.actions || []
 }
@@ -298,10 +308,12 @@ function buildSubResponse(db = {}, body = {}, subQuery = {}, options = {}) {
 export function buildAiCompoundQueryResponse(db = {}, body = {}, options = {}) {
   const classification = classifyCompoundBusinessQuery(body)
   if (!classification.isCompound) return null
+  const visibleSubQueries = classification.subQueries.slice(0, 3)
+  const deferredSubQueries = classification.subQueries.slice(3)
   const sections = []
   const evidence = []
   const actions = []
-  for (const subQuery of classification.subQueries) {
+  for (const subQuery of visibleSubQueries) {
     const response = buildSubResponse(db, body, subQuery, options)
     if (!response) {
       sections.push({
@@ -327,8 +339,23 @@ export function buildAiCompoundQueryResponse(db = {}, body = {}, options = {}) {
   }
   const dedupedEvidence = dedupeBy(evidence, (item) => `${item.type || 'evidence'}:${item.id || item.label || item.summary}`)
   const dedupedActions = dedupeBy(actions, (item) => `${item.kind}:${item.label}:${item.target || item.draftType || ''}`).slice(0, 8)
+  const followUpActions = deferredSubQueries.map((item) => ({
+    kind: 'prompt',
+    label: followUpLabelFor(item.intent),
+    prompt: item.text,
+    target: '',
+    intent: item.intent,
+  }))
+  const remainingTopics = deferredSubQueries.map((item) => ({
+    title: sectionTitleFor(item.intent),
+    prompt: item.text,
+    intent: item.intent,
+  }))
   const sectionNames = sections.map((section) => section.title.replace(/\s*\/.*$/, '')).join('、')
-  const content = `我把这个问题拆成 ${sections.length} 部分来看：${sectionNames}。${sections.map((section) => `${section.title}：${section.conclusion}`).join(' ')}`
+  const progressiveNote = deferredSubQueries.length
+    ? `我先汇总最影响交付的 ${sections.length} 类事项，其余可以继续展开：${remainingTopics.map((item) => item.title).join('、')}。`
+    : ''
+  const content = `我把这个问题拆成 ${classification.subQueries.length} 部分来看：${sectionNames}。${progressiveNote}${sections.map((section) => `${section.title}：${section.conclusion}`).join(' ')}`
   const modelRoute = routeAiModelPolicy({ intent: AI_BUSINESS_INTENT_TAXONOMY.compoundBusiness })
   return {
     provider: 'local',
@@ -343,6 +370,7 @@ export function buildAiCompoundQueryResponse(db = {}, body = {}, options = {}) {
     aiModelRoute: modelRoute,
     subIntents: classification.subQueries.map((item) => item.intent),
     sections,
+    remainingTopics,
     content,
     message: content,
     cards: [
@@ -352,6 +380,9 @@ export function buildAiCompoundQueryResponse(db = {}, body = {}, options = {}) {
         data: {
           orchestrationReason: classification.orchestrationReason,
           subIntents: classification.subQueries.map((item) => item.intent),
+          displayedSubIntents: visibleSubQueries.map((item) => item.intent),
+          deferredSubIntents: deferredSubQueries.map((item) => item.intent),
+          remainingTopics,
           sections: sections.map((section) => ({
             title: section.title,
             conclusion: section.conclusion,
@@ -368,7 +399,7 @@ export function buildAiCompoundQueryResponse(db = {}, body = {}, options = {}) {
         evidence: dedupedEvidence.filter((item) => section.evidenceIds?.includes(item.id)).slice(0, 4),
       })),
       evidenceCard(dedupedEvidence.slice(0, 10)),
-      recommendedActions(dedupedActions),
+      recommendedActions([...dedupedActions, ...followUpActions]),
     ],
     evidence: dedupedEvidence,
     readModelReuse: true,

@@ -210,6 +210,26 @@ test.describe("AI Copilot browser UAT", () => {
     await expect(assistant).toContainText(/打开 RFQ-26-0046|打开 RFQ/);
   });
 
+  test("R146 compound query answers all business parts in browser", async ({ page }) => {
+    await openLoggedInApp(page);
+    await openAssistant(page);
+
+    const assistant = await askAssistant(page, "今天有什么需要我做的，订单还有多少没有收货，有哪些供应商会有潜在风险？");
+    await expectRuntimeHotfixGate(assistant);
+    await expect(assistant).toContainText(/今日待办|今日重点/);
+    await expect(assistant).toContainText(/未收货订单|未完全收货|未到货|部分到货/);
+    await expect(assistant).toContainText(/供应商风险|供应商跟进/);
+    await expect(assistant).toContainText(/PO-2026-1282|PO-2026-1284|PO-2026-1285/);
+    await expect(assistant).toContainText(/已收|订购|剩余/);
+    await expect(assistant).toContainText(/GRN|收货单/);
+    await expect(assistant).toContainText(/供应商|深圳新元电气|广州化工耗材|江苏铝合金集团/);
+    await expect(assistant).toContainText("建议操作");
+    await expect(assistant).not.toContainText(/请提供供应商名称|请提供供应商 ID|供应商主数据中没有匹配记录/);
+
+    const evidence = page.getByTestId("ai-evidence-link").filter({ hasText: /PO-2026-|GRN-202605-/ }).first();
+    await expect(evidence).toBeVisible();
+  });
+
   test("R123 minimize and restore preserve the AI answer", async ({ page }) => {
     await openLoggedInApp(page);
     await askTodayPriority(page);

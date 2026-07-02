@@ -1063,6 +1063,66 @@ function AiResponseCard({
         </CardShell>
       );
     }
+    case "compound_summary":
+      return (
+        <CardShell title={card.title || "多问题拆解"}>
+          <MiniList
+            items={arrayValue(data.sections).map((section) => {
+              const row = typeof section === "object" && section ? section as Record<string, unknown> : {};
+              return {
+                title: bestText(row.title, "业务问题"),
+                reason: row.conclusion,
+              };
+            })}
+            limit={3}
+          />
+          <MiniList
+            items={arrayValue(data.remainingTopics).map((topic) => {
+              const row = typeof topic === "object" && topic ? topic as Record<string, unknown> : {};
+              return {
+                title: bestText(row.title, "可继续展开"),
+                reason: row.prompt,
+              };
+            })}
+            limit={3}
+          />
+        </CardShell>
+      );
+    case "compound_section":
+      return (
+        <CardShell title={card.title || textValue(data.title) || "业务问题"}>
+          <MiniList items={[data.conclusion].filter(hasValue).map((item) => ({ title: item }))} limit={1} />
+          <MiniList items={arrayValue(data.keyFacts).map((item) => ({ title: item }))} limit={3} />
+          <MiniList items={arrayValue(data.limitations).map((item) => ({ title: "限制", reason: item }))} limit={2} />
+          <EvidenceList evidence={card.evidence} onNavigate={onNavigate} />
+        </CardShell>
+      );
+    case "receiving_gap_summary":
+      return (
+        <CardShell title={card.title || "未收货订单"}>
+          <KeyValueGrid fields={[
+            ["未完全收货 PO", data.openGapCount],
+            ["剩余数量", data.totalRemainingQuantity],
+          ]} />
+          <MiniList
+            items={arrayValue(data.topPurchaseOrders).map((po) => {
+              const row = typeof po === "object" && po ? po as Record<string, unknown> : {};
+              return {
+                title: bestText(row.poId, "PO"),
+                reason: [
+                  row.supplier,
+                  row.status,
+                  hasValue(row.receivedQuantity) && hasValue(row.orderedQuantity) ? `已收 ${textValue(row.receivedQuantity)} / 订购 ${textValue(row.orderedQuantity)}` : "",
+                  hasValue(row.remainingQuantity) ? `剩余 ${textValue(row.remainingQuantity)}` : "",
+                  row.expectedDate ? `预计 ${textValue(row.expectedDate)}` : "",
+                ].filter(hasValue).map(textValue).join(" · "),
+              };
+            })}
+            limit={3}
+          />
+          <MiniList items={arrayValue(data.limitations).map((item) => ({ title: "限制", reason: item }))} limit={2} />
+        </CardShell>
+      );
     case "evidence_workspace":
       return (
         <CardShell title={card.title || "证据工作区"}>

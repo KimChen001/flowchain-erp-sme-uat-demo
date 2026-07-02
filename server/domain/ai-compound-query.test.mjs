@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { handleAiRoute } from '../routes/ai.routes.mjs'
+import { readFileSync } from 'node:fs'
 import {
   buildAiReceivingGapResponse,
   classifyCompoundBusinessQuery,
@@ -147,4 +148,51 @@ test('R143 route orchestrates compound query without provider or business mutati
   assert.match(text, /供应商|风险|跟进/)
   assert.doesNotMatch(text, /请提供供应商名称|请提供供应商 ID|供应商主数据中没有匹配记录/)
   assert.doesNotMatch(text, /provider fallback|provider_disabled|外部 AI Provider|OpenAI|Doubao|Ark|api key/i)
+})
+
+test('R144 compound response exposes structured readable cards', async () => {
+  const route = routeContext({
+    moduleId: 'overview',
+    question: '今天有什么需要我做的，订单还有多少没有收货，有哪些供应商会有潜在风险？',
+    message: '今天有什么需要我做的，订单还有多少没有收货，有哪些供应商会有潜在风险？',
+  })
+  await handleAiRoute(route.ctx)
+  const payload = route.response.payload
+
+  assert.equal(payload.intent.name, 'compound_business_query')
+  assert.ok(payload.cards.some((card) => card.type === 'compound_summary'))
+  assert.ok(payload.cards.some((card) => card.type === 'compound_section' && /今日待办|今日重点/.test(card.title)))
+  assert.ok(payload.cards.some((card) => card.type === 'compound_section' && /未收货订单/.test(card.title)))
+  assert.ok(payload.cards.some((card) => card.type === 'compound_section' && /供应商风险|供应商跟进/.test(card.title)))
+  assert.ok(payload.cards.some((card) => card.type === 'recommended_actions'))
+  assert.doesNotMatch(visibleText(payload), /documentType|entityType|response_card|tool_result|debug/i)
+})
+
+test('R145 compound response progressively discloses overlong questions', async () => {
+  const route = routeContext({
+    moduleId: 'overview',
+    question: '今天有什么需要我做的，订单还有多少没收货，供应商风险有哪些，库存够不够，RFQ 回复怎么样，哪些数据不完整？',
+    message: '今天有什么需要我做的，订单还有多少没收货，供应商风险有哪些，库存够不够，RFQ 回复怎么样，哪些数据不完整？',
+  })
+  await handleAiRoute(route.ctx)
+  const payload = route.response.payload
+  const summary = payload.cards.find((card) => card.type === 'compound_summary')
+  const actions = payload.cards.find((card) => card.type === 'recommended_actions')?.actions || []
+
+  assert.equal(payload.intent.name, 'compound_business_query')
+  assert.equal(payload.sections.length, 3)
+  assert.ok(payload.subIntents.length > payload.sections.length)
+  assert.ok(payload.remainingTopics.length > 0)
+  assert.match(payload.content, /我先汇总最影响交付的 3 类事项|其余可以继续展开/)
+  assert.ok(summary.data.deferredSubIntents.length > 0)
+  assert.ok(actions.some((action) => action.kind === 'prompt' && /展开|查看/.test(action.label)))
+  assert.equal(route.providerDispatchCount, 0)
+})
+
+test('R144 Panel renders compound and receiving cards explicitly', () => {
+  const source = readFileSync(path.join(repoRoot, 'src', 'modules', 'ai-assistant', 'Panel.tsx'), 'utf8')
+  assert.match(source, /case "compound_summary"/)
+  assert.match(source, /case "compound_section"/)
+  assert.match(source, /case "receiving_gap_summary"/)
+  assert.match(source, /未收货订单/)
 })
