@@ -6,7 +6,7 @@ import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-quer
 import { buildAiSupplierOperationalResponse } from '../domain/ai-supplier-operational-query.mjs'
 import { buildAiFinanceCollaborationResponse } from '../domain/ai-finance-collaboration-query.mjs'
 import { buildAiMasterDataQualityResponse } from '../domain/ai-master-data-quality-query.mjs'
-import { buildAiCockpitFastPathResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
+import { buildAiCockpitFastPathResponse, buildAiDataLimitationResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
 import { buildAiSessionGroundedResponse } from '../domain/ai-session-grounding.mjs'
 import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
 import { buildAiReadContext } from '../domain/ai-read-context.mjs'
@@ -561,6 +561,26 @@ export async function handleAiRoute(ctx) {
     }
 
     branchStartedAt = Date.now()
+    const repositoryBackedReadContext = hasRepositoryBackedAiReadContext(repositories)
+    const fastPathModuleId = String(body.moduleId || body.activeContext?.module || '').trim().toLowerCase()
+
+    const dataLimitationFastPath = buildAiDataLimitationResponse(db, body, { cache: {} })
+    if (dataLimitationFastPath) {
+      const result = {
+        ...dataLimitationFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_data_limitation_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name, persist: false })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'data_limitation_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
     const procurementFastPath = buildAiProcurementOperationalResponse(db, body, { ensurePurchaseRequests, ensureRfqs })
     if (procurementFastPath) {
       const result = {
@@ -578,23 +598,41 @@ export async function handleAiRoute(ctx) {
     }
 
     branchStartedAt = Date.now()
-    const moduleIdForSupplierFastPath = String(body.moduleId || body.activeContext?.module || '').trim().toLowerCase()
-    if (moduleIdForSupplierFastPath === 'srm' || moduleIdForSupplierFastPath === 'supplier') {
-      const supplierFastPath = buildAiSupplierOperationalResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs })
-      if (supplierFastPath) {
-        const result = {
-          ...supplierFastPath,
-          fastPath: 'pre_read_context',
-          usedWeb: false,
-          timingMs: Date.now() - startedAt,
-          externalMs: 0,
-          modelMs: 0,
-        }
-        void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_supplier_operational_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name })
-        logAiTiming({ startedAt, branchStartedAt, branch: 'supplier_operational_fast_path', body, result })
-        send(res, 200, result)
-        return true
+    const supplierFollowupFastPath = buildAiEvidenceReuseResponse(db, body, { cache: {} })
+    if (
+      !repositoryBackedReadContext &&
+      supplierFollowupFastPath?.intent?.name === 'supplier_followup_query' &&
+      !['srm', 'supplier'].includes(fastPathModuleId)
+    ) {
+      const result = {
+        ...supplierFollowupFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
       }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_supplier_followup_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name, persist: false })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'supplier_followup_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
+
+    branchStartedAt = Date.now()
+    const supplierFastPath = buildAiSupplierOperationalResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs })
+    if (supplierFastPath && (!repositoryBackedReadContext || ['srm', 'supplier'].includes(fastPathModuleId))) {
+      const result = {
+        ...supplierFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_supplier_operational_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'supplier_operational_fast_path', body, result })
+      send(res, 200, result)
+      return true
     }
 
     branchStartedAt = Date.now()
@@ -615,7 +653,6 @@ export async function handleAiRoute(ctx) {
     }
 
     branchStartedAt = Date.now()
-    const repositoryBackedReadContext = hasRepositoryBackedAiReadContext(repositories)
     if (!repositoryBackedReadContext) {
       const cockpitFastPath = buildAiCockpitFastPathResponse(db, body, { cache: {} })
       if (cockpitFastPath) {
@@ -695,7 +732,7 @@ export async function handleAiRoute(ctx) {
 
     branchStartedAt = Date.now()
     const supplierOperationalQuery = buildAiSupplierOperationalResponse(db, body, { ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs })
-    if (supplierOperationalQuery) {
+    if (supplierOperationalQuery && (!repositoryBackedReadContext || ['srm', 'supplier'].includes(fastPathModuleId))) {
       const result = {
         ...supplierOperationalQuery,
         usedWeb: false,

@@ -109,12 +109,24 @@ function businessEvidence(item = {}) {
   }
 
   if (type === 'rfq') {
+    const supplierCount = toNumber(item.supplierCount ?? item.suppliers, 0)
+    const respondedSupplierCount = toNumber(item.respondedSupplierCount ?? item.quoted, 0)
+    const pendingSupplierCount = toNumber(item.pendingSupplierCount, Math.max(0, supplierCount - respondedSupplierCount))
+    const dueDate = text(item.dueDate || item.due || item.quotationDeadline)
+    const rfqSummary = [
+      status ? `状态 ${status}` : '',
+      dueDate ? `截止 ${dueDate}` : '',
+      supplierCount ? `邀请 ${supplierCount} 家供应商` : '',
+      supplierCount ? `已回复 ${respondedSupplierCount} 家` : '',
+      pendingSupplierCount ? `待回复 ${pendingSupplierCount} 家` : '',
+      rawSummary,
+    ].filter(Boolean).join('，')
     return {
       type,
       id,
       label: `${docLabel(type, id)} 仍在进行中`,
       status,
-      summary: rawSummary || '需确认供应商回复与授标节奏。',
+      summary: rfqSummary || '需确认供应商回复与授标节奏。',
       route,
     }
   }
@@ -174,6 +186,10 @@ function evidenceItems(items = []) {
           availableQuantity: item.availableQuantity ?? evidence.availableQuantity,
           safetyStock: item.safetyStock ?? evidence.safetyStock,
           reorderPoint: item.reorderPoint ?? evidence.reorderPoint,
+          dueDate: item.dueDate ?? evidence.dueDate,
+          supplierCount: item.supplierCount ?? evidence.supplierCount,
+          respondedSupplierCount: item.respondedSupplierCount ?? evidence.respondedSupplierCount,
+          pendingSupplierCount: item.pendingSupplierCount ?? evidence.pendingSupplierCount,
         }))
       : [item])
     .filter((item) => item && (item.id || item.documentId || item.sku || item.label || item.summary))
@@ -542,6 +558,9 @@ function priorityItemsFromCockpit(models) {
         amount: document?.amount ?? item.amount,
         dueDate: item.dueDate || document?.expectedDate || document?.dueDate || document?.requiredDate || '',
         status: item.status || document?.status || document?.matchStatus || document?.invoiceStatus || '',
+        supplierCount: document?.supplierCount ?? item.supplierCount ?? item.suppliers,
+        respondedSupplierCount: document?.respondedSupplierCount ?? item.respondedSupplierCount ?? item.quoted,
+        pendingSupplierCount: document?.pendingSupplierCount ?? item.pendingSupplierCount,
         evidence: evidenceItems([item]),
         recommendedActions: recommendedActions([item]),
         scoringSignals: priorityScoringSignals(item, document, models),
@@ -947,11 +966,61 @@ function buildSopResponse(models, message = '') {
   })
 }
 
+function dataLimitationIntent(message = '') {
+  return /数据.*(?:有限|不完整|依据|质量|缺口)|依据.*(?:不够|有限|不完整)|不确定|不能确定|哪些.*(?:有限|不完整)|limitations?|uncertain/i.test(message)
+}
+
+export function buildAiDataLimitationResponse(data = {}, body = {}, options = {}) {
+  const message = text(body.question || body.message || body.prompt || body.text)
+  if (!message || !dataLimitationIntent(message)) return null
+  const models = readModels(data, options.cache || {})
+  const rfqs = asArray(models.procurementDocuments).filter((item) => item.documentType === 'rfq')
+  const pos = asArray(models.procurementDocuments).filter((item) => item.documentType === 'po')
+  const grns = asArray(models.procurementDocuments).filter((item) => item.documentType === 'grn')
+  const invoices = asArray(models.procurementDocuments).filter((item) => item.documentType === 'invoice' || item.documentType === 'three_way_match')
+  const inventoryRisks = topInventoryRisks(models.inventoryItems, models.inventoryExceptions)
+  const limitations = [
+    `供应商回复/RFQ：${rfqs.length} 个 RFQ 中仍需关注报价回复完整性、待回复供应商和授标依据。`,
+    `剩余 ETA/交付确认：${pos.length} 张 PO 需要结合未到货数量、供应商剩余交期和承诺 ETA 复核。`,
+    `GRN/质检：${grns.length} 张收货或质检记录只能说明当前收货状态，异常原因和处置结果仍需人工确认。`,
+    `库存覆盖/需求预测：${inventoryRisks.length} 个库存风险按可用库存、安全库存、再订货点和预测信号判断，实际需求变化仍可能影响优先级。`,
+    `发票/三单匹配：${invoices.length} 条发票或三单匹配证据可用于定位差异，但付款、过账和贷项处理不能自动执行。`,
+  ]
+  const evidence = [
+    { type: 'data_limitation', id: 'supplier_reply_completeness', label: '供应商回复完整性', summary: limitations[0] },
+    { type: 'data_limitation', id: 'delivery_eta_confirmation', label: '剩余 ETA / 交付确认', summary: limitations[1] },
+    { type: 'data_limitation', id: 'grn_quality_completeness', label: 'GRN / 质检完整性', summary: limitations[2] },
+    { type: 'data_limitation', id: 'inventory_forecast_coverage', label: '库存覆盖 / 需求预测', summary: limitations[3] },
+    { type: 'data_limitation', id: 'invoice_three_way_match', label: '发票 / 三单匹配', summary: limitations[4] },
+  ]
+  return response({
+    intent: 'data_limitation_query',
+    content: `当前 AI 判断中需要重点关注这些数据限制：${limitations.join('；')} 所有建议仅用于证据复核，不会自动创建、发送、过账或更新业务记录。`,
+    evidence,
+    cards: [
+      {
+        type: 'data_limitation_summary',
+        title: '数据依据限制',
+        data: {
+          keyFacts: limitations,
+          limitations: ['供应商回复、交付 ETA、GRN 质检、库存预测和三单匹配都需要人工复核后再执行。'],
+        },
+        evidence,
+      },
+      { type: 'evidence', evidence },
+      { type: 'recommended_actions', actions: [{ kind: 'review', label: '复核有限数据证据后再预览或保存 ActionDraft。', target: '' }] },
+    ],
+  })
+}
+
 export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {}) {
   const message = text(body.question || body.message || body.prompt || body.text)
   if (!message) return null
   const normalized = compact(message)
   const models = readModels(data, options.cache || {})
+
+  const dataLimitations = buildAiDataLimitationResponse(data, body, options)
+  if (dataLimitations) return dataLimitations
 
   const sop = buildSopResponse(models, message)
   if (sop) return sop

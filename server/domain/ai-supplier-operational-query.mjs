@@ -809,6 +809,9 @@ export function detectAiSupplierOperationalIntent(message = '', body = {}) {
   const isSrmContext = moduleId === 'srm' || moduleId === 'supplier'
   const hasActiveSupplier = Boolean(activeContextEntity(body, 'supplier'))
   if (DRAFT_PATTERN.test(text) && PR_OR_RFQ_DRAFT_PATTERN.test(text)) return null
+  if (!hasActiveSupplier && /供应商/.test(text) && /注意|推荐|跟进|风险|需要.*看|需要.*关注|哪些/.test(text) && !/\bSUP-[A-Z0-9-]+\b/i.test(text)) {
+    return /推荐|下一步|建议/.test(text) ? 'supplier_next_actions_query' : 'supplier_high_risk_summary_query'
+  }
   if (isSrmContext && !hasActiveSupplier && /评分规则|评分.*算|score.*rule|scoring/i.test(text)) return 'supplier_scoring_rule_query'
   if (isSrmContext && !hasActiveSupplier && /下一步|跟进|建议|next action|follow.?up/i.test(text)) return 'supplier_next_actions_query'
   if (isSrmContext && !hasActiveSupplier && /高风险|风险|没回复|未回复|交付风险|rfq|供应商/i.test(text) && !/\bSUP-[A-Z0-9-]+\b/i.test(text)) {
