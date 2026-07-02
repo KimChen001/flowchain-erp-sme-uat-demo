@@ -2,6 +2,7 @@ import { createJsonMasterDataRepository } from './json-master-data-repository.mj
 import { createJsonInventoryReadRepository } from './json-inventory-read-repository.mjs'
 import { createJsonProcurementReadRepository } from './json-procurement-read-repository.mjs'
 import { createJsonActionDraftRepository } from './json-action-draft-repository.mjs'
+import { createInMemoryExceptionCaseRepository } from './exception-case-repository.mjs'
 import { createAuditLogRepository } from './audit-log-repository.mjs'
 import { createDbActionDraftRepository } from './db-action-draft-repository.mjs'
 import { createDbAuditLogRepository } from './db-audit-log-repository.mjs'
@@ -51,6 +52,7 @@ export function createJsonRepositoryRegistry({ db = {}, env = process.env } = {}
     inventoryRead: createJsonInventoryReadRepository(db),
     procurementRead: createJsonProcurementReadRepository(db),
     actionDrafts: createJsonActionDraftRepository(db),
+    exceptionCases: createInMemoryExceptionCaseRepository({ db }),
     auditLog: createAuditLogRepository(db),
     aiConversation: createAiConversationRepository(),
     userDataRuntime: createUserDataRuntimeRepository({ db, env }),
@@ -64,6 +66,7 @@ export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, p
     inventoryRead: createDbInventoryReadRepository({ env, prisma }),
     procurementRead: createDbProcurementReadRepository({ env, prisma }),
     actionDrafts: createDbActionDraftRepository({ db, env, prisma }),
+    exceptionCases: createInMemoryExceptionCaseRepository({ db }),
     auditLog: createDbAuditLogRepository({ env, prisma }),
     aiConversation: createAiConversationRepository(),
     userDataRuntime: createUserDataRuntimeRepository({ db, env }),

@@ -45,6 +45,7 @@ import AiPanel, { type ActiveContext } from "../modules/ai-assistant/Panel";
 import { ActionDraftReviewShell, type ActionDraftPreview, type ActionDraftPreviewRequest } from "../modules/action-drafts/ActionDraftReviewShell";
 import ReportsPanel from "../modules/reports/Page";
 import ImportsPanel from "../modules/imports/Page";
+import ExceptionCasesPage from "../modules/exception-cases/Page";
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
@@ -214,7 +215,7 @@ const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存管理",
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购管理", finance: "财务协同", "master-data": "主数据", srm: "供应商管理", reports: "报表中心", imports: "数据管理",
+  procurement: "采购管理", finance: "财务协同", "master-data": "主数据", srm: "供应商管理", reports: "报表中心", imports: "数据管理", "exception-cases": "Exception Cases",
 };
 
 type GlobalSearchResult = {
@@ -667,6 +668,7 @@ export default function FlowChainApp() {
     finance:     <FinanceWorkbench initialView={activeView as any} />,
     reports:     <ReportsPanel initialView={activeView as any} onNavigate={navigateTo} />,
     imports:     <ImportsPanel initialView={activeView as any} onNavigate={navigateTo} />,
+    "exception-cases": <ExceptionCasesPage onNavigate={navigateTo} />,
   };
 
   function handleLogin(nextUser: DemoUser, token: string) {

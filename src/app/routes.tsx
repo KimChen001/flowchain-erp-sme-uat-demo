@@ -4,6 +4,7 @@ import {
   FileSpreadsheet,
   Handshake,
   Database,
+  AlertTriangle,
   Package,
   Users,
   TrendingUp,
@@ -103,6 +104,14 @@ export const navItems = [
     ],
   },
   {
+    icon: AlertTriangle, label: "Exception Cases", id: "exception-cases",
+    children: [
+      { id: "exception-cases", label: "Case List" },
+      { id: "exception-cases:open", label: "Open Cases" },
+      { id: "exception-cases:review", label: "Review Queue" },
+    ],
+  },
+  {
     icon: Upload, label: "数据管理", id: "imports",
     children: [
       { id: "imports", label: "导入任务记录" },
@@ -115,6 +124,6 @@ export const navItems = [
 
 export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
-  { label: "供应链", itemIds: ["procurement", "inventory", "srm", "master-data", "finance", "forecast"] },
+  { label: "供应链", itemIds: ["procurement", "inventory", "srm", "master-data", "finance", "forecast", "exception-cases"] },
   { label: "数据", itemIds: ["reports", "imports"] },
 ] as const;

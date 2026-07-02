@@ -37,7 +37,8 @@ test('repository registry defaults to JSON without DATABASE_URL', () => {
   const db = createDb()
   const registry = createRepositoryRegistry({ db, env: {} })
   assert.equal(registry.mode, 'json')
-  assert.deepEqual(Object.keys(registry), ['mode', 'masterData', 'inventoryRead', 'procurementRead', 'actionDrafts', 'auditLog', 'aiConversation', 'userDataRuntime'])
+  assert.deepEqual(Object.keys(registry), ['mode', 'masterData', 'inventoryRead', 'procurementRead', 'actionDrafts', 'exceptionCases', 'auditLog', 'aiConversation', 'userDataRuntime'])
+  assert.equal(typeof registry.exceptionCases.previewCaseDraft, 'function')
 })
 
 test('JSON repository registry exposes expected groups and delegates to current read models', () => {
@@ -52,6 +53,7 @@ test('JSON repository registry exposes expected groups and delegates to current 
   assert.equal(registry.procurementRead.getDocument('po', 'PO-1').id, 'PO-1')
   assert.equal(registry.procurementRead.normalizeDocumentType('purchase-order'), 'po')
   assert.equal(registry.actionDrafts.getSchema().previewOnly, true)
+  assert.equal(typeof registry.exceptionCases.listCases, 'function')
   assert.equal(registry.aiConversation.implemented, false)
   assert.equal(registry.userDataRuntime.adapter, 'disabled-user-data-runtime-v1')
   assert.deepEqual(db, before)
