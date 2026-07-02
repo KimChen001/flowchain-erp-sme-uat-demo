@@ -10,6 +10,8 @@
     "start": "node server/index.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test server/domain/*.test.mjs",
+    "test:browser": "playwright test",
+    "test:browser:ai": "playwright test tests/browser/ai-copilot.spec.ts",
     "test:harness": "node --test server/domain/system-harness-product-review.test.mjs",
     "test:contracts": "node --test server/domain/json-adapter-contracts.test.mjs",
     "test:db": "node --test server/domain/db-test-harness.test.mjs",
@@ -81,6 +83,7 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "4.1.12",
     "@types/node": "^22.19.21",
     "@types/react-dom": "^18.3.7",

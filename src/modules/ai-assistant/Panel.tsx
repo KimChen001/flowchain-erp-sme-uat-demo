@@ -240,7 +240,12 @@ function EvidenceList({
       {rows.map(({ raw, link }, index) => {
         if (!link) return null;
         const intent = navigationIntentFromEvidenceLink(link, { source: "ai" });
-        const label = bestText(raw.label, raw.title, raw.summary, link.label, link.entityId);
+        const rawLabel = bestText(raw.label, raw.title, raw.summary, link.label);
+        const businessId = visibleBusinessId(link.entityId, raw.id, raw.documentId, raw.label, raw.title, raw.summary, link.label);
+        const displayId = businessId || link.entityId;
+        const label = displayId && rawLabel && !rawLabel.includes(displayId)
+          ? `${displayId} · ${rawLabel}`
+          : bestText(rawLabel, link.entityId);
         const title = `依据：${label}`;
         const detail = bestText(raw.summary, raw.reason, link.status && link.status !== link.label ? link.status : "");
         return (
@@ -249,6 +254,8 @@ function EvidenceList({
               <button
                 type="button"
                 onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)}
+                data-testid="ai-evidence-link"
+                data-business-id={displayId}
                 className={aiEvidenceLinkClass}
                 style={{ color: A.blue }}
               >
@@ -909,7 +916,14 @@ function AiResponseCard({
             ["状态", data.status],
           ]} />
           {prDraftRequest ? (
-            <button type="button" onClick={() => onReviewActionDraft?.(prDraftRequest)} className={aiActionPillClass} style={{ background: "#f0f6ff", color: A.blue }}>
+            <button
+              type="button"
+              onClick={() => onReviewActionDraft?.(prDraftRequest)}
+              data-testid="ai-action-draft-preview"
+              data-draft-type={prDraftRequest.type}
+              className={aiActionPillClass}
+              style={{ background: "#f0f6ff", color: A.blue }}
+            >
               审阅草稿
             </button>
           ) : null}
@@ -933,7 +947,14 @@ function AiResponseCard({
             ["状态", data.status],
           ]} />
           {rfqDraftRequest ? (
-            <button type="button" onClick={() => onReviewActionDraft?.(rfqDraftRequest)} className={aiActionPillClass} style={{ background: "#f0f6ff", color: A.blue }}>
+            <button
+              type="button"
+              onClick={() => onReviewActionDraft?.(rfqDraftRequest)}
+              data-testid="ai-action-draft-preview"
+              data-draft-type={rfqDraftRequest.type}
+              className={aiActionPillClass}
+              style={{ background: "#f0f6ff", color: A.blue }}
+            >
               审阅草稿
             </button>
           ) : null}
@@ -967,6 +988,8 @@ function AiResponseCard({
                   key={`${action.label}-${action.kind}`}
                   type="button"
                   onClick={() => onReviewActionDraft?.(draftRequest)}
+                  data-testid="ai-action-draft-preview"
+                  data-draft-type={draftRequest.type}
                   className={aiActionLinkClass}
                   style={{ background: "#f0f6ff", color: A.blue }}
                 >
@@ -977,6 +1000,8 @@ function AiResponseCard({
                   key={`${action.label}-${action.target}`}
                   type="button"
                   onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)}
+                  data-testid="ai-action-link"
+                  data-business-id={intent.focusTarget?.entityId || action.target || ""}
                   className={aiActionLinkClass}
                   style={{ background: A.gray6, color: A.blue }}
                 >
@@ -1044,6 +1069,14 @@ function businessTypeFromId(id = "") {
   if (/^GRN-/i.test(id)) return "grn";
   if (/^INV-/i.test(id)) return "invoice";
   if (/^SKU-/i.test(id)) return "sku";
+  return "";
+}
+
+function visibleBusinessId(...values: unknown[]) {
+  for (const value of values) {
+    const found = String(value ?? "").match(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i)?.[0];
+    if (found) return found.toUpperCase();
+  }
   return "";
 }
 
@@ -1289,10 +1322,11 @@ export default function FloatingAiAssistant({
   }
 
   return (
-    <div className="fixed right-5 bottom-5 z-40 pointer-events-none">
+    <div className="fixed right-5 bottom-5 z-40 pointer-events-none" data-testid="ai-assistant-root">
       {open && (
         <div
           ref={panelRef}
+          data-testid="ai-assistant-panel"
           className="pointer-events-auto mb-3 w-[min(380px,calc(100vw-2rem))] rounded-2xl bg-white shadow-2xl overflow-hidden"
           style={{ border: `1px solid ${A.border}` }}
         >
@@ -1316,7 +1350,7 @@ export default function FloatingAiAssistant({
             </button>
           </div>
 
-          <div ref={scrollRef} className="h-[min(360px,52vh)] overflow-auto px-4 py-3 space-y-3">
+          <div ref={scrollRef} data-testid="ai-assistant-messages" className="h-[min(360px,52vh)] overflow-auto px-4 py-3 space-y-3">
             {messages.length === 0 && (
               <div className="rounded-xl px-3 py-3 text-sm leading-6" style={{ background: A.gray6, color: A.sub }}>
                 {contextLabel
@@ -1327,6 +1361,7 @@ export default function FloatingAiAssistant({
             {messages.map((message, index) => (
               <div key={`${message.role}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
+                  data-testid={message.role === "assistant" ? "ai-message-assistant" : "ai-message-user"}
                   className="max-w-[86%] rounded-2xl px-3 py-2 text-sm leading-6"
                   style={{
                     background: message.role === "user" ? A.blue : A.gray6,
@@ -1378,6 +1413,7 @@ export default function FloatingAiAssistant({
               <textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
+                data-testid="ai-assistant-input"
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
@@ -1393,6 +1429,7 @@ export default function FloatingAiAssistant({
               <button
                 onClick={() => askAi(input)}
                 disabled={!input.trim() || asking}
+                data-testid="ai-assistant-send"
                 className="w-10 h-10 rounded-xl flex items-center justify-center text-white disabled:cursor-not-allowed"
                 style={{ background: input.trim() && !asking ? A.blue : A.gray3 }}
                 aria-label="发送"
@@ -1407,6 +1444,7 @@ export default function FloatingAiAssistant({
       <button
         ref={restoreButtonRef}
         onClick={() => open ? minimizeAssistant() : restoreAssistant()}
+        data-testid="ai-assistant-toggle"
         className="pointer-events-auto h-12 rounded-full pl-4 pr-5 flex items-center gap-2 text-sm font-semibold text-white shadow-xl hover:shadow-2xl transition-shadow"
         style={{ background: A.blue }}
         aria-label={open ? "最小化 AI 助手" : "展开 AI 助手"}

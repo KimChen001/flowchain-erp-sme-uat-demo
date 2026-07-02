@@ -950,10 +950,11 @@ export default function FlowChainApp() {
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
-          <main className="flex-1 overflow-auto p-6">
-            <div id="module-export-scope" className={`mx-auto ${activeModule === "srm" ? "max-w-[1600px]" : "max-w-6xl"}`}>
+          <main className="flex-1 overflow-auto p-6" data-testid="app-main">
+            <div id="module-export-scope" data-testid="module-export-scope" className={`mx-auto ${activeModule === "srm" ? "max-w-[1600px]" : "max-w-6xl"}`}>
               {searchFocus && (
                 <div className="mb-4 rounded-xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                  data-testid="focus-banner"
                   style={{ background: "#f0f6ff", border: `1px solid ${A.border}` }}>
                   <div className="min-w-0">
                     <div className="text-[11px] font-semibold" style={{ color: A.blue }}>当前聚焦</div>
