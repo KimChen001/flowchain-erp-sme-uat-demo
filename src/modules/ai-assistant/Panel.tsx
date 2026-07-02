@@ -86,6 +86,41 @@ const aiActionPillClass = `rounded-full px-2.5 py-1 ${typography.compactMetadata
 const aiActionLinkClass = `${aiActionPillClass} hover:underline`;
 const aiBoundaryNoticeClass = `${typography.metadata} text-slate-600`;
 
+export const AI_EMPTY_STATE_PROMPT_CHIPS = [
+  { label: "今日重点", prompt: "有什么需要我注意的？" },
+  { label: "库存风险", prompt: "哪些 SKU 有库存风险？" },
+  { label: "供应商跟进", prompt: "哪些供应商需要跟进？" },
+  { label: "RFQ 回复", prompt: "哪些 RFQ 需要关注？" },
+  { label: "收货异常", prompt: "今天有哪些收货异常？" },
+  { label: "数据缺口", prompt: "哪些数据依据不够完整？" },
+  { label: "生成草稿", prompt: "我可以生成哪些审阅草稿？" },
+];
+
+const CONTEXT_ENTITY_LABELS: Record<string, string> = {
+  purchase_order: "采购单",
+  item: "库存 SKU",
+  rfq: "询价单",
+  supplier: "供应商",
+  purchase_request: "采购申请",
+};
+
+export function getAiContextLabel(moduleId: string, activeContext?: ActiveContext | null) {
+  if (activeContext?.entityId) {
+    const label = CONTEXT_ENTITY_LABELS[activeContext.entityType || ""] || "业务对象";
+    return `${label} ${activeContext.entityLabel || activeContext.entityId}`;
+  }
+  return PAGE_LABELS[moduleId] || "当前页面";
+}
+
+export function getAiInputPlaceholder(moduleId: string, activeContext?: ActiveContext | null) {
+  if (activeContext?.entityType === "purchase_order") return "问我：这个 PO 为什么优先？未到货风险在哪里？";
+  if (activeContext?.entityType === "item") return "问我：这个 SKU 需要补货吗？库存覆盖够不够？";
+  if (activeContext?.entityType === "rfq") return "问我：这个 RFQ 有几家回复？要不要提醒供应商？";
+  if (activeContext?.entityType === "supplier") return "问我：这个供应商有哪些风险？需要怎么跟进？";
+  if (moduleId === "overview") return "问我：今天先看什么？哪些风险最高？";
+  return "问我：当前有什么问题？哪些数据不完整？";
+}
+
 function hasValue(value: unknown) {
   return value !== undefined && value !== null && value !== "";
 }
@@ -1178,6 +1213,45 @@ function buildSessionGrounding(messages: AiChatMessage[], activeContext: ActiveC
   };
 }
 
+function uniqueFollowUpChips(chips: { label: string; prompt: string }[]) {
+  const seen = new Set<string>();
+  return chips.filter((chip) => {
+    const key = `${chip.label}|${chip.prompt}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 4);
+}
+
+export function getAiFollowUpChips(message: AiChatMessage) {
+  if (message.role !== "assistant" || !message.cards?.length) return [];
+  const ids = collectBusinessIdsFromCards(message.cards);
+  const firstPo = ids.po?.[0] || "";
+  const firstSku = ids.sku?.[0] || "";
+  const firstRfq = ids.rfq?.[0] || "";
+  const cardTypes = new Set(message.cards.map((card) => card.type || ""));
+  const chips: { label: string; prompt: string }[] = [];
+
+  if (cardTypes.has("procurement_followup_summary") || cardTypes.has("priority_explanation")) {
+    if (firstPo) chips.push({ label: "为什么这个 PO 优先？", prompt: "这个 PO 为什么优先？" });
+    if (firstSku) chips.push({ label: "查看关联 SKU", prompt: "它和哪个 SKU 有关系？" });
+    chips.push({ label: "哪些数据不完整？", prompt: "哪些数据依据不够完整？" });
+    if (firstPo || firstRfq) chips.push({ label: "预览跟进草稿", prompt: "预览供应商跟进草稿" });
+  }
+  if (cardTypes.has("inventory_status") || firstSku) {
+    chips.push({ label: "需要补货吗？", prompt: "这个 SKU 需要补货吗？" });
+    chips.push({ label: "关联哪些采购单？", prompt: "这个 SKU 关联哪些采购单？" });
+    chips.push({ label: "预览补货 PR 草稿", prompt: "预览补货 PR 草稿" });
+  }
+  if (cardTypes.has("rfq_status") || cardTypes.has("rfq_followup") || firstRfq) {
+    chips.push({ label: "有几家回复了？", prompt: "刚才那个 RFQ 有几家回复了？" });
+    chips.push({ label: "谁还没回复？", prompt: "谁还没回复这个 RFQ？" });
+    chips.push({ label: "预览供应商提醒草稿", prompt: "预览供应商提醒草稿" });
+  }
+
+  return uniqueFollowUpChips(chips);
+}
+
 function AiResponseCards({
   cards = [],
   onNavigate,
@@ -1292,9 +1366,8 @@ export default function FloatingAiAssistant({
   const currentContext = cleanActiveContext(activeContext);
   const sessionGrounding = useMemo(() => buildSessionGrounding(messages, currentContext), [messages, currentContext]);
   const quickPrompts = getContextualQuickPrompts({ moduleId, activeContext: currentContext });
-  const contextLabel = currentContext
-    ? currentContext.entityLabel || currentContext.entityId
-    : "";
+  const contextLabel = getAiContextLabel(moduleId, currentContext);
+  const inputPlaceholder = getAiInputPlaceholder(moduleId, currentContext);
 
   async function askAi(text: string) {
     const message = text.trim();
@@ -1395,8 +1468,8 @@ export default function FloatingAiAssistant({
                 <Sparkles size={15} style={{ color: A.blue }} />
                 AI 助手
               </div>
-              <div className="text-[11px] truncate" style={{ color: A.gray2 }}>
-                {contextLabel ? `当前上下文：${contextLabel}` : "基于当前页面上下文回答"}
+              <div data-testid="ai-context-chip" className="text-[11px] truncate" style={{ color: A.gray2 }}>
+                当前上下文：{contextLabel}
               </div>
             </div>
             <button
@@ -1411,10 +1484,25 @@ export default function FloatingAiAssistant({
 
           <div ref={scrollRef} data-testid="ai-assistant-messages" className="h-[min(360px,52vh)] overflow-auto px-4 py-3 space-y-3">
             {messages.length === 0 && (
-              <div className="rounded-xl px-3 py-3 text-sm leading-6" style={{ background: A.gray6, color: A.sub }}>
-                {contextLabel
-                  ? `你正在查看${PAGE_LABELS[moduleId] ?? "当前页面"}，当前上下文是 ${contextLabel}。`
-                  : `你正在查看${PAGE_LABELS[moduleId] ?? "当前页面"}。可以询问当前供应商、库存、采购或 RFQ 状态。`}
+              <div className="rounded-xl px-3 py-3 space-y-3" style={{ background: A.gray6, color: A.sub }}>
+                <div data-testid="ai-empty-context-chip" className={`${typography.compactMetadata} inline-flex rounded-full px-2 py-1`} style={{ background: A.white, color: A.gray1, border: `1px solid ${A.border}` }}>
+                  当前上下文：{contextLabel}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {AI_EMPTY_STATE_PROMPT_CHIPS.map((chip) => (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => askAi(chip.prompt)}
+                      disabled={asking}
+                      data-testid="ai-empty-prompt-chip"
+                      className="rounded-full px-2.5 py-1 text-[11px] font-medium hover:bg-slate-100 disabled:cursor-not-allowed"
+                      style={{ background: A.white, color: asking ? A.gray3 : A.gray1, border: `1px solid ${A.border}` }}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {messages.map((message, index) => (
@@ -1429,6 +1517,23 @@ export default function FloatingAiAssistant({
                 >
                   <div className="whitespace-pre-wrap">{message.content}</div>
                   {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={minimizeAfterNavigate} onReviewActionDraft={onReviewActionDraft} />}
+                  {message.role === "assistant" && getAiFollowUpChips(message).length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {getAiFollowUpChips(message).map((chip) => (
+                        <button
+                          key={`${chip.label}-${chip.prompt}`}
+                          type="button"
+                          onClick={() => askAi(chip.prompt)}
+                          disabled={asking}
+                          data-testid="ai-follow-up-chip"
+                          className="rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed"
+                          style={{ background: A.white, color: asking ? A.gray3 : A.blue, border: `1px solid ${A.border}` }}
+                        >
+                          {chip.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   {message.role === "assistant" && message.retryPrompt ? (
                     <button
                       type="button"
@@ -1455,19 +1560,21 @@ export default function FloatingAiAssistant({
           </div>
 
           <div className="px-4 pb-3">
-            <div className="flex flex-wrap gap-2 mb-3">
-              {quickPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => askAi(prompt)}
-                  disabled={asking}
-                  className="px-2.5 py-1 rounded-full text-[11px] font-medium hover:bg-slate-100"
-                  style={{ background: A.gray6, color: asking ? A.gray3 : A.gray1 }}
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
+            {messages.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {quickPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    onClick={() => askAi(prompt)}
+                    disabled={asking}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-medium hover:bg-slate-100"
+                    style={{ background: A.gray6, color: asking ? A.gray3 : A.gray1 }}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
@@ -1481,7 +1588,7 @@ export default function FloatingAiAssistant({
                 }}
                 disabled={asking}
                 rows={2}
-                placeholder="询问当前供应商、库存、采购或 RFQ 状态..."
+                placeholder={inputPlaceholder}
                 className="min-h-10 flex-1 resize-none rounded-xl px-3 py-2 text-sm outline-none disabled:cursor-not-allowed"
                 style={{ background: A.gray6, color: A.label, fontFamily: "inherit" }}
               />

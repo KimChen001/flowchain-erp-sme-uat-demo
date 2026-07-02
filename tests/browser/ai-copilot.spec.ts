@@ -83,6 +83,49 @@ async function closeDraftPreview(page: Page) {
 }
 
 test.describe("AI Copilot browser UAT", () => {
+  test("R134 empty AI panel shows prompt chips and 今日重点 returns overview", async ({ page }) => {
+    await openLoggedInApp(page);
+    await openAssistant(page);
+
+    const chips = page.getByTestId("ai-empty-prompt-chip");
+    await expect(chips.filter({ hasText: "今日重点" })).toBeVisible();
+    await expect(chips.filter({ hasText: "库存风险" })).toBeVisible();
+    await expect(chips.filter({ hasText: "供应商跟进" })).toBeVisible();
+    await expect(page.getByTestId("ai-context-chip")).toContainText("每日工作台");
+
+    await chips.filter({ hasText: "今日重点" }).click();
+    const assistant = page.getByTestId("ai-message-assistant").last();
+    await expect(assistant).toContainText("PO-2026-1282");
+    await expect(assistant).toContainText("SKU-00412");
+    await expect(assistant).not.toContainText(/provider fallback|tool_result|debug|documentType|entityType/i);
+  });
+
+  test("R135 placeholder changes after focusing a PO context", async ({ page }) => {
+    await openLoggedInApp(page);
+    await askTodayPriority(page);
+
+    await clickEvidence(page, "PO-2026-1282");
+    await expect(page.getByTestId("ai-assistant-panel")).toBeHidden();
+    await restoreAssistant(page);
+
+    await expect(page.getByTestId("ai-context-chip")).toContainText("PO-2026-1282");
+    await expect(page.getByTestId("ai-assistant-input")).toHaveAttribute("placeholder", /这个 PO 为什么优先|未到货风险/);
+  });
+
+  test("R136 follow-up chip resolves to prior PO through session grounding", async ({ page }) => {
+    await openLoggedInApp(page);
+    await askTodayPriority(page);
+
+    const chip = page.getByTestId("ai-follow-up-chip").filter({ hasText: "为什么这个 PO 优先？" }).first();
+    await expect(chip).toBeVisible();
+    await chip.click();
+
+    const assistant = page.getByTestId("ai-message-assistant").last();
+    await expect(assistant).toContainText("PO-2026-1282");
+    await expect(assistant).toContainText(/未到货明细|供应商剩余交期|部分到货/);
+    await expect(assistant).not.toContainText(/provider fallback|tool_result|debug|documentType|entityType/i);
+  });
+
   test("R122 answers Today priority with product-readable evidence and actions", async ({ page }) => {
     await openLoggedInApp(page);
     const assistant = await askTodayPriority(page);
