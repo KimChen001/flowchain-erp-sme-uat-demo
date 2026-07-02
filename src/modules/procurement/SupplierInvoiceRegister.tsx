@@ -7,6 +7,7 @@ import { SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/dem
 import { getInvoiceLinkedDocuments } from "../../domain/procurement/document-links";
 import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
 import { makeInvoiceInsight, type ContextualAiAction } from "../../domain/contextual-ai";
+import type { WorkflowContext } from "../../lib/workflowContext";
 import { calculateInvoiceMatch, getInvoiceVarianceSummary, isInvoicePayableReady, supplierInvoiceExportRows } from "../../domain/procurement/invoice-matching";
 import { calculateInvoiceTaxSummary, calculateLineTax, getTaxVarianceSummary } from "../../domain/finance/tax";
 import { exportRowsToCsv } from "../../lib/data-export";
@@ -63,7 +64,7 @@ function invoiceTimeline(invoice: SupplierInvoice): TimelineStep[] {
 type SupplierInvoiceRegisterProps = {
   mode?: "procurement" | "finance";
   focus?: { entityType: string; entityId: string; at: number } | null;
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 };
 
@@ -359,6 +360,14 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
         {selectedInvoice && selectedSnapshot && (
           (() => {
             const taxSummary = calculateInvoiceTaxSummary(selectedInvoice);
+            const invoiceReturnContext: WorkflowContext = {
+              sourceModule: isProcurementMode ? "procurement" : "finance",
+              sourceEntityType: "supplier_invoice",
+              sourceEntityId: selectedInvoice.invoiceNumber,
+              sourceRoute: isProcurementMode ? "procurement:invoices" : "finance:invoices",
+              sourceLabel: selectedInvoice.invoiceNumber,
+              returnLabel: `Back to ${selectedInvoice.invoiceNumber}`,
+            };
             return (
           <DocumentShell
             title="供应商发票"
@@ -421,10 +430,18 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
               ]}
               columns={5}
             />
-            <ContextualAIInsightPanel insight={invoiceInsight} onClose={() => setInvoiceInsight(null)} onAction={handleInvoiceInsightAction} />
+            <ContextualAIInsightPanel insight={invoiceInsight} onClose={() => setInvoiceInsight(null)} onAction={handleInvoiceInsightAction} returnContext={invoiceReturnContext} onNavigateRecord={onNavigate} />
             <DocumentEvidencePanel
               linkedDocuments={getInvoiceLinkedDocuments(selectedInvoice, purchaseOrders, receivingDocs)}
               onNavigate={onNavigate}
+              returnContext={invoiceReturnContext}
+              relatedRecords={[
+                ...(selectedInvoice.relatedPo ? [{ type: "purchaseOrder", id: selectedInvoice.relatedPo, relationshipLabel: "Source document", relationshipReason: "Invoice references this PO." }] : []),
+                ...(selectedInvoice.relatedGrn ? [{ type: "grn", id: selectedInvoice.relatedGrn, relationshipLabel: "Source document", relationshipReason: "Invoice references this GRN." }] : []),
+                { type: "supplier", id: selectedInvoice.supplier, relationshipLabel: "Supplier relationship", relationshipReason: "Supplier named on the invoice." },
+                ...selectedInvoice.lines.slice(0, 3).map((line) => ({ type: "sku", id: line.sku, label: line.name, relationshipLabel: "Matches invoice", relationshipReason: "Invoice line maps to this SKU." })),
+                { type: "invoiceMatch", id: selectedInvoice.invoiceNumber, status: selectedInvoice.matchStatus, relationshipLabel: "Matches invoice", relationshipReason: "Three-way match review for this invoice." },
+              ]}
               confidence={`${selectedInvoice.confidence || 0}%`}
               provenance={invoiceSourceLabel(selectedInvoice.source)}
               notes={selectedInvoice.notes || `${getInvoiceVarianceSummary(selectedInvoice)} 三单匹配用于比较 PO、GRN 与供应商发票的金额、数量与状态差异。`}

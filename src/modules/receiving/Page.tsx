@@ -29,6 +29,7 @@ import {
 import { getGrnLinkedDocuments } from "../../domain/procurement/document-links";
 import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
 import { makeGrnInsight, type ContextualAiAction } from "../../domain/contextual-ai";
+import type { WorkflowContext } from "../../lib/workflowContext";
 import {
   tableMinLgClass,
   tableMinMdClass,
@@ -153,7 +154,7 @@ export default function ReceivingPanel({
   onNavigate,
 }: {
   focus?: { entityType: string; entityId: string; at: number } | null;
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
 }) {
   const [tab, setTab] = useState<RecvTab>("ops");
   const tabs = [
@@ -436,7 +437,7 @@ function ReceivingOps({
   onNavigate,
 }: {
   focus?: { entityType: string; entityId: string; at: number } | null;
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
 }) {
   const [docs, setDocs] = useState<ReceivingDoc[]>(receivingDocs);
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
@@ -749,6 +750,14 @@ function ReceivingOps({
         const receivedQty = lines.reduce((sum, line) => sum + toNumber(line.receivedQty), 0);
         const acceptedQty = lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
         const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
+        const grnReturnContext: WorkflowContext = {
+          sourceModule: "receiving",
+          sourceEntityType: "receiving_doc",
+          sourceEntityId: selectedGrn.grn,
+          sourceRoute: "procurement:receiving",
+          sourceLabel: selectedGrn.grn,
+          returnLabel: `Back to ${selectedGrn.grn}`,
+        };
         return (
           <Card className="p-5">
             <div className="flex items-start justify-between gap-4 pb-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
@@ -812,7 +821,7 @@ function ReceivingOps({
               })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>Preview exception handling note</button>
             </div>
             <div className="mt-4">
-              <ContextualAIInsightPanel insight={grnInsight} onClose={() => setGrnInsight(null)} onAction={handleGrnInsightAction} />
+              <ContextualAIInsightPanel insight={grnInsight} onClose={() => setGrnInsight(null)} onAction={handleGrnInsightAction} returnContext={grnReturnContext} onNavigateRecord={onNavigate} />
             </div>
 
             <div className="grid grid-cols-5 gap-4 mt-4">
@@ -935,6 +944,14 @@ function ReceivingOps({
           const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
           const relatedPo = orders.find((item) => item.po === selectedGrn.po) || purchaseOrders.find((item) => item.po === selectedGrn.po);
           const estimatedAmount = relatedPo ? Math.round((relatedPo.amount || 0) * (acceptedQty / Math.max(1, poLinesOf(relatedPo).reduce((sum, line) => sum + toNumber(line.quantityOrdered), 0)))) : 0;
+          const grnReturnContext: WorkflowContext = {
+            sourceModule: "receiving",
+            sourceEntityType: "receiving_doc",
+            sourceEntityId: selectedGrn.grn,
+            sourceRoute: "procurement:receiving",
+            sourceLabel: selectedGrn.grn,
+            returnLabel: `Back to ${selectedGrn.grn}`,
+          };
           return (
             <DocumentShell
               title="收货单"
@@ -995,6 +1012,14 @@ function ReceivingOps({
               <DocumentEvidencePanel
                 linkedDocuments={getGrnLinkedDocuments(selectedGrn, purchaseOrders, SUPPLIER_INVOICES)}
                 onNavigate={onNavigate}
+                returnContext={grnReturnContext}
+                relatedRecords={[
+                  { type: "purchaseOrder", id: selectedGrn.po, relationshipLabel: "Receives PO", relationshipReason: "GRN was created from this PO." },
+                  { type: "supplier", id: selectedGrn.supplier, relationshipLabel: "Supplier relationship", relationshipReason: "Supplier shipped the received goods." },
+                  ...grnLinesOf(selectedGrn).slice(0, 3).map((line) => ({ type: "sku", id: line.sku, label: line.itemName, relationshipLabel: "Affects inventory", relationshipReason: "GRN line updates inventory for this SKU." })),
+                  ...(selectedGrn.inventoryMovementIds || []).slice(0, 3).map((id) => ({ type: "inventoryMovement", id, relationshipLabel: "Affects inventory", relationshipReason: "Inventory movement exists, but detail page is not available." })),
+                  ...SUPPLIER_INVOICES.filter((invoice) => invoice.relatedGrn === selectedGrn.grn || invoice.relatedPo === selectedGrn.po).slice(0, 3).map((invoice) => ({ type: "invoice", id: invoice.invoiceNumber, status: invoice.status, relationshipLabel: "Matches invoice", relationshipReason: "Invoice references this GRN or PO." })),
+                ]}
                 provenance="GRN / API"
                 notes={selectedGrn.status === "异常处理" ? "异常收货需要进入采购退货、贷项通知或应付冲减流程，并会影响供应商发票匹配。" : "收货明细用于库存可用量、三单匹配和异常处理证据链。"}
                 evidence={[

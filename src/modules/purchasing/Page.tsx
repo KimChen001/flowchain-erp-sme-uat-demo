@@ -37,6 +37,7 @@ import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
 import { getPoLinkedDocuments } from "../../domain/procurement/document-links";
 import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
 import { makePoInsight, poDelayedRisk, type ContextualAiAction } from "../../domain/contextual-ai";
+import type { WorkflowContext } from "../../lib/workflowContext";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   defaultPurchaseOrderWorkbenchFilters,
@@ -116,7 +117,7 @@ export default function PurchasingOrdersPage({
   onActiveContextChange,
 }: {
   focus?: { entityType: string; entityId: string; at: number } | null;
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
@@ -303,6 +304,14 @@ export default function PurchasingOrdersPage({
   const selectedPODelayRisk = selectedPO
     ? poDelayedRisk(selectedPO.eta, selectedPO.status, selectedPOTotals.totalOrderedQty, selectedPOTotals.totalReceivedQty)
     : null;
+  const selectedPoReturnContext: WorkflowContext | null = selectedPO ? {
+    sourceModule: "procurement",
+    sourceEntityType: "purchase_order",
+    sourceEntityId: selectedPO.po,
+    sourceRoute: "procurement:orders",
+    sourceLabel: selectedPO.po,
+    returnLabel: `Back to ${selectedPO.po}`,
+  } : null;
 
   const detailContent = selectedPO && (
     <DocumentShell
@@ -329,7 +338,7 @@ export default function PurchasingOrdersPage({
           { label: "金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
         ]}
       />
-      <ContextualAIInsightPanel insight={poInsight} onClose={() => setPoInsight(null)} onAction={handlePoInsightAction} />
+      <ContextualAIInsightPanel insight={poInsight} onClose={() => setPoInsight(null)} onAction={handlePoInsightAction} returnContext={selectedPoReturnContext} onNavigateRecord={onNavigate} />
       <DocumentStatusTimeline steps={poTimeline(selectedPO)} />
       <DocumentLinesTable
         rows={selectedPOLines.length ? selectedPOLines : [{
@@ -370,6 +379,15 @@ export default function PurchasingOrdersPage({
       <DocumentEvidencePanel
         linkedDocuments={getPoLinkedDocuments(selectedPO, SUPPLIER_INVOICES, receivingDocs)}
         onNavigate={onNavigate}
+        returnContext={selectedPoReturnContext}
+        relatedRecords={[
+          ...(selectedPO.sourceSku ? [{ type: "sku", id: selectedPO.sourceSku, label: selectedPO.sourceName, relationshipLabel: "Affects inventory", relationshipReason: "PO source SKU and line evidence." }] : []),
+          ...(selectedPO.sourceRequest ? [{ type: "purchaseRequest", id: selectedPO.sourceRequest, relationshipLabel: "Created from", relationshipReason: "PO references this source PR." }] : []),
+          ...(selectedPO.sourceRfq ? [{ type: "rfq", id: selectedPO.sourceRfq, relationshipLabel: "Created from", relationshipReason: "PO references this RFQ." }] : []),
+          { type: "supplier", id: selectedPO.supplier, relationshipLabel: "Supplier relationship", relationshipReason: "Supplier named on the PO header." },
+          ...receivingDocs.filter((item) => item.po === selectedPO.po).slice(0, 3).map((item) => ({ type: "grn", id: item.grn, status: item.status, relationshipLabel: "Receives PO", relationshipReason: "GRN was created against this PO." })),
+          ...SUPPLIER_INVOICES.filter((item) => item.relatedPo === selectedPO.po).slice(0, 3).map((item) => ({ type: "invoice", id: item.invoiceNumber, status: item.status, relationshipLabel: "Matches invoice", relationshipReason: "Supplier invoice references this PO." })),
+        ]}
         provenance={selectedPO.source || "manual"}
         notes={selectedPO.reason || selectedPO.approvalSnapshot?.summary || "采购订单详情用于审批、收货和供应商协同复核。"}
         evidence={[

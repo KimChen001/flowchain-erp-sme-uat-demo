@@ -21,6 +21,8 @@ import {
 } from "../lib/evidenceLinks";
 import { fmt } from "../lib/format";
 import { A, Card, Field, inputStyle, Modal, RecoveryActions } from "../components/ui";
+import { BusinessBackLink } from "../components/navigation/BusinessBackLink";
+import type { WorkflowContext } from "../lib/workflowContext";
 import { typography } from "../components/ui/typography";
 import type {
   DemoUser,
@@ -462,6 +464,7 @@ export default function FlowChainApp() {
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [searchFocus, setSearchFocus] = useState<GlobalSearchFocus | null>(null);
   const [focusReturnActive, setFocusReturnActive] = useState("overview");
+  const [focusReturnContext, setFocusReturnContext] = useState<WorkflowContext | null>(null);
   const searchRef = useRef<HTMLFormElement | null>(null);
   const [unreadCount] = useState(3);
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
@@ -563,9 +566,10 @@ export default function FlowChainApp() {
     }
   }
 
-  function applyNavigationIntent(intent: CanonicalNavigationIntent) {
+  function applyNavigationIntent(intent: CanonicalNavigationIntent, returnContext?: WorkflowContext | null) {
     setActive(intent.activeId);
     if (intent.returnTo) setFocusReturnActive(intent.returnTo);
+    if (returnContext !== undefined) setFocusReturnContext(returnContext);
     setSearchFocus(intent.focusTarget
       ? {
           ...intent.focusTarget,
@@ -576,11 +580,18 @@ export default function FlowChainApp() {
       : null);
   }
 
-  function navigateTo(moduleId: string, focusTarget?: CanonicalFocusTarget | null) {
+  function navigateTo(moduleId: string, focusTarget?: CanonicalFocusTarget | null, options: {
+    returnTo?: string;
+    entityLabel?: string;
+    returnContext?: WorkflowContext | null;
+    source?: string;
+  } = {}) {
     applyNavigationIntent(navigationIntentFromModule(moduleId, {
       focusTarget,
-      source: focusTarget ? "evidence" : undefined,
-    }));
+      source: options.source || (focusTarget ? "evidence" : undefined),
+      returnTo: options.returnTo,
+      entityLabel: options.entityLabel,
+    }), options.returnContext);
   }
 
   async function openActionDraftReview(request: ActionDraftPreviewRequest) {
@@ -616,15 +627,23 @@ export default function FlowChainApp() {
 
   function clearFocus() {
     setSearchFocus(null);
+    setFocusReturnContext(null);
   }
 
   function returnFromFocus() {
-    setActive(focusReturnActive || "overview");
+    setActive(focusReturnContext?.sourceRoute || focusReturnActive || "overview");
     setSearchFocus(null);
+    setFocusReturnContext(null);
   }
 
   function openSearchResult(result: GlobalSearchResult) {
-    applyNavigationIntent(navigationIntentFromGlobalSearchResult(result, { returnTo: active }));
+    applyNavigationIntent(navigationIntentFromGlobalSearchResult(result, { returnTo: active }), {
+      sourceModule: activeModule,
+      sourceRoute: active,
+      sourceLabel: activeChildLabel || activeModuleLabel,
+      returnLabel: `Back to ${activeChildLabel || activeModuleLabel}`,
+      originIntent: "globalSearch",
+    });
     setSearchOpen(false);
     setActiveSearchIndex(-1);
   }
@@ -969,6 +988,7 @@ export default function FlowChainApp() {
                       { key: "clear", label: "清除聚焦", onClick: clearFocus, kind: "clear", tone: "subtle" },
                     ]}
                   />
+                  <BusinessBackLink context={focusReturnContext} onReturn={returnFromFocus} />
                 </div>
               )}
               <PanelErrorBoundary key={active} moduleLabel={activeChildLabel || activeModuleLabel}>

@@ -27,7 +27,7 @@ type TodayCockpitPanelProps = {
   cockpit: TodayCockpitResponse | null;
   loading: boolean;
   error?: boolean;
-  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: any; source?: string }) => void;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 };
 
@@ -190,7 +190,7 @@ export function TodayCockpitSummaryCards({
   onNavigate,
 }: {
   cards: TodayCockpitCard[];
-  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate: TodayCockpitPanelProps["onNavigate"];
 }) {
   if (!cards.length) {
     return (
@@ -210,7 +210,12 @@ export function TodayCockpitSummaryCards({
           <button
             key={card.id}
             type="button"
-            onClick={() => onNavigate(moduleId, link?.focusTarget || null)}
+            onClick={() => onNavigate(moduleId, link?.focusTarget || null, {
+              returnTo: "overview",
+              entityLabel: link?.label || card.title,
+              source: "todayCockpit",
+              returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: card.title, returnLabel: "Back to Today Cockpit", originIntent: "priorityCard" },
+            })}
             className="min-h-[118px] rounded-lg border p-3 text-left transition-colors hover:bg-slate-50"
             style={{ borderColor: A.border, background: A.white }}
           >
@@ -239,7 +244,7 @@ export function TodayCockpitActionList({
 }: {
   title: string;
   items: TodayCockpitAction[];
-  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate: TodayCockpitPanelProps["onNavigate"];
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
   className?: string;
 }) {
@@ -258,7 +263,12 @@ export function TodayCockpitActionList({
               className="rounded-md border px-3 py-2"
               style={{ borderColor: A.border }}
             >
-              <button type="button" onClick={() => onNavigate(moduleId, link?.focusTarget || null)} className="w-full text-left">
+              <button type="button" onClick={() => onNavigate(moduleId, link?.focusTarget || null, {
+                returnTo: "overview",
+                entityLabel: link?.label || item.title,
+                source: "todayCockpit",
+                returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: item.title, returnLabel: "Back to Today Cockpit", originIntent: item.id },
+              })} className="w-full text-left">
                 <div className="flex items-center gap-2">
                   <Chip label={style.label} color={style.color} bg={style.bg} />
                   <div className="min-w-0 truncate text-[12px] font-semibold" style={{ color: A.label }}>{item.title}</div>
@@ -295,7 +305,7 @@ export function TodayCockpitFollowups({
   onNavigate,
 }: {
   items: TodayCockpitAction[];
-  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate: TodayCockpitPanelProps["onNavigate"];
 }) {
   return <TodayCockpitActionList title="优先跟进" items={items} onNavigate={onNavigate} />;
 }
@@ -305,7 +315,7 @@ export function TodayCockpitInventoryRisks({
   onNavigate,
 }: {
   items: TodayCockpitInventoryRisk[];
-  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate: TodayCockpitPanelProps["onNavigate"];
 }) {
   return (
     <div className="rounded-lg border p-4" style={{ borderColor: A.border, background: A.white }}>
@@ -319,7 +329,12 @@ export function TodayCockpitInventoryRisks({
             <button
               key={item.id}
               type="button"
-              onClick={() => onNavigate(moduleId, link?.focusTarget || null)}
+              onClick={() => onNavigate(moduleId, link?.focusTarget || null, {
+                returnTo: "overview",
+                entityLabel: link?.label || item.sku || item.id,
+                source: "todayCockpit",
+                returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: item.sku || item.id, returnLabel: "Back to Today Cockpit", originIntent: item.id },
+              })}
               className="w-full rounded-md border px-3 py-2 text-left hover:bg-slate-50"
               style={{ borderColor: A.border }}
             >
@@ -349,7 +364,7 @@ export function TodayCockpitRecentDocuments({
   onNavigate,
 }: {
   documents: TodayCockpitDocument[];
-  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate: TodayCockpitPanelProps["onNavigate"];
 }) {
   return (
     <div className="overflow-hidden rounded-lg border xl:col-span-3" style={{ borderColor: A.border }}>
@@ -378,7 +393,12 @@ export function TodayCockpitRecentDocuments({
                     const link = normalizeTodayCockpitTarget(doc);
                     const moduleId = evidenceModuleId(link);
                     return link?.clickable && moduleId ? (
-                      <button type="button" onClick={() => onNavigate(moduleId, link.focusTarget || null)} className={tableLinkClass}>
+                      <button type="button" onClick={() => onNavigate(moduleId, link.focusTarget || null, {
+                        returnTo: "overview",
+                        entityLabel: link.label || doc.id,
+                        source: "todayCockpit",
+                        returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: doc.id, returnLabel: "Back to Today Cockpit", originIntent: "recentDocument" },
+                      })} className={tableLinkClass}>
                         {doc.id}
                       </button>
                     ) : doc.id;
@@ -407,7 +427,7 @@ export function TodayCockpitRecommendedActions({
   onReviewActionDraft,
 }: {
   items: TodayCockpitAction[];
-  onNavigate: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate: TodayCockpitPanelProps["onNavigate"];
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   return <TodayCockpitActionList title="建议动作" items={items} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} className="xl:col-span-2" />;

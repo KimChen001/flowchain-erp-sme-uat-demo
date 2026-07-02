@@ -1,6 +1,8 @@
 import { Brain, FileText, Link2, ShieldCheck, X } from "lucide-react";
 import { A, Card, Chip } from "../ui";
 import type { ContextualAiAction, ContextualAiLinkedRecord } from "../../domain/contextual-ai/actions";
+import { resolveBusinessLinkedRecord } from "../../lib/businessLinks";
+import type { WorkflowContext } from "../../lib/workflowContext";
 
 export type ContextualAIInsight = {
   title: string;
@@ -28,10 +30,14 @@ export function ContextualAIInsightPanel({
   insight,
   onClose,
   onAction,
+  returnContext,
+  onNavigateRecord,
 }: {
   insight: ContextualAIInsight | null;
   onClose: () => void;
   onAction?: (action: ContextualAiAction) => void;
+  returnContext?: WorkflowContext | null;
+  onNavigateRecord?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
 }) {
   if (!insight) return null;
   return (
@@ -100,7 +106,7 @@ export function ContextualAIInsightPanel({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <LinkedRecords records={insight.linkedRecords} />
+            <LinkedRecords records={insight.linkedRecords} returnContext={returnContext} onNavigateRecord={onNavigateRecord} />
             <Section title="Data limitations" items={insight.limitations} />
           </div>
         </div>
@@ -127,17 +133,58 @@ function Section({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function LinkedRecords({ records }: { records: ContextualAiLinkedRecord[] }) {
+function LinkedRecords({
+  records,
+  returnContext,
+  onNavigateRecord,
+}: {
+  records: ContextualAiLinkedRecord[];
+  returnContext?: WorkflowContext | null;
+  onNavigateRecord?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
+}) {
+  const resolved = (records.length ? records : [{ type: "limitation", id: "No linked records found" }]).map((record) => resolveBusinessLinkedRecord({
+    type: record.type,
+    id: record.id,
+    label: record.label,
+    route: record.route,
+    relationshipLabel: "AI evidence",
+    relationshipReason: "Linked by contextual AI evidence.",
+    sourceContext: returnContext,
+  }));
   return (
     <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
       <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.label }}><Link2 size={12} /> Linked records</div>
       <div className="mt-2 space-y-1.5">
-        {(records.length ? records : [{ type: "limitation", id: "No linked records found" }]).map((record) => (
-          <div key={`${record.type}-${record.id}`} className="rounded-lg px-2 py-1.5" style={{ background: A.white }}>
-            <div className="text-[10px]" style={{ color: A.gray2 }}>{record.type}</div>
-            <div className="text-[11px] font-semibold truncate" style={{ color: A.label }}>{record.id}{record.label ? ` · ${record.label}` : ""}</div>
-          </div>
-        ))}
+        {resolved.map((record) => {
+          const clickable = record.routeAvailable && record.focusTarget && onNavigateRecord;
+          const body = (
+            <>
+              <div className="text-[10px]" style={{ color: A.gray2 }}>{record.entityType}</div>
+              <div className="text-[11px] font-semibold truncate" style={{ color: clickable ? A.blue : A.label }}>{record.displayLabel}</div>
+              {record.disabledReason ? <div className="mt-0.5 text-[10px] leading-4" style={{ color: A.orange }}>{record.disabledReason}</div> : null}
+            </>
+          );
+          return clickable ? (
+            <button
+              key={`${record.entityType}-${record.entityId}`}
+              type="button"
+              onClick={() => onNavigateRecord(record.route, record.focusTarget || null, {
+                returnTo: returnContext?.sourceRoute,
+                returnContext,
+                entityLabel: record.displayLabel,
+                source: "contextualAiInsight",
+              })}
+              className="w-full rounded-lg px-2 py-1.5 text-left"
+              style={{ background: A.white }}
+            >
+              {body}
+            </button>
+          ) : (
+            <div key={`${record.entityType}-${record.entityId}`} className="rounded-lg px-2 py-1.5" style={{ background: A.white }}>
+              {body}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

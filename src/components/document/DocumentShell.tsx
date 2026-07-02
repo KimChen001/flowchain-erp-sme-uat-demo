@@ -1,6 +1,9 @@
 import React from "react";
 import { X } from "lucide-react";
 import { A, Card, Chip } from "../ui";
+import { RelatedRecordsPanel } from "../navigation/RelatedRecordsPanel";
+import { resolveBusinessLinkedRecord, type BusinessLinkedRecord, type BusinessLinkedRecordInput } from "../../lib/businessLinks";
+import type { WorkflowContext } from "../../lib/workflowContext";
 
 export type DocumentTone = "neutral" | "info" | "success" | "warning" | "danger" | "purple";
 export type DocumentField = {
@@ -30,6 +33,11 @@ export type LinkedDocument = {
   value: string;
   moduleId?: string;
   tone?: DocumentTone;
+  entityType?: string;
+  relationshipLabel?: string;
+  relationshipReason?: string;
+  status?: string;
+  recordFound?: boolean;
 };
 export type EvidenceRow = {
   label: string;
@@ -231,6 +239,8 @@ export function DocumentStatusTimeline({ steps }: { steps: TimelineStep[] }) {
 
 export function DocumentEvidencePanel({
   linkedDocuments = [],
+  relatedRecords,
+  returnContext,
   evidence = [],
   notes,
   confidence,
@@ -238,13 +248,37 @@ export function DocumentEvidencePanel({
   onNavigate,
 }: {
   linkedDocuments?: LinkedDocument[];
+  relatedRecords?: BusinessLinkedRecordInput[];
+  returnContext?: WorkflowContext | null;
   evidence?: EvidenceRow[];
   notes?: React.ReactNode;
   confidence?: React.ReactNode;
   provenance?: React.ReactNode;
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
 }) {
+  const resolvedRecords: BusinessLinkedRecord[] = (relatedRecords?.length ? relatedRecords : linkedDocuments.map((doc) => ({
+    entityType: doc.entityType,
+    entityId: doc.value,
+    displayLabel: doc.value,
+    label: doc.label,
+    module: doc.moduleId,
+    status: doc.status,
+    relationshipLabel: doc.relationshipLabel || doc.label,
+    relationshipReason: doc.relationshipReason,
+    recordFound: doc.recordFound,
+    sourceContext: returnContext,
+  }))).map(resolveBusinessLinkedRecord);
   return (
+    <div className="space-y-3">
+    <RelatedRecordsPanel
+      records={resolvedRecords}
+      onNavigate={onNavigate ? (moduleId, focusTarget) => onNavigate(moduleId, focusTarget || null, {
+        returnTo: returnContext?.sourceRoute,
+        returnContext,
+        entityLabel: resolvedRecords.find((record) => record.route === moduleId && record.focusTarget?.entityId === focusTarget?.entityId)?.displayLabel,
+        source: "relatedRecord",
+      }) : undefined}
+    />
     <Card className="p-4">
       <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-4">
         <div>
@@ -252,15 +286,22 @@ export function DocumentEvidencePanel({
           <div className="space-y-1.5">
             {linkedDocuments.length === 0 ? (
               <div className="text-[11px]" style={{ color: A.gray2 }}>暂无关联单据</div>
-            ) : linkedDocuments.map((doc) => {
-              const style = documentToneStyle(doc.tone || "info");
+            ) : resolvedRecords.map((doc) => {
+              const style = documentToneStyle(doc.disabledReason ? "warning" : "info");
+              const clickable = doc.routeAvailable && doc.focusTarget && onNavigate;
               return (
-                <button key={`${doc.label}-${doc.value}`} onClick={() => doc.moduleId && onNavigate?.(doc.moduleId)}
-                  disabled={!doc.moduleId || !onNavigate}
+                <button key={`${doc.relationshipLabel}-${doc.entityId}`} onClick={() => clickable && onNavigate?.(doc.route, doc.focusTarget || null, {
+                    returnTo: returnContext?.sourceRoute,
+                    returnContext,
+                    entityLabel: doc.displayLabel,
+                    source: "documentEvidence",
+                  })}
+                  disabled={!clickable}
                   className="w-full rounded-lg px-2.5 py-2 text-left disabled:cursor-default"
                   style={{ background: style.bg, color: style.color }}>
-                  <div className="text-[10px] font-medium">{doc.label}</div>
-                  <div className="text-xs font-semibold mt-0.5 truncate">{doc.value}</div>
+                  <div className="text-[10px] font-medium">{doc.relationshipLabel}</div>
+                  <div className="text-xs font-semibold mt-0.5 truncate">{doc.displayLabel}</div>
+                  {doc.disabledReason ? <div className="mt-0.5 text-[10px]">{doc.disabledReason}</div> : null}
                 </button>
               );
             })}
@@ -289,6 +330,7 @@ export function DocumentEvidencePanel({
         </div>
       </div>
     </Card>
+    </div>
   );
 }
 
