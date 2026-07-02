@@ -69,12 +69,12 @@ test('R206-R208 AI insight, cockpit, and transactional links preserve workflow r
   assert.match(cockpit, /returnLabel:\s*"Back to Today Cockpit"/)
   assert.match(cockpit, /source:\s*"todayCockpit"/)
   assert.match(purchasing, /returnLabel:\s*`Back to \$\{selectedPO\.po\}`/)
-  assert.match(purchasing, /type:\s*"sku"/)
-  assert.match(purchasing, /type:\s*"supplier"/)
+  assert.match(purchasing, /relatedRecordsForEntity\(\{[^}]+purchaseOrders/)
+  assert.match(purchasing, /"purchaseOrder", selectedPO\.po/)
   assert.match(receiving, /returnLabel:\s*`Back to \$\{selectedGrn\.grn\}`/)
-  assert.match(receiving, /type:\s*"inventoryMovement"/)
+  assert.match(receiving, /"grn", selectedGrn\.grn/)
   assert.match(invoice, /returnLabel:\s*`Back to \$\{selectedInvoice\.invoiceNumber\}`/)
-  assert.match(invoice, /type:\s*"invoiceMatch"/)
+  assert.match(invoice, /"invoice", selectedInvoice\.invoiceNumber/)
 })
 
 test('R210 guardrails keep AI embedded provider-free and non-mutating', () => {

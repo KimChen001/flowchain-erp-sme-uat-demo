@@ -30,6 +30,7 @@ import { getGrnLinkedDocuments } from "../../domain/procurement/document-links";
 import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
 import { makeGrnInsight, type ContextualAiAction } from "../../domain/contextual-ai";
 import type { WorkflowContext } from "../../lib/workflowContext";
+import { relatedRecordsForEntity } from "../../domain/relationships";
 import {
   tableMinLgClass,
   tableMinMdClass,
@@ -1013,13 +1014,7 @@ function ReceivingOps({
                 linkedDocuments={getGrnLinkedDocuments(selectedGrn, purchaseOrders, SUPPLIER_INVOICES)}
                 onNavigate={onNavigate}
                 returnContext={grnReturnContext}
-                relatedRecords={[
-                  { type: "purchaseOrder", id: selectedGrn.po, relationshipLabel: "Receives PO", relationshipReason: "GRN was created from this PO." },
-                  { type: "supplier", id: selectedGrn.supplier, relationshipLabel: "Supplier relationship", relationshipReason: "Supplier shipped the received goods." },
-                  ...grnLinesOf(selectedGrn).slice(0, 3).map((line) => ({ type: "sku", id: line.sku, label: line.itemName, relationshipLabel: "Affects inventory", relationshipReason: "GRN line updates inventory for this SKU." })),
-                  ...(selectedGrn.inventoryMovementIds || []).slice(0, 3).map((id) => ({ type: "inventoryMovement", id, relationshipLabel: "Affects inventory", relationshipReason: "Inventory movement exists, but detail page is not available." })),
-                  ...SUPPLIER_INVOICES.filter((invoice) => invoice.relatedGrn === selectedGrn.grn || invoice.relatedPo === selectedGrn.po).slice(0, 3).map((invoice) => ({ type: "invoice", id: invoice.invoiceNumber, status: invoice.status, relationshipLabel: "Matches invoice", relationshipReason: "Invoice references this GRN or PO." })),
-                ]}
+                relatedRecords={relatedRecordsForEntity({ purchaseOrders, receivingDocs: docs, supplierInvoices: SUPPLIER_INVOICES, inventoryMovements: [] }, "grn", selectedGrn.grn)}
                 provenance="GRN / API"
                 notes={selectedGrn.status === "异常处理" ? "异常收货需要进入采购退货、贷项通知或应付冲减流程，并会影响供应商发票匹配。" : "收货明细用于库存可用量、三单匹配和异常处理证据链。"}
                 evidence={[
