@@ -185,6 +185,7 @@ test('procurement operational intent detection keeps draft and RFQ prompts out',
   }), 'pr_conversion_status_query')
   assert.equal(detectAiProcurementOperationalIntent('PO-1001 receiving status'), 'receiving_status_query')
   assert.equal(detectAiProcurementOperationalIntent('哪些收货有异常？'), 'receiving_exception_query')
+  assert.equal(detectAiProcurementOperationalIntent('逾期 PO 一般怎么处理？'), null)
   assert.equal(detectAiProcurementOperationalIntent('Create RFQ for A100 qty 1000'), null)
   assert.equal(detectAiProcurementOperationalIntent('RFQ pending'), null)
 })

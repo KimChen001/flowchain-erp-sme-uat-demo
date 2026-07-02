@@ -806,6 +806,26 @@ function idsFromMessage(message = '') {
   return [...message.matchAll(/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/gi)].map((match) => match[0].toUpperCase())
 }
 
+function contextualBusinessId(body = {}, family = '') {
+  const matchesFamily = (type = '', id = '') => {
+    const normalized = text(type).toLowerCase()
+    if (family === 'po') return normalized === 'po' || normalized === 'purchase_order' || /^PO-/i.test(id)
+    return false
+  }
+  const candidates = [
+    body.activeContext,
+    body.sessionGrounding?.activeContext,
+    body.sessionGrounding?.lastPrimaryEntity,
+    ...asArray(body.sessionGrounding?.lastVisibleBusinessIds?.[family]).map((id) => ({ id, type: family })),
+  ]
+  for (const candidate of candidates) {
+    const id = text(candidate?.entityId || candidate?.id)
+    const type = text(candidate?.entityType || candidate?.type)
+    if (id && matchesFamily(type, id)) return id.toUpperCase()
+  }
+  return ''
+}
+
 function documentById(models = {}, id = '') {
   return findDocumentById(models.procurementDocuments, id)
 }
@@ -814,9 +834,13 @@ function inventoryById(models = {}, id = '') {
   return asArray(models.inventoryItems).find((item) => text(item.sku).toLowerCase() === text(id).toLowerCase()) || null
 }
 
-function buildRelationshipResponse(models, message = '') {
+function buildRelationshipResponse(models, message = '', body = {}) {
   if (!/关系|关联|对应|从哪个|来自|转\s*PO|后面|有关/.test(message)) return null
   const ids = idsFromMessage(message)
+  const contextualPo = !ids.some((id) => /^PO-/i.test(id)) && /(?:这个|该|此)?\s*\bPO\b/i.test(message)
+    ? contextualBusinessId(body, 'po')
+    : ''
+  if (contextualPo) ids.unshift(contextualPo)
   const docs = ids.map((id) => documentById(models, id)).filter(Boolean)
   const skus = ids.map((id) => inventoryById(models, id)).filter(Boolean)
   const evidence = evidenceItems([...docs, ...skus.map((item) => ({ ...item, type: 'inventory_item', id: item.sku, route: `/api/inventory/items/${encodeURIComponent(item.sku)}` }))])
@@ -932,7 +956,7 @@ export function buildAiEvidenceReuseResponse(data = {}, body = {}, options = {})
   const sop = buildSopResponse(models, message)
   if (sop) return sop
 
-  const relationship = buildRelationshipResponse(models, message)
+  const relationship = buildRelationshipResponse(models, message, body)
   if (relationship) return relationship
 
   if (/\b(?:PO|PR|RFQ|GRN|INV|SKU)-[A-Z0-9-]+\b/i.test(message) && /优先|解释/.test(message)) {

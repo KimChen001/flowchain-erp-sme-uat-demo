@@ -708,7 +708,9 @@ export function detectAiProcurementOperationalIntent(message = '', body = {}) {
   const overdueText = /逾期|快逾期|due soon|overdue|需要跟进的\s*PO|本周.*PO.*跟|po.*follow/i.test(text)
   const exceptionText = /收货.*(?:异常|差异)|receiving exceptions?|grn variance|收货差异/i.test(text)
   const followupText = /采购.*(?:跟进|下一步|重点|工作台|有什么要跟)|需要跟进.*采购|procurement.*(?:follow|need|items)|what procurement items need follow-up/i.test(text)
+  const sopText = /SOP|规则|流程|通常|一般|怎么处理|应该/i.test(text)
 
+  if (sopText) return null
   if (exceptionText) return 'receiving_exception_query'
   if (hasReceivingId || (receivingText && hasPoId)) return 'receiving_status_query'
   if (overdueText && !hasPoId) return 'po_overdue_query'

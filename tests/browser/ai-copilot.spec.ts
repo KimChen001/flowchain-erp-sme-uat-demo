@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const demoUser = {
   id: "browser-uat-user",
@@ -33,6 +33,12 @@ async function askAssistant(page: Page, prompt: string) {
   return assistant;
 }
 
+async function expectCleanAssistantOutput(assistant: Locator) {
+  await expect(assistant).not.toContainText(/provider fallback|tool_result|debug|documentType|entityType|response_card/i);
+  await expect(assistant).not.toContainText(/\{\s*"/);
+  await expect(assistant).not.toContainText(/"\s*:/);
+}
+
 async function askTodayPriority(page: Page) {
   await openAssistant(page);
   const assistant = await askAssistant(page, "今天最需要处理什么？");
@@ -56,7 +62,7 @@ async function clickEvidence(page: Page, businessId: string) {
 }
 
 async function openDraftPreview(page: Page, draftType: string) {
-  const action = page.locator(`[data-testid="ai-action-draft-preview"][data-draft-type="${draftType}"]`).first();
+  const action = page.locator(`[data-testid="ai-action-draft-preview"][data-draft-type="${draftType}"]`).last();
   await expect(action).toBeVisible();
   await action.click();
   const shell = page.getByTestId("action-draft-review-shell");
@@ -196,5 +202,37 @@ test.describe("AI Copilot browser UAT", () => {
     await expect(shell).toContainText("RFQ-26-0046");
     await expect(shell).toContainText(/不会创建|不会发送/);
     await expect(page.getByRole("button", { name: "确认提交" })).toBeDisabled();
+  });
+
+  test("R129 full AI Copilot demo scenario stays evidence-backed and review-first", async ({ page }) => {
+    await openLoggedInApp(page);
+    let assistant = await askTodayPriority(page);
+    await expectCleanAssistantOutput(assistant);
+
+    await clickEvidence(page, "PO-2026-1282");
+    await expect(page.getByTestId("ai-assistant-panel")).toBeHidden();
+    await expect(page.getByTestId("focus-banner")).toContainText("PO-2026-1282");
+
+    await restoreAssistant(page);
+    assistant = await askAssistant(page, "这个 PO 和 SKU-00412 有什么关系？");
+    for (const expected of ["PO-2026-1282", "SKU-00412"]) {
+      await expect(assistant).toContainText(expected);
+    }
+    await expect(assistant).toContainText(/GRN-202605-0418|GRN-202605-0419|收货单/);
+    await expect(assistant).toContainText(/PR-2026-2401|当前采购链路|采购申请/);
+    await expectCleanAssistantOutput(assistant);
+
+    assistant = await askAssistant(page, "逾期 PO 一般怎么处理？");
+    await expect(assistant).toContainText(/SOP-PO-OVERDUE|PO-OVERDUE/);
+    await expect(assistant).toContainText("内部处理建议");
+    await expect(assistant).toContainText("逾期 PO 跟进");
+    await expect(assistant).toContainText("不得自动");
+    await expectCleanAssistantOutput(assistant);
+
+    const shell = await openDraftPreview(page, "po_followup_draft");
+    await expect(shell).toContainText("PO-2026-1282");
+    await expect(shell).toContainText("ActionDraft");
+    await expect(page.getByRole("button", { name: "确认提交" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "保存草稿" })).toBeVisible();
   });
 });

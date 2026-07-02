@@ -73,6 +73,24 @@ test('R114 relationship reasoning explains PO SKU PR RFQ and GRN chain determini
   assert.ok(response.cards.some((card) => card.type === 'evidence_workspace'))
 })
 
+test('R129 relationship reasoning can ground contextual PO with explicit SKU', () => {
+  const response = buildAiEvidenceReuseResponse(createPilotDb(), {
+    moduleId: 'overview',
+    message: '这个 PO 和 SKU-00412 有什么关系？',
+    activeContext: { module: 'procurement', entityType: 'purchase_order', entityId: 'PO-2026-1282' },
+    sessionGrounding: {
+      lastPrimaryEntity: { type: 'po', id: 'PO-2026-1282', label: 'PO-2026-1282' },
+      lastVisibleBusinessIds: { po: ['PO-2026-1282'], sku: ['SKU-00412'] },
+    },
+  }, { cache: {} })
+
+  assert.equal(response.intent.name, 'relationship_reasoning_query')
+  assert.match(response.content, /PO-2026-1282/)
+  assert.match(response.content, /SKU-00412/)
+  assert.match(response.content, /PR-2026-2401/)
+  assert.match(response.content, /GRN-202605-0418/)
+})
+
 test('R114 relationship limitations do not invent missing links', () => {
   const response = buildAiEvidenceReuseResponse(createPilotDb(), { moduleId: 'overview', message: 'RFQ-26-9999 后面有没有转 PO？' }, { cache: {} })
 
@@ -98,4 +116,3 @@ test('R115 evidence-based follow-up draft actions stay review-first', () => {
   assert.equal(validateAiRetrievalActions([...poActions, ...rfqActions]).valid, true)
   assert.equal(visibleText([...poActions, ...rfqActions]).includes('autoSubmit'), false)
 })
-
