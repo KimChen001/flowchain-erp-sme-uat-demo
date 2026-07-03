@@ -195,3 +195,23 @@ test('R250 source guardrails keep workflow UI business-facing and AI safely boun
   assert.match(relationships, /resolveEntityRelationships/)
   assert.doesNotMatch([page, workflow, caseRoute].join('\n'), /OPENAI_API_KEY|ARK_API_KEY|DOUBAO_API_KEY|sk-[A-Za-z0-9]/)
 })
+
+test('R250.1 final case transitions require explicit confirmation UI before backend confirm flag', () => {
+  const page = source('src', 'modules', 'exception-cases', 'Page.tsx')
+  for (const expected of [
+    'Confirm final case transition',
+    'Current status',
+    'Next status',
+    'Case ID',
+    'Linked primary record',
+    'Resolution note required',
+    'Audit preview',
+    'Linked PO/GRN/Invoice/SKU/Supplier records will not be changed.',
+    'Confirm transition',
+  ]) {
+    assert.match(page, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  }
+  assert.match(page, /requestTransition\(status/)
+  assert.match(page, /"cancelled", "resolved", "closed"/)
+  assert.doesNotMatch(page, /onClick=\{\(\) => onChangeStatus\(item, status/)
+})
