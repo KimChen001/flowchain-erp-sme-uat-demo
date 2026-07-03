@@ -206,6 +206,23 @@ export default function SrmPage({
         <KpiCard label="开放 RFx" value={String(kpis.openRfqs)} sub="寻源参与" icon={ClipboardCheck} color={A.purple} />
       </div>
 
+      <Card className="p-5">
+        <SectionHeader title="Supplier Risk Evidence" right={<Chip label="review first" color={A.blue} bg="#eef6ff" />} />
+        <div className="grid grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
+          {[
+            ["Explain evidence", "Signals come from PO delay, quality hold, invoice mismatch, RFQ response, and unresolved exception cases."],
+            ["Create case draft", "Risk follow-up opens an exception case draft for owner review before any workflow is created."],
+            ["Preview supplier follow-up note", "Supplier communication stays as a draft; no external email send."],
+            ["Master-data guardrail", "Risk scoring has no supplier master data mutation and no purchasing block side effect."],
+          ].map(([title, body]) => (
+            <div key={title} className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
+              <div className="font-semibold" style={{ color: A.label }}>{title}</div>
+              <div className="mt-1">{body}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {tab !== "overview" && (
         <>
           <div className="flex items-center justify-between gap-3">

@@ -480,6 +480,22 @@ export function TodayCockpitPanel({ cockpit, loading, error = false, onNavigate,
         </button>
       </div>
 
+      <div className="mt-4 rounded-lg p-4" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold" style={{ color: A.label }}>Operations Control Tower</div>
+            <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>
+              Work items are grouped as Critical, Needs review, Waiting supplier, Waiting internal, Resolved pending closure, and Data gaps with case-aware deduplication.
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2 text-[11px]">
+            {["Create case draft", "Preview follow-up note", "Explain evidence"].map((label) => (
+              <span key={label} className="rounded-md px-2.5 py-1 font-medium" style={{ background: A.white, color: A.blue }}>{label}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <TodayCockpitSummaryCards cards={cockpit.cards} onNavigate={onNavigate} />
 
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">

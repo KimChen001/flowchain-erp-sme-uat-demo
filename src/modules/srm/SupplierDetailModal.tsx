@@ -88,8 +88,16 @@ export default function SupplierDetailModal({ row, onClose }: { row: SupplierSrm
             </div>
           </Card>
         </div>
+
+        <Card className="p-4" style={{ boxShadow: "none", background: A.gray6 }}>
+          <SectionHeader title="Supplier Risk Evidence" />
+          <div className="grid grid-cols-3 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
+            <div>Explain evidence before action: PO delay, receiving exception, invoice mismatch, RFQ response, and open exception cases.</div>
+            <div>Preview supplier follow-up note only; no external email send and no supplier master data mutation.</div>
+            <div>Create case draft only; owner confirmation is required before supplier remediation work starts.</div>
+          </div>
+        </Card>
       </div>
     </Modal>
   );
 }
-

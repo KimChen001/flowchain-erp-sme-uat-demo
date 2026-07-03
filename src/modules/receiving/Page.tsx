@@ -576,6 +576,26 @@ function ReceivingOps({
         <KpiCard label="异常处理"   value={String(exceptions)}   sub="本月累计 12 起"    delta="+1 vs 昨日" positive={false} icon={AlertCircle} color={A.red}    />
       </div>
 
+      <Card className="p-5">
+        <SectionHeader
+          title="Receiving Review Boundary"
+          right={<Chip label="draft only" color={A.blue} bg="#eef6ff" />}
+        />
+        <div className="grid grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
+          {[
+            ["Preview GRN Draft", "Only issued or partially received POs are eligible; PO Draft is blocked."],
+            ["Create Receiving Record after Review", "Requires human confirmation before a receiving record can be saved."],
+            ["Preview Inventory Movement Draft", "Shows hold / receive movement intent with no inventory posting and no stock balance update."],
+            ["Preview Receiving Exception Case", "Creates an exception case draft only; no PO close and no invoice approval/payment/posting."],
+          ].map(([title, body]) => (
+            <div key={title} className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
+              <div className="font-semibold" style={{ color: A.label }}>{title}</div>
+              <div className="mt-1">{body}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {!showGrnDetail && (
       <>
       {/* Schedule + Dock */}

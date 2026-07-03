@@ -199,6 +199,24 @@ function InventoryOverview({
       </div>
 
       <Card className="p-5">
+        <SectionHeader title="Inventory Movement Ledger Draft" right={<Chip label="preview only" color={A.blue} bg="#eef6ff" />} />
+        <div className="grid grid-cols-3 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
+          <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
+            <div className="font-semibold" style={{ color: A.label }}>Balance Impact Preview</div>
+            <div className="mt-1">Preview projected on-hand, available stock, and held stock before a person posts any movement.</div>
+          </div>
+          <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
+            <div className="font-semibold" style={{ color: A.label }}>Quality Hold</div>
+            <div className="mt-1">Accepted quantity can be reviewed separately from quality hold quantity; hold has zero available-stock impact.</div>
+          </div>
+          <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
+            <div className="font-semibold" style={{ color: A.label }}>Posting Guardrail</div>
+            <div className="mt-1">Draft review has no inventory posting, no stock balance update, and no PO close side effect.</div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-5">
         <SectionHeader title="库存补货控制台" right={
           <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#fff8f0", color: A.orange }}>
             ROP + MOQ + 在途/分配

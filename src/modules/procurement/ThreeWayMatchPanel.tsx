@@ -48,7 +48,7 @@ export default function ThreeWayMatchPanel() {
   const resolve = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, matchStatus: "已解决", status: "已匹配", varianceAmount: 0, varianceType: "无差异" } : q));
     setOpenActionId(null);
-    toast.success(`${id} 差异已解决`, { description: "状态已更新，请继续复核发票、退货贷项或应付冲减影响。" });
+    toast.success(`${id} 差异已解决`, { description: "已保存匹配复核状态；no approval/payment/posting." });
   };
   const rejectInvoice = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, status: "已驳回", matchStatus: "差异待处理" } : q));
@@ -75,6 +75,21 @@ export default function ThreeWayMatchPanel() {
         <KpiCard label="缺少收货" value={String(missingGrn)} sub="GRN 未完成" icon={Package} color={A.orange} />
         <KpiCard label="重复风险" value={String(duplicateRisk)} sub="供应商+发票号" icon={AlertCircle} color={A.purple} />
       </div>
+
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>Invoice Matching Review</h2>
+            <p className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>
+              三单匹配只生成证据、差异状态和协同记录。Save Finance Note 与 Preview Invoice Exception Case 均需人工确认，且 no approval/payment/posting。
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button type="button" className="px-3 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>Save Finance Note</button>
+            <button type="button" className="px-3 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#fff8f0", color: A.orange }}>Preview Invoice Exception Case</button>
+          </div>
+        </div>
+      </Card>
 
       <Card>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
