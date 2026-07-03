@@ -10,6 +10,7 @@ import { createDbMasterDataRepository } from './db-master-data-repository.mjs'
 import { createDbProcurementReadRepository } from './db-procurement-read-repository.mjs'
 import { createDbInventoryReadRepository } from './db-inventory-read-repository.mjs'
 import { createDisabledUserDataRuntimeRepository, createInMemoryUserDataRuntimeRepository } from './user-data-runtime-repository.mjs'
+import { createInMemoryUserConfirmedActionRepository } from './user-confirmed-action-repository.mjs'
 
 export const PERSISTENCE_MODES = Object.freeze({
   json: 'json',
@@ -56,6 +57,7 @@ export function createJsonRepositoryRegistry({ db = {}, env = process.env } = {}
     auditLog: createAuditLogRepository(db),
     aiConversation: createAiConversationRepository(),
     userDataRuntime: createUserDataRuntimeRepository({ db, env }),
+    userConfirmedActions: createInMemoryUserConfirmedActionRepository({ db }),
   }
 }
 
@@ -70,6 +72,7 @@ export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, p
     auditLog: createDbAuditLogRepository({ env, prisma }),
     aiConversation: createAiConversationRepository(),
     userDataRuntime: createUserDataRuntimeRepository({ db, env }),
+    userConfirmedActions: createInMemoryUserConfirmedActionRepository({ db }),
   }
 }
 

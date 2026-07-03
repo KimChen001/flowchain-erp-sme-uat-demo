@@ -81,6 +81,16 @@ async function openDraftPreview(page: Page, draftType: string) {
   return shell;
 }
 
+async function expectConfirmedSafeActionBoundary(page: Page, expectedLabel = /Create PR|Save Reviewed Draft/) {
+  await expect(page.getByRole("button", { name: expectedLabel })).toBeVisible();
+  const shell = page.getByTestId("action-draft-review-shell");
+  await expect(shell).toContainText("What will be created/saved");
+  await expect(shell).toContainText("Dangerous actions remain disabled or absent");
+  await expect(shell).toContainText("This will not issue a PO");
+  await expect(shell).toContainText("This will not send email");
+  await expect(shell).toContainText("This will not award a supplier");
+}
+
 async function closeDraftPreview(page: Page) {
   await page.getByRole("button", { name: "关闭", exact: true }).click();
   await expect(page.getByTestId("action-draft-review-shell")).toBeHidden();
@@ -309,7 +319,7 @@ test.describe("AI Copilot browser UAT", () => {
     const shell = await openDraftPreview(page, "purchase_request_draft");
     await expect(shell).toContainText("SKU-00412");
     await expect(shell).toContainText("ActionDraft");
-    await expect(page.getByRole("button", { name: "确认提交" })).toBeDisabled();
+    await expectConfirmedSafeActionBoundary(page, "Create PR");
 
     await closeDraftPreview(page);
     await expect(page.getByTestId("ai-assistant-panel")).toBeVisible();
@@ -323,14 +333,14 @@ test.describe("AI Copilot browser UAT", () => {
     await askAssistant(page, "解释 PO-2026-1282 为什么优先");
     let shell = await openDraftPreview(page, "po_followup_draft");
     await expect(shell).toContainText("PO-2026-1282");
-    await expect(page.getByRole("button", { name: "确认提交" })).toBeDisabled();
+    await expectConfirmedSafeActionBoundary(page, "Save Reviewed Draft");
     await closeDraftPreview(page);
 
     await askAssistant(page, "RFQ-26-0046 需要怎么跟进？");
     shell = await openDraftPreview(page, "supplier_followup_draft");
     await expect(shell).toContainText("RFQ-26-0046");
     await expect(shell).toContainText(/不会创建|不会发送/);
-    await expect(page.getByRole("button", { name: "确认提交" })).toBeDisabled();
+    await expectConfirmedSafeActionBoundary(page, "Save Supplier Follow-up Note");
   });
 
   test("R129 full AI Copilot demo scenario stays evidence-backed and review-first", async ({ page }) => {
@@ -361,7 +371,7 @@ test.describe("AI Copilot browser UAT", () => {
     const shell = await openDraftPreview(page, "po_followup_draft");
     await expect(shell).toContainText("PO-2026-1282");
     await expect(shell).toContainText("ActionDraft");
-    await expect(page.getByRole("button", { name: "确认提交" })).toBeDisabled();
+    await expectConfirmedSafeActionBoundary(page, "Save Reviewed Draft");
     await expect(page.getByRole("button", { name: "保存草稿" })).toBeVisible();
   });
 });

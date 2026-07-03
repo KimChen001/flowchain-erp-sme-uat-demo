@@ -49,7 +49,8 @@ test('PO detail and draft review shell use shared recovery actions', () => {
   assert.match(purchasingSource, /返回采购工作台/)
   assert.match(actionDraftSource, /<RecoveryActions/)
   assert.match(actionDraftSource, /取消草稿/)
-  assert.match(actionDraftSource, /确认提交/)
+  assert.match(actionDraftSource, /onConfirmSafeAction/)
+  assert.match(actionDraftSource, /This will not issue a PO/)
 })
 
 test('procurement PR RFQ and GRN details expose canonical recovery paths', () => {

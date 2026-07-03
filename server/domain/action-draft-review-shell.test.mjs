@@ -9,16 +9,24 @@ function readSource(...parts) {
   return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8')
 }
 
-test('action draft review shell is preview-only and keeps confirmation disabled', () => {
+test('action draft review shell keeps dangerous actions disabled and exposes confirmed safe actions', () => {
   const shell = readSource('src', 'modules', 'action-drafts', 'ActionDraftReviewShell.tsx')
 
   assert.match(shell, /export function ActionDraftReviewShell/)
-  assert.match(shell, /审阅工作区：可编辑和保存草稿，但不会创建、提交、发送或过账任何业务记录/)
+  assert.match(shell, /审阅工作区：可编辑和保存草稿，用户确认后仅能创建或保存允许的安全内部记录/)
   assert.match(shell, /预览 \/ 保存边界/)
-  assert.match(shell, /不会创建 PR、RFQ、PO、GRN 或库存事务/)
-  assert.match(shell, /确认提交/)
+  assert.match(shell, /confirmed-action-boundary/)
+  assert.match(shell, /Create PR/)
+  assert.match(shell, /Create Sourcing Event \/ RFQ Draft/)
+  assert.match(shell, /Save Supplier Follow-up Note/)
+  assert.match(shell, /This will not submit for approval/)
+  assert.match(shell, /This will not issue a PO/)
+  assert.match(shell, /This will not send email/)
+  assert.match(shell, /This will not award a supplier/)
+  assert.match(shell, /This will not post inventory or invoice entries/)
   assert.match(shell, /draftButtonClass = `h-8 rounded-lg px-3 \$\{typography\.denseButton\} disabled:cursor-not-allowed`/)
-  assert.match(shell, /disabled className=\{`\$\{draftButtonClass\} text-white`\}/)
+  assert.match(shell, /onConfirmSafeAction/)
+  assert.match(shell, /confirmedActionLabel/)
   assert.match(shell, /取消草稿/)
   assert.match(shell, /重置修改/)
   assert.match(shell, /保存草稿/)
@@ -49,8 +57,10 @@ test('Today Cockpit AI and inventory can open review shell without business writ
 
   assert.match(app, /\/api\/action-drafts\/preview/)
   assert.match(app, /\/api\/action-drafts\/save/)
+  assert.match(app, /\/api\/user-confirmed-actions/)
   assert.match(app, /<ActionDraftReviewShell/)
   assert.match(app, /onSaveDraft=\{saveActionDraftReview\}/)
+  assert.match(app, /onConfirmSafeAction=\{confirmSafeActionDraft\}/)
   assert.match(app, /createsBusinessDocument/)
   assert.match(cockpit, /草稿预览/)
   assert.match(cockpit, /actionDraftRequest\(item\)/)
@@ -60,5 +70,4 @@ test('Today Cockpit AI and inventory can open review shell without business writ
   assert.match(inventory, /type: draftType/)
   assert.match(inventory, /originEvidence/)
   assert.doesNotMatch(app, /\/api\/purchase-requests/)
-  assert.doesNotMatch(app, /confirmDraft/)
 })

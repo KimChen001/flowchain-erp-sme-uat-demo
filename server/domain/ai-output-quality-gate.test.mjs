@@ -263,7 +263,10 @@ test('R97 AI panel wires draft preview actions to review shell without unsafe su
   assert.match(source, /"draft_preview"/)
   assert.match(source, /actionDraftRequestFromAction/)
   assert.match(source, /onReviewActionDraft\?\.\(draftRequest\)/)
-  assert.match(draftShell, /不会创建、提交、发送或过账任何业务记录/)
+  assert.match(draftShell, /用户确认后仅能创建或保存允许的安全内部记录/)
+  assert.match(draftShell, /This will not submit for approval/)
+  assert.match(draftShell, /This will not issue a PO/)
+  assert.match(draftShell, /This will not send email/)
   assert.doesNotMatch(source, UNSAFE_ACTION_PATTERN)
 })
 

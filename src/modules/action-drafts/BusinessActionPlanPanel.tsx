@@ -42,6 +42,7 @@ export type BusinessActionPlanPanelProps = {
   drafts?: BusinessDraft[];
   onEditDraft?: () => void;
   onSaveDraft?: () => void;
+  onConfirmSafeAction?: () => void;
   onMarkReviewed?: () => void;
   onCopyDraft?: () => void;
   onContinueFillingFields?: () => void;
@@ -51,6 +52,7 @@ export type BusinessActionPlanPanelProps = {
 const safeButtons = [
   { key: "edit", label: "Edit Draft", icon: Edit3 },
   { key: "save", label: "Save Draft", icon: Save },
+  { key: "confirm", label: "Save Reviewed Draft", icon: CheckCircle2 },
   { key: "reviewed", label: "Mark Reviewed", icon: CheckCircle2 },
   { key: "copy", label: "Copy Draft", icon: Clipboard },
   { key: "continue", label: "Continue Filling Fields", icon: FileClock },
@@ -67,6 +69,7 @@ function formatValue(value: unknown) {
 function callbackFor(key: string, props: BusinessActionPlanPanelProps) {
   if (key === "edit") return props.onEditDraft;
   if (key === "save") return props.onSaveDraft;
+  if (key === "confirm") return props.onConfirmSafeAction;
   if (key === "reviewed") return props.onMarkReviewed;
   if (key === "copy") return props.onCopyDraft;
   if (key === "continue") return props.onContinueFillingFields;
@@ -137,6 +140,11 @@ export function BusinessActionPlanPanel(props: BusinessActionPlanPanelProps) {
           {!!draft.missingFields?.length && <p className={typography.metadata} style={{ color: A.orange }}>Missing fields: {draft.missingFields.join(", ")}</p>}
           {!!draft.dataLimitations?.length && <p className={typography.metadata} style={{ color: A.red }}>Data limitations: {draft.dataLimitations.join(", ")}</p>}
           {!!draft.auditPreview?.length && <p className={typography.metadata} style={{ color: A.sub }}>Audit preview: {draft.auditPreview.map((item) => item.action).join(", ")}</p>}
+          <div className="rounded-md border p-3" style={{ borderColor: A.border, background: A.gray6 }}>
+            <p className={typography.formLabel}>User-confirmed safe action boundary</p>
+            <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>Supported safe actions: Create Supplier Application · Create PR · Create Sourcing Event / RFQ Draft · Save Supplier Follow-up Note · Save Case Note · Save Reviewed Draft.</p>
+            <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>This will not submit for approval. This will not issue a PO. This will not send email. This will not award a supplier. This will not post inventory or invoice entries.</p>
+          </div>
         </div>
       ))}
 

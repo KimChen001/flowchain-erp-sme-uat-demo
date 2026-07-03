@@ -37,6 +37,12 @@ export type ActionDraftPreview = {
   };
 };
 
+export type ConfirmedActionResult = {
+  createdRecordId?: string;
+  status?: string;
+  auditEventId?: string | null;
+};
+
 function text(value: unknown) {
   if (value === undefined || value === null || value === "") return "—";
   if (typeof value === "boolean") return value ? "是" : "否";
@@ -103,6 +109,34 @@ function copyTextForDraft(draft: ActionDraftPreview | null) {
   return `${draft.title}\nType: ${draft.type}\nStatus: ${draft.status}\n${payload}${warnings}`.trim();
 }
 
+function confirmedActionTypeForDraft(type?: string) {
+  const map: Record<string, string> = {
+    purchase_request_draft: "create_purchase_request",
+    rfq_draft: "create_rfq",
+    supplier_followup_draft: "save_supplier_followup_note",
+    supplier_application: "create_supplier_application",
+    purchase_request: "create_purchase_request",
+    sourcing_event: "create_sourcing_event",
+    rfq: "create_rfq",
+    supplier_followup: "save_supplier_followup_note",
+    exception_note: "save_exception_case_note",
+  };
+  return map[type || ""] || "save_reviewed_draft";
+}
+
+function confirmedActionLabel(type?: string) {
+  const labels: Record<string, string> = {
+    create_supplier_application: "Create Supplier Application",
+    create_purchase_request: "Create PR",
+    create_sourcing_event: "Create Sourcing Event / RFQ Draft",
+    create_rfq: "Create Sourcing Event / RFQ Draft",
+    save_supplier_followup_note: "Save Supplier Follow-up Note",
+    save_exception_case_note: "Save Case Note",
+    save_reviewed_draft: "Save Reviewed Draft",
+  };
+  return labels[confirmedActionTypeForDraft(type)] || "Save Reviewed Draft";
+}
+
 function isEditableScalar(value: unknown) {
   return ["string", "number", "boolean"].includes(typeof value) || value === null || value === undefined;
 }
@@ -129,6 +163,7 @@ export function ActionDraftReviewShell({
   onClose,
   onCancelPreview,
   onSaveDraft,
+  onConfirmSafeAction,
   onNavigate,
 }: {
   open: boolean;
@@ -138,12 +173,15 @@ export function ActionDraftReviewShell({
   onClose: () => void;
   onCancelPreview: () => void;
   onSaveDraft?: (draft: ActionDraftPreview) => Promise<void>;
+  onConfirmSafeAction?: (draft: ActionDraftPreview) => Promise<ConfirmedActionResult>;
   onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
 }) {
   const [workingDraft, setWorkingDraft] = useState<ActionDraftPreview | null>(draft);
   const [saveStatus, setSaveStatus] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmResult, setConfirmResult] = useState<ConfirmedActionResult | null>(null);
   const activeDraft = workingDraft || draft;
   const validation = activeDraft?.validation;
   const evidence = normalizeEvidenceLinks(activeDraft?.originEvidence || [], { source: "actionDraft" }).slice(0, 6);
@@ -154,6 +192,7 @@ export function ActionDraftReviewShell({
     setWorkingDraft(draft);
     setSaveStatus("");
     setSaveError("");
+    setConfirmResult(null);
   }, [draft?.id, draft?.updatedAt, open]);
 
   function updatePayloadField(key: string, value: string, original: unknown) {
@@ -194,12 +233,27 @@ export function ActionDraftReviewShell({
     await navigator.clipboard.writeText(content);
   }
 
+  async function confirmSafeAction() {
+    if (!activeDraft || !onConfirmSafeAction) return;
+    setConfirming(true);
+    setSaveError("");
+    try {
+      const result = await onConfirmSafeAction(activeDraft);
+      setConfirmResult(result);
+      setSaveStatus("用户确认的安全动作已记录。");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "安全确认失败");
+    } finally {
+      setConfirming(false);
+    }
+  }
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={activeDraft?.title || "动作草稿预览"}
-      subtitle="审阅工作区：可编辑和保存草稿，但不会创建、提交、发送或过账任何业务记录"
+      subtitle="审阅工作区：可编辑和保存草稿，用户确认后仅能创建或保存允许的安全内部记录"
       width={860}
       footer={(
         <>
@@ -218,8 +272,8 @@ export function ActionDraftReviewShell({
           <button type="button" onClick={saveDraft} disabled={!activeDraft || !onSaveDraft || saving} className={draftButtonClass} style={{ background: activeDraft && onSaveDraft ? A.blue : A.gray4, color: A.white }}>
             <Save size={12} className="mr-1 inline" />{saving ? "保存中" : "保存草稿"}
           </button>
-          <button type="button" disabled className={`${draftButtonClass} text-white`} style={{ background: A.gray3 }}>
-            确认提交
+          <button type="button" onClick={confirmSafeAction} disabled={!activeDraft || !onConfirmSafeAction || confirming || Boolean(validation?.errors?.length)} className={`${draftButtonClass} text-white`} style={{ background: activeDraft && onConfirmSafeAction && !validation?.errors?.length ? A.green : A.gray3 }}>
+            {confirming ? "确认中" : confirmedActionLabel(activeDraft?.type)}
           </button>
         </>
       )}
@@ -236,15 +290,32 @@ export function ActionDraftReviewShell({
               <div>
                 <div className="font-semibold">预览 / 保存边界</div>
                 <div className="mt-1" style={{ color: A.sub }}>
-                  当前工作区只允许审阅、复制、编辑简单字段和保存 ActionDraft 壳；不会创建 PR、RFQ、PO、GRN 或库存事务，最终确认仍未实现。
+                  当前工作区允许审阅、复制、编辑简单字段、保存 ActionDraft 壳，并在明确用户确认后创建/保存允许范围内的安全记录。
                 </div>
                 <div className="mt-1" style={{ color: A.sub }}>
-                  人工审阅后才可保存草稿；不会创建、不会提交、不会发送或过账任何业务记录。
+                  危险动作不会创建或发出 PO，不会提交审批，不会发送外部邮件；所有安全记录仍需人工确认。
+                </div>
+                <div className="mt-1" style={{ color: A.sub }}>
+                  This will not submit for approval. This will not issue a PO. This will not send email. This will not award a supplier. This will not post inventory or invoice entries.
                 </div>
               </div>
             </div>
             {(saveStatus || saveError) && (
               <div className="mt-2 text-[11px]" style={{ color: saveError ? A.red : A.green }}>{saveError || saveStatus}</div>
+            )}
+          </section>
+          <section data-testid="confirmed-action-boundary" className="rounded-lg border px-3 py-3" style={{ borderColor: A.border, background: A.white }}>
+            <div className="text-[12px] font-semibold" style={{ color: A.label }}>{confirmedActionLabel(activeDraft.type)}</div>
+            <div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>
+              What will be created/saved: {confirmedActionLabel(activeDraft.type)} from reviewed draft {activeDraft.id}. Linked records and evidence remain references only.
+            </div>
+            <div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>
+              Dangerous actions remain disabled or absent: submit, approve, pay, post, send email, issue PO, award supplier.
+            </div>
+            {confirmResult && (
+              <div className="mt-2 rounded-md px-2 py-2 text-[11px]" style={{ background: "#f0faf4", color: A.green }}>
+                Created record {confirmResult.createdRecordId || "—"} · status {confirmResult.status || "—"} · audit {confirmResult.auditEventId || "not available"}
+              </div>
             )}
           </section>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">

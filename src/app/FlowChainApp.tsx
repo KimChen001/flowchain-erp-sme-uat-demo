@@ -42,7 +42,7 @@ import FinanceWorkbench from "../modules/finance/Page";
 import SrmPage from "../modules/srm/Page";
 import MasterDataPage from "../modules/master-data/Page";
 import AiPanel, { type ActiveContext } from "../modules/ai-assistant/Panel";
-import { ActionDraftReviewShell, type ActionDraftPreview, type ActionDraftPreviewRequest } from "../modules/action-drafts/ActionDraftReviewShell";
+import { ActionDraftReviewShell, type ActionDraftPreview, type ActionDraftPreviewRequest, type ConfirmedActionResult } from "../modules/action-drafts/ActionDraftReviewShell";
 import ReportsPanel from "../modules/reports/Page";
 import ImportsPanel from "../modules/imports/Page";
 import ExceptionCasesPage from "../modules/exception-cases/Page";
@@ -626,6 +626,37 @@ export default function FlowChainApp() {
     toast.success("草稿已保存", { description: "仅保存 ActionDraft，不会创建业务单据。" });
   }
 
+  function confirmedActionTypeForPreview(type: string) {
+    const map: Record<string, string> = {
+      purchase_request_draft: "create_purchase_request",
+      rfq_draft: "create_rfq",
+      supplier_followup_draft: "save_supplier_followup_note",
+    };
+    return map[type] || "save_reviewed_draft";
+  }
+
+  async function confirmSafeActionDraft(draft: ActionDraftPreview): Promise<ConfirmedActionResult> {
+    const response = await apiJson<{ createdRecordId?: string; status?: string; auditEventId?: string | null; mutatesLinkedBusinessRecords?: boolean; sideEffects?: Record<string, unknown> }>("/api/user-confirmed-actions", {
+      method: "POST",
+      body: JSON.stringify({
+        actionType: confirmedActionTypeForPreview(draft.type),
+        draftId: draft.id,
+        sourceTrigger: draft.source || "action_draft_review",
+        reviewedFields: draft.payload || {},
+        linkedRecords: draft.originEvidence || [],
+        evidenceReferences: draft.originEvidence || [],
+        auditPreview: draft.auditTrail || [],
+        confirm: true,
+        actor: "current_user",
+      }),
+    });
+    if (response.mutatesLinkedBusinessRecords || response.sideEffects?.issuesPo || response.sideEffects?.sendsExternalEmail) {
+      throw new Error("确认边界异常：接口声明存在禁止的业务副作用。");
+    }
+    toast.success("安全动作已确认", { description: `${response.createdRecordId || "记录"} · ${response.status || "已保存"}` });
+    return { createdRecordId: response.createdRecordId, status: response.status, auditEventId: response.auditEventId };
+  }
+
   function clearFocus() {
     setSearchFocus(null);
     setFocusReturnContext(null);
@@ -1009,6 +1040,7 @@ export default function FlowChainApp() {
         onClose={() => setDraftShellOpen(false)}
         onCancelPreview={() => { setDraftPreview(null); setDraftError(""); setDraftShellOpen(false); }}
         onSaveDraft={saveActionDraftReview}
+        onConfirmSafeAction={confirmSafeActionDraft}
         onNavigate={navigateTo}
       />
     </div>
