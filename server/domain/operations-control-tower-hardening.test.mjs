@@ -184,17 +184,23 @@ test('R296-R300 Today Cockpit control tower aggregates work items with case awar
 })
 
 test('R280/R290/R300 source guardrails preserve boundaries no keys and no standalone AI nav', () => {
-  const all = [
+  const domainSource = [
     read('server', 'domain', 'receiving-inventory-ledger.mjs'),
     read('server', 'domain', 'invoice-matching-review.mjs'),
     read('server', 'domain', 'supplier-risk-control-tower.mjs'),
+  ].join('\n')
+  const uiSource = [
     read('src', 'modules', 'receiving', 'Page.tsx'),
     read('src', 'modules', 'inventory', 'Page.tsx'),
     read('src', 'modules', 'procurement', 'ThreeWayMatchPanel.tsx'),
     read('src', 'modules', 'srm', 'Page.tsx'),
     read('src', 'modules', 'srm', 'SupplierDetailModal.tsx'),
     read('src', 'modules', 'overview', 'TodayCockpitPanel.tsx'),
+    read('src', 'components', 'ai', 'ContextualAIInsightPanel.tsx'),
+    read('src', 'modules', 'action-drafts', 'BusinessActionPlanPanel.tsx'),
+    read('src', 'modules', 'action-drafts', 'ActionDraftReviewShell.tsx'),
   ].join('\n')
+  const all = [domainSource, uiSource].join('\n')
   const app = read('src', 'app', 'FlowChainApp.tsx')
   const relationships = read('src', 'domain', 'relationships', 'resolver.ts')
   const procurement = read('server', 'domain', 'procurement-transaction-core.mjs')
@@ -209,24 +215,43 @@ test('R280/R290/R300 source guardrails preserve boundaries no keys and no standa
   assert.match(relationships, /resolveEntityRelationships/)
   assert.doesNotMatch(relationships, /fetch\(|apiJson|POST|PATCH/)
   assert.doesNotMatch(all, /SKU-00412.*exception/i)
-  assert.match(all, /Preview GRN Draft/)
-  assert.match(all, /Create Receiving Record after Review/)
-  assert.match(all, /Preview Inventory Movement Draft/)
-  assert.match(all, /Preview Receiving Exception Case/)
-  assert.match(all, /Inventory Movement Ledger Draft/)
-  assert.match(all, /Balance Impact Preview/)
-  assert.match(all, /quality hold/i)
-  assert.match(all, /available stock/i)
-  assert.match(all, /Invoice Matching Review/)
-  assert.match(all, /Save Finance Note/)
-  assert.match(all, /Preview Invoice Exception Case/)
-  assert.match(all, /no approval\/payment\/posting/)
-  assert.match(all, /Supplier Risk Evidence/)
-  assert.match(all, /Preview supplier follow-up note/)
-  assert.match(all, /no supplier master data mutation/)
-  assert.match(all, /no external email send/)
-  assert.match(all, /Operations Control Tower/)
-  assert.match(all, /Critical, Needs review, Waiting supplier, Waiting internal, Resolved pending closure, and Data gaps/)
-  assert.match(all, /Create case draft/)
-  assert.match(all, /Explain evidence/)
+  assert.match(uiSource, /收货复核边界/)
+  assert.match(uiSource, /预览收货单草稿（GRN）/)
+  assert.match(uiSource, /复核后创建收货记录/)
+  assert.match(uiSource, /预览库存流水草稿/)
+  assert.match(uiSource, /预览收货异常工单/)
+  assert.match(uiSource, /库存流水草稿/)
+  assert.match(uiSource, /库存余额影响预览/)
+  assert.match(uiSource, /质检冻结/)
+  assert.match(uiSource, /可用库存/)
+  assert.match(uiSource, /发票三单匹配复核/)
+  assert.match(uiSource, /保存财务协同备注/)
+  assert.match(uiSource, /预览发票异常工单/)
+  assert.match(uiSource, /不审批、不付款、不过账/)
+  assert.match(uiSource, /供应商风险依据/)
+  assert.match(uiSource, /预览供应商跟进备注/)
+  assert.match(uiSource, /不修改供应商主数据/)
+  assert.match(uiSource, /不自动发送外部邮件/)
+  assert.match(uiSource, /运营控制塔/)
+  assert.match(uiSource, /紧急、需复核、等待供应商、等待内部、已解决待关闭和数据缺口/)
+  assert.match(uiSource, /创建工单草稿/)
+  assert.match(uiSource, /解释依据/)
+  for (const forbidden of [
+    /Operations Control Tower/,
+    /Receiving Review Boundary/,
+    /Invoice Matching Review/,
+    /Supplier Risk Evidence/,
+    /Create case draft/,
+    /Preview follow-up note/,
+    /Explain evidence/,
+    /draft only/i,
+    /preview only/i,
+    /no approval\/payment\/posting/i,
+    /requiresReview:\s*true\s*·/i,
+  ]) {
+    assert.doesNotMatch(uiSource, forbidden)
+  }
+  for (const line of uiSource.split('\n')) {
+    assert.doesNotMatch(line, /["'`][^"'`]*mutationAllowed/i)
+  }
 })

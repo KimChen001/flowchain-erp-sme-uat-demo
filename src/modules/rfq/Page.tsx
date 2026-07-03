@@ -112,7 +112,7 @@ export default function PurchasingRFQPage({
         method: "POST",
         body: JSON.stringify({ rfqId: id }),
       });
-      toast.success(`${result.recommendation.id} 已生成授标推荐草稿`, { description: "Draft Only · Requires Review · 不授标、不创建 PO、不通知供应商" });
+      toast.success(`${result.recommendation.id} 已生成授标推荐草稿`, { description: "仅生成草稿 · 需人工复核 · 不授标、不创建 PO、不通知供应商" });
     } catch (error) {
       toast.error("授标推荐草稿失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
     }

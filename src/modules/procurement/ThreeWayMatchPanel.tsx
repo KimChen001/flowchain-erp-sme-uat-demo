@@ -48,7 +48,7 @@ export default function ThreeWayMatchPanel() {
   const resolve = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, matchStatus: "已解决", status: "已匹配", varianceAmount: 0, varianceType: "无差异" } : q));
     setOpenActionId(null);
-    toast.success(`${id} 差异已解决`, { description: "已保存匹配复核状态；no approval/payment/posting." });
+    toast.success(`${id} 差异已解决`, { description: "已保存匹配复核状态；不审批、不付款、不过账。" });
   };
   const rejectInvoice = (id: string) => {
     setQueue(prev => prev.map(q => q.id === id ? { ...q, status: "已驳回", matchStatus: "差异待处理" } : q));
@@ -79,14 +79,14 @@ export default function ThreeWayMatchPanel() {
       <Card className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>Invoice Matching Review</h2>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>发票三单匹配复核</h2>
             <p className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>
-              三单匹配只生成证据、差异状态和协同记录。Save Finance Note 与 Preview Invoice Exception Case 均需人工确认，且 no approval/payment/posting。
+              三单匹配只生成证据、差异状态和协同记录。保存财务协同备注与预览发票异常工单均需人工确认，且不审批、不付款、不过账。
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <button type="button" className="px-3 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>Save Finance Note</button>
-            <button type="button" className="px-3 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#fff8f0", color: A.orange }}>Preview Invoice Exception Case</button>
+            <button type="button" className="px-3 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>保存财务协同备注</button>
+            <button type="button" className="px-3 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#fff8f0", color: A.orange }}>预览发票异常工单</button>
           </div>
         </div>
       </Card>

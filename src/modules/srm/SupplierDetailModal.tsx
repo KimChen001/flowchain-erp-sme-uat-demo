@@ -90,11 +90,11 @@ export default function SupplierDetailModal({ row, onClose }: { row: SupplierSrm
         </div>
 
         <Card className="p-4" style={{ boxShadow: "none", background: A.gray6 }}>
-          <SectionHeader title="Supplier Risk Evidence" />
+          <SectionHeader title="供应商风险依据" />
           <div className="grid grid-cols-3 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
-            <div>Explain evidence before action: PO delay, receiving exception, invoice mismatch, RFQ response, and open exception cases.</div>
-            <div>Preview supplier follow-up note only; no external email send and no supplier master data mutation.</div>
-            <div>Create case draft only; owner confirmation is required before supplier remediation work starts.</div>
+            <div>行动前先解释依据：PO 延误、收货异常、发票差异、RFQ 响应和未关闭异常工单。</div>
+            <div>仅预览供应商跟进备注，不自动发送外部邮件，也不修改供应商主数据。</div>
+            <div>仅创建工单草稿，负责人确认后才启动供应商整改流程。</div>
           </div>
         </Card>
       </div>

@@ -221,10 +221,10 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
 
   function handleInvoiceInsightAction(action: ContextualAiAction) {
     if (action.intent === "preview_invoice_resolution_note") {
-      toast("Resolution note preview only", { description: `${action.sourceEntityId} · no auto-approve, no payment, no AP posting.` });
+      toast("仅预览差异处理备注", { description: `${action.sourceEntityId} · 不自动审批、不付款、不做应付过账。` });
       return;
     }
-    toast(action.label, { description: "Contextual insight only. mutationAllowed: false." });
+    toast(action.label, { description: "仅提供上下文洞察，需人工复核后处理。" });
   }
 
   const selectedSnapshot = selectedInvoice
@@ -452,12 +452,12 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
               ]}
             />
             <DocumentActionBar>
-              <button onClick={() => openInvoiceInsight(selectedInvoice, "Explain matching failure")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>Explain matching failure</button>
-              <button onClick={() => openInvoiceInsight(selectedInvoice, "Trace PO/GRN/Invoice difference")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>Trace PO/GRN/Invoice difference</button>
-              <button onClick={() => openInvoiceInsight(selectedInvoice, "Check receiving impact")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>Check receiving impact</button>
+              <button onClick={() => openInvoiceInsight(selectedInvoice, "解释匹配失败")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>解释匹配失败</button>
+              <button onClick={() => openInvoiceInsight(selectedInvoice, "追踪 PO/GRN/发票差异")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>追踪 PO/GRN/发票差异</button>
+              <button onClick={() => openInvoiceInsight(selectedInvoice, "检查收货影响")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>检查收货影响</button>
               <button onClick={() => handleInvoiceInsightAction({
                 id: `preview_invoice_resolution_note:supplier_invoice:${selectedInvoice.invoiceNumber}`,
-                label: `Preview resolution note for ${selectedInvoice.invoiceNumber}`,
+                label: `预览 ${selectedInvoice.invoiceNumber} 差异处理备注`,
                 intent: "preview_invoice_resolution_note",
                 sourceModule: isProcurementMode ? "procurement" : "finance",
                 sourceEntityType: "supplier_invoice",
@@ -470,7 +470,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
                 allowedOutputType: "draft_preview",
                 requiresReview: true,
                 mutationAllowed: false,
-              })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>Preview resolution note</button>
+              })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>预览差异处理备注</button>
               <button onClick={() => runMatch(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>运行匹配</button>
               <button onClick={() => approve(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
               {!isProcurementMode && <button onClick={() => postToAp(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>过账到应付</button>}

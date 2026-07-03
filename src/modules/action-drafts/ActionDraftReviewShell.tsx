@@ -105,8 +105,8 @@ function copyTextForDraft(draft: ActionDraftPreview | null) {
   const payload = Object.entries(draft.payload || {})
     .map(([key, value]) => `${payloadLabel(key)}: ${businessValue(value)}`)
     .join("\n");
-  const warnings = draft.validation?.errors?.length ? `\nValidation: ${draft.validation.errors.join("; ")}` : "";
-  return `${draft.title}\nType: ${draft.type}\nStatus: ${draft.status}\n${payload}${warnings}`.trim();
+  const warnings = draft.validation?.errors?.length ? `\n校验：${draft.validation.errors.join("; ")}` : "";
+  return `${draft.title}\n类型：${draft.type}\n状态：${draft.status}\n${payload}${warnings}`.trim();
 }
 
 function confirmedActionTypeForDraft(type?: string) {
@@ -126,15 +126,15 @@ function confirmedActionTypeForDraft(type?: string) {
 
 function confirmedActionLabel(type?: string) {
   const labels: Record<string, string> = {
-    create_supplier_application: "Create Supplier Application",
-    create_purchase_request: "Create PR",
-    create_sourcing_event: "Create Sourcing Event / RFQ Draft",
-    create_rfq: "Create Sourcing Event / RFQ Draft",
-    save_supplier_followup_note: "Save Supplier Follow-up Note",
-    save_exception_case_note: "Save Case Note",
-    save_reviewed_draft: "Save Reviewed Draft",
+    create_supplier_application: "创建供应商准入申请",
+    create_purchase_request: "创建 PR",
+    create_sourcing_event: "创建寻源事件 / RFQ 草稿",
+    create_rfq: "创建寻源事件 / RFQ 草稿",
+    save_supplier_followup_note: "保存供应商跟进备注",
+    save_exception_case_note: "保存工单备注",
+    save_reviewed_draft: "保存已复核草稿",
   };
-  return labels[confirmedActionTypeForDraft(type)] || "Save Reviewed Draft";
+  return labels[confirmedActionTypeForDraft(type)] || "保存已复核草稿";
 }
 
 function isEditableScalar(value: unknown) {
@@ -296,7 +296,7 @@ export function ActionDraftReviewShell({
                   危险动作不会创建或发出 PO，不会提交审批，不会发送外部邮件；所有安全记录仍需人工确认。
                 </div>
                 <div className="mt-1" style={{ color: A.sub }}>
-                  This will not submit for approval. This will not issue a PO. This will not send email. This will not award a supplier. This will not post inventory or invoice entries.
+                  不会提交审批、不会发出 PO、不会发送邮件、不会授标，也不会自动库存或发票过账。
                 </div>
               </div>
             </div>
@@ -307,10 +307,10 @@ export function ActionDraftReviewShell({
           <section data-testid="confirmed-action-boundary" className="rounded-lg border px-3 py-3" style={{ borderColor: A.border, background: A.white }}>
             <div className="text-[12px] font-semibold" style={{ color: A.label }}>{confirmedActionLabel(activeDraft.type)}</div>
             <div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>
-              What will be created/saved: {confirmedActionLabel(activeDraft.type)} from reviewed draft {activeDraft.id}. Linked records and evidence remain references only.
+              将从已复核草稿 {activeDraft.id} 创建或保存：{confirmedActionLabel(activeDraft.type)}。关联记录和依据仅作为引用，不会被自动修改。
             </div>
             <div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>
-              Dangerous actions remain disabled or absent: submit, approve, pay, post, send email, issue PO, award supplier.
+              危险动作保持禁用或不展示：提交、审批、付款、过账、发送邮件、发出 PO、供应商授标。
             </div>
             {confirmResult && (
               <div className="mt-2 rounded-md px-2 py-2 text-[11px]" style={{ background: "#f0faf4", color: A.green }}>

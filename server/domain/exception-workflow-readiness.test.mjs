@@ -183,7 +183,7 @@ test('R250 source guardrails keep workflow UI business-facing and AI safely boun
   const caseRoute = source('server', 'routes', 'exception-cases.routes.mjs')
   const planner = source('server', 'domain', 'business-action-draft-contract.mjs')
   const relationships = source('src', 'domain', 'relationships', 'resolver.ts')
-  for (const expected of ['Workflow controls', 'Update fields', 'Move to In Review', 'Mark Waiting Supplier', 'Mark Resolved', 'Close Case', 'Resolution draft']) {
+  for (const expected of ['流程控制', '更新字段', '移至复核中', '标记为等待供应商', '标记为已解决', '关闭工单', '处理结论草稿']) {
     assert.match(page, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
   assert.match(routes, /label:\s*"Exception Cases"/)
@@ -199,15 +199,15 @@ test('R250 source guardrails keep workflow UI business-facing and AI safely boun
 test('R250.1 final case transitions require explicit confirmation UI before backend confirm flag', () => {
   const page = source('src', 'modules', 'exception-cases', 'Page.tsx')
   for (const expected of [
-    'Confirm final case transition',
-    'Current status',
-    'Next status',
-    'Case ID',
-    'Linked primary record',
-    'Resolution note required',
-    'Audit preview',
-    'Linked PO/GRN/Invoice/SKU/Supplier records will not be changed.',
-    'Confirm transition',
+    '确认最终状态变更',
+    '当前状态',
+    '下一状态',
+    '工单 ID',
+    '关联主记录',
+    '需要处理结论',
+    '审计预览',
+    '关联 PO、GRN、发票、SKU、供应商记录不会被修改。',
+    '确认状态变更',
   ]) {
     assert.match(page, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }

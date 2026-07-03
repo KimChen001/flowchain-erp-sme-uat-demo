@@ -202,7 +202,7 @@ test('R230 end-to-end intake and UI/source guardrails keep provider disabled and
   assert.equal(intake.drafts.every((draft) => draft.requiresReview && draft.mutationAllowed === false), true)
 
   const panel = source('src', 'modules', 'action-drafts', 'BusinessActionPlanPanel.tsx')
-  for (const safe of ['Edit Draft', 'Save Draft', 'Mark Reviewed', 'Copy Draft', 'Continue Filling Fields', 'Cancel']) {
+  for (const safe of ['编辑草稿', '保存草稿', '标记为已复核', '复制草稿', '继续补充字段', '取消']) {
     assert.match(panel, new RegExp(safe))
   }
   for (const unsafe of ['Submit', 'Approve', 'Pay', 'Post', 'Send Email', 'Issue PO']) {

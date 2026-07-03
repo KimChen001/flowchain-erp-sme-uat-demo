@@ -552,7 +552,7 @@ export default function PurchaseRequestsPage({
         <div className="grid grid-cols-5 gap-2 text-[11px]">
           {[
             ["PR", selected.pr, selected.status],
-            ["RFQ Draft", selected.linkedPo ? "已转后续单据" : "可创建内部草稿", "review-first"],
+            ["RFQ 草稿", selected.linkedPo ? "已转后续单据" : "可创建内部草稿", "先复核后确认"],
             ["Supplier Response", "内部录入", "no external portal"],
             ["Award Recommendation", "仅预览推荐", "does not award"],
             ["PO Draft", "仅草稿", "not issued"],

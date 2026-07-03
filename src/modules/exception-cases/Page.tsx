@@ -99,8 +99,8 @@ function sourceContextFromSearch(): ExceptionCaseSourceContext | null {
     sourceEntityId,
     sourceRoute,
     caseType: params.get("caseType") || undefined,
-    linkedRecords: [{ entityType: sourceEntityType, entityId: sourceEntityId, displayLabel: sourceEntityId, route: sourceRoute || sourceModule, relationshipLabel: "Primary source" }],
-    dataLimitations: ["Source context was provided by navigation; linked relationship depth depends on current data."],
+    linkedRecords: [{ entityType: sourceEntityType, entityId: sourceEntityId, displayLabel: sourceEntityId, route: sourceRoute || sourceModule, relationshipLabel: "主要来源" }],
+    dataLimitations: ["来源上下文由导航提供；关联关系深度取决于当前数据。"],
   };
 }
 
@@ -111,7 +111,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
   const [statusFilter, setStatusFilter] = useState("open");
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<ExceptionCaseDraft | null>(null);
-  const [guidedDraftState, setGuidedDraftState] = useState("Select a risk from Today Cockpit, a business record, or an AI insight to create an exception case draft.");
+  const [guidedDraftState, setGuidedDraftState] = useState("请从今日驾驶舱、业务记录或智能洞察中选择风险来源后，再创建异常工单草稿。");
   const [noteDraft, setNoteDraft] = useState("");
   const [workflowDraft, setWorkflowDraft] = useState("");
 
@@ -122,7 +122,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
       setCases(payload.cases);
       if (selected) setSelected(payload.cases.find((item) => item.caseId === selected.caseId) || null);
     } catch (error) {
-      toast.error("Exception cases unavailable", { description: error instanceof Error ? error.message : "" });
+      toast.error("异常工单暂不可用", { description: error instanceof Error ? error.message : "" });
     } finally {
       setLoading(false);
     }
@@ -145,15 +145,15 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
     const sourceContext = sourceContextFromSearch();
     if (!sourceContext) {
       setDraft(null);
-      setGuidedDraftState("Select a risk from Today Cockpit, a business record, or an AI insight to create an exception case draft.");
-      toast.message("Select source context before creating a case draft");
+      setGuidedDraftState("请从今日驾驶舱、业务记录或智能洞察中选择风险来源后，再创建异常工单草稿。");
+      toast.message("创建工单草稿前请先选择来源上下文");
       return;
     }
     const payload = await apiJson<{ draft: ExceptionCaseDraft; previewOnly: boolean; createsCaseRecord: boolean }>("/api/exception-cases/draft", {
       method: "POST",
       body: JSON.stringify(sourceContext),
     });
-    if (!payload.previewOnly || payload.createsCaseRecord) throw new Error("Case draft boundary returned unsafe creation flags.");
+    if (!payload.previewOnly || payload.createsCaseRecord) throw new Error("工单草稿边界返回了不安全的创建标记。");
     setDraft(payload.draft);
     setGuidedDraftState("");
   }
@@ -167,7 +167,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
         sourceTrigger: draft.sourceTrigger,
         case: {
           ...draft.proposedCaseFields,
-          owner: draft.proposedCaseFields.owner === "Unassigned" ? "Operations Review" : draft.proposedCaseFields.owner,
+          owner: draft.proposedCaseFields.owner === "Unassigned" ? "运营复核" : draft.proposedCaseFields.owner,
           dueDate: draft.proposedCaseFields.dueDate || "2026-07-10",
         },
       }),
@@ -175,7 +175,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
     setDraft(null);
     setCases((current) => [payload.case, ...current.filter((item) => item.caseId !== payload.case.caseId)]);
     setSelected(payload.case);
-    toast.success("Exception case created", { description: payload.case.caseId });
+    toast.success("异常工单已创建", { description: payload.case.caseId });
   }
 
   async function previewNote(item: ExceptionCase) {
@@ -183,7 +183,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
       method: "POST",
       body: JSON.stringify({ summary: item.summary, noteType: "internal_followup_note" }),
     });
-    if (payload.draft.mutationAllowed) throw new Error("Note draft boundary is unsafe.");
+    if (payload.draft.mutationAllowed) throw new Error("备注草稿边界不安全。");
     setNoteDraft(payload.draft.body);
   }
 
@@ -196,7 +196,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
     setSelected(payload.case);
     setCases((current) => current.map((row) => row.caseId === payload.case.caseId ? payload.case : row));
     setNoteDraft("");
-    toast.success("Case note saved after confirmation", { description: item.caseId });
+    toast.success("工单备注已确认保存", { description: item.caseId });
   }
 
   return (
@@ -204,13 +204,13 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
       <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className={typography.pageTitle} style={{ color: A.label }}>Exception Cases</h1>
+            <h1 className={typography.pageTitle} style={{ color: A.label }}>异常工单</h1>
             <p className={`${typography.metadata} mt-1 max-w-3xl`} style={{ color: A.sub }}>
-              Track operational risks as reviewable cases with linked records, evidence, notes, and audit provenance.
+              将运营风险沉淀为可复核工单，关联记录、依据、备注和审计来源。
             </p>
           </div>
           <button onClick={openDraft} className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton}`} style={{ background: A.blue }}>
-            <Plus size={14} /> Create case draft
+            <Plus size={14} /> 创建工单草稿
           </button>
         </div>
       </Card>
@@ -219,25 +219,25 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
         <div className="grid gap-3 px-5 py-3 md:grid-cols-[1fr_180px_180px]" style={{ borderBottom: `1px solid ${A.border}` }}>
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: A.gray2 }} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search case, owner, linked record" className="pl-8" style={inputStyle} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索工单、负责人、关联记录" className="pl-8" style={inputStyle} />
           </div>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} style={inputStyle}>
-            <option value="open">Open</option>
-            <option value="high">High severity</option>
-            <option value="waiting_supplier">Waiting supplier</option>
-            <option value="in_review">In review</option>
-            <option value="all">All cases</option>
+            <option value="open">未关闭</option>
+            <option value="high">高严重度</option>
+            <option value="waiting_supplier">等待供应商</option>
+            <option value="in_review">复核中</option>
+            <option value="all">全部工单</option>
           </select>
           <button onClick={loadCases} className={`rounded-lg px-3 ${typography.denseButton}`} style={{ background: A.gray6, color: A.blue }}>
-            {loading ? "Loading" : "Refresh"}
+            {loading ? "加载中" : "刷新"}
           </button>
         </div>
 
         {visible.length === 0 ? (
           <div className="px-5 py-8">
-            <p className={typography.subsectionTitle} style={{ color: A.label }}>No exception cases found.</p>
+            <p className={typography.subsectionTitle} style={{ color: A.label }}>未找到异常工单。</p>
             <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>
-              AI may suggest cases from risks, but user confirmation is required to create them.
+              系统可根据风险建议工单，但必须由用户确认后才能创建。
             </p>
           </div>
         ) : (
@@ -245,7 +245,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
             <table className="w-full min-w-[980px] text-left">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${A.border}` }}>
-                  {["Case", "Type", "Severity", "Status", "Owner", "Due", "Primary record", "Updated"].map((header) => (
+                  {["工单", "类型", "严重度", "状态", "负责人", "到期", "主记录", "更新"].map((header) => (
                     <th key={header} className={`px-4 py-3 ${typography.tableHeader}`} style={{ color: A.gray1 }}>{header}</th>
                   ))}
                 </tr>
@@ -260,7 +260,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
                       <td className={`px-4 py-3 ${typography.tableCell}`}>{caseTypeLabel(item.caseType)}</td>
                       <td className="px-4 py-3"><Chip label={item.severity} color={severity.color} bg={severity.bg} /></td>
                       <td className="px-4 py-3"><Chip label={item.status} color={status.color} bg={status.bg} /></td>
-                      <td className={`px-4 py-3 ${typography.tableCell}`}>{item.owner || "Unassigned"}</td>
+                      <td className={`px-4 py-3 ${typography.tableCell}`}>{item.owner || "未分配"}</td>
                       <td className={`px-4 py-3 ${typography.tableCell}`}>{formatDate(item.dueDate)}</td>
                       <td className={`px-4 py-3 ${typography.tableCell}`}>{item.sourceEntityId || "—"}</td>
                       <td className={`px-4 py-3 ${typography.tableCell}`}>{formatDate(item.updatedAt)}</td>
@@ -277,26 +277,26 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
         <Card className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className={typography.compactMetadata} style={{ color: A.sub }}>Review-first create case flow</p>
+              <p className={typography.compactMetadata} style={{ color: A.sub }}>先复核后确认的工单创建流程</p>
               <h2 className={typography.sectionTitle} style={{ color: A.label }}>{draft.proposedCaseFields.title}</h2>
             </div>
-            <Chip label="Draft Only / Requires Review" color={A.blue} bg="#eef6ff" />
+            <Chip label="仅生成草稿 / 需人工复核" color={A.blue} bg="#eef6ff" />
           </div>
-          {draft.duplicateWarning && <p className={`${typography.metadata} mt-3`} style={{ color: A.orange }}>Duplicate warning: {draft.duplicateWarning.message} {draft.duplicateWarning.caseId}</p>}
+          {draft.duplicateWarning && <p className={`${typography.metadata} mt-3`} style={{ color: A.orange }}>重复提醒：{draft.duplicateWarning.message} {draft.duplicateWarning.caseId}</p>}
           <div className="mt-3 grid gap-2 md:grid-cols-4">
-            <DraftMetric label="Type" value={caseTypeLabel(draft.proposedCaseFields.caseType)} />
-            <DraftMetric label="Severity" value={draft.proposedCaseFields.severity} />
-            <DraftMetric label="Owner" value={draft.proposedCaseFields.owner || "Missing"} />
-            <DraftMetric label="Due date" value={draft.proposedCaseFields.dueDate || "Missing"} />
+            <DraftMetric label="类型" value={caseTypeLabel(draft.proposedCaseFields.caseType)} />
+            <DraftMetric label="严重度" value={draft.proposedCaseFields.severity} />
+            <DraftMetric label="负责人" value={draft.proposedCaseFields.owner || "缺失"} />
+            <DraftMetric label="到期日期" value={draft.proposedCaseFields.dueDate || "缺失"} />
           </div>
-          {!!draft.missingFields.length && <p className={`${typography.metadata} mt-3`} style={{ color: A.orange }}>Missing fields: {draft.missingFields.join(", ")}</p>}
-          <p className={`${typography.metadata} mt-3`} style={{ color: A.sub }}>Audit preview: {draft.auditPreview.map((item) => item.action).join(", ")}</p>
+          {!!draft.missingFields.length && <p className={`${typography.metadata} mt-3`} style={{ color: A.orange }}>缺少字段：{draft.missingFields.join(", ")}</p>}
+          <p className={`${typography.metadata} mt-3`} style={{ color: A.sub }}>审计预览：{draft.auditPreview.map((item) => item.action).join(", ")}</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <button onClick={confirmCreateCase} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton}`} style={{ background: A.green }}>
-              <CheckCircle2 size={14} /> Confirm create case
+              <CheckCircle2 size={14} /> 确认创建工单
             </button>
             <button onClick={() => setDraft(null)} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: A.gray6, color: A.sub }}>
-              <X size={14} /> Cancel
+              <X size={14} /> 取消
             </button>
           </div>
         </Card>
@@ -304,7 +304,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
 
       {!draft && guidedDraftState && (
         <Card className="p-4">
-          <p className={typography.subsectionTitle} style={{ color: A.label }}>Create case draft</p>
+          <p className={typography.subsectionTitle} style={{ color: A.label }}>创建工单草稿</p>
           <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>{guidedDraftState}</p>
         </Card>
       )}
@@ -321,7 +321,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
               method: "POST",
               body: JSON.stringify({ draftType }),
             });
-            if (payload.draft.mutationAllowed) throw new Error("Workflow draft boundary is unsafe.");
+            if (payload.draft.mutationAllowed) throw new Error("流程草稿边界不安全。");
             setWorkflowDraft(payload.draft.body);
           }}
           onSaveNote={saveNote}
@@ -419,15 +419,15 @@ function CaseDetail({
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-4">
-        <DraftMetric label="Owner" value={item.owner || "Unassigned"} />
-        <DraftMetric label="Due date" value={formatDate(item.dueDate)} />
-        <DraftMetric label="Source module" value={item.sourceModule || "—"} />
-        <DraftMetric label="Source entity" value={item.sourceEntityId || "—"} />
+        <DraftMetric label="负责人" value={item.owner || "未分配"} />
+        <DraftMetric label="到期日期" value={formatDate(item.dueDate)} />
+        <DraftMetric label="来源模块" value={item.sourceModule || "—"} />
+        <DraftMetric label="来源对象" value={item.sourceEntityId || "—"} />
       </div>
 
       <section className="mt-5 grid gap-4 lg:grid-cols-2">
         <div>
-          <h3 className={typography.subsectionTitle} style={{ color: A.label }}>Linked records</h3>
+          <h3 className={typography.subsectionTitle} style={{ color: A.label }}>关联记录</h3>
           <div className="mt-2 space-y-2">
             {links.length ? links.map((link) => (
               <button
@@ -440,11 +440,11 @@ function CaseDetail({
                 <span><Link2 size={13} className="mr-1 inline" />{link.displayLabel}</span>
                 <span>{link.relationshipLabel}</span>
               </button>
-            )) : <p className={typography.metadata} style={{ color: A.sub }}>No linked records available.</p>}
+            )) : <p className={typography.metadata} style={{ color: A.sub }}>暂无关联记录。</p>}
           </div>
         </div>
         <div>
-          <h3 className={typography.subsectionTitle} style={{ color: A.label }}>Evidence</h3>
+          <h3 className={typography.subsectionTitle} style={{ color: A.label }}>依据</h3>
           <div className="mt-2 space-y-2">
             {(item.evidenceItems || []).map((evidence) => (
               <div key={evidence.id} className="rounded-md border p-3" style={{ borderColor: A.border }}>
@@ -463,26 +463,26 @@ function CaseDetail({
       <section className="mt-5 rounded-md border p-4" style={{ borderColor: A.border }}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className={typography.subsectionTitle} style={{ color: A.label }}>Workflow controls</h3>
-            <p className={typography.metadata} style={{ color: A.sub }}>Updates are user-confirmed and recorded on the case audit trail. Linked business records are not changed.</p>
+            <h3 className={typography.subsectionTitle} style={{ color: A.label }}>流程控制</h3>
+            <p className={typography.metadata} style={{ color: A.sub }}>更新需用户确认，并记录在工单审计轨迹中；不会改动关联业务记录。</p>
           </div>
-          <Chip label={`Current: ${item.status}`} {...statusStyle(item.status)} />
+          <Chip label={`当前：${item.status}`} {...statusStyle(item.status)} />
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-[1fr_160px_150px_auto]">
-          <input value={owner} onChange={(event) => setOwner(event.target.value)} placeholder="Owner" style={inputStyle} />
+          <input value={owner} onChange={(event) => setOwner(event.target.value)} placeholder="负责人" style={inputStyle} />
           <input value={dueDate} onChange={(event) => setDueDate(event.target.value)} type="date" style={inputStyle} />
           <select value={severity} onChange={(event) => setSeverity(event.target.value as ExceptionCase["severity"])} style={inputStyle}>
             {["critical", "high", "medium", "low"].map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
           <button onClick={() => onUpdateFields(item, { owner, dueDate, severity })} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton}`} style={{ background: A.blue }}>
-            <Save size={14} /> Update fields
+            <Save size={14} /> 更新字段
           </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {nextStatuses.map((status) => (
             <button
               key={status}
-              onClick={() => requestTransition(status, { reason: `Move case to ${status}` })}
+              onClick={() => requestTransition(status, { reason: `将工单状态调整为 ${status}` })}
               className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`}
               style={{ background: status === "cancelled" ? "#fff1f0" : "#f0f6ff", color: status === "cancelled" ? A.red : A.blue }}
             >
@@ -491,31 +491,31 @@ function CaseDetail({
           ))}
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto_auto]">
-          <textarea value={resolutionNote} onChange={(event) => setResolutionNote(event.target.value)} placeholder="Resolution note required before Close Case" rows={2} style={{ ...inputStyle, height: "auto", resize: "vertical" }} />
+          <textarea value={resolutionNote} onChange={(event) => setResolutionNote(event.target.value)} placeholder="关闭工单前需填写处理结论" rows={2} style={{ ...inputStyle, height: "auto", resize: "vertical" }} />
           <button onClick={() => onPreviewWorkflowDraft(item, "resolution_note")} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: "#f0f6ff", color: A.blue }}>
-            <FileClock size={14} /> Resolution draft
+            <FileClock size={14} /> 处理结论草稿
           </button>
           <button
-            onClick={() => requestTransition("closed", { resolutionNote, rootCause: "User reviewed case evidence", actionTaken: "Resolution confirmed in case workflow", remainingRisk: "Monitor recurrence" })}
+            onClick={() => requestTransition("closed", { resolutionNote, rootCause: "用户已复核工单依据", actionTaken: "已在工单流程中确认处理结论", remainingRisk: "持续监控复发风险" })}
             disabled={item.status !== "resolved" || !resolutionNote.trim()}
             className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton} disabled:cursor-not-allowed disabled:opacity-60`}
             style={{ background: A.green }}
           >
-            <CheckCircle2 size={14} /> Close Case
+            <CheckCircle2 size={14} /> 关闭工单
           </button>
         </div>
         {pendingTransition && (
           <div data-testid="exception-transition-confirmation" className="mt-3 rounded-md border p-3" style={{ borderColor: A.orange, background: "#fff8f0" }}>
-            <p className={typography.formLabel} style={{ color: A.label }}>Confirm final case transition</p>
+            <p className={typography.formLabel} style={{ color: A.label }}>确认最终状态变更</p>
             <div className="mt-2 grid gap-2 md:grid-cols-3">
-              <DraftMetric label="Case ID" value={item.caseId} />
-              <DraftMetric label="Current status" value={item.status} />
-              <DraftMetric label="Next status" value={pendingTransition.status} />
-              <DraftMetric label="Linked primary record" value={primaryRecord} />
-              <DraftMetric label="Resolution note required" value={pendingTransition.status === "closed" ? "Yes" : "No"} />
-              <DraftMetric label="Audit preview" value={`exception_case_${pendingTransition.status === "closed" ? "closed" : "status_changed"}`} />
+              <DraftMetric label="工单 ID" value={item.caseId} />
+              <DraftMetric label="当前状态" value={item.status} />
+              <DraftMetric label="下一状态" value={pendingTransition.status} />
+              <DraftMetric label="关联主记录" value={primaryRecord} />
+              <DraftMetric label="需要处理结论" value={pendingTransition.status === "closed" ? "是" : "否"} />
+              <DraftMetric label="审计预览" value={`exception_case_${pendingTransition.status === "closed" ? "closed" : "status_changed"}`} />
             </div>
-            <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>Linked PO/GRN/Invoice/SKU/Supplier records will not be changed.</p>
+            <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>关联 PO、GRN、发票、SKU、供应商记录不会被修改。</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={() => {
@@ -526,10 +526,10 @@ function CaseDetail({
                 className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton} disabled:cursor-not-allowed disabled:opacity-60`}
                 style={{ background: pendingTransition.status === "cancelled" ? A.red : A.green }}
               >
-                <CheckCircle2 size={14} /> Confirm transition
+                <CheckCircle2 size={14} /> 确认状态变更
               </button>
               <button onClick={() => setPendingTransition(null)} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: A.gray6, color: A.sub }}>
-                <X size={14} /> Keep current status
+                <X size={14} /> 保持当前状态
               </button>
             </div>
           </div>
@@ -539,16 +539,16 @@ function CaseDetail({
 
       <section className="mt-5 grid gap-4 lg:grid-cols-2">
         <div>
-          <h3 className={typography.subsectionTitle} style={{ color: A.label }}>AI diagnosis and actions</h3>
-          <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>{item.aiDiagnosisSummary || "No AI diagnosis summary stored."}</p>
+          <h3 className={typography.subsectionTitle} style={{ color: A.label }}>智能诊断与动作</h3>
+          <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>{item.aiDiagnosisSummary || "暂无智能诊断摘要。"}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {(item.recommendedReviewFirstActions || []).map((action) => <Chip key={action} label={action} color={A.blue} bg="#eef6ff" />)}
           </div>
         </div>
         <div>
-          <h3 className={typography.subsectionTitle} style={{ color: A.label }}>Notes and provenance</h3>
-          <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>Data limitations: {(item.dataLimitations || []).join(", ") || "None"}</p>
-          <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>Audit source: {String(item.auditMetadata?.sourceTrigger || "user_confirmed")}</p>
+          <h3 className={typography.subsectionTitle} style={{ color: A.label }}>备注与来源</h3>
+          <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>数据限制：{(item.dataLimitations || []).join(", ") || "无"}</p>
+          <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>审计来源：{String(item.auditMetadata?.sourceTrigger || "user_confirmed")}</p>
           {(item.notes || []).map((note) => <p key={note.noteId} className={`${typography.metadata} mt-2 rounded-md p-2`} style={{ background: A.gray6, color: A.label }}>{note.body}</p>)}
           {(item.auditTrail || []).map((entry, index) => <p key={`${entry.action}-${index}`} className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>{entry.action} · {formatDate(entry.timestamp)}</p>)}
         </div>
@@ -557,20 +557,20 @@ function CaseDetail({
       <div className="mt-5 rounded-md border p-3" style={{ borderColor: A.border }}>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => onPreviewNote(item)} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: "#f0f6ff", color: A.blue }}>
-            <FileClock size={14} /> Preview follow-up note
+            <FileClock size={14} /> 预览跟进备注
           </button>
           <button onClick={() => onPreviewWorkflowDraft(item, "supplier_followup_note")} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: "#fff8f0", color: A.orange }}>
-            <FileClock size={14} /> Supplier follow-up draft
+            <FileClock size={14} /> 供应商跟进草稿
           </button>
           <button onClick={() => navigator.clipboard?.writeText(item.summary)} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: A.gray6, color: A.sub }}>
-            <Clipboard size={14} /> Copy summary
+            <Clipboard size={14} /> 复制摘要
           </button>
         </div>
         {noteDraft && (
           <div className="mt-3">
             <textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} rows={3} style={{ ...inputStyle, height: "auto", resize: "vertical" }} />
             <button onClick={() => onSaveNote(item)} className={`mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton}`} style={{ background: A.green }}>
-              <Save size={14} /> Save note after confirmation
+              <Save size={14} /> 确认后保存备注
             </button>
           </div>
         )}
@@ -592,12 +592,12 @@ function allowedNextStatuses(status: string) {
 
 function statusLabel(status: string) {
   const labels: Record<string, string> = {
-    in_review: "Move to In Review",
-    waiting_supplier: "Mark Waiting Supplier",
-    waiting_internal: "Mark Waiting Internal",
-    resolved: "Mark Resolved",
-    cancelled: "Cancel Case",
-    closed: "Close Case",
+    in_review: "移至复核中",
+    waiting_supplier: "标记为等待供应商",
+    waiting_internal: "标记为等待内部",
+    resolved: "标记为已解决",
+    cancelled: "取消工单",
+    closed: "关闭工单",
   };
   return labels[status] || status;
 }

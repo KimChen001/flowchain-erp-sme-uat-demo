@@ -207,13 +207,13 @@ export default function SrmPage({
       </div>
 
       <Card className="p-5">
-        <SectionHeader title="Supplier Risk Evidence" right={<Chip label="review first" color={A.blue} bg="#eef6ff" />} />
+        <SectionHeader title="供应商风险依据" right={<Chip label="先复核后确认" color={A.blue} bg="#eef6ff" />} />
         <div className="grid grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
           {[
-            ["Explain evidence", "Signals come from PO delay, quality hold, invoice mismatch, RFQ response, and unresolved exception cases."],
-            ["Create case draft", "Risk follow-up opens an exception case draft for owner review before any workflow is created."],
-            ["Preview supplier follow-up note", "Supplier communication stays as a draft; no external email send."],
-            ["Master-data guardrail", "Risk scoring has no supplier master data mutation and no purchasing block side effect."],
+            ["解释依据", "信号来自 PO 延误、质检冻结、发票差异、RFQ 响应和未关闭异常工单。"],
+            ["创建工单草稿", "风险跟进只打开异常工单草稿，负责人复核后才进入流程。"],
+            ["预览供应商跟进备注", "供应商沟通保持为草稿，不自动发送外部邮件。"],
+            ["主数据安全边界", "风险评分不修改供应商主数据，也不会自动触发采购冻结。"],
           ].map(([title, body]) => (
             <div key={title} className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
               <div className="font-semibold" style={{ color: A.label }}>{title}</div>

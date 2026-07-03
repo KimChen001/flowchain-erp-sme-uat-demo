@@ -143,7 +143,7 @@ test('R234 case drafts build deterministically from PO SKU GRN invoice supplier 
 test('R250.1 source context drafts require explicit context and do not use default SKU evidence', async () => {
   const page = source('src', 'modules', 'exception-cases', 'Page.tsx')
   assert.doesNotMatch(page, /sourceEntityId:\s*"SKU-00412"|SKU-00412:shortage|demoDraftEvidence/)
-  assert.match(page, /Select a risk from Today Cockpit, a business record, or an AI insight to create an exception case draft\./)
+  assert.match(page, /请从今日驾驶舱、业务记录或智能洞察中选择风险来源后，再创建异常工单草稿。/)
 
   const poDraft = buildExceptionCaseDraftFromSourceContext({
     sourceModule: 'procurement',
@@ -216,7 +216,7 @@ test('R238-R240 UI and integration guardrails keep case management business-faci
   assert.match(routes, /label:\s*"Exception Cases"/)
   assert.doesNotMatch(routes, /label:\s*["']AI Assistant["']|label:\s*["']AI Command Center["']|label:\s*["']Ask AI["']/)
   assert.match(app, /ExceptionCasesPage/)
-  for (const text of ['No exception cases found.', 'Create case draft', 'Confirm create case', 'Preview follow-up note', 'Save note after confirmation']) {
+  for (const text of ['未找到异常工单。', '创建工单草稿', '确认创建工单', '预览跟进备注', '确认后保存备注']) {
     assert.match(page, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
   for (const unsafe of ['Auto close', 'Auto send', 'Issue PO', 'Pay invoice']) {

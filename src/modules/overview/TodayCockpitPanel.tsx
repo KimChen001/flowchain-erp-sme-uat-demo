@@ -483,13 +483,13 @@ export function TodayCockpitPanel({ cockpit, loading, error = false, onNavigate,
       <div className="mt-4 rounded-lg p-4" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold" style={{ color: A.label }}>Operations Control Tower</div>
+            <div className="text-sm font-semibold" style={{ color: A.label }}>运营控制塔</div>
             <div className="text-[11px] leading-5 mt-1" style={{ color: A.sub }}>
-              Work items are grouped as Critical, Needs review, Waiting supplier, Waiting internal, Resolved pending closure, and Data gaps with case-aware deduplication.
+              工作项按紧急、需复核、等待供应商、等待内部、已解决待关闭和数据缺口分组，并结合现有工单去重。
             </div>
           </div>
           <div className="flex flex-wrap justify-end gap-2 text-[11px]">
-            {["Create case draft", "Preview follow-up note", "Explain evidence"].map((label) => (
+            {["创建工单草稿", "预览跟进备注", "解释依据"].map((label) => (
               <span key={label} className="rounded-md px-2.5 py-1 font-medium" style={{ background: A.white, color: A.blue }}>{label}</span>
             ))}
           </div>

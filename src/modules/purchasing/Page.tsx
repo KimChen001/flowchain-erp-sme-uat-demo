@@ -294,12 +294,12 @@ export default function PurchasingOrdersPage({
 
   function handlePoInsightAction(action: ContextualAiAction) {
     if (action.intent === "preview_supplier_followup_draft" && selectedPO) {
-      toast("Supplier follow-up draft preview only", {
-        description: `${selectedPO.po} · no auto-send, no PO mutation. Review in supplier workflow before recording.`,
+      toast("仅预览供应商跟进草稿", {
+        description: `${selectedPO.po} · 不自动发送、不修改 PO；记录前需在供应商流程中复核。`,
       });
       return;
     }
-    toast(action.label, { description: "Contextual insight only. mutationAllowed: false." });
+    toast(action.label, { description: "仅提供上下文洞察，需人工复核后处理。" });
   }
 
   const selectedPODelayRisk = selectedPO

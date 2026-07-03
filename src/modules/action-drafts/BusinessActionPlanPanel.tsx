@@ -50,13 +50,13 @@ export type BusinessActionPlanPanelProps = {
 };
 
 const safeButtons = [
-  { key: "edit", label: "Edit Draft", icon: Edit3 },
-  { key: "save", label: "Save Draft", icon: Save },
-  { key: "confirm", label: "Save Reviewed Draft", icon: CheckCircle2 },
-  { key: "reviewed", label: "Mark Reviewed", icon: CheckCircle2 },
-  { key: "copy", label: "Copy Draft", icon: Clipboard },
-  { key: "continue", label: "Continue Filling Fields", icon: FileClock },
-  { key: "cancel", label: "Cancel", icon: X },
+  { key: "edit", label: "编辑草稿", icon: Edit3 },
+  { key: "save", label: "保存草稿", icon: Save },
+  { key: "confirm", label: "保存已复核草稿", icon: CheckCircle2 },
+  { key: "reviewed", label: "标记为已复核", icon: CheckCircle2 },
+  { key: "copy", label: "复制草稿", icon: Clipboard },
+  { key: "continue", label: "继续补充字段", icon: FileClock },
+  { key: "cancel", label: "取消", icon: X },
 ] as const;
 
 function formatValue(value: unknown) {
@@ -83,11 +83,11 @@ export function BusinessActionPlanPanel(props: BusinessActionPlanPanelProps) {
     <section className="space-y-4 rounded-lg border bg-white p-4" style={{ borderColor: A.border }}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className={typography.compactMetadata}>Business action plan</p>
+          <p className={typography.compactMetadata}>业务动作计划</p>
           <h3 className={`${typography.subsectionTitle} break-words`}>{props.originalText}</h3>
           <p className={`${typography.metadata} mt-1 break-words`} style={{ color: A.sub }}>{props.normalizedText}</p>
         </div>
-        <Chip label="Draft Only / Requires Review" color={A.blue} bg="#eef6ff" />
+        <Chip label="仅生成草稿 / 需人工复核" color={A.blue} bg="#eef6ff" />
       </div>
 
       {!!props.corrections?.length && (
@@ -105,7 +105,7 @@ export function BusinessActionPlanPanel(props: BusinessActionPlanPanelProps) {
           <div key={candidate.intent} className="rounded-md border p-3" style={{ borderColor: A.border }}>
             <p className={typography.formLabel}>{candidate.intent}</p>
             <p className={typography.metadata} style={{ color: A.sub }}>
-              confidence {Math.round((candidate.confidence || 0) * 100)}% · review {candidate.requiresReview ? "required" : "not required"}
+              置信度 {Math.round((candidate.confidence || 0) * 100)}% · {candidate.requiresReview ? "需要复核" : "无需复核"}
             </p>
           </div>
         ))}
@@ -115,16 +115,16 @@ export function BusinessActionPlanPanel(props: BusinessActionPlanPanelProps) {
         {steps.map((step, index) => (
           <div key={step.id || `${step.intent}-${index}`} className="rounded-md border p-3" style={{ borderColor: A.border }}>
             <div className="flex flex-wrap items-center gap-2">
-              <Chip label={`Step ${step.order || index + 1}`} color={A.label} bg={A.gray5} />
+              <Chip label={`步骤 ${step.order || index + 1}`} color={A.label} bg={A.gray5} />
               <span className={typography.formLabel}>{step.intent}</span>
               <Chip label={step.status || "requires_review"} color={step.status === "blocked" ? A.red : A.green} bg={step.status === "blocked" ? "#fff1f0" : "#ecfdf5"} />
             </div>
             {(step.condition || step.dependsOn) && (
               <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>
-                {step.condition || "requires prior step"} {step.dependsOn ? `· depends on ${step.dependsOn}` : ""}
+                {step.condition || "需要先完成前置步骤"} {step.dependsOn ? `· 依赖 ${step.dependsOn}` : ""}
               </p>
             )}
-            {!!step.missingFields?.length && <p className={`${typography.metadata} mt-2`} style={{ color: A.orange }}>Missing: {step.missingFields.join(", ")}</p>}
+            {!!step.missingFields?.length && <p className={`${typography.metadata} mt-2`} style={{ color: A.orange }}>缺少字段：{step.missingFields.join(", ")}</p>}
           </div>
         ))}
       </div>
@@ -135,15 +135,15 @@ export function BusinessActionPlanPanel(props: BusinessActionPlanPanelProps) {
             <Chip label={draft.draftType || "business_draft"} color={A.blue} bg="#eef6ff" />
             <Chip label={draft.reviewStatus || "draft_only_requires_review"} color={A.green} bg="#ecfdf5" />
           </div>
-          <FieldList title="Provided Fields" values={draft.extractedFields} />
-          <FieldList title="Suggested Fields" values={draft.suggestedFields} />
-          {!!draft.missingFields?.length && <p className={typography.metadata} style={{ color: A.orange }}>Missing fields: {draft.missingFields.join(", ")}</p>}
-          {!!draft.dataLimitations?.length && <p className={typography.metadata} style={{ color: A.red }}>Data limitations: {draft.dataLimitations.join(", ")}</p>}
-          {!!draft.auditPreview?.length && <p className={typography.metadata} style={{ color: A.sub }}>Audit preview: {draft.auditPreview.map((item) => item.action).join(", ")}</p>}
+          <FieldList title="已识别字段" values={draft.extractedFields} />
+          <FieldList title="建议字段" values={draft.suggestedFields} />
+          {!!draft.missingFields?.length && <p className={typography.metadata} style={{ color: A.orange }}>缺少字段：{draft.missingFields.join(", ")}</p>}
+          {!!draft.dataLimitations?.length && <p className={typography.metadata} style={{ color: A.red }}>数据限制：{draft.dataLimitations.join(", ")}</p>}
+          {!!draft.auditPreview?.length && <p className={typography.metadata} style={{ color: A.sub }}>审计预览：{draft.auditPreview.map((item) => item.action).join(", ")}</p>}
           <div className="rounded-md border p-3" style={{ borderColor: A.border, background: A.gray6 }}>
-            <p className={typography.formLabel}>User-confirmed safe action boundary</p>
-            <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>Supported safe actions: Create Supplier Application · Create PR · Create Sourcing Event / RFQ Draft · Save Supplier Follow-up Note · Save Case Note · Save Reviewed Draft.</p>
-            <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>This will not submit for approval. This will not issue a PO. This will not send email. This will not award a supplier. This will not post inventory or invoice entries.</p>
+            <p className={typography.formLabel}>用户确认安全边界</p>
+            <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>支持的安全动作：创建供应商准入申请、创建 PR、创建寻源事件 / RFQ 草稿、保存供应商跟进备注、保存工单备注、保存已复核草稿。</p>
+            <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>不会自动提交审批、不会下发 PO、不会发送邮件、不会授标，也不会自动库存或发票过账。</p>
           </div>
         </div>
       ))}

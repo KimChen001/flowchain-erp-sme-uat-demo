@@ -77,7 +77,7 @@ test('Replenishment Workbench uses ActionDraft preview and never direct purchase
   const forecast = readSource('src', 'modules', 'forecast', 'Page.tsx')
   const replenishmentSection = forecast.slice(forecast.indexOf('const ReplenishmentWorkbenchView'), forecast.indexOf('const PlanningParametersView'))
 
-  assert.match(replenishmentSection, /ActionDraft preview only/)
+  assert.match(replenishmentSection, /仅预览动作草稿/)
   assert.match(replenishmentSection, /createRequestFromForecast/)
   assert.match(forecast, /purchase_request_draft/)
   assert.match(forecast, /onReviewActionDraft/)

@@ -561,10 +561,10 @@ function ReceivingOps({
 
   function handleGrnInsightAction(action: ContextualAiAction) {
     if (action.intent === "preview_exception_note") {
-      toast("Exception handling note preview only", { description: `${action.sourceEntityId} · no auto-close, no receiving post, no inventory mutation.` });
+      toast("仅预览异常处理备注", { description: `${action.sourceEntityId} · 不自动关闭、不自动收货过账、不修改库存。` });
       return;
     }
-    toast(action.label, { description: "Contextual insight only. mutationAllowed: false." });
+    toast(action.label, { description: "仅提供上下文洞察，需人工复核后处理。" });
   }
 
   return (
@@ -578,15 +578,15 @@ function ReceivingOps({
 
       <Card className="p-5">
         <SectionHeader
-          title="Receiving Review Boundary"
-          right={<Chip label="draft only" color={A.blue} bg="#eef6ff" />}
+          title="收货复核边界"
+          right={<Chip label="仅生成草稿" color={A.blue} bg="#eef6ff" />}
         />
         <div className="grid grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
           {[
-            ["Preview GRN Draft", "Only issued or partially received POs are eligible; PO Draft is blocked."],
-            ["Create Receiving Record after Review", "Requires human confirmation before a receiving record can be saved."],
-            ["Preview Inventory Movement Draft", "Shows hold / receive movement intent with no inventory posting and no stock balance update."],
-            ["Preview Receiving Exception Case", "Creates an exception case draft only; no PO close and no invoice approval/payment/posting."],
+            ["预览收货单草稿（GRN）", "仅已发出或部分到货的采购订单（PO）可作为来源，PO 草稿会被拦截。"],
+            ["复核后创建收货记录", "保存收货记录前必须由人工确认。"],
+            ["预览库存流水草稿", "仅展示暂存 / 收货流水意图，不自动库存过账，也不修改库存余额。"],
+            ["预览收货异常工单", "仅生成异常工单草稿，不自动关闭 PO，也不审批、不付款、不过账。"],
           ].map(([title, body]) => (
             <div key={title} className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
               <div className="font-semibold" style={{ color: A.label }}>{title}</div>
@@ -824,12 +824,12 @@ function ReceivingOps({
               ))}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button onClick={() => openGrnInsight(selectedGrn, "Explain receiving exception")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>Explain receiving exception</button>
-              <button onClick={() => openGrnInsight(selectedGrn, "Check invoice impact")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>Check invoice impact</button>
-              <button onClick={() => openGrnInsight(selectedGrn, "Trace PO/GRN relationship")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>Trace PO/GRN relationship</button>
+              <button onClick={() => openGrnInsight(selectedGrn, "解释收货异常")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>解释收货异常</button>
+              <button onClick={() => openGrnInsight(selectedGrn, "检查发票影响")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>检查发票影响</button>
+              <button onClick={() => openGrnInsight(selectedGrn, "追踪 PO/GRN 关系")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>追踪 PO/GRN 关系</button>
               <button onClick={() => handleGrnInsightAction({
                 id: `preview_exception_note:receiving_doc:${selectedGrn.grn}`,
-                label: `Preview exception handling note for ${selectedGrn.grn}`,
+                label: `预览 ${selectedGrn.grn} 异常处理备注`,
                 intent: "preview_exception_note",
                 sourceModule: "receiving",
                 sourceEntityType: "receiving_doc",
@@ -839,7 +839,7 @@ function ReceivingOps({
                 allowedOutputType: "draft_preview",
                 requiresReview: true,
                 mutationAllowed: false,
-              })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>Preview exception handling note</button>
+              })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>预览异常处理备注</button>
             </div>
             <div className="mt-4">
               <ContextualAIInsightPanel insight={grnInsight} onClose={() => setGrnInsight(null)} onAction={handleGrnInsightAction} returnContext={grnReturnContext} onNavigateRecord={onNavigate} />

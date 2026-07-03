@@ -45,9 +45,9 @@ export function ContextualAIInsightPanel({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Chip label="Contextual AI insight" color={A.blue} bg="#f0f6ff" />
-            <Chip label="Review-first" color={A.green} bg="#f0faf4" />
-            <Chip label="No mutation" color={A.gray1} bg={A.gray6} />
+            <Chip label="上下文洞察" color={A.blue} bg="#f0f6ff" />
+            <Chip label="先复核后确认" color={A.green} bg="#f0faf4" />
+            <Chip label="不自动改业务数据" color={A.gray1} bg={A.gray6} />
           </div>
           <h3 className="mt-2 text-sm font-semibold" style={{ color: A.label }}>{insight.title}</h3>
           <div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>{insight.sourceContext} · {insight.trigger}</div>
@@ -60,16 +60,16 @@ export function ContextualAIInsightPanel({
       <div className="mt-4 grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-3">
         <div className="space-y-3">
           <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.label }}><Brain size={12} /> Conclusion</div>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.label }}><Brain size={12} /> 结论</div>
             <div className="mt-1 text-xs leading-5" style={{ color: A.sub }}>{insight.conclusion}</div>
             {(insight.riskLevel || insight.reason) && (
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <div className="rounded-lg px-2.5 py-2" style={{ background: A.white }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>Risk level</div>
+                  <div className="text-[10px]" style={{ color: A.gray2 }}>风险等级</div>
                   <div className="text-[11px] font-semibold" style={{ color: insight.riskLevel === "高" ? A.red : A.label }}>{insight.riskLevel || "未标注"}</div>
                 </div>
                 <div className="rounded-lg px-2.5 py-2" style={{ background: A.white }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>Reason</div>
+                  <div className="text-[10px]" style={{ color: A.gray2 }}>原因</div>
                   <div className="text-[11px] font-semibold truncate" style={{ color: A.label }}>{insight.reason || "当前数据未提供明确原因，建议复核相关记录。"}</div>
                 </div>
               </div>
@@ -77,14 +77,14 @@ export function ContextualAIInsightPanel({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Section title="Key evidence" items={insight.evidence} />
-            <Section title="Business impact" items={insight.impact} />
+            <Section title="关键依据" items={insight.evidence} />
+            <Section title="业务影响" items={insight.impact} />
           </div>
         </div>
 
         <div className="space-y-3">
           <div className="rounded-xl p-3" style={{ background: "#f0f6ff" }}>
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.blue }}><ShieldCheck size={12} /> Recommended actions</div>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.blue }}><ShieldCheck size={12} /> 建议动作</div>
             <div className="mt-2 space-y-2">
               {insight.recommendedActions.map((action) => {
                 const tone = actionTone(action);
@@ -97,7 +97,7 @@ export function ContextualAIInsightPanel({
                   >
                     <div className="text-[11px] font-semibold">{action.label}</div>
                     <div className="mt-0.5 text-[10px]" style={{ color: A.gray2 }}>
-                      {action.allowedOutputType} · requiresReview: true · mutationAllowed: false
+                      仅生成可复核内容 · 需要人工确认 · 不自动修改业务记录
                     </div>
                   </button>
                 );
@@ -107,14 +107,14 @@ export function ContextualAIInsightPanel({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <LinkedRecords records={insight.linkedRecords} returnContext={returnContext} onNavigateRecord={onNavigateRecord} />
-            <Section title="Data limitations" items={insight.limitations} />
+            <Section title="数据限制" items={insight.limitations} />
           </div>
         </div>
       </div>
 
       <div className="mt-3 rounded-xl p-3 text-[11px] leading-5" style={{ background: A.gray6, color: A.sub }}>
-        <span className="font-semibold" style={{ color: A.gray1 }}>Provenance:</span> {insight.provenance}
-        {insight.auditPreview && <span> · <span className="font-semibold" style={{ color: A.gray1 }}>Audit preview:</span> {insight.auditPreview}</span>}
+        <span className="font-semibold" style={{ color: A.gray1 }}>依据来源：</span> {insight.provenance}
+        {insight.auditPreview && <span> · <span className="font-semibold" style={{ color: A.gray1 }}>审计预览：</span> {insight.auditPreview}</span>}
       </div>
     </Card>
   );
@@ -125,7 +125,7 @@ function Section({ title, items }: { title: string; items: string[] }) {
     <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
       <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.label }}><FileText size={12} /> {title}</div>
       <div className="mt-2 space-y-1.5">
-        {(items.length ? items : ["No current data available."]).map((item) => (
+        {(items.length ? items : ["暂无可用数据。"]).map((item) => (
           <div key={item} className="text-[11px] leading-5" style={{ color: A.sub }}>{item}</div>
         ))}
       </div>
@@ -142,18 +142,18 @@ function LinkedRecords({
   returnContext?: WorkflowContext | null;
   onNavigateRecord?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
 }) {
-  const resolved = (records.length ? records : [{ type: "limitation", id: "No linked records found" }]).map((record) => resolveBusinessLinkedRecord({
+  const resolved = (records.length ? records : [{ type: "limitation", id: "未找到关联记录" }]).map((record) => resolveBusinessLinkedRecord({
     type: record.type,
     id: record.id,
     label: record.label,
     route: record.route,
-    relationshipLabel: "AI evidence",
-    relationshipReason: "Linked by contextual AI evidence.",
+    relationshipLabel: "智能依据",
+    relationshipReason: "由上下文智能依据关联。",
     sourceContext: returnContext,
   }));
   return (
     <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.label }}><Link2 size={12} /> Linked records</div>
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.label }}><Link2 size={12} /> 关联记录</div>
       <div className="mt-2 space-y-1.5">
         {resolved.map((record) => {
           const clickable = record.routeAvailable && record.focusTarget && onNavigateRecord;

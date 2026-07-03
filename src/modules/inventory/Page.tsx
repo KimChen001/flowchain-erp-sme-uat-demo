@@ -199,19 +199,19 @@ function InventoryOverview({
       </div>
 
       <Card className="p-5">
-        <SectionHeader title="Inventory Movement Ledger Draft" right={<Chip label="preview only" color={A.blue} bg="#eef6ff" />} />
+        <SectionHeader title="库存流水草稿" right={<Chip label="仅预览" color={A.blue} bg="#eef6ff" />} />
         <div className="grid grid-cols-3 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
           <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div className="font-semibold" style={{ color: A.label }}>Balance Impact Preview</div>
-            <div className="mt-1">Preview projected on-hand, available stock, and held stock before a person posts any movement.</div>
+            <div className="font-semibold" style={{ color: A.label }}>库存余额影响预览</div>
+            <div className="mt-1">在人工过账前预览预计现有库存、可用库存和冻结库存。</div>
           </div>
           <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div className="font-semibold" style={{ color: A.label }}>Quality Hold</div>
-            <div className="mt-1">Accepted quantity can be reviewed separately from quality hold quantity; hold has zero available-stock impact.</div>
+            <div className="font-semibold" style={{ color: A.label }}>质检冻结</div>
+            <div className="mt-1">合格数量与质检冻结数量分开复核；冻结数量不会增加可用库存。</div>
           </div>
           <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div className="font-semibold" style={{ color: A.label }}>Posting Guardrail</div>
-            <div className="mt-1">Draft review has no inventory posting, no stock balance update, and no PO close side effect.</div>
+            <div className="font-semibold" style={{ color: A.label }}>过账安全边界</div>
+            <div className="mt-1">草稿复核不会自动库存过账，不修改库存余额，也不会关闭 PO。</div>
           </div>
         </div>
       </Card>
@@ -1277,7 +1277,7 @@ function InventoryLanding({
       onReviewActionDraft(inventoryDraftRequest(selectedPlannedItem));
       return;
     }
-    toast(action.label, { description: "Contextual insight only. mutationAllowed: false." });
+    toast(action.label, { description: "仅提供上下文洞察，需人工复核后处理。" });
   }
 
   return (
@@ -1357,12 +1357,12 @@ function InventoryLanding({
             />
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <button onClick={() => openSkuInsight("Explain shortage")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>Explain shortage for {selectedItem.sku}</button>
-            <button onClick={() => openSkuInsight("Check incoming supply")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>Check incoming supply</button>
-            <button onClick={() => openSkuInsight("Find related POs/RFQs/GRNs")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>Find related POs/RFQs/GRNs</button>
+            <button onClick={() => openSkuInsight("解释库存短缺")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>解释 {selectedItem.sku} 短缺</button>
+            <button onClick={() => openSkuInsight("检查在途供应")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>检查在途供应</button>
+            <button onClick={() => openSkuInsight("查找关联 PO/RFQ/GRN")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>查找关联 PO/RFQ/GRN</button>
             <button onClick={() => selectedPlannedItem && handleSkuInsightAction({
               id: `preview_replenishment_draft:inventory_item:${selectedItem.sku}`,
-              label: `Preview replenishment PR draft for ${selectedItem.sku}`,
+              label: `预览 ${selectedItem.sku} 补货 PR 草稿`,
               intent: "preview_replenishment_draft",
               sourceModule: "inventory",
               sourceEntityType: "inventory_item",
@@ -1372,7 +1372,7 @@ function InventoryLanding({
               allowedOutputType: "draft_preview",
               requiresReview: true,
               mutationAllowed: false,
-            })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>Preview replenishment PR draft</button>
+            })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>预览补货 PR 草稿</button>
           </div>
           <ContextualAIInsightPanel insight={skuInsight} onClose={() => setSkuInsight(null)} onAction={handleSkuInsightAction} />
         </Card>

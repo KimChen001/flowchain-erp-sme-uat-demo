@@ -167,7 +167,7 @@ test('R258-R260 source guardrails expose route UI and preserve previous safety b
   const routes = source('src', 'app', 'routes.tsx')
   const exceptionPage = source('src', 'modules', 'exception-cases', 'Page.tsx')
   const userDataRoutes = source('server', 'routes', 'user-data.routes.mjs')
-  for (const expected of ['Create PR', 'Create Supplier Application', 'Create Sourcing Event / RFQ Draft', 'Save Supplier Follow-up Note', 'Save Case Note', 'Save Reviewed Draft']) {
+  for (const expected of ['创建 PR', '创建供应商准入申请', '创建寻源事件 / RFQ 草稿', '保存供应商跟进备注', '保存工单备注', '保存已复核草稿']) {
     assert.match(`${shell}\n${planPanel}`, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
   for (const forbidden of ['Issue PO', 'Send Email', 'Award Supplier', 'Pay', 'Post']) {
@@ -178,6 +178,6 @@ test('R258-R260 source guardrails expose route UI and preserve previous safety b
   assert.doesNotMatch(routes, /label:\s*["']AI Assistant["']|label:\s*["']AI Command Center["']|label:\s*["']Ask AI["']/)
   assert.doesNotMatch(exceptionPage, /sourceEntityId:\s*"SKU-00412"|SKU-00412:shortage|demoDraftEvidence/)
   assert.match(userDataRoutes, /getPreviewSnapshot/)
-  assert.match(exceptionPage, /Confirm final case transition/)
+  assert.match(exceptionPage, /确认最终状态变更/)
   assert.doesNotMatch([route, shell, planPanel].join('\n'), /OPENAI_API_KEY|ARK_API_KEY|DOUBAO_API_KEY|sk-[A-Za-z0-9]/)
 })

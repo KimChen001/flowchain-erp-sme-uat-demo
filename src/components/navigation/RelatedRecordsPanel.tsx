@@ -37,7 +37,7 @@ export function RelatedRecordsPanel({
                       {record.entityType} · {record.module || "unrouted"}
                     </div>
                     <div className="mt-1 text-[10px] leading-4" style={{ color: record.disabledReason ? A.orange : A.sub }}>
-                      {record.disabledReason || record.relationshipReason || "Relationship evidence is available."}
+                      {record.disabledReason || record.relationshipReason || "已找到关联依据。"}
                     </div>
                   </>
                 );
