@@ -28,7 +28,7 @@ const ACTION_RULES = [
 ]
 
 const DIAGNOSTIC_RULES = [
-  { intent: 'today_attention', patterns: [/今天|今日|优先|待办|attention/i], confidence: 0.78 },
+  { intent: 'today_attention', patterns: [/今天|今日|优先|待办|attention|需要.*(?:注意|关注|处理)|有什么.*(?:注意|关注|处理|异常|风险|卡点)|哪些事情.*紧急|比较紧急|要先处理|最需要处理/i], confidence: 0.82 },
   { intent: 'explain_po_delay', patterns: [/PO-[A-Z0-9-]+.*(延期|延迟|delay)|订单.*(延期|延迟)/i], confidence: 0.86 },
   { intent: 'explain_sku_shortage', patterns: [/SKU-[A-Z0-9-]+.*(不够|短缺|缺货|库存)|\b\d{4,6}\b.*(不够|短缺|缺货|库存)|库存不够|低于安全库存/i], confidence: 0.88 },
   { intent: 'analyze_supplier_risk', patterns: [/供应商.*风险|supplier.*risk/i], confidence: 0.82 },

@@ -10,7 +10,11 @@ function slotValue(resolution, key) {
 }
 
 function linkedRecords(resolution) {
-  return (resolution?.resolvedEntities || []).map((item) => ({ type: item.type, id: item.id, source: item.source }))
+  return (resolution?.resolvedEntities || []).map((item) => ({ type: item.type, id: item.id, source: item.source, validationStatus: item.validationStatus, dataLimitation: item.dataLimitation }))
+}
+
+function entityDataLimitations(resolution) {
+  return unique((resolution?.resolvedEntities || []).map((item) => item.dataLimitation))
 }
 
 function missing(requiredFields, fields) {
@@ -47,7 +51,7 @@ export function buildSupplierApplicationDraft(context = {}) {
     requiredFields,
     missingFields: missing(requiredFields, fields),
     linkedRecords: linkedRecords(context.resolution),
-    dataLimitations: missing(requiredFields, fields).length ? ['supplier_application_partial_fields'] : [],
+    dataLimitations: unique([...(missing(requiredFields, fields).length ? ['supplier_application_partial_fields'] : []), ...entityDataLimitations(context.resolution)]),
     assumptions: ['Supplier onboarding draft is review-first and does not create supplier master data.'],
   })
 }
@@ -75,7 +79,7 @@ export function buildPurchaseRequestDraft(context = {}) {
     missingFields: missing(requiredFields, fields),
     linkedRecords: linkedRecords(context.resolution),
     evidence: context.shortageEvidence ? [{ type: 'inventory_shortage', ...context.shortageEvidence }] : [],
-    dataLimitations: missing(requiredFields, fields).length ? ['purchase_request_partial_fields'] : [],
+    dataLimitations: unique([...(missing(requiredFields, fields).length ? ['purchase_request_partial_fields'] : []), ...entityDataLimitations(context.resolution)]),
     assumptions: ['Purchase request draft is not submitted and does not reserve inventory.'],
   })
 }
@@ -126,6 +130,7 @@ export function buildPurchaseOrderDraft(context = {}) {
   }
   const limitations = missing(requiredFields, fields)
   if (!fields.price || !fields.supplier) limitations.push('supplier_quote_or_price_missing')
+  limitations.push(...entityDataLimitations(context.resolution))
   return createBusinessActionDraft({
     draftType: 'purchase_order',
     userText: context.userText,
@@ -147,6 +152,7 @@ export function buildSupplierFollowupDraft(context = {}) {
     extractedFields: compact({ supplier: entityId(context.resolution, 'supplier') || context.supplier, relatedPo: entityId(context.resolution, 'po'), messagePurpose: 'follow_up' }),
     requiredFields: ['supplier', 'messagePurpose'],
     linkedRecords: linkedRecords(context.resolution),
+    dataLimitations: entityDataLimitations(context.resolution),
     assumptions: ['Follow-up text is prepared as a draft and is not sent automatically.'],
   })
 }
@@ -159,6 +165,7 @@ export function buildExceptionNoteDraft(context = {}) {
     extractedFields: compact({ relatedGrn: entityId(context.resolution, 'grn'), relatedInvoice: entityId(context.resolution, 'invoice'), recommendation: context.recommendation }),
     requiredFields: ['recommendation'],
     linkedRecords: linkedRecords(context.resolution),
+    dataLimitations: entityDataLimitations(context.resolution),
     assumptions: ['Exception note is draft-only and does not approve, post, or pay anything.'],
   })
 }
@@ -172,7 +179,7 @@ function draftWithLimitations(draftType, requiredFields, fields, context, assump
     requiredFields,
     missingFields: missing(requiredFields, fields),
     linkedRecords: linkedRecords(context.resolution),
-    dataLimitations: missing(requiredFields, fields).length ? [`${draftType}_partial_fields`] : [],
+    dataLimitations: unique([...(missing(requiredFields, fields).length ? [`${draftType}_partial_fields`] : []), ...entityDataLimitations(context.resolution)]),
     assumptions: [assumption],
   })
 }

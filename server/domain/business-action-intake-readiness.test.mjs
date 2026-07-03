@@ -82,19 +82,44 @@ test('R222 intent extractor covers action drafts, diagnostics, ambiguous cases a
   assert.equal(extractBusinessActionIntents('帮我处理一下这个').candidates[0].kind, 'fallback')
 })
 
+test('R250 broad Chinese attention phrases route to diagnostic today attention without action draft', () => {
+  for (const input of [
+    '有什么需要我注意的？',
+    '有什么需要关注的？',
+    '今天有什么要处理？',
+    '哪些事情比较紧急？',
+    '有什么异常？',
+    '有什么风险？',
+    '有什么卡点？',
+  ]) {
+    const result = extractBusinessActionIntents(input)
+    assert.equal(result.candidates[0].intent, 'today_attention', input)
+    assert.equal(result.candidates[0].kind, 'diagnostic', input)
+    assert.equal(result.candidates.some((item) => item.kind === 'action_draft'), false, input)
+    assert.equal(result.provider, 'local')
+    assert.equal(result.mutationAllowed, false)
+  }
+})
+
 test('R223 entity and slot resolver handles explicit ids, context partials, pronouns and missing context', () => {
   const explicit = resolveEntitySlots('给 PO-2026-1282 和 SKU-00412 起草 50 个，下周五，WH-A', { records, intent: 'draft_purchase_request' })
   assert.equal(explicit.resolvedEntities.some((item) => item.id === 'PO-2026-1282'), true)
   assert.equal(explicit.resolvedEntities.some((item) => item.id === 'SKU-00412'), true)
+  assert.equal(explicit.resolvedEntities.find((item) => item.id === 'SKU-00412').validationStatus, 'validated_existing_record')
   assert.equal(explicit.extractedSlots.quantity.value, 50)
   assert.equal(explicit.extractedSlots.requiredDate.value, '下周五')
 
+  const unvalidated = resolveEntitySlots('给 SKU-99999 起草 PR')
+  assert.equal(unvalidated.resolvedEntities[0].validationStatus, 'record_not_loaded_for_validation')
+  assert.equal(unvalidated.resolvedEntities[0].dataLimitation, 'Recognized ID, but record was not validated in current data.')
   const partial = resolveEntitySlots('00412 库存不够', { records, sourceContext: { sourceModule: 'inventory' } })
   assert.equal(partial.resolvedEntities.some((item) => item.id === 'SKU-00412'), true)
+  assert.equal(partial.resolvedEntities[0].validationStatus, 'validated_existing_record')
   const poPartial = resolveEntitySlots('1282 写个跟进', { records, sourceContext: { sourceModule: 'procurement' } })
   assert.equal(poPartial.resolvedEntities.some((item) => item.id === 'PO-2026-1282'), true)
   const pronoun = resolveEntitySlots('这个 SKU 帮我开 PR', { sourceContext: { sourceEntityType: 'sku', sourceEntityId: 'SKU-00412' } })
   assert.equal(pronoun.resolvedEntities.some((item) => item.source === 'context_pronoun'), true)
+  assert.equal(pronoun.resolvedEntities[0].dataLimitation, 'Recognized ID, but record was not validated in current data.')
   const missing = resolveEntitySlots('这个供应商怎么办')
   assert.equal(missing.unresolvedReferences.some((item) => item.reason === 'context_pronoun_requires_matching_source_context'), true)
   const ambiguous = resolveEntitySlots('0041', { records, sourceContext: { sourceModule: 'inventory' } })

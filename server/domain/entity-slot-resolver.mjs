@@ -29,6 +29,8 @@ const CONTEXT_TYPE_HINTS = {
   pr: 'pr',
 }
 
+export const RECOGNIZED_UNVALIDATED_ENTITY_LIMITATION = 'Recognized ID, but record was not validated in current data.'
+
 export function resolveEntitySlots(input = '', options = {}) {
   const sourceContext = options.sourceContext || {}
   const records = options.records || {}
@@ -77,22 +79,24 @@ export function resolveEntitySlots(input = '', options = {}) {
 
 function resolveKnownEntity(type, id, records, source) {
   const matches = findRecords(type, id, records)
+  const recordsLoaded = recordsLoadedForType(type, records)
   return {
     type,
     id,
     source,
     confidence: matches.length ? 0.98 : 0.82,
+    validationStatus: matches.length === 1 ? 'validated_existing_record' : recordsLoaded ? 'record_not_found' : 'record_not_loaded_for_validation',
     record: matches.length === 1 ? matches[0] : undefined,
     candidates: matches.length > 1 ? matches : undefined,
-    dataLimitation: matches.length ? undefined : 'record_not_loaded_for_validation',
+    dataLimitation: matches.length ? undefined : RECOGNIZED_UNVALIDATED_ENTITY_LIMITATION,
   }
 }
 
 function resolvePartialId(type, partial, records, sourceContext) {
   const candidates = partialCandidates(partial, records).filter((item) => item.type === type)
-  if (candidates.length === 1) return { type, id: candidates[0].id, source: 'partial_id_context', confidence: 0.86, record: candidates[0].record }
+  if (candidates.length === 1) return { type, id: candidates[0].id, source: 'partial_id_context', confidence: 0.86, validationStatus: 'validated_existing_record', record: candidates[0].record }
   const sourceId = text(sourceContext.sourceEntityId || sourceContext.entityId)
-  if (sourceId && sourceId.includes(partial)) return { type, id: sourceId, source: 'source_context_partial', confidence: 0.9 }
+  if (sourceId && sourceId.includes(partial)) return { type, id: sourceId, source: 'source_context_partial', confidence: 0.9, validationStatus: 'record_not_loaded_for_validation', dataLimitation: RECOGNIZED_UNVALIDATED_ENTITY_LIMITATION }
   return null
 }
 
@@ -108,6 +112,10 @@ function partialCandidates(partial, records) {
 
 function findRecords(type, id, records) {
   return Object.values(records).flatMap((list) => Array.isArray(list) ? list : []).filter((record) => recordId(record).toUpperCase() === id.toUpperCase())
+}
+
+function recordsLoadedForType(type, records = {}) {
+  return Object.entries(records).some(([key, list]) => normalizeType(key) === type && Array.isArray(list))
 }
 
 function recordId(record = {}) {
@@ -146,7 +154,7 @@ function resolvePronouns(value, sourceContext) {
     const contextId = text(sourceContext.sourceEntityId || sourceContext.entityId)
     const contextType = normalizeType(text(sourceContext.sourceEntityType || sourceContext.entityType))
     if (contextId && (!contextType || contextType === type)) {
-      resolved.push({ type, id: contextId, source: 'context_pronoun', confidence: 0.88 })
+      resolved.push({ type, id: contextId, source: 'context_pronoun', confidence: 0.88, validationStatus: 'record_not_loaded_for_validation', dataLimitation: RECOGNIZED_UNVALIDATED_ENTITY_LIMITATION })
       assumptions.push(`Resolved contextual pronoun to ${contextId}.`)
     } else {
       unresolved.push({ raw: pattern.source, type, reason: 'context_pronoun_requires_matching_source_context' })
