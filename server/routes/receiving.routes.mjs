@@ -27,7 +27,7 @@ export async function handleReceivingRoute(ctx) {
       po: body.po,
       supplier: body.supplier || po?.supplier || '—',
       arrived: body.arrived || `${todayLabel()} ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')}`,
-      dock: body.dock || 'Dock-02',
+      dock: body.dock || '月台-02',
       receiver: body.receiver || '刘建华',
       items: Number(body.items || po?.items || 1),
       passed: Number(body.passed || 0),

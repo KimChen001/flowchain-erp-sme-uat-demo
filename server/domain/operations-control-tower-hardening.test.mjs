@@ -73,6 +73,30 @@ test('R271-R273 receiving baseline eligibility and GRN draft block PO Drafts', (
   assert.equal(buildGrnDraft({ po: { po: 'PO-DRAFT-2', status: 'draft', items: 10 } }).blocked, true)
 })
 
+test('R312 receiving source eligibility is strict and only explicit receivable statuses pass', () => {
+  const base = { po: 'PO-R312', supplier: 'Fast Precision', sourceSku: 'SKU-R312', items: 10, received: 0 }
+  for (const status of ['issued', 'partially_received', 'ready_for_receiving', '已发出', '部分到货']) {
+    const result = evaluateReceivingSource({ ...base, status, received: status === 'partially_received' || status === '部分到货' ? 4 : 0 })
+    assert.equal(result.eligible, true, status)
+  }
+
+  for (const status of ['draft', '草稿', 'pending_review', 'review_required', 'approval_required', 'approved_not_issued', 'ready_for_manual_issue', 'created', 'unknown', 'closed', 'cancelled', 'fully_received', 'completed', '已取消', '已关闭', '已完成', '已收货', '待审批', '已驳回']) {
+    const result = evaluateReceivingSource({ ...base, status })
+    assert.equal(result.eligible, false, status)
+    assert.ok(result.reason, status)
+    assert.equal(buildGrnDraft({ po: { ...base, status } }).blocked, true, status)
+  }
+
+  const missingPo = evaluateReceivingSource({ status: 'issued', sourceSku: 'SKU-R312', items: 10 })
+  assert.equal(missingPo.eligible, false)
+  assert.ok(missingPo.dataLimitations.includes('missing_po_id'))
+
+  const missingQuantityAndSku = evaluateReceivingSource({ po: 'PO-R312-MISSING', status: 'issued' })
+  assert.equal(missingQuantityAndSku.eligible, true)
+  assert.ok(missingQuantityAndSku.dataLimitations.includes('missing_ordered_quantity'))
+  assert.ok(missingQuantityAndSku.dataLimitations.includes('missing_sku'))
+})
+
 test('R274-R277 receiving confirmation exceptions inventory movement and balance preview remain non-mutating', () => {
   const draft = buildGrnDraft({ po: issuedPo, receivedQuantity: 90, warehouse: 'WH-A', location: 'BIN-1', qualityStatus: 'quality_hold' }).draft
   assert.deepEqual(confirmReceivingRecord({ draft }).errors, ['missing_confirmation'])
@@ -181,6 +205,20 @@ test('R296-R300 Today Cockpit control tower aggregates work items with case awar
   assert.equal(insight.standaloneAiNavigation, false)
   assert.equal(insight.sideEffects.issuesPo, false)
   assert.equal(insight.sideEffects.postsInventory, false)
+})
+
+test('R313 supplier risk and control tower overdue detection uses injected business date', () => {
+  const futureAsOf = '2026-07-01T00:00:00.000Z'
+  const lateAsOf = '2026-07-20T00:00:00.000Z'
+  const po = { po: 'PO-R313', supplier: 'Fast Precision', status: 'issued', eta: '2026-07-10', sourceSku: 'SKU-R313' }
+
+  assert.equal(deriveSupplierRiskSignals({ supplierName: 'Fast Precision', purchaseOrders: [po], asOfDate: futureAsOf }).some((item) => item.signalType === 'po_delay'), false)
+  assert.equal(deriveSupplierRiskSignals({ supplierName: 'Fast Precision', purchaseOrders: [po], asOfDate: lateAsOf }).some((item) => item.signalType === 'po_delay'), true)
+
+  assert.equal(resolveTodayCockpitWorkItems({ purchaseOrders: [po], asOfDate: futureAsOf }).some((item) => item.category === 'po_delay'), false)
+  assert.equal(resolveTodayCockpitWorkItems({ purchaseOrders: [po], asOfDate: lateAsOf }).some((item) => item.category === 'po_delay'), true)
+
+  assert.doesNotMatch(read('server', 'domain', 'supplier-risk-control-tower.mjs'), /2026-07-03/)
 })
 
 test('R280/R290/R300 source guardrails preserve boundaries no keys and no standalone AI nav', () => {

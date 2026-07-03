@@ -49,21 +49,21 @@ export const receivingDocs: {
   receiver: string; items: number; passed: number; failed: number;
   status: RecvStatus; warehouse: string;
 }[] = [
-  { grn: "GRN-202605-0418", po: "PO-2026-1284", supplier: "佛山标准件",     arrived: "5月27日 09:14", dock: "Dock-02", receiver: "刘建华", items: 18, passed: 12, failed: 0, status: "已入库",  warehouse: "A 区" },
-  { grn: "GRN-202605-0419", po: "PO-2026-1282", supplier: "广州化工耗材",   arrived: "5月27日 10:42", dock: "Dock-04", receiver: "孙明",   items: 9,  passed: 5,  failed: 2, status: "异常处理",warehouse: "C 区" },
-  { grn: "GRN-202605-0420", po: "PO-2026-1285", supplier: "江苏铝合金集团", arrived: "5月27日 13:08", dock: "Dock-01", receiver: "刘建华", items: 4,  passed: 0,  failed: 0, status: "质检中",  warehouse: "—"    },
-  { grn: "GRN-202605-0421", po: "PO-2026-1286", supplier: "华东精工机械",   arrived: "5月27日 14:30", dock: "Dock-03", receiver: "—",      items: 12, passed: 0,  failed: 0, status: "待收货",  warehouse: "—"    },
-  { grn: "GRN-202605-0422", po: "PO-2026-1283", supplier: "深圳新元电气",   arrived: "5月26日 16:21", dock: "Dock-02", receiver: "孙明",   items: 6,  passed: 6,  failed: 0, status: "已入库",  warehouse: "D 区" },
-  { grn: "GRN-202605-0423", po: "PO-2026-1281", supplier: "华东精工机械",   arrived: "5月26日 11:05", dock: "Dock-01", receiver: "刘建华", items: 7,  passed: 7,  failed: 0, status: "已入库",  warehouse: "A 区" },
+  { grn: "GRN-202605-0418", po: "PO-2026-1284", supplier: "佛山标准件",     arrived: "5月27日 09:14", dock: "月台-02", receiver: "刘建华", items: 18, passed: 12, failed: 0, status: "已入库",  warehouse: "A 区" },
+  { grn: "GRN-202605-0419", po: "PO-2026-1282", supplier: "广州化工耗材",   arrived: "5月27日 10:42", dock: "月台-04", receiver: "孙明",   items: 9,  passed: 5,  failed: 2, status: "异常处理",warehouse: "C 区" },
+  { grn: "GRN-202605-0420", po: "PO-2026-1285", supplier: "江苏铝合金集团", arrived: "5月27日 13:08", dock: "月台-01", receiver: "刘建华", items: 4,  passed: 0,  failed: 0, status: "质检中",  warehouse: "—"    },
+  { grn: "GRN-202605-0421", po: "PO-2026-1286", supplier: "华东精工机械",   arrived: "5月27日 14:30", dock: "月台-03", receiver: "—",      items: 12, passed: 0,  failed: 0, status: "待收货",  warehouse: "—"    },
+  { grn: "GRN-202605-0422", po: "PO-2026-1283", supplier: "深圳新元电气",   arrived: "5月26日 16:21", dock: "月台-02", receiver: "孙明",   items: 6,  passed: 6,  failed: 0, status: "已入库",  warehouse: "D 区" },
+  { grn: "GRN-202605-0423", po: "PO-2026-1281", supplier: "华东精工机械",   arrived: "5月26日 11:05", dock: "月台-01", receiver: "刘建华", items: 7,  passed: 7,  failed: 0, status: "已入库",  warehouse: "A 区" },
 ];
 
 export const arrivalSchedule = [
-  { time: "09:00", supplier: "佛山标准件",     po: "PO-2026-1284", dock: "Dock-02", driver: "王师傅 / 粤B·12846", status: "已到达" },
-  { time: "10:30", supplier: "广州化工耗材",   po: "PO-2026-1282", dock: "Dock-04", driver: "李师傅 / 粤A·39201", status: "已到达" },
-  { time: "13:00", supplier: "江苏铝合金集团", po: "PO-2026-1285", dock: "Dock-01", driver: "陈师傅 / 苏A·82014", status: "已到达" },
-  { time: "14:30", supplier: "华东精工机械",   po: "PO-2026-1286", dock: "Dock-03", driver: "赵师傅 / 沪D·17729", status: "在途"  },
-  { time: "16:00", supplier: "深圳新元电气",   po: "PO-2026-1287", dock: "Dock-02", driver: "—",                  status: "待发车" },
-  { time: "17:30", supplier: "上海仪表科技",   po: "PO-2026-1278", dock: "Dock-04", driver: "—",                  status: "待发车" },
+  { time: "09:00", supplier: "佛山标准件",     po: "PO-2026-1284", dock: "月台-02", driver: "王师傅 / 粤B·12846", status: "已到达" },
+  { time: "10:30", supplier: "广州化工耗材",   po: "PO-2026-1282", dock: "月台-04", driver: "李师傅 / 粤A·39201", status: "已到达" },
+  { time: "13:00", supplier: "江苏铝合金集团", po: "PO-2026-1285", dock: "月台-01", driver: "陈师傅 / 苏A·82014", status: "已到达" },
+  { time: "14:30", supplier: "华东精工机械",   po: "PO-2026-1286", dock: "月台-03", driver: "赵师傅 / 沪D·17729", status: "在途"  },
+  { time: "16:00", supplier: "深圳新元电气",   po: "PO-2026-1287", dock: "月台-02", driver: "—",                  status: "待发车" },
+  { time: "17:30", supplier: "上海仪表科技",   po: "PO-2026-1278", dock: "月台-04", driver: "—",                  status: "待发车" },
 ];
 
 export const qcExceptions = [

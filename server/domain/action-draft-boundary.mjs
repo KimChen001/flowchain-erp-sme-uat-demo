@@ -133,7 +133,7 @@ export function buildActionDraftSuggestion(input = {}, options = {}) {
         action: 'ai_draft_prepared',
         source: 'ai_assisted',
         timestamp: input.createdAt || now.toISOString(),
-        summary: 'Preview draft prepared. No business record was created or submitted.',
+        summary: '草稿预览已生成；未创建或提交业务记录。',
       },
     ],
     confirmationBoundary: {

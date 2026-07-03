@@ -109,6 +109,38 @@ function copyTextForDraft(draft: ActionDraftPreview | null) {
   return `${draft.title}\n类型：${draft.type}\n状态：${draft.status}\n${payload}${warnings}`.trim();
 }
 
+function draftTypeLabel(type?: string) {
+  const labels: Record<string, string> = {
+    purchase_request_draft: "PR 草稿",
+    rfq_draft: "RFQ 草稿",
+    supplier_followup_draft: "供应商跟进备注草稿",
+    po_followup_draft: "PO 跟进备注草稿",
+    exception_note: "工单备注草稿",
+  };
+  return labels[type || ""] || "业务动作草稿";
+}
+
+function draftStatusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    preview: "仅预览",
+    draft: "草稿",
+    review_required: "需人工复核",
+    draft_only_requires_review: "仅生成草稿 / 需人工复核",
+  };
+  return labels[status || ""] || "需人工复核";
+}
+
+function draftSourceLabel(source?: string) {
+  const labels: Record<string, string> = {
+    inventory_replenishment: "库存补货",
+    today_cockpit: "今日驾驶舱",
+    ai_assistant: "智能洞察",
+    procurement_followup: "采购跟进",
+    supplier_followup: "供应商跟进",
+  };
+  return labels[source || ""] || "业务上下文";
+}
+
 function confirmedActionTypeForDraft(type?: string) {
   const map: Record<string, string> = {
     purchase_request_draft: "create_purchase_request",
@@ -321,15 +353,15 @@ export function ActionDraftReviewShell({
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
               <div className="text-[10px]" style={{ color: A.gray2 }}>类型</div>
-              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{activeDraft.type}</div>
+              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{draftTypeLabel(activeDraft.type)}</div>
             </div>
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
               <div className="text-[10px]" style={{ color: A.gray2 }}>状态</div>
-              <div className="mt-1"><Chip label={activeDraft.status || "preview"} color={A.blue} bg="#eef4ff" /></div>
+              <div className="mt-1"><Chip label={draftStatusLabel(activeDraft.status)} color={A.blue} bg="#eef4ff" /></div>
             </div>
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
               <div className="text-[10px]" style={{ color: A.gray2 }}>来源</div>
-              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{activeDraft.source || "preview"}</div>
+              <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{draftSourceLabel(activeDraft.source)}</div>
             </div>
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
               <div className="text-[10px]" style={{ color: A.gray2 }}>确认边界</div>
@@ -400,7 +432,7 @@ export function ActionDraftReviewShell({
 
           <section className="rounded-lg px-3 py-3 text-[11px] leading-5" style={{ background: A.gray6, color: A.sub }}>
             <span className="font-semibold" style={{ color: A.gray1 }}>审计预览：</span>
-            {audit?.summary || "Preview draft prepared. No business record was created or submitted."}
+            {audit?.summary || "草稿预览已生成；未创建或提交业务记录。"}
           </section>
         </div>
       ) : (

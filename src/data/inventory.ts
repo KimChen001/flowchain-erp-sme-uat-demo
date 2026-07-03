@@ -93,7 +93,7 @@ export const INVENTORY_MOVEMENT_LEDGER: InventoryMovement[] = [
       { label: "收货状态", value: "已入库" },
     ],
     timeline: [
-      { label: "09:14", value: "Dock-02 完成到货登记" },
+      { label: "09:14", value: "月台-02 完成到货登记" },
       { label: "10:02", value: "质检通过并登记库存影响" },
       { label: "10:18", value: "操作记录已归档" },
     ],
@@ -124,7 +124,7 @@ export const INVENTORY_MOVEMENT_LEDGER: InventoryMovement[] = [
       { label: "异常", value: "2 桶外观破损" },
     ],
     timeline: [
-      { label: "10:42", value: "Dock-04 完成到货登记" },
+      { label: "10:42", value: "月台-04 完成到货登记" },
       { label: "11:06", value: "质检发现外观破损" },
       { label: "11:32", value: "合格数量登记，异常转采购退货" },
     ],

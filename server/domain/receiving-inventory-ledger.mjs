@@ -55,9 +55,9 @@ export const RECEIVING_FORBIDDEN_SIDE_EFFECTS = Object.freeze({
 })
 
 const RECEIVABLE_STATUSES = ['已发出', '部分到货', 'issued', 'partially_received', 'ready_for_receiving']
-const DRAFT_STATUSES = ['草稿', '待审批', 'draft', 'review_required', 'ready_for_manual_issue']
+const DRAFT_STATUSES = ['草稿', '待审批', '已驳回', 'draft', 'pending_review', 'review_required', 'approval_required', 'approved_not_issued', 'ready_for_manual_issue', 'created']
 const CLOSED_STATUSES = ['已完成', '已收货', '已关闭', 'closed', 'fully_received', 'completed']
-const CANCELLED_STATUSES = ['已取消', '已驳回', 'cancelled', 'rejected']
+const CANCELLED_STATUSES = ['已取消', 'cancelled', 'rejected']
 
 export function evaluateReceivingSource(po = {}, context = {}) {
   const id = text(po.po || po.poId || po.id)
@@ -84,11 +84,11 @@ export function evaluateReceivingSource(po = {}, context = {}) {
   if (!id) limitations.push('missing_po_id')
   if (!ordered) limitations.push('missing_ordered_quantity')
   if (!linkedItems.some((item) => item.sku)) limitations.push('missing_sku')
+  if (!id) return result(false, 'missing_po', 'Missing or unknown PO cannot be used as receiving source.', limitations, openQuantity, linkedItems, po)
   if (sourceType === 'poDraft' || DRAFT_STATUSES.includes(status)) return result(false, sourceType, 'PO Draft is not eligible for receiving.', limitations, openQuantity, linkedItems, po)
   if (CANCELLED_STATUSES.includes(status)) return result(false, 'cancelled_po', 'Cancelled PO is not eligible for receiving.', limitations, openQuantity, linkedItems, po)
   if (CLOSED_STATUSES.includes(status) || (ordered > 0 && openQuantity <= 0)) return result(false, 'closed_po', 'Closed or fully received PO is not eligible for new receiving except review.', limitations, openQuantity, linkedItems, po)
-  if (!id) return result(false, 'missing_po', 'Missing or unknown PO cannot be used as receiving source.', limitations, openQuantity, linkedItems, po)
-  if (!RECEIVABLE_STATUSES.includes(status)) limitations.push('status_not_explicitly_receivable')
+  if (!RECEIVABLE_STATUSES.includes(status)) return result(false, 'status_not_receivable', `PO status "${status || 'unknown'}" is not explicitly eligible for receiving.`, [...limitations, 'status_not_explicitly_receivable'], openQuantity, linkedItems, po)
   return result(true, received > 0 ? 'partially_received_po' : 'issued_po', received > 0 ? 'Partially received PO is eligible for remaining open quantity.' : 'Issued PO is eligible for receiving.', limitations, openQuantity, linkedItems, po)
 }
 

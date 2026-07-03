@@ -75,10 +75,10 @@ export function buildReturnUrl(route: string, context: WorkflowContext | null | 
 
 export function formatReturnLabel(context: WorkflowContext | null | undefined) {
   const safe = buildReturnContext(context);
-  if (!safe) return "Back to previous workflow";
+  if (!safe) return "返回上一工作流";
   if (safe.returnLabel) return safe.returnLabel;
-  if (safe.sourceLabel) return `Back to ${safe.sourceLabel}`;
-  if (safe.sourceEntityId) return `Back to ${safe.sourceEntityId}`;
-  if (safe.sourceModule === "overview" || safe.sourceModule === "todayCockpit") return "Back to Today Cockpit";
-  return "Back to previous workflow";
+  if (safe.sourceLabel) return `返回 ${safe.sourceLabel}`;
+  if (safe.sourceEntityId) return `返回 ${safe.sourceEntityId}`;
+  if (safe.sourceModule === "overview" || safe.sourceModule === "todayCockpit") return "返回今日驾驶舱";
+  return "返回上一工作流";
 }

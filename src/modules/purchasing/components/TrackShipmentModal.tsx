@@ -11,7 +11,7 @@ export function TrackShipmentModal({ open, onClose, po }: {
     { label: "供应商确认", time: "5月26日 10:14", done: true,                                                  loc: po.supplier },
     { label: "已发货",     time: "5月26日 16:48", done: po.status !== "草稿" && po.status !== "待审批" && po.status !== "已审批", loc: "供应商出库口" },
     { label: "运输中",     time: "5月27日 03:22", done: ["部分到货", "已完成"].includes(po.status),              loc: "G42 京沪高速 · 距 280km" },
-    { label: "抵达月台",   time: po.eta + " 09:00", done: ["部分到货", "已完成"].includes(po.status),             loc: "Dock-02" },
+    { label: "抵达月台",   time: po.eta + " 09:00", done: ["部分到货", "已完成"].includes(po.status),             loc: "月台-02" },
     { label: "完成签收",   time: po.eta + " 11:30", done: po.status === "已完成",                                loc: "WMS 入库完成" },
   ];
   return (

@@ -66,6 +66,25 @@ function formatValue(value: unknown) {
   return String(value);
 }
 
+function draftTypeLabel(type?: string) {
+  const labels: Record<string, string> = {
+    business_draft: "业务草稿",
+    purchase_request_draft: "PR 草稿",
+    rfq_draft: "RFQ 草稿",
+    supplier_followup_draft: "供应商跟进备注草稿",
+  };
+  return labels[type || ""] || "业务草稿";
+}
+
+function reviewStatusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    draft_only_requires_review: "仅生成草稿 / 需人工复核",
+    review_required: "需人工复核",
+    reviewed: "已复核",
+  };
+  return labels[status || ""] || "需人工复核";
+}
+
 function callbackFor(key: string, props: BusinessActionPlanPanelProps) {
   if (key === "edit") return props.onEditDraft;
   if (key === "save") return props.onSaveDraft;
@@ -132,8 +151,8 @@ export function BusinessActionPlanPanel(props: BusinessActionPlanPanelProps) {
       {drafts.map((draft) => (
         <div key={draft.draftId} className="space-y-3 rounded-md border p-3" style={{ borderColor: A.border }}>
           <div className="flex flex-wrap items-center gap-2">
-            <Chip label={draft.draftType || "business_draft"} color={A.blue} bg="#eef6ff" />
-            <Chip label={draft.reviewStatus || "draft_only_requires_review"} color={A.green} bg="#ecfdf5" />
+            <Chip label={draftTypeLabel(draft.draftType)} color={A.blue} bg="#eef6ff" />
+            <Chip label={reviewStatusLabel(draft.reviewStatus)} color={A.green} bg="#ecfdf5" />
           </div>
           <FieldList title="已识别字段" values={draft.extractedFields} />
           <FieldList title="建议字段" values={draft.suggestedFields} />

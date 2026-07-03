@@ -75,9 +75,10 @@ export function normalizeSupplierRiskSignal(input = {}) {
 export function deriveSupplierRiskSignals(input = {}) {
   const supplierName = text(input.supplierName || input.supplier?.name || input.supplier)
   const supplierId = text(input.supplierId || input.supplier?.code || input.supplier?.id)
+  const asOfDate = input.asOfDate || input.businessDate
   const signals = []
   for (const po of asArray(input.purchaseOrders).filter((row) => sameSupplier(row, supplierName, supplierId))) {
-    if (/延期|逾期|overdue|late/i.test(text(po.status || po.reason)) || isPast(po.eta || po.expectedDate)) {
+    if (/延期|逾期|overdue|late/i.test(text(po.status || po.reason)) || isPast(po.eta || po.expectedDate, asOfDate)) {
       signals.push(normalizeSupplierRiskSignal({ supplierId, supplierName, signalType: 'po_delay', severity: 'high', linkedRecords: [{ type: 'po', id: text(po.po || po.id) }], evidence: [{ type: 'po', id: text(po.po || po.id), summary: text(po.status || po.eta) }] }))
     }
     if (text(po.sourceSku) && /关键|critical/i.test(text(po.priority || po.criticality))) {
@@ -104,9 +105,11 @@ function sameSupplier(row = {}, name = '', id = '') {
   return (name && text(row.supplier || row.supplierName || row.name) === name) || (id && text(row.supplierId || row.supplierCode || row.code || row.id) === id)
 }
 
-function isPast(value = '') {
+function isPast(value = '', asOfDate = undefined) {
   const raw = text(value)
-  return raw && !Number.isNaN(Date.parse(raw)) && new Date(raw) < new Date('2026-07-03T00:00:00Z')
+  const parsed = raw ? Date.parse(raw) : NaN
+  const reference = asOfDate ? new Date(asOfDate) : new Date()
+  return raw && !Number.isNaN(parsed) && !Number.isNaN(reference.getTime()) && new Date(parsed) < reference
 }
 
 export function resolveSupplierRiskScore(input = {}) {
@@ -187,8 +190,9 @@ export function normalizeControlTowerWorkItem(input = {}) {
 
 export function resolveTodayCockpitWorkItems(input = {}) {
   const items = []
+  const asOfDate = input.asOfDate || input.businessDate
   for (const po of asArray(input.purchaseOrders)) {
-    if (/延期|逾期|overdue/i.test(text(po.status || po.reason)) || isPast(po.eta || po.expectedDate)) items.push(normalizeControlTowerWorkItem({ category: 'po_delay', priority: 'high', title: `${text(po.po || po.id)} delayed`, conclusion: 'PO delivery needs review.', sourceModule: 'procurement', sourceEntityType: 'po', sourceEntityId: text(po.po || po.id), linkedRecords: [{ type: 'po', id: text(po.po || po.id) }], evidence: [{ type: 'po', id: text(po.po || po.id), summary: text(po.status || po.eta) }], businessImpact: 'Potential production or inventory shortage.', dueDate: text(po.eta || po.expectedDate) }))
+    if (/延期|逾期|overdue/i.test(text(po.status || po.reason)) || isPast(po.eta || po.expectedDate, asOfDate)) items.push(normalizeControlTowerWorkItem({ category: 'po_delay', priority: 'high', title: `${text(po.po || po.id)} delayed`, conclusion: 'PO delivery needs review.', sourceModule: 'procurement', sourceEntityType: 'po', sourceEntityId: text(po.po || po.id), linkedRecords: [{ type: 'po', id: text(po.po || po.id) }], evidence: [{ type: 'po', id: text(po.po || po.id), summary: text(po.status || po.eta) }], businessImpact: 'Potential production or inventory shortage.', dueDate: text(po.eta || po.expectedDate) }))
   }
   for (const inv of asArray(input.supplierInvoices)) {
     if (number(inv.varianceAmount) || /差异|variance|异常/i.test(text(inv.matchStatus || inv.status))) items.push(normalizeControlTowerWorkItem({ category: 'invoice_mismatch', priority: 'high', title: `${text(inv.invoiceNumber || inv.id)} mismatch`, conclusion: 'Invoice matching variance requires finance/procurement review.', sourceModule: 'finance', sourceEntityType: 'invoice', sourceEntityId: text(inv.invoiceNumber || inv.id), linkedRecords: [{ type: 'invoice', id: text(inv.invoiceNumber || inv.id) }, { type: 'po', id: text(inv.relatedPo) }].filter((item) => item.id), evidence: [{ type: 'invoice', id: text(inv.invoiceNumber || inv.id), summary: text(inv.matchStatus || inv.varianceAmount) }], businessImpact: 'Payment should remain blocked until review.' }))
@@ -198,7 +202,7 @@ export function resolveTodayCockpitWorkItems(input = {}) {
   }
   const suppliers = unique([...asArray(input.suppliers).map((s) => text(s.name || s.supplierName)), ...asArray(input.purchaseOrders).map((po) => text(po.supplier))])
   for (const supplier of suppliers.filter(Boolean)) {
-    const explanation = buildSupplierRiskExplanation({ ...input, supplierName: supplier })
+    const explanation = buildSupplierRiskExplanation({ ...input, supplierName: supplier, asOfDate })
     if (explanation.score > 0) items.push(normalizeControlTowerWorkItem({ category: 'supplier_risk', priority: explanation.riskLevel === 'high' ? 'high' : 'medium', title: `${supplier} supplier risk`, conclusion: explanation.reason, sourceModule: 'srm', sourceEntityType: 'supplier', sourceEntityId: supplier, linkedRecords: explanation.linkedRecords, evidence: explanation.evidence, businessImpact: explanation.businessImpact, recommendedNextAction: 'Review supplier risk evidence' }))
   }
   for (const item of asArray(input.exceptionCases)) {

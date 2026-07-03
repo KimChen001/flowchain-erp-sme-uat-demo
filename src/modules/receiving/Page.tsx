@@ -571,9 +571,9 @@ function ReceivingOps({
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="今日已入库" value={String(todayReceived)} sub={`${fmt(4820000)} 入库价值`} delta="+18%" positive icon={PackageCheck} color={A.green}  />
-        <KpiCard label="待收货"     value={String(pending)}      sub="未来 24 小时"      delta="6 个 Dock" positive icon={Truck}        color={A.blue}   />
+        <KpiCard label="待收货"     value={String(pending)}      sub="未来 24 小时"      delta="6 个月台" positive icon={Truck}        color={A.blue}   />
         <KpiCard label="质检中"     value={String(inQC)}         sub="平均 1.8 小时"     delta="-0.4h"      positive icon={ScanLine}     color={A.orange} />
-        <KpiCard label="异常处理"   value={String(exceptions)}   sub="本月累计 12 起"    delta="+1 vs 昨日" positive={false} icon={AlertCircle} color={A.red}    />
+        <KpiCard label="异常处理"   value={String(exceptions)}   sub="本月累计 12 起"    delta="较昨日 +1" positive={false} icon={AlertCircle} color={A.red}    />
       </div>
 
       <Card className="p-5">
@@ -598,7 +598,7 @@ function ReceivingOps({
 
       {!showGrnDetail && (
       <>
-      {/* Schedule + Dock */}
+      {/* Schedule + dock */}
       <div className="grid grid-cols-5 gap-3">
         <Card className="col-span-3 p-5">
           <SectionHeader title="今日到货排期"
@@ -631,10 +631,10 @@ function ReceivingOps({
             right={<span className="text-[11px]" style={{ color: A.gray2 }}>实时</span>} />
           <div className="space-y-3.5">
             {[
-              { dock: "Dock-01", used: 78, jobs: 4, status: "占用中", color: A.green },
-              { dock: "Dock-02", used: 62, jobs: 3, status: "占用中", color: A.green },
-              { dock: "Dock-03", used: 51, jobs: 2, status: "等待",   color: A.orange },
-              { dock: "Dock-04", used: 41, jobs: 2, status: "空闲",   color: A.gray2 },
+              { dock: "月台-01", used: 78, jobs: 4, status: "占用中", color: A.green },
+              { dock: "月台-02", used: 62, jobs: 3, status: "占用中", color: A.green },
+              { dock: "月台-03", used: 51, jobs: 2, status: "等待",   color: A.orange },
+              { dock: "月台-04", used: 41, jobs: 2, status: "空闲",   color: A.gray2 },
             ].map((d) => (
               <div key={d.dock}>
                 <div className="flex items-center justify-between mb-1.5">
@@ -686,7 +686,7 @@ function ReceivingOps({
         <table className={tableMinLgClass}>
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["GRN", "关联 PO", "供应商", "到货时间", "Dock", "收货人", "质检", "入库", "状态", "操作"].map((h) => (
+              {["GRN", "关联 PO", "供应商", "到货时间", "月台", "收货人", "质检", "入库", "状态", "操作"].map((h) => (
                 <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
               ))}
             </tr>
@@ -854,7 +854,7 @@ function ReceivingOps({
                     ["供应商", selectedGrn.supplier],
                     ["收货人", selectedGrn.receiver || "—"],
                     ["仓库", selectedGrn.warehouse || "—"],
-                    ["Dock", selectedGrn.dock || "—"],
+                    ["月台", selectedGrn.dock || "—"],
                     ["库存移动", selectedGrn.inventoryMovementIds?.join(", ") || "—"],
                     ["库存应用", selectedGrn.inventoryApplied ? "已应用" : "未应用"],
                   ].map(([label, value]) => (
@@ -991,7 +991,7 @@ function ReceivingOps({
                   { label: "状态", value: selectedGrn.status, tone: statusTone(selectedGrn.status) },
                   { label: "质检状态", value: selectedGrn.failed > 0 ? "存在拒收" : selectedGrn.status === "质检中" ? "质检中" : "通过", tone: selectedGrn.failed > 0 ? "danger" : selectedGrn.status === "质检中" ? "warning" : "success" },
                   { label: "负责人", value: selectedGrn.receiver || "—" },
-                  { label: "Dock", value: selectedGrn.dock || "—" },
+                  { label: "月台", value: selectedGrn.dock || "—" },
                   { label: "库存过账", value: selectedGrn.inventoryApplied ? "已应用" : "未应用", tone: selectedGrn.inventoryApplied ? "success" : "warning" },
                   { label: "库存移动", value: selectedGrn.inventoryMovementIds?.join(", ") || "—" },
                   { label: "过账时间", value: selectedGrn.postedAt ? new Date(selectedGrn.postedAt).toLocaleString("zh-CN") : "—" },
