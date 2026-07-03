@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { createExceptionCaseDraft, normalizeExceptionCase, validateExceptionCase } from './exception-case-model.mjs'
-import { buildCaseNoteDraft, buildExceptionCaseDraftFromEvidence } from './exception-case-draft-builder.mjs'
+import { buildCaseNoteDraft, buildExceptionCaseDraftFromEvidence, buildExceptionCaseDraftFromSourceContext } from './exception-case-draft-builder.mjs'
 import { createInMemoryExceptionCaseRepository } from '../repositories/exception-case-repository.mjs'
 import { handleExceptionCasesRoute } from '../routes/exception-cases.routes.mjs'
 
@@ -138,6 +138,47 @@ test('R234 case drafts build deterministically from PO SKU GRN invoice supplier 
     assert.equal(draft.proposedCaseFields.evidenceItems.length > 0, true)
     assert.equal(draft.proposedCaseFields.evidenceItems.every((item) => item.reason && !['高', '中', '低'].includes(item.reason)), true)
   }
+})
+
+test('R250.1 source context drafts require explicit context and do not use default SKU evidence', async () => {
+  const page = source('src', 'modules', 'exception-cases', 'Page.tsx')
+  assert.doesNotMatch(page, /sourceEntityId:\s*"SKU-00412"|SKU-00412:shortage|demoDraftEvidence/)
+  assert.match(page, /Select a risk from Today Cockpit, a business record, or an AI insight to create an exception case draft\./)
+
+  const poDraft = buildExceptionCaseDraftFromSourceContext({
+    sourceModule: 'procurement',
+    sourceEntityType: 'purchaseOrder',
+    sourceEntityId: 'PO-2026-1282',
+    caseType: 'po_delay',
+  })
+  assert.equal(poDraft.proposedCaseFields.caseType, 'po_delay')
+  assert.equal(poDraft.proposedCaseFields.sourceEntityId, 'PO-2026-1282')
+  assert.ok(poDraft.proposedCaseFields.dataLimitations.includes('source_context_has_no_evidence_items'))
+
+  const skuDraft = buildExceptionCaseDraftFromSourceContext({
+    sourceModule: 'inventory',
+    sourceEntityType: 'sku',
+    sourceEntityId: 'SKU-LOCAL-1',
+  })
+  assert.equal(skuDraft.proposedCaseFields.caseType, 'sku_shortage')
+  assert.equal(skuDraft.createsCaseRecord, false)
+
+  const repo = createInMemoryExceptionCaseRepository({ db: {} })
+  const missing = responseHarness({ method: 'POST', pathname: '/api/exception-cases/draft', repo, body: {} })
+  assert.equal(await handleExceptionCasesRoute(missing.ctx), true)
+  assert.equal(missing.result().status, 422)
+  assert.equal(missing.result().payload.code, 'EXCEPTION_CASE_DRAFT_SOURCE_CONTEXT_REQUIRED')
+
+  const sourced = responseHarness({
+    method: 'POST',
+    pathname: '/api/exception-cases/draft',
+    repo,
+    body: { sourceModule: 'invoice-matching', sourceEntityType: 'invoice', sourceEntityId: 'INV-LOCAL-1' },
+  })
+  assert.equal(await handleExceptionCasesRoute(sourced.ctx), true)
+  assert.equal(sourced.result().status, 200)
+  assert.equal(sourced.result().payload.draft.proposedCaseFields.caseType, 'invoice_matching_failure')
+  assert.equal(sourced.result().payload.createsCaseRecord, false)
 })
 
 test('R237 route rejects missing confirmation and creates only exception case records after confirmation', async () => {

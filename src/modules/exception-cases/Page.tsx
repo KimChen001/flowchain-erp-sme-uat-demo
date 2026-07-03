@@ -46,32 +46,20 @@ type ExceptionCaseDraft = {
   createsCaseRecord: boolean;
 };
 
-type Props = {
-  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null, options?: { returnTo?: string; entityLabel?: string; source?: string }) => void;
+type ExceptionCaseSourceContext = {
+  sourceTrigger: string;
+  sourceModule?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  sourceRoute?: string;
+  caseType?: string;
+  evidenceReferences?: { id?: string; title?: string; summary?: string; riskLevel?: string; reason?: string; route?: string }[];
+  linkedRecords?: { entityType?: string; entityId?: string; displayLabel?: string; route?: string; relationshipLabel?: string }[];
+  dataLimitations?: string[];
 };
 
-const demoDraftEvidence = {
-  sourceTrigger: "business_page",
-  caseType: "sku_shortage",
-  sourceModule: "inventory",
-  sourceEntityType: "sku",
-  sourceEntityId: "SKU-00412",
-  evidence: [
-    {
-      id: "SKU-00412:shortage",
-      title: "SKU shortage evidence",
-      sourceModule: "inventory",
-      sourceEntityType: "sku",
-      sourceEntityId: "SKU-00412",
-      evidenceType: "sku_shortage",
-      summary: "SKU-00412 current 34, safety 50, reorder point 50.",
-      riskLevel: "high",
-      reason: "Current stock 34 is below safety/reorder threshold.",
-      route: "inventory",
-    },
-  ],
-  linkedRecords: [{ entityType: "sku", entityId: "SKU-00412", displayLabel: "SKU-00412", route: "inventory" }],
-  aiDiagnosisSummary: "Inventory evidence suggests a shortage case draft; user confirmation is required before creating a case.",
+type Props = {
+  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null, options?: { returnTo?: string; entityLabel?: string; source?: string }) => void;
 };
 
 function severityStyle(severity: string) {
@@ -96,6 +84,26 @@ function formatDate(value?: string) {
   return value.slice(0, 10);
 }
 
+function sourceContextFromSearch(): ExceptionCaseSourceContext | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const sourceEntityType = params.get("sourceEntityType") || params.get("entityType") || "";
+  const sourceEntityId = params.get("sourceEntityId") || params.get("entityId") || "";
+  if (!sourceEntityType || !sourceEntityId) return null;
+  const sourceModule = params.get("sourceModule") || params.get("module") || "";
+  const sourceRoute = params.get("sourceRoute") || params.get("route") || sourceModule;
+  return {
+    sourceTrigger: params.get("sourceTrigger") || "source_context",
+    sourceModule,
+    sourceEntityType,
+    sourceEntityId,
+    sourceRoute,
+    caseType: params.get("caseType") || undefined,
+    linkedRecords: [{ entityType: sourceEntityType, entityId: sourceEntityId, displayLabel: sourceEntityId, route: sourceRoute || sourceModule, relationshipLabel: "Primary source" }],
+    dataLimitations: ["Source context was provided by navigation; linked relationship depth depends on current data."],
+  };
+}
+
 export default function ExceptionCasesPage({ onNavigate }: Props) {
   const [cases, setCases] = useState<ExceptionCase[]>([]);
   const [selected, setSelected] = useState<ExceptionCase | null>(null);
@@ -103,6 +111,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
   const [statusFilter, setStatusFilter] = useState("open");
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<ExceptionCaseDraft | null>(null);
+  const [guidedDraftState, setGuidedDraftState] = useState("Select a risk from Today Cockpit, a business record, or an AI insight to create an exception case draft.");
   const [noteDraft, setNoteDraft] = useState("");
   const [workflowDraft, setWorkflowDraft] = useState("");
 
@@ -133,12 +142,20 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
   }, [cases, query, statusFilter]);
 
   async function openDraft() {
+    const sourceContext = sourceContextFromSearch();
+    if (!sourceContext) {
+      setDraft(null);
+      setGuidedDraftState("Select a risk from Today Cockpit, a business record, or an AI insight to create an exception case draft.");
+      toast.message("Select source context before creating a case draft");
+      return;
+    }
     const payload = await apiJson<{ draft: ExceptionCaseDraft; previewOnly: boolean; createsCaseRecord: boolean }>("/api/exception-cases/draft", {
       method: "POST",
-      body: JSON.stringify(demoDraftEvidence),
+      body: JSON.stringify(sourceContext),
     });
     if (!payload.previewOnly || payload.createsCaseRecord) throw new Error("Case draft boundary returned unsafe creation flags.");
     setDraft(payload.draft);
+    setGuidedDraftState("");
   }
 
   async function confirmCreateCase() {
@@ -285,6 +302,13 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
         </Card>
       )}
 
+      {!draft && guidedDraftState && (
+        <Card className="p-4">
+          <p className={typography.subsectionTitle} style={{ color: A.label }}>Create case draft</p>
+          <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>{guidedDraftState}</p>
+        </Card>
+      )}
+
       {selected && (
         <CaseDetail
           item={selected}
@@ -363,13 +387,23 @@ function CaseDetail({
   const [dueDate, setDueDate] = useState(formatDate(item.dueDate) === "—" ? "" : formatDate(item.dueDate));
   const [severity, setSeverity] = useState(item.severity);
   const [resolutionNote, setResolutionNote] = useState(item.resolution?.resolutionSummary || "");
+  const [pendingTransition, setPendingTransition] = useState<{ status: string; payload?: Record<string, unknown> } | null>(null);
   const nextStatuses = allowedNextStatuses(item.status);
   useEffect(() => {
     setOwner(item.owner || "");
     setDueDate(formatDate(item.dueDate) === "—" ? "" : formatDate(item.dueDate));
     setSeverity(item.severity);
     setResolutionNote(item.resolution?.resolutionSummary || "");
+    setPendingTransition(null);
   }, [item.caseId, item.owner, item.dueDate, item.severity, item.resolution?.resolutionSummary]);
+  const primaryRecord = item.linkedRecords?.[0]?.displayLabel || item.linkedRecords?.[0]?.entityId || item.sourceEntityId || "—";
+  function requestTransition(status: string, payload?: Record<string, unknown>) {
+    if (["cancelled", "resolved", "closed"].includes(status)) {
+      setPendingTransition({ status, payload });
+      return;
+    }
+    onChangeStatus(item, status, payload);
+  }
   return (
     <Card className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -448,7 +482,7 @@ function CaseDetail({
           {nextStatuses.map((status) => (
             <button
               key={status}
-              onClick={() => onChangeStatus(item, status, { reason: `Move case to ${status}` })}
+              onClick={() => requestTransition(status, { reason: `Move case to ${status}` })}
               className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`}
               style={{ background: status === "cancelled" ? "#fff1f0" : "#f0f6ff", color: status === "cancelled" ? A.red : A.blue }}
             >
@@ -462,7 +496,7 @@ function CaseDetail({
             <FileClock size={14} /> Resolution draft
           </button>
           <button
-            onClick={() => onChangeStatus(item, "closed", { resolutionNote, rootCause: "User reviewed case evidence", actionTaken: "Resolution confirmed in case workflow", remainingRisk: "Monitor recurrence" })}
+            onClick={() => requestTransition("closed", { resolutionNote, rootCause: "User reviewed case evidence", actionTaken: "Resolution confirmed in case workflow", remainingRisk: "Monitor recurrence" })}
             disabled={item.status !== "resolved" || !resolutionNote.trim()}
             className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton} disabled:cursor-not-allowed disabled:opacity-60`}
             style={{ background: A.green }}
@@ -470,6 +504,36 @@ function CaseDetail({
             <CheckCircle2 size={14} /> Close Case
           </button>
         </div>
+        {pendingTransition && (
+          <div data-testid="exception-transition-confirmation" className="mt-3 rounded-md border p-3" style={{ borderColor: A.orange, background: "#fff8f0" }}>
+            <p className={typography.formLabel} style={{ color: A.label }}>Confirm final case transition</p>
+            <div className="mt-2 grid gap-2 md:grid-cols-3">
+              <DraftMetric label="Case ID" value={item.caseId} />
+              <DraftMetric label="Current status" value={item.status} />
+              <DraftMetric label="Next status" value={pendingTransition.status} />
+              <DraftMetric label="Linked primary record" value={primaryRecord} />
+              <DraftMetric label="Resolution note required" value={pendingTransition.status === "closed" ? "Yes" : "No"} />
+              <DraftMetric label="Audit preview" value={`exception_case_${pendingTransition.status === "closed" ? "closed" : "status_changed"}`} />
+            </div>
+            <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>Linked PO/GRN/Invoice/SKU/Supplier records will not be changed.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  onChangeStatus(item, pendingTransition.status, pendingTransition.payload);
+                  setPendingTransition(null);
+                }}
+                disabled={pendingTransition.status === "closed" && !resolutionNote.trim()}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton} disabled:cursor-not-allowed disabled:opacity-60`}
+                style={{ background: pendingTransition.status === "cancelled" ? A.red : A.green }}
+              >
+                <CheckCircle2 size={14} /> Confirm transition
+              </button>
+              <button onClick={() => setPendingTransition(null)} className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`} style={{ background: A.gray6, color: A.sub }}>
+                <X size={14} /> Keep current status
+              </button>
+            </div>
+          </div>
+        )}
         {workflowDraft && <p className={`${typography.metadata} mt-3 rounded-md p-3`} style={{ background: A.gray6, color: A.label }}>{workflowDraft}</p>}
       </section>
 

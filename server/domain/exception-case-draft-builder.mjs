@@ -11,6 +11,19 @@ const EVIDENCE_TO_CASE_TYPE = {
   rfq_timing_risk: 'rfq_timing_risk',
 }
 
+const SOURCE_TYPE_TO_CASE_TYPE = {
+  purchaseOrder: 'po_delay',
+  po: 'po_delay',
+  sku: 'sku_shortage',
+  item: 'sku_shortage',
+  grn: 'receiving_exception',
+  receiving: 'receiving_exception',
+  invoice: 'invoice_matching_failure',
+  supplier: 'supplier_risk',
+  rfq: 'rfq_timing_risk',
+  data: 'data_completeness_gap',
+}
+
 function text(value = '') {
   return String(value ?? '').trim()
 }
@@ -30,6 +43,65 @@ function sourceFromBundle(bundle = {}) {
     sourceEntityType: text(bundle.sourceEntityType || first.sourceEntityType),
     sourceEntityId: text(bundle.sourceEntityId || first.sourceEntityId),
   }
+}
+
+function normalizedSourceContext(input = {}) {
+  const context = input.sourceContext || input
+  const sourceEntityType = text(context.sourceEntityType || context.entityType)
+  const sourceEntityId = text(context.sourceEntityId || context.entityId)
+  const sourceModule = text(context.sourceModule || context.module) || moduleFor(sourceEntityType)
+  const sourceRoute = text(context.sourceRoute || context.route)
+  const caseType = text(input.caseType || context.caseType) || SOURCE_TYPE_TO_CASE_TYPE[sourceEntityType] || 'general_operational_exception'
+  const linkedRecords = input.linkedRecords || context.linkedRecords || (sourceEntityType && sourceEntityId
+    ? [{ entityType: sourceEntityType, entityId: sourceEntityId, displayLabel: sourceEntityId, route: sourceRoute || sourceModule, relationshipLabel: 'Primary source' }]
+    : [])
+  return {
+    sourceModule,
+    sourceEntityType,
+    sourceEntityId,
+    sourceRoute,
+    caseType,
+    linkedRecords,
+    evidenceReferences: input.evidenceReferences || context.evidenceReferences || [],
+    dataLimitations: input.dataLimitations || context.dataLimitations || [],
+  }
+}
+
+export function hasExceptionCaseSourceContext(input = {}) {
+  const context = normalizedSourceContext(input)
+  return Boolean(context.sourceEntityType && context.sourceEntityId && context.caseType)
+}
+
+export function buildExceptionCaseDraftFromSourceContext(input = {}) {
+  const context = normalizedSourceContext(input)
+  const evidence = input.evidenceItems || input.evidence || context.evidenceReferences || []
+  const dataLimitations = [...context.dataLimitations]
+  if (!evidence.length) dataLimitations.push('source_context_has_no_evidence_items')
+  if (!context.linkedRecords.length) dataLimitations.push('linked_records_not_available')
+  return createExceptionCaseDraft({
+    sourceTrigger: input.sourceTrigger || context.sourceModule || 'source_context',
+    caseType: context.caseType,
+    title: input.title || titleFor(context.caseType, context.sourceEntityId),
+    summary: input.summary || `${context.sourceEntityId} requires exception case review from ${context.sourceModule || 'business context'}.`,
+    severity: input.severity || severityFromEvidence(evidence),
+    status: 'open',
+    owner: input.suggestedOwner || input.owner || '',
+    dueDate: input.suggestedDueDate || input.dueDate || '',
+    sourceModule: context.sourceModule,
+    sourceEntityType: context.sourceEntityType,
+    sourceEntityId: context.sourceEntityId,
+    linkedRecords: context.linkedRecords,
+    evidenceItems: evidence,
+    dataLimitations,
+    aiDiagnosisSummary: input.aiDiagnosisSummary || 'Draft prepared from explicit source context. Evidence must be reviewed before creating a case.',
+    recommendedReviewFirstActions: input.recommendedReviewFirstActions,
+    assumptions: [
+      'Draft Only',
+      'Requires Review',
+      'Source context was explicit; missing relationships were not invented.',
+      ...(input.assumptions || []),
+    ],
+  })
 }
 
 export function buildExceptionCaseDraftFromEvidence(input = {}) {
@@ -87,8 +159,10 @@ export function buildCaseNoteDraft(input = {}) {
 }
 
 function moduleFor(entityType = '') {
-  if (entityType === 'sku') return 'inventory'
+  if (entityType === 'sku' || entityType === 'item') return 'inventory'
   if (entityType === 'supplier') return 'srm'
-  if (entityType === 'grn') return 'receiving'
+  if (entityType === 'grn' || entityType === 'receiving') return 'receiving'
+  if (entityType === 'invoice') return 'invoice-matching'
+  if (entityType === 'rfq') return 'procurement'
   return 'procurement'
 }

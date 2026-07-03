@@ -1,4 +1,9 @@
-import { buildCaseNoteDraft, buildExceptionCaseDraftFromEvidence } from '../domain/exception-case-draft-builder.mjs'
+import {
+  buildCaseNoteDraft,
+  buildExceptionCaseDraftFromEvidence,
+  buildExceptionCaseDraftFromSourceContext,
+  hasExceptionCaseSourceContext,
+} from '../domain/exception-case-draft-builder.mjs'
 import { buildExceptionWorkflowDraft, exceptionCaseAuditPolicyEntry } from '../domain/exception-case-workflow.mjs'
 import { createInMemoryExceptionCaseRepository } from '../repositories/exception-case-repository.mjs'
 import { recordDatabaseAuditBestEffort } from '../domain/audit-policy.mjs'
@@ -51,7 +56,19 @@ export async function handleExceptionCasesRoute(ctx) {
 
   if (req.method === 'POST' && url.pathname === '/api/exception-cases/draft') {
     const body = await readBody(req)
-    const draftInput = body.bundle || body.evidence || body.caseType ? buildExceptionCaseDraftFromEvidence(body) : body
+    if (!body.bundle && !body.evidence && !body.evidenceItems && !hasExceptionCaseSourceContext(body)) {
+      send(res, 422, {
+        error: 'Exception case draft requires explicit source context or evidence.',
+        code: 'EXCEPTION_CASE_DRAFT_SOURCE_CONTEXT_REQUIRED',
+        guidedState: 'Select a risk from Today Cockpit, a business record, or an AI insight to create an exception case draft.',
+        previewOnly: true,
+        createsCaseRecord: false,
+      })
+      return true
+    }
+    const draftInput = body.bundle || body.evidence || body.evidenceItems
+      ? buildExceptionCaseDraftFromEvidence(body)
+      : buildExceptionCaseDraftFromSourceContext(body)
     const draft = await repo.previewCaseDraft(scopeFrom(ctx, body), draftInput)
     send(res, 200, { draft, previewOnly: true, createsCaseRecord: false })
     return true
