@@ -281,7 +281,7 @@ export default function ForecastPanel({ initialView, onNavigate, onReviewActionD
           <div className="min-w-0">
             <div className={typography.subsectionTitle} style={{ color: A.label }}>计划使用边界</div>
             <p className={`${typography.compactMetadata} mt-1 max-w-5xl`} style={{ color: A.sub }}>
-              当前物料需求计划使用样例商品、静态计划参数和 BOM 展开生成只读计划证据；计划入库和计划释放仅用于人工审阅采购建议。系统只会生成采购申请草稿，需人工复核后才能继续处理，不会自动创建采购订单。
+              当前物料需求计划基于工作区内的商品、库存、采购、销售需求与供应商记录，以及当前配置和 BOM 展开生成只读计划证据；计划入库和计划释放仅用于人工审阅采购建议。系统只会生成采购申请草稿，需人工复核后才能继续处理，不会自动创建采购订单。
             </p>
           </div>
         </div>

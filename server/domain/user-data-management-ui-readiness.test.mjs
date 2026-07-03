@@ -142,7 +142,7 @@ test('R181-R190 source guardrails keep UI review-first and provider-free', () =>
   assert.match(importsPage, /智能助手保持只读/)
   assert.match(importsPage, /不能提交、审批、付款、过账、发送或修改业务记录/)
   assert.match(importsPage, /写文件：\$\{userPreview\?\.writesFiles \? "是" : "否"\}/)
-  assert.match(importsPage, /覆盖演示数据：\$\{userPreview\?\.overwritesDemoData \? "是" : "否"\}/)
+  assert.match(importsPage, /覆盖当前工作区数据：\$\{userPreview\?\.overwritesDemoData \? "是" : "否"\}/)
   assert.doesNotMatch(routes, /label:\s*["']AI Assistant["']/)
   assert.doesNotMatch(importsPage, /OPENAI_API_KEY|DOUBAO|ARK_API_KEY|fetch\(["']https:\/\/api\.openai/i)
   assert.doesNotMatch(userDataRoutes, /scm-demo\.json|writeFile/)

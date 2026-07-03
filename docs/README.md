@@ -4,9 +4,7 @@
 
 - [Product language and positioning](product-language-and-positioning-v1.md)
 - [Product narrative](product-narrative-v1.md)
-- [Demo script](demo-script-v1.md)
-- [Demo screenshot checklist](demo-screenshot-checklist-v1.md)
-- [Current development limitations](uat-limitations-v1.md)
+- [Current development limitations](current-development-limitations-v1.md)
 - [Product scope / IA review](product-scope-ia-review.md)
 - [System harness and product review](system-harness-and-product-review-v1.md)
 
@@ -22,10 +20,10 @@
 - [Route mutation classification](route-mutation-classification-v1.md)
 - [ORM decision and persistence scaffold](orm-decision-and-persistence-scaffold-v1.md)
 - [DB readiness review](db-readiness-review-v1.md)
-- [ActionDraft and AuditLog DB adapter](action-draft-audit-db-adapter-v1.md)
+- [Draft and AuditLog DB adapter](action-draft-audit-db-adapter-v1.md)
 - [Master Data DB adapter](master-data-db-adapter-v1.md)
 - [Master Data seed mapping](master-data-seed-mapping-v1.md)
-- [ActionDraft and AuditLog repository adapter](action-draft-audit-repository-adapter-v1.md)
+- [Draft and AuditLog repository adapter](action-draft-audit-repository-adapter-v1.md)
 - [Master Data repository adapter](master-data-repository-adapter-v1.md)
 - [Procurement and Inventory read repository adapters](procurement-inventory-read-repository-adapters-v1.md)
 - [Database entity model v2](database-entity-model-v2.md)

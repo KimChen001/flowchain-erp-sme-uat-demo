@@ -36,7 +36,7 @@ test('inventory replenishment opens draft preview instead of creating purchase r
   assert.match(inventory, /查看事务流水/)
   assert.match(inventory, /查看异常单据/)
   assert.match(inventory, /inventoryReadFallbackScopes/)
-  assert.match(inventory, /演示数据回落/)
+  assert.match(inventory, /当前工作区数据补足/)
   assert.doesNotMatch(inventory, /\/api\/purchase-requests/)
   assert.doesNotMatch(inventory, /inventoryPurchaseRequestPayload/)
   assert.doesNotMatch(inventory, /apiJson<PurchaseRequest>/)

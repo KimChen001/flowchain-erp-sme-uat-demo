@@ -47,7 +47,7 @@ FlowChain packages a focused operations workflow:
 
 ## Current Development Scope
 
-The current implementation is a local JSON-backed development project suitable for product walkthroughs, workflow validation, architecture review, and repeatable local testing. It is intentionally not production-ready persistence.
+The current implementation is a local JSON-backed development project suitable for product walkthroughs, workflow validation, architecture review, and repeatable local testing. It uses a deterministic workspace dataset and is intentionally not production-ready persistence.
 
 Implemented foundations include canonical evidence links, navigation recovery, Today Cockpit read models, procurement and inventory read APIs, AI cockpit fast path, AI provider safety gate, audit latency hardening, action draft preview, exception case workflow controls, and system harness tests.
 

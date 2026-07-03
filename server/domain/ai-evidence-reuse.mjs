@@ -984,7 +984,7 @@ function buildSopResponse(models, message = '') {
       {
         type: 'recommended_actions',
         actions: guidance.allowedActions.includes('po_followup_draft') || guidance.allowedActions.includes('supplier_followup_draft') || guidance.allowedActions.includes('purchase_request_draft')
-          ? [{ kind: 'review', label: '按内部处理建议复核业务证据后，再预览对应 ActionDraft。', target: '' }]
+          ? [{ kind: 'review', label: '按内部处理建议复核业务证据后，再预览对应待复核草稿。', target: '' }]
           : [],
       },
     ],
@@ -1033,7 +1033,7 @@ export function buildAiDataLimitationResponse(data = {}, body = {}, options = {}
         evidence,
       },
       { type: 'evidence', evidence },
-      { type: 'recommended_actions', actions: [{ kind: 'review', label: '复核有限数据证据后再预览或保存 ActionDraft。', target: '' }] },
+      { type: 'recommended_actions', actions: [{ kind: 'review', label: '复核有限数据证据后再预览或保存待复核草稿。', target: '' }] },
     ],
   })
 }

@@ -26,7 +26,7 @@ It is not production-ready SaaS infrastructure.
 ## AI Boundary
 
 - External AI providers are disabled by default.
-- Fake API keys do not activate provider calls.
+- Placeholder API keys do not activate provider calls.
 - Deterministic local AI paths answer supported cockpit, procurement, inventory, supplier, RFQ, planning, and draft-preparation prompts.
 - AI answers should include business evidence where supported.
 - Audit persistence failures must not break read-only AI answers.

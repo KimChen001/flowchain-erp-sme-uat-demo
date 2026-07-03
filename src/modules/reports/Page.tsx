@@ -67,7 +67,7 @@ import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
 type ReportModule = "采购" | "库存" | "主数据" | "财务" | "预测/MRP" | "供应商" | "审计";
-type SourceKind = "Core" | "Computed" | "API" | "API fallback" | "Module";
+type SourceKind = "Core" | "Computed" | "API" | "API supplement" | "Module";
 type RouteId = "procurement" | "finance" | "inventory" | "forecast" | "master-data" | "srm" | `procurement:${string}` | `inventory:${string}` | `finance:${string}` | `master-data:${string}` | `srm:${string}`;
 type ReportRows = Record<string, unknown>[];
 
@@ -112,7 +112,7 @@ function exportReport(filename: string, rows: ReportRows) {
 
 function badgeStyle(kind: SourceKind) {
   if (kind === "API") return { color: A.green, bg: "#f0faf4" };
-  if (kind === "API fallback") return { color: A.orange, bg: "#fff8f0" };
+  if (kind === "API supplement") return { color: A.orange, bg: "#fff8f0" };
   if (kind === "Module") return { color: A.gray1, bg: A.gray6 };
   if (kind === "Computed") return { color: A.purple, bg: "#faf3ff" };
   return { color: A.blue, bg: "#f0f6ff" };
@@ -542,9 +542,9 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       name: "Supplier Performance Report",
       module: "供应商",
       description: "供应商评分、准时率、质量率、响应分、PO 数和 YTD 采购额。",
-      source: "PORTAL_SUPPLIERS · supplier performance API fallback",
-      sourceKind: "API fallback",
-      updated: "API fallback baseline",
+      source: "PORTAL_SUPPLIERS · supplier performance API supplement",
+      sourceKind: "API supplement",
+      updated: "API supplement baseline",
       filename: "supplier-performance-export.csv",
       sourceModule: "procurement:portal",
       rows: () => PORTAL_SUPPLIERS.map((row) => ({ 供应商: row.name, 评分: row.rating, 准时率: row.onTime, 质量率: row.quality, 响应分: row.resp, YTD_PO: row.po, YTD采购额: row.spend, 标签: row.flag })),
@@ -905,7 +905,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
   const visibleReports = filter === "全部" ? reports : reports.filter((report) => report.module === filter);
   const filterLabel = filter === "全部" ? "跨模块报表 / 全部" : `${filter}报表`;
   const exportReadyCount = reports.filter((report) => report.rows && !report.comingLaterReason).length;
-  const apiCount = reports.filter((report) => report.sourceKind === "API" || report.sourceKind === "API fallback").length;
+  const apiCount = reports.filter((report) => report.sourceKind === "API" || report.sourceKind === "API supplement").length;
   const modulesCovered = new Set(reports.map((report) => report.module)).size;
 
   return (
@@ -944,7 +944,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="标准报表" value={String(reports.length)} sub="报表中心 v1" icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="采购/库存/主数据/财务/计划/供应商/审计" icon={Database} color={A.green} />
-        <KpiCard label="API / Fallback" value={String(apiCount)} sub="只读现有端点" icon={RefreshCw} color={A.orange} />
+        <KpiCard label="API / 当前数据范围" value={String(apiCount)} sub="只读现有端点" icon={RefreshCw} color={A.orange} />
         <KpiCard label="可导出" value={String(exportReadyCount)} sub="CSV 标准导出" icon={ShieldCheck} color={A.purple} />
       </div>
 

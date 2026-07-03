@@ -36,7 +36,7 @@ const SOP_ITEMS = Object.freeze([
       '缺口明确后只生成 PR 草稿预览，交由采购人工审阅。',
     ],
     allowedActions: ['deep_link', 'purchase_request_draft'],
-    reviewBoundary: '补货建议只生成 ActionDraft 预览；不得自动创建 PR、RFQ 或 PO。',
+    reviewBoundary: '补货建议只生成待复核草稿预览；不得自动创建 PR、RFQ 或 PO。',
   },
   {
     id: 'SOP-GRN-EXCEPTION',
@@ -116,4 +116,3 @@ export function retrieveAiSopGuidance(input = {}) {
     },
   }
 }
-

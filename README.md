@@ -8,7 +8,7 @@ FlowChain 是面向中小企业的 AI 进销存与供应链协同工作台，帮
 
 FlowChain is an early-stage local development project. It is not yet production-ready SaaS infrastructure.
 
-Default runtime behavior remains JSON-backed through `data/scm-demo.json`. No production database, ORM, RDS, or PolarDB connection is required for local development.
+Default local runtime behavior uses a deterministic workspace dataset. No production database, ORM, RDS, or PolarDB connection is required for local development.
 
 ## Core Modules
 
@@ -101,7 +101,7 @@ Legacy/manual local write routes still exist for compatibility, including purcha
 
 ## AI Safety
 
-External AI providers are disabled by default. Fake `OPENAI_API_KEY`, `ARK_API_KEY`, or `DOUBAO_API_KEY` values do not enable provider calls.
+External AI providers are disabled by default. Placeholder `OPENAI_API_KEY`, `ARK_API_KEY`, or `DOUBAO_API_KEY` values do not enable provider calls.
 
 Cockpit-style prompts such as `今天最需要处理什么？` use a deterministic local fast path backed by Today Cockpit, procurement, inventory, supplier, and planning read models. Unsupported prompts fall back safely when providers are disabled.
 
@@ -125,13 +125,13 @@ Start here:
 - [Docs index](docs/README.md)
 - [Product language and positioning](docs/product-language-and-positioning-v1.md)
 - [Product narrative](docs/product-narrative-v1.md)
-- [Current development limitations](docs/uat-limitations-v1.md)
+- [Current development limitations](docs/current-development-limitations-v1.md)
 - [Architecture overview](docs/architecture-overview-v1.md)
 - [Backend route map](docs/backend-route-map-v1.md)
 - [Repository boundary](docs/repository-boundary-v1.md)
 - [JSON adapter contract tests](docs/json-adapter-contract-tests-v1.md)
 - [Persistence mode and adapter registry](docs/persistence-mode-and-adapter-registry-v1.md)
-- [ActionDraft and AuditLog repository adapter](docs/action-draft-audit-repository-adapter-v1.md)
+- [Draft and audit repository adapter](docs/action-draft-audit-repository-adapter-v1.md)
 - [Master Data repository adapter](docs/master-data-repository-adapter-v1.md)
 - [Procurement and Inventory read repository adapters](docs/procurement-inventory-read-repository-adapters-v1.md)
 - [Roadmap](docs/roadmap-v1.md)

@@ -32,7 +32,7 @@ test("R181-R190 Data Management user data import UI previews safely and handles 
   await expect(page.getByTestId("user-data-snapshot-hash")).toContainText(/[a-f0-9]{64}/);
   await expect(panel).toContainText("写文件：否");
   await expect(panel).toContainText("写数据库：否");
-  await expect(panel).toContainText("覆盖演示数据：否");
+  await expect(panel).toContainText("覆盖当前工作区数据：否");
   await expect(panel).toContainText("复核后提交");
   await expect(panel).toContainText("智能助手保持只读");
   await expect(page.getByTestId("user-data-active-status")).toContainText(/未找到当前用户数据集|暂无当前用户数据集/);

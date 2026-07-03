@@ -22,6 +22,17 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
   - PR = 采购申请
   - GRN = 收货单 / 到货验收单
 - 用户可见页面避免出现：
+  - Demo
+  - UAT
+  - 演示数据
+  - 示例数据
+  - 样例数据
+  - mock
+  - fake
+  - sample data
+  - demo data
+  - UAT data
+  - fallback
   - ActionDraft
   - purchase_request_draft
   - supplier_followup_draft
@@ -51,6 +62,18 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 | Exception Case | 异常工单 |
 | Finance Collaboration | 财务协同 |
 
+## Data Wording Replacements
+
+| Forbidden visible wording | Recommended visible wording |
+| --- | --- |
+| Demo / UAT | 当前版本 / 当前工作区 |
+| 演示数据 / 示例数据 / 样例数据 | 当前工作区数据 / 当前业务数据 |
+| demo data / sample data / UAT data | current workspace data / current business records |
+| fallback | 当前数据范围 / 当前配置 |
+| mock / fake | 占位配置 / 未启用配置 |
+| 当前使用演示客户订单 | 当前页面基于工作区内的客户订单、库存、采购和供应商记录识别交付风险 |
+| 由于这是演示数据 | 当前工作区缺少完整历史履约或库存分配记录，因此建议人工复核 |
+
 ## Scope Rules
 
 - 要做轻量销售需求 / 客户订单，不做完整 CRM。
@@ -74,4 +97,4 @@ Bad:
 
 Good:
 
-“当前物料需求计划使用样例商品与静态计划参数，仅用于人工审阅采购建议。”
+“当前物料需求计划基于工作区内的商品、库存、采购、销售需求与供应商记录生成只读计划证据，仅用于人工审阅采购建议。”

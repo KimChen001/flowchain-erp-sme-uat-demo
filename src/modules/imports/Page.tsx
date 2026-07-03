@@ -792,7 +792,7 @@ function createBatchId(index: number) {
 const USER_DATA_SCOPE = { tenantId: "tenant-flowchain-sme", userId: "browser-import-user" };
 const USER_IMPORT_SAMPLES = {
   valid: {
-    sourceName: "ui-user-data-valid-sample",
+    sourceName: "ui-user-data-valid-workspace",
     tenantId: USER_DATA_SCOPE.tenantId,
     userId: USER_DATA_SCOPE.userId,
     purchaseOrders: [{ poId: "PO-UI-IMPORT-0001", supplierName: "杭州精密组件", eta: "2026-07-16", amount: "18500", status: "已发出", sourceRequest: "PR-UI-IMPORT-0001", sourceRfq: "RFQ-UI-IMPORT-0001", lines: [{ itemSku: "SKU-UI-IMPORT-0001", name: "导入轴承组件", quantity: "24", received: "6" }] }],
@@ -804,7 +804,7 @@ const USER_IMPORT_SAMPLES = {
     supplierInvoices: [{ invoiceNumber: "INV-UI-IMPORT-0001", poId: "PO-UI-IMPORT-0001", grnId: "GRN-UI-IMPORT-0001", supplierName: "杭州精密组件", amount: "18500", matchStatus: "待匹配" }],
   },
   warning: {
-    sourceName: "ui-user-data-warning-sample",
+    sourceName: "ui-user-data-warning-workspace",
     tenantId: USER_DATA_SCOPE.tenantId,
     userId: USER_DATA_SCOPE.userId,
     purchaseOrders: [{ poId: "PO-UI-IMPORT-0002", supplierName: "宁波电子科技", eta: "2026-07-20", amount: "9200", lines: [{ itemSku: "SKU-UI-IMPORT-MISSING", quantity: "8" }] }],
@@ -812,7 +812,7 @@ const USER_IMPORT_SAMPLES = {
     suppliers: [{ supplierId: "SUP-UI-IMPORT-0002", supplierName: "宁波电子科技", riskStatus: "低风险" }],
   },
   invalid: {
-    sourceName: "ui-user-data-invalid-sample",
+    sourceName: "ui-user-data-invalid-workspace",
     tenantId: USER_DATA_SCOPE.tenantId,
     userId: USER_DATA_SCOPE.userId,
     purchaseOrders: [{ poId: "", supplierName: "", eta: "bad-date", lines: [{ itemSku: "", quantity: "not-a-number" }] }],
@@ -821,9 +821,9 @@ const USER_IMPORT_SAMPLES = {
 } as const;
 
 const USER_IMPORT_SAMPLE_OPTIONS = [
-  { label: "有效样例", value: "valid" },
-  { label: "警告样例", value: "warning" },
-  { label: "错误样例", value: "invalid" },
+  { label: "有效模板", value: "valid" },
+  { label: "警告模板", value: "warning" },
+  { label: "错误模板", value: "invalid" },
 ] as const;
 
 type UserImportSampleKey = keyof typeof USER_IMPORT_SAMPLES;
@@ -1175,7 +1175,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               </div>
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: A.label }}>用户数据导入预览</h2>
-                <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先复核后确认的范围化运行时导入 · dry-run 默认不写文件、不写 DB、不覆盖演示数据</p>
+                <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先复核后确认的范围化运行时导入 · dry-run 默认不写文件、不写 DB、不覆盖当前工作区数据</p>
               </div>
             </div>
           </div>
@@ -1229,7 +1229,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               <div className="flex flex-wrap gap-1.5">
                 <Chip label={`写文件：${userPreview?.writesFiles ? "是" : "否"}`} color={A.green} bg="#f0faf4" />
                 <Chip label={`写数据库：${userPreview?.writesDb ? "是" : "否"}`} color={A.green} bg="#f0faf4" />
-                <Chip label={`覆盖演示数据：${userPreview?.overwritesDemoData ? "是" : "否"}`} color={A.green} bg="#f0faf4" />
+                <Chip label={`覆盖当前工作区数据：${userPreview?.overwritesDemoData ? "是" : "否"}`} color={A.green} bg="#f0faf4" />
               </div>
               <div className="text-[11px] leading-5" style={{ color: A.sub }}>
                 预览仅执行 dry-run，不会改动业务数据。持久化需要用户明确确认，并通过后端功能开关。

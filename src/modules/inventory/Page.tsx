@@ -1166,7 +1166,7 @@ export default function InventoryPage({
       <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as InvTab)} />
       {fallbackScopes.length > 0 && (
         <div className="rounded-lg px-3 py-2 text-[11px] leading-5" style={{ background: "#fff8f0", color: A.orange, border: "0.5px solid rgba(255,149,0,0.25)" }}>
-          当前库存读模型有 {fallbackScopes.length} 个端点使用演示数据回落，页面操作仍保持预览优先。
+          当前库存读模型有 {fallbackScopes.length} 个端点使用当前工作区数据补足，页面操作仍保持预览优先。
         </div>
       )}
       {tab === "overview"  && <InventoryLanding items={stockItems} lots={lots} focus={focus} onOpenTab={setTab} onActiveContextChange={onActiveContextChange} onReviewActionDraft={onReviewActionDraft} />}
