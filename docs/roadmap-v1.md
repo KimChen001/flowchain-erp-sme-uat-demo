@@ -15,12 +15,14 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 
 - Add lightweight sales demand and customer order visibility.
 - Keep scope limited to demand evidence and customer order signals.
+- Current foundation: read-only customer order list, delivery risk summary, SKU impact, PO-to-sales impact, Today Cockpit sales risk card, global search target, and deterministic AI answers.
 - Do not build a full CRM or customer lifecycle suite.
 
 ## Phase 2 Inventory Allocation
 
 - Explain available quantity, reserved quantity, in-transit quantity, and shortage quantity.
 - Connect stock risk to demand and procurement evidence.
+- Next focus: make allocation evidence more explicit across customer orders, inventory item availability, open PO receipts, and shortage reasons.
 - Do not build complex WMS execution.
 
 ## Phase 3 Demand-to-Procurement Evidence Chain

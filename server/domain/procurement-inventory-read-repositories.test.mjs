@@ -122,7 +122,7 @@ test('Today Cockpit and deterministic AI remain compatible with read repository 
   const cockpit = buildTodayCockpit(db, { now: '2026-06-30T00:00:00.000Z' })
   const ai = buildAiCockpitFastPathResponse(db, { question: '今天工作台优先处理什么？', moduleId: 'overview' })
 
-  assert.equal(cockpit.cards.length, 8)
+  assert.equal(cockpit.cards.length, 9)
   assert.equal(cockpit.recentDocuments.some((item) => item.type === 'po'), true)
   assert.equal(ai.provider, 'local')
   assert.equal(ai.readModelReuse, true)

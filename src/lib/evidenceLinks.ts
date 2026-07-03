@@ -1,4 +1,4 @@
-export type CanonicalEvidenceModule = "procurement" | "inventory" | "supplier" | "masterData" | "todayCockpit" | "planning" | "ai";
+export type CanonicalEvidenceModule = "sales" | "procurement" | "inventory" | "supplier" | "masterData" | "todayCockpit" | "planning" | "ai";
 
 export type CanonicalFocusTarget = {
   entityType: string;
@@ -48,6 +48,8 @@ const PROCUREMENT_DOCUMENT_TYPES: Record<string, { entityType: string; moduleId:
 };
 
 const ENTITY_TARGETS: Record<string, { moduleId: string; entityType: string; module: CanonicalEvidenceModule; label: string }> = {
+  sales_order: { moduleId: "sales", entityType: "sales_order", module: "sales", label: "客户订单" },
+  customer_order: { moduleId: "sales", entityType: "sales_order", module: "sales", label: "客户订单" },
   inventory_item: { moduleId: "inventory", entityType: "inventory_item", module: "inventory", label: "SKU" },
   sku: { moduleId: "inventory", entityType: "inventory_item", module: "inventory", label: "SKU" },
   item: { moduleId: "inventory", entityType: "inventory_item", module: "inventory", label: "SKU" },
@@ -79,6 +81,7 @@ function readableLabel(raw: EvidenceLike, fallbackType = "evidence") {
 
 function moduleKind(moduleId = "", fallback: CanonicalEvidenceModule = "ai"): CanonicalEvidenceModule {
   if (moduleId.startsWith("procurement") || ["purchaseRequests", "purchasing", "rfq", "receiving"].includes(moduleId)) return "procurement";
+  if (moduleId.startsWith("sales")) return "sales";
   if (moduleId.startsWith("inventory")) return "inventory";
   if (moduleId.startsWith("srm")) return "supplier";
   if (moduleId.startsWith("master-data")) return "masterData";

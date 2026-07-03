@@ -4,8 +4,10 @@ import {
   listMasterWarehouses,
 } from './master-data.mjs'
 import { buildInventoryItems } from './inventory-read.mjs'
+import { listSalesOrders } from './sales-demand-read-model.mjs'
 
 const TYPE_ALIASES = {
+  sales_order: ['客户订单', '销售需求', '销售订单', '交付风险', 'customer order', 'sales order'],
   purchase_request: ['pr', '采购申请', '申请'],
   rfq: ['rfq', 'rfx', '询价', '报价', '寻源'],
   purchase_order: ['po', '采购订单', '订单'],
@@ -167,6 +169,34 @@ function purchaseRequestResults(db) {
       evidence('SKU', item.sourceSku),
       evidence('金额', money(item.amount)),
       evidence('状态', item.status),
+    ],
+  }))
+}
+
+function salesOrderResults(db) {
+  return listSalesOrders(db).map((item) => makeResult({
+    type: 'sales_order',
+    label: item.salesOrderId,
+    subtitle: compact([item.customerName, item.sku, item.itemName, item.promisedDate]).join(' · '),
+    status: item.deliveryRiskLabel,
+    moduleId: 'sales',
+    entityType: 'sales_order',
+    entityId: item.salesOrderId,
+    entityLabel: `${item.customerName} · ${item.salesOrderId}`,
+    fields: {
+      salesOrderId: item.salesOrderId,
+      customerName: item.customerName,
+      sku: item.sku,
+      itemName: item.itemName,
+      risk: item.deliveryRiskLabel,
+      reason: item.deliveryRiskReason,
+      linkedPo: item.linkedPurchaseOrders.map((po) => po.id).join(' '),
+    },
+    evidence: [
+      evidence('客户', item.customerName),
+      evidence('SKU', item.sku),
+      evidence('承诺日期', item.promisedDate),
+      evidence('风险', item.deliveryRiskLabel),
     ],
   }))
 }
@@ -413,6 +443,7 @@ function warehouseResults(db) {
 export function buildGlobalBusinessSearchIndex(contextOrData = {}) {
   const db = contextOrData.db || contextOrData
   return [
+    ...salesOrderResults(db),
     ...purchaseRequestResults(db),
     ...rfqResults(db),
     ...purchaseOrderResults(db),

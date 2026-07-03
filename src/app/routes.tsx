@@ -9,6 +9,7 @@ import {
   Users,
   TrendingUp,
   Upload,
+  ClipboardList,
 } from "lucide-react";
 
 export const navItems = [
@@ -18,6 +19,14 @@ export const navItems = [
       { id: "overview", label: "今日行动" },
       { id: "overview:risks", label: "风险与异常" },
       { id: "overview:ai", label: "AI 建议" },
+    ],
+  },
+  {
+    icon: ClipboardList, label: "销售需求", id: "sales",
+    children: [
+      { id: "sales", label: "客户订单与交付风险" },
+      { id: "sales:risks", label: "交付风险订单" },
+      { id: "sales:evidence", label: "订单证据链" },
     ],
   },
   {
@@ -124,6 +133,6 @@ export const navItems = [
 
 export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
-  { label: "供应链", itemIds: ["procurement", "inventory", "srm", "master-data", "finance", "forecast", "exception-cases"] },
+  { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "master-data", "finance", "forecast", "exception-cases"] },
   { label: "数据", itemIds: ["reports", "imports"] },
 ] as const;

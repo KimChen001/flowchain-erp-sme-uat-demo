@@ -78,6 +78,12 @@ Read and preview APIs:
 - `GET /api/tenants/current`
 - `GET /api/search`
 - `GET /api/today-cockpit`
+- `GET /api/sales-demand/summary`
+- `GET /api/sales-demand/orders`
+- `GET /api/sales-demand/orders/:id`
+- `GET /api/sales-demand/risks`
+- `GET /api/sales-demand/impact?sku=:sku`
+- `GET /api/sales-demand/po-impact?poId=:poId`
 - `GET /api/procurement/documents`
 - `GET /api/procurement/documents/:type/:id`
 - `GET /api/procurement/links`
@@ -148,6 +154,7 @@ Start here:
 - No full finance/GL.
 - No HR/payroll.
 - No CRM/customer lifecycle suite.
+- No sales order confirmation, shipment execution, invoicing, receivables, or customer notification automation.
 - No bank integration.
 
 ## Roadmap

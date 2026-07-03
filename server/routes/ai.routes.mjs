@@ -6,6 +6,7 @@ import { buildAiRfqOperationalResponse } from '../domain/ai-rfq-operational-quer
 import { buildAiSupplierOperationalResponse } from '../domain/ai-supplier-operational-query.mjs'
 import { buildAiFinanceCollaborationResponse } from '../domain/ai-finance-collaboration-query.mjs'
 import { buildAiMasterDataQualityResponse } from '../domain/ai-master-data-quality-query.mjs'
+import { buildAiSalesDemandResponse } from '../domain/ai-sales-demand-query.mjs'
 import { buildAiCockpitFastPathResponse, buildAiDataLimitationResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
 import { buildAiSessionGroundedResponse } from '../domain/ai-session-grounding.mjs'
 import { buildAiCompoundQueryResponse, buildAiReceivingGapResponse, detectCompoundBusinessQuery } from '../domain/ai-compound-query.mjs'
@@ -575,6 +576,22 @@ export async function handleAiRoute(ctx) {
     const repositoryBackedReadContext = hasRepositoryBackedAiReadContext(repositories)
     const fastPathModuleId = String(body.moduleId || body.activeContext?.module || '').trim().toLowerCase()
     const compoundCandidate = detectCompoundBusinessQuery(body)
+
+    const salesDemandFastPath = buildAiSalesDemandResponse(db, body)
+    if (!compoundCandidate && salesDemandFastPath) {
+      const result = {
+        ...salesDemandFastPath,
+        fastPath: 'pre_read_context',
+        usedWeb: false,
+        timingMs: Date.now() - startedAt,
+        externalMs: 0,
+        modelMs: 0,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_sales_demand_fast_path', summary: `AI answered ${result.intent.name} before read-context build`, entity: result.intent.name, persist: false })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'sales_demand_fast_path', body, result })
+      send(res, 200, result)
+      return true
+    }
 
     const dataLimitationFastPath = buildAiDataLimitationResponse(db, body, { cache: {} })
     if (!compoundCandidate && dataLimitationFastPath) {

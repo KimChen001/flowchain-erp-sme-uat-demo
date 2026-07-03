@@ -10,6 +10,7 @@ import {
   buildInventoryMovements,
   buildInventorySummary,
 } from './inventory-read.mjs'
+import { buildSalesDemandReadModel } from './sales-demand-read-model.mjs'
 
 function asArray(value) {
   return Array.isArray(value) ? value : []
@@ -82,7 +83,7 @@ function card(id, title, value, subtitle, severity, module, target, evidence = [
   }
 }
 
-function buildSummaryCards(summary, procurementDocuments, followups, inventoryRisks) {
+function buildSummaryCards(summary, procurementDocuments, followups, inventoryRisks, salesRisks = []) {
   const firstByType = (type) => procurementDocuments.find((item) => item.documentType === type && isOpenStatus(item.status || item.invoiceStatus || item.matchStatus))
   const openPr = firstByType('pr')
   const openRfq = firstByType('rfq')
@@ -96,6 +97,7 @@ function buildSummaryCards(summary, procurementDocuments, followups, inventoryRi
   const inventoryRisk = inventoryRisks[0]
 
   return [
+    card('customer-delivery-risk', '客户交付风险', summary.customerDeliveryRiskCount || 0, '客户订单缺口与承诺交付风险', summary.highRiskSalesOrderCount ? 'high' : summary.customerDeliveryRiskCount ? 'medium' : 'low', 'sales', evidenceTarget('sales', 'sales_order', salesRisks[0]?.salesOrderId), salesRisks[0]?.evidence, { route: 'sales' }),
     card('open-prs', 'Open PRs', summary.openPrCount, '等待采购审批或转单', summary.openPrCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:requests', 'procurement_document', openPr?.id), documentType: 'pr' }, openPr?.evidence),
     card('active-rfqs', 'Active RFQs', summary.activeRfqCount, '待报价、比价或授标', summary.activeRfqCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:rfq', 'procurement_document', openRfq?.id), documentType: 'rfq' }, openRfq?.evidence),
     card('open-pos', 'Open POs', summary.openPoCount, '未关闭采购订单', summary.openPoCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:orders', 'procurement_document', openPo?.id), documentType: 'po' }, openPo?.evidence),
@@ -206,8 +208,23 @@ function buildRecentMovements(movements) {
     .slice(0, 8)
 }
 
-function buildRecommendedActions({ followups, inventoryRisks, summary, recentDocuments }) {
+function buildRecommendedActions({ followups, inventoryRisks, summary, recentDocuments, salesRisks = [] }) {
   const actions = []
+  const salesRisk = salesRisks[0]
+  if (salesRisk) {
+    actions.push({
+      id: `action-sales-${salesRisk.salesOrderId}`,
+      priority: salesRisk.deliveryRiskLevel === 'blocked' ? 'high' : salesRisk.deliveryRiskLevel,
+      title: `${salesRisk.salesOrderId} 客户交付风险`,
+      reason: salesRisk.reason,
+      nextAction: '先复核客户订单、库存分配、采购在途和供应商风险',
+      module: 'sales',
+      route: 'sales',
+      target: evidenceTarget('sales', 'sales_order', salesRisk.salesOrderId),
+      evidence: firstEvidence(salesRisk.evidence),
+      category: salesRisk.shortageQty > 0 ? 'sales_order_shortage' : 'customer_delivery_risk',
+    })
+  }
   const urgent = followups.find((item) => item.severity === 'high') || followups[0]
   if (urgent) {
     actions.push({
@@ -267,12 +284,13 @@ function buildRecommendedActions({ followups, inventoryRisks, summary, recentDoc
   return actions.slice(0, 5)
 }
 
-function buildEvidence({ procurementDocuments, followups, inventoryRisks, recentMovements, links }) {
+function buildEvidence({ procurementDocuments, followups, inventoryRisks, recentMovements, links, salesRisks = [] }) {
   const procurementEvidence = procurementDocuments.flatMap((item) => asArray(item.evidence)).slice(0, 12)
   const followupEvidence = followups.map((item) => item.evidence).filter(Boolean).slice(0, 8)
   const inventoryEvidence = inventoryRisks.flatMap((item) => asArray(item.evidence)).slice(0, 8)
   const movementEvidence = recentMovements.flatMap((item) => asArray(item.evidence)).slice(0, 8)
   return {
+    sales: salesRisks.flatMap((item) => asArray(item.evidence)).slice(0, 8),
     procurement: procurementEvidence,
     followups: followupEvidence,
     inventory: inventoryEvidence,
@@ -291,8 +309,14 @@ export function buildTodayCockpit(data = {}, options = {}) {
   const inventoryExceptions = buildInventoryExceptions(data)
   const inventorySummary = buildInventorySummary(data)
   const inventoryRisks = buildInventoryRisks(inventoryItems, inventoryExceptions)
+  const salesDemand = buildSalesDemandReadModel(data, options)
+  const salesRisks = salesDemand.risks
   const summary = {
     ...procurementSummary,
+    customerDeliveryRiskCount: salesDemand.summary.riskOrderCount,
+    highRiskSalesOrderCount: salesDemand.summary.highRiskOrderCount,
+    salesShortageQty: salesDemand.summary.shortageQty,
+    affectedSalesCustomerCount: salesDemand.summary.affectedCustomerCount,
     lowStockCount: inventorySummary.lowStockCount,
     highRiskInventoryCount: inventorySummary.highRiskCount,
     inventoryExceptionCount: inventorySummary.exceptionCount,
@@ -300,13 +324,14 @@ export function buildTodayCockpit(data = {}, options = {}) {
   }
   const recentDocuments = buildRecentDocuments(procurementDocuments)
   const recentMovements = buildRecentMovements(inventoryMovements)
-  const cards = buildSummaryCards(summary, procurementDocuments, followups, inventoryRisks)
-  const recommendedActions = buildRecommendedActions({ followups, inventoryRisks, summary, recentDocuments })
+  const cards = buildSummaryCards(summary, procurementDocuments, followups, inventoryRisks, salesRisks)
+  const recommendedActions = buildRecommendedActions({ followups, inventoryRisks, summary, recentDocuments, salesRisks })
 
   return {
     summary,
     cards,
     followups: followups.slice(0, 8),
+    salesRisks: salesRisks.slice(0, 5),
     inventoryRisks,
     recentDocuments,
     recentMovements,
@@ -316,6 +341,7 @@ export function buildTodayCockpit(data = {}, options = {}) {
       followups,
       inventoryRisks,
       recentMovements,
+      salesRisks,
       links: buildProcurementDocumentLinks(data),
     }),
   }

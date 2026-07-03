@@ -46,6 +46,7 @@ import { ActionDraftReviewShell, type ActionDraftPreview, type ActionDraftPrevie
 import ReportsPanel from "../modules/reports/Page";
 import ImportsPanel from "../modules/imports/Page";
 import ExceptionCasesPage from "../modules/exception-cases/Page";
+import SalesDemandPage from "../modules/sales/Page";
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
@@ -212,7 +213,7 @@ function actionDraftErrorMessage(error: unknown) {
 }
 
 const PAGE_LABELS: Record<string, string> = {
-  overview: "每日工作台", inventory: "库存管理",
+  overview: "每日工作台", sales: "销售需求", inventory: "库存管理",
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
   procurement: "采购管理", finance: "财务协同", "master-data": "主数据", srm: "供应商管理", reports: "报表中心", imports: "数据管理", "exception-cases": "异常处理工单",
@@ -242,6 +243,7 @@ type GlobalSearchFocus = {
 };
 
 const SEARCH_TYPE_LABELS: Record<string, string> = {
+  sales_order: "客户订单",
   purchase_request: "PR",
   rfq: "RFQ",
   purchase_order: "PO",
@@ -255,6 +257,7 @@ const SEARCH_TYPE_LABELS: Record<string, string> = {
 };
 
 const SEARCH_GROUP_LABELS: Record<string, string> = {
+  sales_order: "客户订单",
   purchase_request: "采购申请",
   rfq: "RFQ / 寻源",
   purchase_order: "采购订单",
@@ -267,6 +270,7 @@ const SEARCH_GROUP_LABELS: Record<string, string> = {
 };
 
 const SEARCH_GROUP_ORDER = [
+  "sales_order",
   "purchase_order",
   "purchase_request",
   "rfq",
@@ -686,6 +690,7 @@ export default function FlowChainApp() {
 
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
+    sales:       <SalesDemandPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onOpenAi={() => setAiOpenSignal(Date.now())} />,
     inventory:   <InventoryPanel initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} onReviewActionDraft={openActionDraftReview} />,
     forecast:    <ForecastPanel initialView={activeView as any} onNavigate={navigateTo} onReviewActionDraft={openActionDraftReview} />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.

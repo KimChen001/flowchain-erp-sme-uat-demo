@@ -17,7 +17,7 @@ import { getContextualQuickPrompts } from "./prompts";
 
 export type ActiveContext = {
   module?: string;
-  entityType?: "supplier" | "item" | "rfq" | "purchase_request" | "purchase_order";
+  entityType?: "supplier" | "item" | "rfq" | "purchase_request" | "purchase_order" | "sales_order";
   entityId?: string;
   entityLabel?: string;
   view?: string;
@@ -68,6 +68,7 @@ type AiSessionGrounding = {
 
 const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台",
+  sales: "销售需求",
   inventory: "库存管理",
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请",
@@ -102,6 +103,7 @@ const CONTEXT_ENTITY_LABELS: Record<string, string> = {
   rfq: "询价单",
   supplier: "供应商",
   purchase_request: "采购申请",
+  sales_order: "客户订单",
 };
 
 export function getAiContextLabel(moduleId: string, activeContext?: ActiveContext | null) {
@@ -114,6 +116,7 @@ export function getAiContextLabel(moduleId: string, activeContext?: ActiveContex
 
 export function getAiInputPlaceholder(moduleId: string, activeContext?: ActiveContext | null) {
   if (activeContext?.entityType === "purchase_order") return "问我：这个 PO 为什么优先？未到货风险在哪里？";
+  if (activeContext?.entityType === "sales_order") return "问我：这个客户订单的交付风险在哪里？需要先看哪些证据？";
   if (activeContext?.entityType === "item") return "问我：这个 SKU 需要补货吗？库存覆盖够不够？";
   if (activeContext?.entityType === "rfq") return "问我：这个 RFQ 有几家回复？要不要提醒供应商？";
   if (activeContext?.entityType === "supplier") return "问我：这个供应商有哪些风险？需要怎么跟进？";

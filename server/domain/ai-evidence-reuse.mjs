@@ -498,8 +498,12 @@ function priorityExplanation(item = {}, models = {}) {
   const document = findDocumentById(models.procurementDocuments, id)
   const status = text(item.status || document?.status || document?.matchStatus || document?.invoiceStatus)
   const dueDate = text(item.dueDate || document?.expectedDate || document?.dueDate || document?.requiredDate || document?.date)
-  const reason = text(item.reason || item.summary || item.message || item.nextAction)
-  const action = actionLabel(item)
+  const cleanVisibleAction = (value = '') => text(value)
+    .replace(/打开采购单据并确认责任人与截止日期/g, '查看相关单据、责任人和截止日期')
+    .replace(/复核库存覆盖与再订货点/g, '查看库存覆盖和补货阈值')
+    .replace(/确认待回复供应商、最佳报价和授标依据/g, '确认待回复供应商和授标依据')
+  const reason = cleanVisibleAction(item.reason || item.summary || item.message || item.nextAction)
+  const action = cleanVisibleAction(actionLabel(item))
   const amountText = hasFiniteValue(document?.amount) ? `金额 ${amount(document.amount, document.currency || 'CNY')}` : ''
   const receiving = relatedDocumentsFor(document, models).filter((value) => /收货单/.test(value)).join('、')
   const inventory = relatedInventoryRisksFor(document, models).join('、')
@@ -582,7 +586,7 @@ function priorityItemsFromCockpit(models) {
       text(a.id).localeCompare(text(b.id))
     )
     .map((item, index) => ({ ...item, rank: index + 1 }))
-    .slice(0, 6)
+    .slice(0, 10)
 }
 
 function buildPriorityExplanationResponse(models, message = '') {
@@ -633,7 +637,7 @@ function buildTodayCockpitResponse(models) {
       primaryActions.push(action)
       seenActionFamilies.add(family)
     }
-    if (primaryActions.length >= 3) break
+    if (primaryActions.length >= 4) break
   }
   const supplementalActions = actions
     .flatMap((item) => item.recommendedActions.filter((action) => action.kind === 'draft_preview'))
@@ -644,10 +648,11 @@ function buildTodayCockpitResponse(models) {
   const seenEvidenceFamilies = new Set()
   for (const item of priorityItems) {
     const family = businessFamilyForId(text(item.id), item.type)
+    if (family === 'sales_order') continue
     if (!family || seenEvidenceFamilies.has(family)) continue
     evidenceSourceItems.push(item)
     seenEvidenceFamilies.add(family)
-    if (evidenceSourceItems.length >= 4) break
+    if (evidenceSourceItems.length >= 5) break
   }
   const evidence = evidenceItems(evidenceSourceItems.length ? evidenceSourceItems : actions)
   const topPriority = priorityItems[0]
@@ -672,7 +677,7 @@ function buildTodayCockpitResponse(models) {
           pendingRfqResponseCount: models.procurementSummary.activeRfqCount,
           overduePoCount,
           receivingExceptionCount: models.procurementSummary.pendingReceivingCount,
-          priorityItems,
+          priorityItems: actions,
           topIssues: actions.map((item) => ({
             title: item.sourceDocument || item.title,
             reason: item.explanation,
@@ -682,7 +687,7 @@ function buildTodayCockpitResponse(models) {
         },
       },
       { type: 'evidence', evidence },
-      { type: 'recommended_actions', actions: [...primaryActions, ...supplementalActions].slice(0, 4) },
+      { type: 'recommended_actions', actions: [...primaryActions, ...supplementalActions].slice(0, 5) },
     ],
   })
 }

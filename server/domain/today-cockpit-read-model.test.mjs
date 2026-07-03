@@ -152,9 +152,10 @@ test('today cockpit returns stable top-level fields and cards', () => {
   const again = buildTodayCockpit(db, { now: '2026-06-29T00:00:00Z' })
 
   assert.equal(snapshot(db), before)
-  assert.deepEqual(Object.keys(cockpit), ['summary', 'cards', 'followups', 'inventoryRisks', 'recentDocuments', 'recentMovements', 'recommendedActions', 'evidence'])
+  assert.deepEqual(Object.keys(cockpit), ['summary', 'cards', 'followups', 'salesRisks', 'inventoryRisks', 'recentDocuments', 'recentMovements', 'recommendedActions', 'evidence'])
   assert.deepEqual(cockpit, again)
   assert.deepEqual(cockpit.cards.map((item) => item.id), [
+    'customer-delivery-risk',
     'open-prs',
     'active-rfqs',
     'open-pos',
@@ -164,6 +165,7 @@ test('today cockpit returns stable top-level fields and cards', () => {
     'urgent-followups',
     'total-open-amount',
   ])
+  assert.equal(cockpit.cards.find((item) => item.id === 'customer-delivery-risk')?.module, 'sales')
   assert.equal(cockpit.cards.find((item) => item.id === 'total-open-amount')?.valueKind, 'currency')
 })
 
@@ -179,7 +181,7 @@ test('today cockpit handles missing inventory arrays safely', () => {
   assert.equal(cockpit.summary.lowStockCount, 0)
   assert.deepEqual(cockpit.inventoryRisks, [])
   assert.deepEqual(cockpit.recentMovements, [])
-  assert.equal(cockpit.cards.length, 8)
+  assert.equal(cockpit.cards.length, 9)
 })
 
 test('today cockpit recent documents include canonical procurement document types', () => {

@@ -34,6 +34,17 @@
 |---|---|---|---|---|---|
 | `GET` | `/api/today-cockpit` | Read | Today Cockpit read model | None | Aggregates procurement and inventory read models. |
 
+## Sales Demand Read APIs
+
+| Method | Path | Class | Source | Mutation | Notes |
+|---|---|---|---|---|---|
+| `GET` | `/api/sales-demand/summary` | Read | sales demand read model | None | Customer order counts, delivery risk counts, shortage and reserved quantity totals. |
+| `GET` | `/api/sales-demand/orders` | Read | sales demand read model | None | Customer orders with inventory, procurement, supplier, receiving evidence, and data limitations. |
+| `GET` | `/api/sales-demand/orders/:id` | Read | sales demand read model | None | Single customer order detail by order id. |
+| `GET` | `/api/sales-demand/risks` | Read | sales demand read model | None | Delivery risk rows for customer order review. |
+| `GET` | `/api/sales-demand/impact?sku=:sku` | Read | sales demand read model | None | Affected customer orders for a SKU. |
+| `GET` | `/api/sales-demand/po-impact?poId=:poId` | Read | sales demand read model | None | Customer orders affected by a purchase order. |
+
 ## Procurement Read APIs
 
 | Method | Path | Class | Source | Mutation | Notes |

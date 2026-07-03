@@ -262,7 +262,8 @@ test('system harness records typography grep boundary for current product scope'
   assert.match(typography, /formLabel/)
   assert.match(table, /tableLinkClass/)
   assert.doesNotMatch(cockpitPanel, /compactDisplay|notation:\s*["']compact["']|万元|14万/)
-  assert.match(salesPage, /万/)
+  assert.match(salesPage, /销售需求使用边界/)
+  assert.match(salesPage, /客户订单与交付风险/)
 })
 
 test('Phase 0 product positioning and visible language governance stay productized', () => {

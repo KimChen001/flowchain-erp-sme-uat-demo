@@ -291,7 +291,7 @@ test('GET /api/ai/tools returns controlled AI tool registry', async () => {
 
   assert.ok(handled)
   assert.equal(route.response.status, 200)
-  assert.equal(route.response.payload.tools.length, 22)
+  assert.equal(route.response.payload.tools.length, 27)
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getSupplierStatus'))
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'resolveSupplierEntity'))
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getSupplierOperationalSummary'))
@@ -299,6 +299,9 @@ test('GET /api/ai/tools returns controlled AI tool registry', async () => {
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getPurchaseRequestStatus'))
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getReceivingExceptions'))
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getRfqSupplierResponses'))
+  assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getSalesDemandSummary'))
+  assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getCustomerDeliveryRisks'))
+  assert.ok(route.response.payload.tools.some((tool) => tool.name === 'getPurchaseOrderSalesImpact'))
   assert.ok(route.response.payload.tools.some((tool) => tool.name === 'preparePurchaseRequestDraft'))
   assert.equal(route.response.payload.tools.find((tool) => tool.name === 'getSupplierStatus').mode, 'read')
   assert.equal(route.response.payload.tools.find((tool) => tool.name === 'prepareRfqDraft').requiresUserReview, true)
@@ -307,10 +310,11 @@ test('GET /api/ai/tools returns controlled AI tool registry', async () => {
 
 test('AI tool registry returns defensive copies', () => {
   const first = getAiToolRegistry()
-  first[0].inputSchema.query = 'changed'
+  const supplierTool = first.find((tool) => tool.name === 'findSupplier')
+  supplierTool.inputSchema.query = 'changed'
 
   const second = getAiToolRegistry()
-  assert.equal(second[0].inputSchema.query, 'string')
+  assert.equal(second.find((tool) => tool.name === 'findSupplier').inputSchema.query, 'string')
 })
 
 test('audit foundation normalizes and records reusable audit events', () => {
