@@ -39,6 +39,7 @@ import { handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import { handleActionDraftsRoute } from './action-drafts.routes.mjs'
 import { handleUserConfirmedActionsRoute } from './user-confirmed-actions.routes.mjs'
+import { handleProcurementTransactionsRoute } from './procurement-transactions.routes.mjs'
 import { handleExceptionCasesRoute } from './exception-cases.routes.mjs'
 import { handleUserDataRoute } from './user-data.routes.mjs'
 import {
@@ -1022,6 +1023,7 @@ export function createScmServer() {
     if (await handleMasterDataRoute(routeContext)) return
     if (await handleActionDraftsRoute(routeContext)) return
     if (await handleUserConfirmedActionsRoute(routeContext)) return
+    if (await handleProcurementTransactionsRoute(routeContext)) return
     if (await handleExceptionCasesRoute(routeContext)) return
     if (await handleUserDataRoute(routeContext)) return
     if (await handleMarketRoute(routeContext)) return

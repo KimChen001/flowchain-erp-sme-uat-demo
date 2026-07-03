@@ -394,7 +394,7 @@ export function ActionDraftReviewShell({
                 {validation.errors.map((item) => <div key={item} className="text-[11px]" style={{ color: A.sub }}>{item}</div>)}
               </div>
             ) : (
-              <div className="mt-1 text-[11px]" style={{ color: A.sub }}>该草稿仍不会自动提交，后续确认能力是 future work。</div>
+              <div className="mt-1 text-[11px]" style={{ color: A.sub }}>该草稿仍不会自动提交；用户确认后也只会创建或保存允许范围内的安全内部记录。</div>
             )}
           </section>
 

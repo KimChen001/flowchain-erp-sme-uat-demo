@@ -436,32 +436,31 @@ export default function PurchaseRequestsPage({
     ].filter(Boolean) as string[]));
     setCreatingRfq(true);
     try {
-      const rfq = await apiJson<RfqRecord>("/api/rfqs", {
+      const result = await apiJson<{ ok: boolean; record?: { id: string; status: string } }>("/api/procurement/rfq-drafts/from-pr", {
         method: "POST",
         body: JSON.stringify({
-          title: `${selected.sourceSku || "SKU"} ${selected.sourceName || ""} 采购询价`.trim(),
-          category: selected.source || "采购申请",
-          suppliers: invitedSuppliers.length,
-          quoted: 0,
-          bestPrice: Number(supplierRecommendationResult?.primary?.unitPrice || selected.unitPrice || 0),
-          bestSupplier: supplierRecommendationResult?.primary?.supplier || selected.supplier || "",
-          due: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().slice(0, 10),
-          status: "进行中",
-          sourceRequest: selected.pr,
-          sourceSku: selected.sourceSku,
-          sourceName: selected.sourceName,
-          quantity: selected.quantity,
-          unit: selected.unit,
-          reason: supplierRecommendationResult?.primary
-            ? `${supplierRecommendationResult?.rfqReason || "替代询价"} 主推 ${supplierRecommendationResult.primary.supplier}，合同 ${supplierRecommendationResult.primary.contractId || "无"}，产能 ${supplierRecommendationResult.primary.capacityStatus || "未知"}，币种 ${supplierRecommendationResult.primary.currency || "CNY"}。`
-            : supplierRecommendationResult?.rfqReason || selected.reason || "采购申请需要补充报价或备选供应商。",
-          invitedSuppliers,
+          pr: {
+            id: selected.pr,
+            sku: selected.sourceSku,
+            itemName: selected.sourceName,
+            quantity: selected.quantity,
+            requiredDate: selected.requiredDate,
+            warehouse: selected.forecastBasis?.plannedReleasePeriod || "",
+            costCenter: "",
+            reason: selected.reason,
+          },
+          prId: selected.pr,
+          confirm: true,
+          actor: "current_user",
+          responseDeadline: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().slice(0, 10),
+          candidateSuppliers: invitedSuppliers,
+          evaluationCriteria: ["total_cost", "lead_time", "supplier_risk", "data_completeness"],
         }),
       });
-      toast.success(`${rfq.id} 已发起`, { description: `${selected.pr} · 已邀请 ${invitedSuppliers.length} 家供应商` });
+      toast.success(`${result.record?.id || "RFQ 草稿"} 已创建为内部草稿`, { description: "未外发 RFQ、未邀请供应商、未授标、未创建 PO" });
       onOpenRfq?.();
     } catch (error) {
-      toast.error("RFQ 发起失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
+      toast.error("RFQ 草稿创建失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
     } finally {
       setCreatingRfq(false);
     }
@@ -548,6 +547,27 @@ export default function PurchaseRequestsPage({
         title="审批历史"
         refreshKey={selected.lastAuditId || selected.auditTrailIds?.join(",") || selected.status}
       />
+      <Card className="p-4" style={{ background: "#f8fbff", border: "0.5px solid rgba(0,113,227,0.14)" }}>
+        <div className="text-xs font-semibold mb-2" style={{ color: A.label }}>PR → RFQ → Supplier Response → Award Recommendation → PO Draft</div>
+        <div className="grid grid-cols-5 gap-2 text-[11px]">
+          {[
+            ["PR", selected.pr, selected.status],
+            ["RFQ Draft", selected.linkedPo ? "已转后续单据" : "可创建内部草稿", "review-first"],
+            ["Supplier Response", "内部录入", "no external portal"],
+            ["Award Recommendation", "仅预览推荐", "does not award"],
+            ["PO Draft", "仅草稿", "not issued"],
+          ].map(([label, value, helper]) => (
+            <div key={label} className="rounded-lg p-2" style={{ background: A.white, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.06)" }}>
+              <div className="font-semibold" style={{ color: A.label }}>{label}</div>
+              <div className="mt-1 tabular-nums" style={{ color: A.blue }}>{value}</div>
+              <div className="mt-0.5" style={{ color: A.gray2 }}>{helper}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-[11px]" style={{ color: A.sub }}>
+          Safe boundary: no external RFQ send, no supplier award, no PO issue, no approval, no payment/posting, no inventory mutation.
+        </div>
+      </Card>
       <DocumentActionBar>
         <RecoveryActions
           actions={[
@@ -558,7 +578,7 @@ export default function PurchaseRequestsPage({
         {selected.status === "待审批" && <button onClick={() => approveRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>批准申请</button>}
         {selected.status === "待审批" && <button onClick={() => rejectRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>}
         {selected.status === "已批准" && <button onClick={() => convertRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>转采购订单</button>}
-        <button onClick={createRfqFromSelected} disabled={creatingRfq} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60" style={{ background: supplierRecommendationResult?.needsRfq ? A.orange : A.blue }}>发起 RFQ</button>
+        <button onClick={createRfqFromSelected} disabled={creatingRfq} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60" style={{ background: supplierRecommendationResult?.needsRfq ? A.orange : A.blue }}>创建 RFQ 草稿</button>
         <button onClick={() => exportPurchaseRequestDetail(selected)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
       </DocumentActionBar>
     </DocumentShell>

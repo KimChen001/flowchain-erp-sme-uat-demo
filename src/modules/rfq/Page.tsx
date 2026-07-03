@@ -108,15 +108,13 @@ export default function PurchasingRFQPage({
 
   const award = async (id: string) => {
     try {
-      const updated = await apiJson<RfqRecord>(`/api/rfqs/${encodeURIComponent(id)}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "已授标" }),
+      const result = await apiJson<{ recommendation: { id: string; reviewStatus: string; recommendation_confidence: string } }>(`/api/procurement/award-recommendations/draft`, {
+        method: "POST",
+        body: JSON.stringify({ rfqId: id }),
       });
-      setRfqs(prev => prev.map(r => r.id === id ? updated : r));
-      setSelectedId(updated.id);
-      toast.success(`${id} 已授标`, { description: updated.linkedPo ? `已生成 ${updated.linkedPo} 待审批订单` : "已更新授标结果" });
+      toast.success(`${result.recommendation.id} 已生成授标推荐草稿`, { description: "Draft Only · Requires Review · 不授标、不创建 PO、不通知供应商" });
     } catch (error) {
-      toast.error("RFQ 授标失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("授标推荐草稿失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
     }
   };
 
@@ -184,6 +182,33 @@ export default function PurchasingRFQPage({
         title="报价请求历史"
         refreshKey={selectedRfq.lastAuditId || selectedRfq.auditTrailIds?.join(",") || selectedRfq.status}
       />
+      <Card className="p-4 mt-5" style={{ background: "#f8fbff", border: "0.5px solid rgba(0,113,227,0.14)" }}>
+        <div className="text-xs font-semibold mb-2" style={{ color: A.label }}>Procurement Transaction Chain</div>
+        <div className="grid grid-cols-5 gap-2 text-[11px]">
+          {[
+            ["PR", selectedRfq.sourceRequest || "—", "source"],
+            ["RFQ", selectedRfq.id, selectedRfq.status],
+            ["Supplier Responses", `${selectedRfq.quoted} / ${selectedRfq.suppliers}`, "internal records"],
+            ["Award Recommendation", "Preview Draft", "does not award"],
+            ["PO Draft", selectedRfq.linkedPo || "Preview Only", "not issued"],
+          ].map(([label, value, helper]) => (
+            <div key={label} className="rounded-lg p-2" style={{ background: A.white, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.06)" }}>
+              <div className="font-semibold" style={{ color: A.label }}>{label}</div>
+              <div className="mt-1 tabular-nums" style={{ color: A.blue }}>{value}</div>
+              <div className="mt-0.5" style={{ color: A.gray2 }}>{helper}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button onClick={() => toast.success("内部 Supplier Response 草稿入口已就绪", { description: "No supplier master mutation · No PO creation" })} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>Add Supplier Response Internally</button>
+          <button onClick={() => toast.success("响应比较为确定性预览", { description: "Compare price, lead time, coverage, terms, risk, completeness" })} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>Compare Responses</button>
+          <button onClick={() => award(selectedRfq.id)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-white" style={{ background: A.blue }}>Preview Award Recommendation</button>
+          <button onClick={() => toast.success("PO Draft Preview", { description: "Draft only · Not issued · Not sent · Not approved" })} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: "#f0faf4", color: A.green }}>Preview PO Draft</button>
+        </div>
+        <div className="mt-3 text-[11px]" style={{ color: A.sub }}>
+          Safe boundary: no external send, no award mutation, no PO issue, no approval, no payment/posting, no inventory mutation.
+        </div>
+      </Card>
       <div className="flex flex-wrap gap-2 mt-5">
         {selectedRfq.sourceRequest && (
           <button onClick={() => onNavigate?.("procurement:requests")} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: "#f0f6ff", color: A.blue }}>
@@ -196,7 +221,7 @@ export default function PurchasingRFQPage({
           </button>
         )}
         {(selectedRfq.status === "比价中" || selectedRfq.status === "进行中") && (
-          <button onClick={() => award(selectedRfq.id)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-white" style={{ background: A.blue }}>授标</button>
+          <button onClick={() => award(selectedRfq.id)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-white" style={{ background: A.blue }}>预览授标推荐</button>
         )}
         <button onClick={exportCsv} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
       </div>
@@ -308,7 +333,7 @@ export default function PurchasingRFQPage({
                     <td className={tdActionClass}>
                       <div className="flex items-center gap-2">
                         {(r.status === "比价中" || r.status === "进行中") &&
-                          <button onClick={() => award(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md text-white" style={{ background: A.blue }}>授标</button>}
+                          <button onClick={() => award(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md text-white" style={{ background: A.blue }}>预览推荐</button>}
                         <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button>
                       </div>
                     </td>
