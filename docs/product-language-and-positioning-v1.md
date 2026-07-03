@@ -1,0 +1,77 @@
+# Product Language and Positioning v1
+
+## Product Positioning
+
+中文：
+
+FlowChain 是面向中小企业的 AI 进销存与供应链协同工作台。
+
+English:
+
+FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier operations platform for SMEs.
+
+## Visible UI Language Policy
+
+- 面向中国 SME 用户的 UI 文案默认使用简体中文。
+- 技术枚举、内部 action type、repository adapter、draft type 不得直接暴露给用户。
+- 可以保留行业缩写，但要有中文解释：
+  - SKU = 物料编码 / 商品编码
+  - MRP = 物料需求计划
+  - RFQ = 询价 / 报价请求
+  - PO = 采购订单
+  - PR = 采购申请
+  - GRN = 收货单 / 到货验收单
+- 用户可见页面避免出现：
+  - ActionDraft
+  - purchase_request_draft
+  - supplier_followup_draft
+  - provider fallback
+  - tool_result
+  - response_card
+  - entityType
+  - documentType
+  - raw JSON
+
+## Recommended Chinese Labels
+
+| Internal / English term | Recommended Chinese label |
+| --- | --- |
+| ActionDraft | 操作草稿 / 待复核草稿 |
+| purchase_request_draft | 采购申请草稿 |
+| rfq_draft | 询价草稿 |
+| supplier_followup_draft | 供应商跟进草稿 |
+| review-first | 先复核后确认 |
+| previewOnly | 仅预览 |
+| user-confirmed action | 用户确认动作 |
+| Sales Demand | 销售需求 |
+| Customer Order | 客户订单 |
+| Inventory Allocation | 库存分配 |
+| Evidence Link | 证据链接 |
+| Control Tower | 运营控制台 / 今日风险工作台 |
+| Exception Case | 异常工单 |
+| Finance Collaboration | 财务协同 |
+
+## Scope Rules
+
+- 要做轻量销售需求 / 客户订单，不做完整 CRM。
+- 要做库存可用量、预留量、在途量、缺口解释，不做复杂 WMS。
+- 要做财务协同异常可见，不做完整总账、付款、税务。
+- 要做钉钉/企微通知草稿与待办入口，不默认真实外发。
+
+## UI Copy Examples
+
+Bad:
+
+“补货和释放动作只会打开 ActionDraft purchase_request_draft 预览。”
+
+Good:
+
+“系统只会生成采购申请草稿，需人工复核后才能继续处理，不会自动创建采购订单。”
+
+Bad:
+
+“Forecast/MRP 使用演示商品主数据。”
+
+Good:
+
+“当前物料需求计划使用样例商品与静态计划参数，仅用于人工审阅采购建议。”

@@ -1,11 +1,12 @@
 # FlowChain Docs Index
 
-## Product / Demo
+## Product
 
+- [Product language and positioning](product-language-and-positioning-v1.md)
 - [Product narrative](product-narrative-v1.md)
 - [Demo script](demo-script-v1.md)
 - [Demo screenshot checklist](demo-screenshot-checklist-v1.md)
-- [UAT limitations](uat-limitations-v1.md)
+- [Current development limitations](uat-limitations-v1.md)
 - [Product scope / IA review](product-scope-ia-review.md)
 - [System harness and product review](system-harness-and-product-review-v1.md)
 

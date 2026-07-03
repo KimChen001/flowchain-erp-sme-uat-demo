@@ -1,31 +1,48 @@
-# FlowChain ERP/SCM UAT Demo
+# FlowChain AI Operations Platform for SME Inventory, Sales, Procurement, and Suppliers
 
-FlowChain is an AI-assisted supply chain and supplier management UAT demo for SMEs moving from Excel, email, chat, and manual approvals into structured procurement, inventory, supplier, and finance-collaboration workflows.
+FlowChain is an AI-assisted operations platform for SMEs to manage sales demand, inventory availability, procurement, receiving, supplier risk, and finance-collaboration exceptions in one evidence-based workflow.
 
-It is not a full ERP, not a SAP/Oracle replacement, not a full finance/GL system, not a payment execution system, not a tax system, and not a fully autonomous AI system.
+FlowChain 是面向中小企业的 AI 进销存与供应链协同工作台，帮助团队围绕销售需求、库存、采购、收货、供应商和发票协同异常，识别交付风险、解释供需缺口、生成可复核动作，并形成可追踪的异常处理闭环。
 
 ## Current Status
 
-FlowChain is currently a local JSON/demo-data-backed UAT project. It is useful for product storytelling, workflow validation, architecture review, and repeatable local testing. It is not production-ready SaaS infrastructure.
+FlowChain is an early-stage local development project. It is not yet production-ready SaaS infrastructure.
 
-Default runtime behavior remains JSON-backed through `data/scm-demo.json`. No production database, ORM, RDS, or PolarDB connection is required.
+Default runtime behavior remains JSON-backed through `data/scm-demo.json`. No production database, ORM, RDS, or PolarDB connection is required for local development.
 
 ## Core Modules
 
-- Today Cockpit
+- Today Cockpit / 今日风险工作台
+- Sales Demand / Customer Orders Lite
+- Inventory Allocation / Availability
+- Demand-to-Procurement Links
 - Procurement / P2P
 - Purchase Request
 - RFQ / supplier quotation
 - Purchase Order
 - Receiving / GRN
-- Inventory
-- Inventory Exception Closure
-- SRM
+- Inventory and inventory exceptions
+- Supplier operations / SRM
 - Master Data
 - Forecast / MRP
 - AI Assistant
 - Finance collaboration visibility
 - Reports / Imports / Data Management
+
+## Non-goals
+
+FlowChain is intentionally focused. It is not:
+
+- a full ERP replacement;
+- a SAP/Oracle replacement;
+- a full finance or general ledger system;
+- an HR or payroll system;
+- a CRM or customer lifecycle suite;
+- a bank or payment execution system;
+- a tax filing system;
+- an autonomous AI execution platform.
+
+AI-assisted actions are review-first. The system may prepare drafts and explanations, but it must not autonomously issue purchase orders, send supplier emails, post inventory, approve invoices, execute payments, or mutate supplier master data.
 
 ## Run Locally
 
@@ -80,13 +97,13 @@ Read and preview APIs:
 - `GET /api/ai/tools`
 - `POST /api/ai/chat`
 
-Legacy/manual demo write routes still exist for compatibility, including purchase request, RFQ, purchase order, receiving, forecast, S&OP, login, and market-signal demo routes. The AI/draft-first surfaces do not autonomously execute those writes.
+Legacy/manual local write routes still exist for compatibility, including purchase request, RFQ, purchase order, receiving, forecast, S&OP, login, and market-signal routes. The AI and draft-first surfaces do not autonomously execute those writes.
 
 ## AI Safety
 
 External AI providers are disabled by default. Fake `OPENAI_API_KEY`, `ARK_API_KEY`, or `DOUBAO_API_KEY` values do not enable provider calls.
 
-Cockpit-style prompts such as `今天最需要处理什么？` use a deterministic local fast path backed by Today Cockpit, procurement, and inventory read models. Unsupported prompts fall back safely when providers are disabled.
+Cockpit-style prompts such as `今天最需要处理什么？` use a deterministic local fast path backed by Today Cockpit, procurement, inventory, supplier, and planning read models. Unsupported prompts fall back safely when providers are disabled.
 
 ## Draft-first Actions
 
@@ -94,19 +111,21 @@ AI and Today Cockpit actions prepare reviewable drafts rather than executing bus
 
 Current draft previews include:
 
-- purchase request draft;
-- RFQ draft;
-- supplier follow-up draft.
+- purchase request drafts;
+- RFQ drafts;
+- supplier follow-up drafts;
+- exception case drafts.
 
-Drafts keep `previewOnly: true`, `requiresConfirmation: true`, and `submitted: false`. Confirm/submit behavior is future work.
+Drafts remain preview-only and require user review before any future confirmed workflow can continue.
 
 ## Documentation Map
 
 Start here:
 
 - [Docs index](docs/README.md)
+- [Product language and positioning](docs/product-language-and-positioning-v1.md)
 - [Product narrative](docs/product-narrative-v1.md)
-- [Demo script](docs/demo-script-v1.md)
+- [Current development limitations](docs/uat-limitations-v1.md)
 - [Architecture overview](docs/architecture-overview-v1.md)
 - [Backend route map](docs/backend-route-map-v1.md)
 - [Repository boundary](docs/repository-boundary-v1.md)
@@ -116,27 +135,29 @@ Start here:
 - [Master Data repository adapter](docs/master-data-repository-adapter-v1.md)
 - [Procurement and Inventory read repository adapters](docs/procurement-inventory-read-repository-adapters-v1.md)
 - [Roadmap](docs/roadmap-v1.md)
-- [UAT limitations](docs/uat-limitations-v1.md)
 - [AI safety and draft-first explainer](docs/ai-safety-and-draft-first-explainer-v1.md)
 
 ## Current Limitations
 
 - No production database.
-- No ORM.
+- No ORM-backed production runtime.
 - No autonomous AI execution.
 - No real supplier message sending from drafts.
 - No payment execution.
 - No tax filing.
 - No full finance/GL.
-- No CRM, HR, sales order center, customer center, bank integration, OCR, PDF export, or xlsx export.
+- No HR/payroll.
+- No CRM/customer lifecycle suite.
+- No bank integration.
 
 ## Roadmap
 
-The next architecture phase prepares adapter-ready persistence while keeping JSON/demo behavior stable:
-
-- JSON adapter contract tests;
-- persistence mode and adapter registry;
-- ActionDraft and AuditLog repositories;
-- Master Data repository;
-- Procurement and Inventory read repositories;
-- future ORM/database adapter implementation.
+- Phase 0 Product positioning and language governance
+- Phase 1 Sales Demand Lite
+- Phase 2 Inventory Allocation
+- Phase 3 Demand-to-Procurement Evidence Chain
+- Phase 4 AI Control Tower v2
+- Phase 5 Review-first Action Workflow
+- Phase 6 DB persistence, tenant isolation, RBAC, audit
+- Phase 7 DingTalk / WeCom notification draft adapter
+- Phase 8 deployment and launch hardening

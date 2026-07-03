@@ -1,132 +1,69 @@
 # Roadmap v1
 
-## Completed Foundation
+## Product Direction
 
-The current foundation includes:
+FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier operations platform for SMEs. The roadmap keeps the product focused on evidence-backed operations workflows rather than full ERP replacement.
 
-- canonical evidence links;
-- navigation recovery;
-- AI cockpit timeout fast path;
-- AI provider safety gate disabled by default;
-- AI audit latency hardening;
-- draft-first action boundary;
-- Action Draft Review UI shell;
-- PR/RFQ/supplier follow-up draft previews;
-- draft-first workflow integration;
-- typography token consolidation;
-- Overview evidence builder extraction;
-- database entity model v2 documentation;
-- system harness and product review;
-- demo scenario pack and product narrative.
+## Phase 0 Product Positioning and Language Governance
 
-## Current UAT Scope
+- Reposition FlowChain around SME inventory, sales-demand, procurement, supplier operations, and finance-collaboration exceptions.
+- Standardize user-visible copy in simplified Chinese for China SME users.
+- Keep internal enums, adapter names, and draft types out of visible UI.
+- Document allowed business abbreviations such as SKU, MRP, RFQ, PO, PR, and GRN with Chinese meaning.
 
-The current FlowChain scope is a JSON/demo-data-backed UAT demo for:
+## Phase 1 Sales Demand Lite
 
-- Today Cockpit;
-- procurement/P2P visibility;
-- purchase requests;
-- RFQs;
-- purchase orders;
-- receiving/GRN;
-- inventory and inventory exceptions;
-- SRM;
-- master data;
-- forecast/MRP;
-- AI Assistant;
-- finance collaboration visibility;
-- reports/imports/data management.
+- Add lightweight sales demand and customer order visibility.
+- Keep scope limited to demand evidence and customer order signals.
+- Do not build a full CRM or customer lifecycle suite.
 
-Current behavior is not production persistence and not full ERP coverage.
+## Phase 2 Inventory Allocation
 
-## Next Phase: Repository Adapter Boundary
+- Explain available quantity, reserved quantity, in-transit quantity, and shortage quantity.
+- Connect stock risk to demand and procurement evidence.
+- Do not build complex WMS execution.
 
-Prepare adapter-ready persistence while keeping default JSON behavior stable:
+## Phase 3 Demand-to-Procurement Evidence Chain
 
-- lock current JSON behavior with contract tests;
-- introduce persistence mode defaulting to JSON;
-- introduce an adapter registry;
-- keep database adapter placeholders non-runtime until a future ORM/database round.
+- Link sales demand, shortage signals, PR, RFQ, PO, GRN, supplier, and invoice exception evidence.
+- Make evidence navigation and recovery paths stable for daily operations.
+- Keep relationship and evidence resolvers read-only.
 
-## Next Phase: Action Draft / Audit Persistence
+## Phase 4 AI Control Tower v2
 
-ActionDraft and AuditLog are the safest first persistence candidates because they do not directly mutate procurement or inventory business documents.
+- Improve Today Cockpit and AI Assistant evidence quality.
+- Keep providers disabled by default.
+- Keep all AI answers evidence-backed and non-mutating.
 
-Planned direction:
+## Phase 5 Review-first Action Workflow
 
-- repository methods for schema, preview, validation, future persist, future confirm;
-- audit repository methods for list and best-effort record;
-- keep preview-only behavior;
-- keep read-only AI answers resilient to audit write failures.
+- Expand review-first drafts for procurement, supplier follow-up, exception case, and notification workflows.
+- Require user confirmation for any future safe write.
+- Do not allow autonomous AI execution.
 
-## Next Phase: Master Data Persistence
+## Phase 6 DB Persistence, Tenant Isolation, RBAC, Audit
 
-Master Data is the safest read-domain adapter after ActionDraft/AuditLog.
+- Introduce database-backed persistence behind repository adapters.
+- Add tenant isolation, user roles, permissions, and audit logs.
+- Keep local JSON-backed behavior available for development until explicitly replaced.
 
-Planned direction:
+## Phase 7 DingTalk / WeCom Notification Draft Adapter
 
-- item repository reads;
-- supplier repository reads;
-- warehouse/payment term/tax code references;
-- response compatibility with current read models;
-- no write APIs in this phase.
+- Prepare notification drafts and task handoff payloads.
+- Do not send real external messages by default.
+- Keep user review and confirmation in the loop.
 
-## Next Phase: Procurement Read Persistence
+## Phase 8 Deployment and Launch Hardening
 
-Procurement read models should move gradually behind adapters:
-
-- documents;
-- document detail;
-- links;
-- followups;
-- summary;
-- evidence helpers.
-
-No PR/RFQ/PO/GRN/invoice write migration should happen until read contracts are stable.
-
-## Next Phase: Inventory Read Persistence
-
-Inventory read models should move gradually behind adapters:
-
-- items;
-- lots;
-- serials;
-- movements;
-- exceptions;
-- summary;
-- evidence helpers.
-
-No inventory posting, exception closure, or stock mutation should be introduced in the read-adapter phase.
-
-## Future Controlled Write Workflows
-
-Future write workflows should be explicit confirmation flows, not autonomous AI execution.
-
-Possible future confirmations:
-
-- confirm draft PR;
-- confirm draft RFQ;
-- record supplier follow-up;
-- confirm inventory exception closure.
-
-Each future write should include:
-
-- user confirmation;
-- permission checks;
-- validation;
-- audit event;
-- repository-backed persistence;
-- rollback/error behavior appropriate for the final persistence layer.
+- Harden build, deployment, configuration, monitoring, error handling, and security.
+- Keep production-readiness claims tied to implemented infrastructure.
 
 ## Non-goals
 
-- Do not claim production readiness.
-- Do not replace SAP/Oracle/full ERP systems.
-- Do not add full finance/GL.
-- Do not add payment execution.
-- Do not add tax filing.
-- Do not add bank integration.
-- Do not add CRM, HR, sales order center, or customer center.
-- Do not enable external AI by default.
-- Do not add autonomous AI execution.
-- Do not add production database runtime behavior until an explicit database/ORM round.
+- Not a full ERP replacement.
+- No full finance/GL.
+- No HR/payroll.
+- No CRM/customer lifecycle suite.
+- No bank/payment execution.
+- No tax filing.
+- No autonomous AI execution.

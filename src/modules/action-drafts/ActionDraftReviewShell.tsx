@@ -322,7 +322,7 @@ export function ActionDraftReviewShell({
               <div>
                 <div className="font-semibold">预览 / 保存边界</div>
                 <div className="mt-1" style={{ color: A.sub }}>
-                  当前工作区允许审阅、复制、编辑简单字段、保存 ActionDraft 壳，并在明确用户确认后创建/保存允许范围内的安全记录。
+                  当前工作区允许审阅、复制、编辑简单字段、保存待复核草稿，并在明确用户确认后创建或保存允许范围内的安全记录。
                 </div>
                 <div className="mt-1" style={{ color: A.sub }}>
                   危险动作不会创建或发出 PO，不会提交审批，不会发送外部邮件；所有安全记录仍需人工确认。
@@ -346,7 +346,7 @@ export function ActionDraftReviewShell({
             </div>
             {confirmResult && (
               <div className="mt-2 rounded-md px-2 py-2 text-[11px]" style={{ background: "#f0faf4", color: A.green }}>
-                Created record {confirmResult.createdRecordId || "—"} · status {confirmResult.status || "—"} · audit {confirmResult.auditEventId || "not available"}
+                已创建记录 {confirmResult.createdRecordId || "—"} · 状态 {confirmResult.status || "—"} · 审计 {confirmResult.auditEventId || "暂无"}
               </div>
             )}
           </section>
@@ -403,7 +403,7 @@ export function ActionDraftReviewShell({
                   <div key={`${link.entityType}-${link.entityId}-${index}`} className="rounded-lg border px-3 py-2" style={{ borderColor: A.border }}>
                     {intent && onNavigate ? (
                       <button type="button" onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)} className={draftEvidenceLinkClass} style={{ color: A.blue }}>
-                        {[link.entityType, link.entityId].filter(Boolean).join(" · ")}
+                        {[link.label || "来源记录", link.entityId].filter(Boolean).join(" · ")}
                       </button>
                     ) : (
                       <div className={draftEvidenceTitleClass} style={{ color: A.label }}>{link.label}</div>

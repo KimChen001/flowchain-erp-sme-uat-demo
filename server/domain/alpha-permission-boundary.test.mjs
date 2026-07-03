@@ -88,8 +88,8 @@ test('ActionDraft and Forecast/MRP UI copy keeps final confirmation and release 
   assert.match(actionDraftShell, /不会授标/)
   assert.match(actionDraftShell, /不会自动库存或发票过账/)
 
-  assert.match(forecastPage, /不代表系统已自动创建生产级 PR\/PO/)
-  assert.match(forecastPage, /不是自动下发 PR\/PO/)
-  assert.match(forecastPage, /预览 PR 草稿/)
+  assert.match(forecastPage, /系统只会生成采购申请草稿/)
+  assert.match(forecastPage, /需人工复核后才能继续处理/)
+  assert.match(forecastPage, /不会自动创建采购订单/)
   assert.doesNotMatch(forecastPage, /确认释放|自动释放|提交 PR/)
 })

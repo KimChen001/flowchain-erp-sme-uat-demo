@@ -318,7 +318,7 @@ test.describe("AI Copilot browser UAT", () => {
 
     const shell = await openDraftPreview(page, "purchase_request_draft");
     await expect(shell).toContainText("SKU-00412");
-    await expect(shell).toContainText("ActionDraft");
+    await expect(shell).toContainText("待复核草稿");
     await expectConfirmedSafeActionBoundary(page, "创建 PR");
 
     await closeDraftPreview(page);
@@ -370,7 +370,7 @@ test.describe("AI Copilot browser UAT", () => {
 
     const shell = await openDraftPreview(page, "po_followup_draft");
     await expect(shell).toContainText("PO-2026-1282");
-    await expect(shell).toContainText("ActionDraft");
+    await expect(shell).toContainText("待复核草稿");
     await expectConfirmedSafeActionBoundary(page, "保存已复核草稿");
     await expect(page.getByRole("button", { name: "保存草稿" })).toBeVisible();
   });

@@ -85,7 +85,7 @@ export const navItems = [
     ],
   },
   {
-    icon: TrendingUp, label: "预测与 MRP", id: "forecast",
+    icon: TrendingUp, label: "预测与 MRP 物料需求计划", id: "forecast",
     children: [
       { id: "forecast:cockpit", label: "计划驾驶舱" },
       { id: "forecast:demand", label: "需求预测" },

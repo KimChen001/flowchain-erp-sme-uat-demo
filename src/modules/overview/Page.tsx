@@ -370,12 +370,12 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
 
   const pulse = [
     { label: "OTIF", value: "96.2%", note: "本月交付", color: A.green },
-    { label: "Inventory Turnover", value: "8.4x", note: "加权指标", color: A.blue },
-    { label: "Forecast Accuracy", value: "92.1%", note: "MAPE 7.9%", color: A.purple },
-    { label: "Purchase Cycle", value: "6.4d", note: "PR → PO", color: A.orange },
-    { label: "Supplier Score", value: "88", note: "综合评分", color: A.teal },
-    { label: "Open PR Value", value: fmt(openPrValue), note: "待审批", color: A.red },
-    { label: "Open PO Value", value: fmt(openPoValue), note: "未关闭", color: A.gray1 },
+    { label: "库存周转", value: "8.4x", note: "加权指标", color: A.blue },
+    { label: "预测准确率", value: "92.1%", note: "MAPE 7.9%", color: A.purple },
+    { label: "采购周期", value: "6.4d", note: "PR → PO", color: A.orange },
+    { label: "供应商评分", value: "88", note: "综合评分", color: A.teal },
+    { label: "待审批 PR 金额", value: fmt(openPrValue), note: "待审批", color: A.red },
+    { label: "未关闭 PO 金额", value: fmt(openPoValue), note: "未关闭", color: A.gray1 },
   ];
 
   const quickLinks = [
@@ -383,7 +383,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
     { label: "库存管理", id: "inventory" },
     { label: "供应商管理", id: "srm" },
     { label: "财务协同", id: "finance" },
-    { label: "预测与 MRP", id: "forecast" },
+    { label: "预测与 MRP 物料需求计划", id: "forecast" },
   ];
   const visibleKpis = [
     kpis[0],

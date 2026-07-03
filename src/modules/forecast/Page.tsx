@@ -279,9 +279,9 @@ export default function ForecastPanel({ initialView, onNavigate, onReviewActionD
         <div className="flex items-start gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#f0f6ff", color: A.blue }}><FileCheck2 size={17} /></div>
           <div className="min-w-0">
-            <div className={typography.subsectionTitle} style={{ color: A.label }}>规划演示边界</div>
+            <div className={typography.subsectionTitle} style={{ color: A.label }}>计划使用边界</div>
             <p className={`${typography.compactMetadata} mt-1 max-w-5xl`} style={{ color: A.sub }}>
-              当前 Forecast/MRP 使用演示商品主数据、静态计划参数和 BOM 展开生成只读计划证据；计划入库和计划释放用于人工审阅节奏，不代表系统已自动创建生产级 PR/PO，不是自动下发 PR/PO。补货和释放动作只会打开 ActionDraft purchase_request_draft 预览。
+              当前物料需求计划使用样例商品、静态计划参数和 BOM 展开生成只读计划证据；计划入库和计划释放仅用于人工审阅采购建议。系统只会生成采购申请草稿，需人工复核后才能继续处理，不会自动创建采购订单。
             </p>
           </div>
         </div>
