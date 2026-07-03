@@ -213,10 +213,16 @@ test('R238-R240 UI and integration guardrails keep case management business-faci
   const planner = source('server', 'domain', 'business-action-draft-contract.mjs')
   const relationships = source('src', 'domain', 'relationships', 'resolver.ts')
 
-  assert.match(routes, /label:\s*"Exception Cases"/)
+  assert.match(routes, /label:\s*"异常处理工单"/)
   assert.doesNotMatch(routes, /label:\s*["']AI Assistant["']|label:\s*["']AI Command Center["']|label:\s*["']Ask AI["']/)
   assert.match(app, /ExceptionCasesPage/)
-  for (const text of ['未找到异常工单。', '创建工单草稿', '确认创建工单', '预览跟进备注', '确认后保存备注']) {
+  for (const text of ['暂无异常处理工单', '创建工单草稿', '确认创建工单', '预览跟进备注', '确认后保存备注', '工单字段已更新', '工单状态已更新']) {
+    assert.match(page, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  }
+  for (const text of ['Exception Cases', 'Case List', 'Open Cases', 'Review Queue', 'Case fields updated', 'Case status updated']) {
+    assert.doesNotMatch([routes, page].join('\n'), new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  }
+  for (const text of ['供应商风险', '收货异常', '发票匹配异常', '库存风险', '采购订单延期', '未关闭', '复核中', '等待供应商', '等待内部处理', '未分配', '当前操作人']) {
     assert.match(page, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
   for (const unsafe of ['Auto close', 'Auto send', 'Issue PO', 'Pay invoice']) {

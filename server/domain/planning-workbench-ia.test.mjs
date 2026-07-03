@@ -89,11 +89,44 @@ test('Planning Parameters exposes read-only planning assumptions', () => {
   const forecast = readSource('src', 'modules', 'forecast', 'Page.tsx')
   const paramsSection = forecast.slice(forecast.indexOf('const PlanningParametersView'), forecast.indexOf('const PlanningCockpitView'))
 
-  for (const label of ['Lead time', 'MOQ', 'Batch multiple', 'Safety stock', 'Reorder point', 'Preferred supplier', 'Buyer', 'Unit cost']) {
+  for (const label of ['采购提前期', 'MOQ', '批量倍数', '安全库存', '再订货点', '优先供应商', '采购负责人', '单位成本']) {
     assert.match(paramsSection, new RegExp(label))
   }
 
-  assert.match(paramsSection, /demo\/static assumptions/)
+  assert.match(paramsSection, /只读计划假设/)
+})
+
+test('Phase U.1 planning visible copy remains localized', () => {
+  const forecast = readSource('src', 'modules', 'forecast', 'Page.tsx')
+  const visibleForbidden = [
+    'planning-priority-cockpit',
+    'material-requirements-planning',
+    'action-draft-replenishment-review',
+    'read-only-planning-assumptions',
+    'Planning risk summary',
+    'Top MRP exceptions',
+    'Forecast quality',
+    'MRP exception',
+    '查看 Demand Forecast',
+    '查看 MRP Plan',
+    '打开 Replenishment',
+    'Lead time',
+    'Batch multiple',
+    'Safety stock',
+    'Reorder point',
+    'Preferred supplier',
+    'Buyer',
+    'Unit cost',
+    'MRP 静态 profile',
+    'forecast UI',
+    'demo/static assumptions',
+  ]
+  for (const text of visibleForbidden) {
+    assert.doesNotMatch(forecast, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  }
+  for (const text of ['计划优先级驾驶舱', '需求预测质量', '物料需求计划', '补货草稿复核', '只读计划参数', '计划风险摘要', '重点 MRP 例外', '查看需求预测', '查看 MRP 计划', '打开补货工作台']) {
+    assert.match(forecast, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  }
 })
 
 test('Planning routes remain read-only or DB-mode guarded legacy mutations', () => {

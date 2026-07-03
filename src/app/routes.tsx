@@ -104,11 +104,11 @@ export const navItems = [
     ],
   },
   {
-    icon: AlertTriangle, label: "Exception Cases", id: "exception-cases",
+    icon: AlertTriangle, label: "异常处理工单", id: "exception-cases",
     children: [
-      { id: "exception-cases", label: "Case List" },
-      { id: "exception-cases:open", label: "Open Cases" },
-      { id: "exception-cases:review", label: "Review Queue" },
+      { id: "exception-cases", label: "工单列表" },
+      { id: "exception-cases:open", label: "未关闭工单" },
+      { id: "exception-cases:review", label: "复核队列" },
     ],
   },
   {

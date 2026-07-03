@@ -52,6 +52,8 @@ test('R195-R196 GRN and invoice contextual actions do not auto-post approve or p
 test('R198 AI insight panel is embedded and not a standalone left navigation module', () => {
   const panel = source('src', 'components', 'ai', 'ContextualAIInsightPanel.tsx')
   const routes = source('src', 'app', 'routes.tsx')
+  const app = source('src', 'app', 'FlowChainApp.tsx')
+  const floating = source('src', 'modules', 'ai-assistant', 'Panel.tsx')
   assert.match(panel, /上下文洞察/)
   assert.match(panel, /不自动改业务数据/)
   assert.match(panel, /仅生成可复核内容 · 需要人工确认 · 不自动修改业务记录/)
@@ -59,6 +61,11 @@ test('R198 AI insight panel is embedded and not a standalone left navigation mod
   assert.doesNotMatch(routes, /label:\s*["']AI Assistant["']/)
   assert.doesNotMatch(routes, /label:\s*["']AI Command Center["']/)
   assert.doesNotMatch(routes, /label:\s*["']Ask AI["']/)
+  assert.match(app, /<span>AI 助手<\/span>/)
+  assert.match(app, /<AiPanel moduleId=\{activeModule\}/)
+  assert.match(floating, /data-testid="ai-assistant-root"/)
+  assert.match(floating, /data-testid="ai-assistant-toggle"/)
+  assert.match(floating, /export default function FloatingAiAssistant/)
 })
 
 test('R200 business modules remain navigable and provider keys are not introduced', () => {

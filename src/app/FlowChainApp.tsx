@@ -215,7 +215,7 @@ const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", inventory: "库存管理",
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购管理", finance: "财务协同", "master-data": "主数据", srm: "供应商管理", reports: "报表中心", imports: "数据管理", "exception-cases": "Exception Cases",
+  procurement: "采购管理", finance: "财务协同", "master-data": "主数据", srm: "供应商管理", reports: "报表中心", imports: "数据管理", "exception-cases": "异常处理工单",
 };
 
 type GlobalSearchResult = {

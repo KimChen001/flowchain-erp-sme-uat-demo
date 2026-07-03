@@ -75,8 +75,87 @@ function statusStyle(status: string) {
   return { color: A.blue, bg: "#f0f6ff" };
 }
 
-function caseTypeLabel(value: string) {
-  return value.replaceAll("_", " ");
+const CASE_TYPE_LABELS: Record<string, string> = {
+  supplier_risk: "供应商风险",
+  receiving_exception: "收货异常",
+  invoice_matching_exception: "发票匹配异常",
+  inventory_risk: "库存风险",
+  po_delay: "采购订单延期",
+  procurement_exception: "采购异常",
+  data_gap: "数据缺口",
+  general_exception: "一般异常",
+};
+
+const SEVERITY_LABELS: Record<string, string> = {
+  critical: "严重",
+  high: "高",
+  medium: "中",
+  low: "低",
+  none: "无",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  open: "未关闭",
+  new: "新建",
+  in_review: "复核中",
+  waiting_supplier: "等待供应商",
+  waiting_internal: "等待内部处理",
+  resolved: "已解决",
+  closed: "已关闭",
+  cancelled: "已取消",
+};
+
+const REVIEW_ACTION_LABELS: Record<string, string> = {
+  create_case_after_review: "复核后创建工单",
+  review_existing_case: "复核已有工单",
+  preview_supplier_followup: "预览供应商跟进",
+  preview_supplier_followup_note: "预览供应商跟进备注",
+  review_grn_evidence: "复核收货证据",
+  review_case_closure: "复核工单关闭",
+};
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  exception_case_created: "异常工单已创建",
+  exception_case_fields_updated: "工单字段已更新",
+  exception_case_status_changed: "工单状态已更新",
+  exception_case_note_added: "工单备注已保存",
+  exception_case_closed: "异常工单已关闭",
+  exception_case_cancelled: "异常工单已取消",
+};
+
+function caseTypeLabel(value = "") {
+  return CASE_TYPE_LABELS[value] || "一般异常";
+}
+
+function severityLabel(value = "") {
+  return SEVERITY_LABELS[value] || "中";
+}
+
+function caseStatusLabel(value = "") {
+  return STATUS_LABELS[value] || "未关闭";
+}
+
+function ownerLabel(value = "") {
+  return value && value !== "Unassigned" ? value : "未分配";
+}
+
+function actorLabel(value = "") {
+  return value === "current_user" ? "当前操作人" : value || "系统";
+}
+
+function reviewActionLabel(value = "") {
+  return REVIEW_ACTION_LABELS[value] || "人工复核";
+}
+
+function auditActionLabel(value = "") {
+  return AUDIT_ACTION_LABELS[value] || value || "审计记录";
+}
+
+function normalizeExceptionCaseError(error: unknown) {
+  const message = error instanceof Error ? error.message.trim() : "";
+  if (/not found|404/i.test(message)) return "暂未找到对应异常处理工单。该工单可能尚未创建，或当前筛选条件下不可见。";
+  if (/failed to fetch|network|load failed/i.test(message)) return "异常处理工单暂不可用，请检查服务连接后重试。";
+  return "异常处理工单暂不可用，请稍后重试。";
 }
 
 function formatDate(value?: string) {
@@ -122,7 +201,8 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
       setCases(payload.cases);
       if (selected) setSelected(payload.cases.find((item) => item.caseId === selected.caseId) || null);
     } catch (error) {
-      toast.error("异常工单暂不可用", { description: error instanceof Error ? error.message : "" });
+      console.warn("Failed to load exception cases", error);
+      toast.error("异常处理工单暂不可用", { description: normalizeExceptionCaseError(error) });
     } finally {
       setLoading(false);
     }
@@ -145,17 +225,22 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
     const sourceContext = sourceContextFromSearch();
     if (!sourceContext) {
       setDraft(null);
-      setGuidedDraftState("请从今日驾驶舱、业务记录或智能洞察中选择风险来源后，再创建异常工单草稿。");
-      toast.message("创建工单草稿前请先选择来源上下文");
+      setGuidedDraftState("异常处理工单需要关联具体业务记录。请从今日驾驶舱、采购订单、收货单、发票匹配、供应商风险或库存风险进入后再创建草稿。");
+      toast.message("请先选择风险来源", { description: "异常处理工单需要关联具体业务记录。" });
       return;
     }
-    const payload = await apiJson<{ draft: ExceptionCaseDraft; previewOnly: boolean; createsCaseRecord: boolean }>("/api/exception-cases/draft", {
-      method: "POST",
-      body: JSON.stringify(sourceContext),
-    });
-    if (!payload.previewOnly || payload.createsCaseRecord) throw new Error("工单草稿边界返回了不安全的创建标记。");
-    setDraft(payload.draft);
-    setGuidedDraftState("");
+    try {
+      const payload = await apiJson<{ draft: ExceptionCaseDraft; previewOnly: boolean; createsCaseRecord: boolean }>("/api/exception-cases/draft", {
+        method: "POST",
+        body: JSON.stringify(sourceContext),
+      });
+      if (!payload.previewOnly || payload.createsCaseRecord) throw new Error("工单草稿边界返回了不安全的创建标记。");
+      setDraft(payload.draft);
+      setGuidedDraftState("");
+    } catch (error) {
+      console.warn("Failed to preview exception case draft", error);
+      toast.error("工单草稿暂不可用", { description: normalizeExceptionCaseError(error) });
+    }
   }
 
   async function confirmCreateCase() {
@@ -204,7 +289,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
       <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className={typography.pageTitle} style={{ color: A.label }}>异常工单</h1>
+            <h1 className={typography.pageTitle} style={{ color: A.label }}>异常处理工单</h1>
             <p className={`${typography.metadata} mt-1 max-w-3xl`} style={{ color: A.sub }}>
               将运营风险沉淀为可复核工单，关联记录、依据、备注和审计来源。
             </p>
@@ -235,9 +320,9 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
 
         {visible.length === 0 ? (
           <div className="px-5 py-8">
-            <p className={typography.subsectionTitle} style={{ color: A.label }}>未找到异常工单。</p>
+            <p className={typography.subsectionTitle} style={{ color: A.label }}>暂无异常处理工单</p>
             <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>
-              系统可根据风险建议工单，但必须由用户确认后才能创建。
+              异常处理工单需要从具体风险来源创建，例如今日驾驶舱中的 PO 延迟、收货异常、发票差异、供应商风险或库存风险。请先进入对应风险记录，再预览工单草稿。
             </p>
           </div>
         ) : (
@@ -258,9 +343,9 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
                     <tr key={item.caseId} className="cursor-pointer hover:bg-blue-50/40" onClick={() => { setSelected(item); setNoteDraft(""); setWorkflowDraft(""); }} style={{ borderBottom: `1px solid ${A.border}` }}>
                       <td className={`px-4 py-3 ${typography.tableLink}`} style={{ color: A.blue }}>{item.caseId}<div className={typography.metadata} style={{ color: A.label }}>{item.title}</div></td>
                       <td className={`px-4 py-3 ${typography.tableCell}`}>{caseTypeLabel(item.caseType)}</td>
-                      <td className="px-4 py-3"><Chip label={item.severity} color={severity.color} bg={severity.bg} /></td>
-                      <td className="px-4 py-3"><Chip label={item.status} color={status.color} bg={status.bg} /></td>
-                      <td className={`px-4 py-3 ${typography.tableCell}`}>{item.owner || "未分配"}</td>
+                      <td className="px-4 py-3"><Chip label={severityLabel(item.severity)} color={severity.color} bg={severity.bg} /></td>
+                      <td className="px-4 py-3"><Chip label={caseStatusLabel(item.status)} color={status.color} bg={status.bg} /></td>
+                      <td className={`px-4 py-3 ${typography.tableCell}`}>{ownerLabel(item.owner)}</td>
                       <td className={`px-4 py-3 ${typography.tableCell}`}>{formatDate(item.dueDate)}</td>
                       <td className={`px-4 py-3 ${typography.tableCell}`}>{item.sourceEntityId || "—"}</td>
                       <td className={`px-4 py-3 ${typography.tableCell}`}>{formatDate(item.updatedAt)}</td>
@@ -285,8 +370,8 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
           {draft.duplicateWarning && <p className={`${typography.metadata} mt-3`} style={{ color: A.orange }}>重复提醒：{draft.duplicateWarning.message} {draft.duplicateWarning.caseId}</p>}
           <div className="mt-3 grid gap-2 md:grid-cols-4">
             <DraftMetric label="类型" value={caseTypeLabel(draft.proposedCaseFields.caseType)} />
-            <DraftMetric label="严重度" value={draft.proposedCaseFields.severity} />
-            <DraftMetric label="负责人" value={draft.proposedCaseFields.owner || "缺失"} />
+            <DraftMetric label="严重度" value={severityLabel(draft.proposedCaseFields.severity)} />
+            <DraftMetric label="负责人" value={ownerLabel(draft.proposedCaseFields.owner)} />
             <DraftMetric label="到期日期" value={draft.proposedCaseFields.dueDate || "缺失"} />
           </div>
           {!!draft.missingFields.length && <p className={`${typography.metadata} mt-3`} style={{ color: A.orange }}>缺少字段：{draft.missingFields.join(", ")}</p>}
@@ -332,7 +417,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
             });
             setSelected(payload.case);
             setCases((current) => current.map((row) => row.caseId === payload.case.caseId ? payload.case : row));
-            toast.success("Case fields updated", { description: item.caseId });
+            toast.success("工单字段已更新", { description: item.caseId });
           }}
           onChangeStatus={async (item, status, payloadFields = {}) => {
             const payload = await apiJson<{ case: ExceptionCase }>(`/api/exception-cases/${encodeURIComponent(item.caseId)}/status`, {
@@ -341,7 +426,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
             });
             setSelected(payload.case);
             setCases((current) => current.map((row) => row.caseId === payload.case.caseId ? payload.case : row));
-            toast.success("Case status updated", { description: `${item.caseId} -> ${status}` });
+            toast.success("工单状态已更新", { description: `${item.caseId} -> ${caseStatusLabel(status)}` });
           }}
           onNavigate={onNavigate}
         />
@@ -383,14 +468,14 @@ function CaseDetail({
   onNavigate?: Props["onNavigate"];
 }) {
   const links = (item.linkedRecords || []).map((record) => resolveBusinessLinkedRecord(record));
-  const [owner, setOwner] = useState(item.owner || "");
+  const [owner, setOwner] = useState(ownerLabel(item.owner));
   const [dueDate, setDueDate] = useState(formatDate(item.dueDate) === "—" ? "" : formatDate(item.dueDate));
   const [severity, setSeverity] = useState(item.severity);
   const [resolutionNote, setResolutionNote] = useState(item.resolution?.resolutionSummary || "");
   const [pendingTransition, setPendingTransition] = useState<{ status: string; payload?: Record<string, unknown> } | null>(null);
   const nextStatuses = allowedNextStatuses(item.status);
   useEffect(() => {
-    setOwner(item.owner || "");
+    setOwner(ownerLabel(item.owner));
     setDueDate(formatDate(item.dueDate) === "—" ? "" : formatDate(item.dueDate));
     setSeverity(item.severity);
     setResolutionNote(item.resolution?.resolutionSummary || "");
@@ -413,13 +498,13 @@ function CaseDetail({
           <p className={`${typography.body} mt-2 max-w-4xl`} style={{ color: A.sub }}>{item.summary}</p>
         </div>
         <div className="flex gap-2">
-          <Chip label={item.severity} {...severityStyle(item.severity)} />
-          <Chip label={item.status} {...statusStyle(item.status)} />
+          <Chip label={severityLabel(item.severity)} {...severityStyle(item.severity)} />
+          <Chip label={caseStatusLabel(item.status)} {...statusStyle(item.status)} />
         </div>
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-4">
-        <DraftMetric label="负责人" value={item.owner || "未分配"} />
+        <DraftMetric label="负责人" value={ownerLabel(item.owner)} />
         <DraftMetric label="到期日期" value={formatDate(item.dueDate)} />
         <DraftMetric label="来源模块" value={item.sourceModule || "—"} />
         <DraftMetric label="来源对象" value={item.sourceEntityId || "—"} />
@@ -450,7 +535,7 @@ function CaseDetail({
               <div key={evidence.id} className="rounded-md border p-3" style={{ borderColor: A.border }}>
                 <div className="flex items-center justify-between gap-2">
                   <p className={typography.formLabel} style={{ color: A.label }}>{evidence.title}</p>
-                  <Chip label={evidence.riskLevel || "none"} {...severityStyle(evidence.riskLevel || "low")} />
+                  <Chip label={severityLabel(evidence.riskLevel || "none")} {...severityStyle(evidence.riskLevel || "low")} />
                 </div>
                 <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>{evidence.summary}</p>
                 <p className={`${typography.metadata} mt-1`} style={{ color: A.gray1 }}>{evidence.reason}</p>
@@ -466,13 +551,13 @@ function CaseDetail({
             <h3 className={typography.subsectionTitle} style={{ color: A.label }}>流程控制</h3>
             <p className={typography.metadata} style={{ color: A.sub }}>更新需用户确认，并记录在工单审计轨迹中；不会改动关联业务记录。</p>
           </div>
-          <Chip label={`当前：${item.status}`} {...statusStyle(item.status)} />
+          <Chip label={`当前：${caseStatusLabel(item.status)}`} {...statusStyle(item.status)} />
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-[1fr_160px_150px_auto]">
           <input value={owner} onChange={(event) => setOwner(event.target.value)} placeholder="负责人" style={inputStyle} />
           <input value={dueDate} onChange={(event) => setDueDate(event.target.value)} type="date" style={inputStyle} />
           <select value={severity} onChange={(event) => setSeverity(event.target.value as ExceptionCase["severity"])} style={inputStyle}>
-            {["critical", "high", "medium", "low"].map((value) => <option key={value} value={value}>{value}</option>)}
+            {["critical", "high", "medium", "low"].map((value) => <option key={value} value={value}>{severityLabel(value)}</option>)}
           </select>
           <button onClick={() => onUpdateFields(item, { owner, dueDate, severity })} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton}`} style={{ background: A.blue }}>
             <Save size={14} /> 更新字段
@@ -482,7 +567,7 @@ function CaseDetail({
           {nextStatuses.map((status) => (
             <button
               key={status}
-              onClick={() => requestTransition(status, { reason: `将工单状态调整为 ${status}` })}
+              onClick={() => requestTransition(status, { reason: `将工单状态调整为 ${caseStatusLabel(status)}` })}
               className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 ${typography.denseButton}`}
               style={{ background: status === "cancelled" ? "#fff1f0" : "#f0f6ff", color: status === "cancelled" ? A.red : A.blue }}
             >
@@ -509,8 +594,8 @@ function CaseDetail({
             <p className={typography.formLabel} style={{ color: A.label }}>确认最终状态变更</p>
             <div className="mt-2 grid gap-2 md:grid-cols-3">
               <DraftMetric label="工单 ID" value={item.caseId} />
-              <DraftMetric label="当前状态" value={item.status} />
-              <DraftMetric label="下一状态" value={pendingTransition.status} />
+              <DraftMetric label="当前状态" value={caseStatusLabel(item.status)} />
+              <DraftMetric label="下一状态" value={caseStatusLabel(pendingTransition.status)} />
               <DraftMetric label="关联主记录" value={primaryRecord} />
               <DraftMetric label="需要处理结论" value={pendingTransition.status === "closed" ? "是" : "否"} />
               <DraftMetric label="审计预览" value={`exception_case_${pendingTransition.status === "closed" ? "closed" : "status_changed"}`} />
@@ -542,7 +627,7 @@ function CaseDetail({
           <h3 className={typography.subsectionTitle} style={{ color: A.label }}>智能诊断与动作</h3>
           <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>{item.aiDiagnosisSummary || "暂无智能诊断摘要。"}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {(item.recommendedReviewFirstActions || []).map((action) => <Chip key={action} label={action} color={A.blue} bg="#eef6ff" />)}
+            {(item.recommendedReviewFirstActions || []).map((action) => <Chip key={action} label={reviewActionLabel(action)} color={A.blue} bg="#eef6ff" />)}
           </div>
         </div>
         <div>
@@ -550,7 +635,7 @@ function CaseDetail({
           <p className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>数据限制：{(item.dataLimitations || []).join(", ") || "无"}</p>
           <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>审计来源：{String(item.auditMetadata?.sourceTrigger || "user_confirmed")}</p>
           {(item.notes || []).map((note) => <p key={note.noteId} className={`${typography.metadata} mt-2 rounded-md p-2`} style={{ background: A.gray6, color: A.label }}>{note.body}</p>)}
-          {(item.auditTrail || []).map((entry, index) => <p key={`${entry.action}-${index}`} className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>{entry.action} · {formatDate(entry.timestamp)}</p>)}
+          {(item.auditTrail || []).map((entry, index) => <p key={`${entry.action}-${index}`} className={`${typography.metadata} mt-2`} style={{ color: A.sub }}>{auditActionLabel(entry.action)} · {actorLabel(entry.actor)} · {formatDate(entry.timestamp)}</p>)}
         </div>
       </section>
 

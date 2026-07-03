@@ -186,7 +186,7 @@ test('R250 source guardrails keep workflow UI business-facing and AI safely boun
   for (const expected of ['流程控制', '更新字段', '移至复核中', '标记为等待供应商', '标记为已解决', '关闭工单', '处理结论草稿']) {
     assert.match(page, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
-  assert.match(routes, /label:\s*"Exception Cases"/)
+  assert.match(routes, /label:\s*"异常处理工单"/)
   assert.doesNotMatch(routes, /label:\s*["']AI Assistant["']|label:\s*["']AI Command Center["']|label:\s*["']Ask AI["']/)
   assert.match(workflow, /auto_close_case/)
   assert.match(workflow, /auto_send_supplier_email/)
