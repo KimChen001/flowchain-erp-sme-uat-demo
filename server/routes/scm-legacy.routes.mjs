@@ -36,6 +36,7 @@ import { handleContextRoute } from './context.routes.mjs'
 import { handleMasterDataRoute } from './master-data.routes.mjs'
 import { handleSearchRoute } from './search.routes.mjs'
 import { handleSalesDemandRoute } from './sales-demand.routes.mjs'
+import { handleEvidenceGraphRoute } from './evidence-graph.routes.mjs'
 import { handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import { handleActionDraftsRoute } from './action-drafts.routes.mjs'
@@ -1019,6 +1020,7 @@ export function createScmServer() {
     if (await handleContextRoute(routeContext)) return
     if (await handleSearchRoute(routeContext)) return
     if (await handleSalesDemandRoute(routeContext)) return
+    if (await handleEvidenceGraphRoute(routeContext)) return
     if (await handleTodayCockpitRoute(routeContext)) return
     if (await handleInventoryRoute(routeContext)) return
     if (await handleProcurementReadRoute(routeContext)) return

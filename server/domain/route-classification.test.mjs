@@ -14,6 +14,8 @@ test('route classification covers read preview legacy mutation and diagnostics r
   assert.equal(classifyRoute('GET', '/api/health').classification, ROUTE_CLASSES.diagnostics)
   assert.equal(classifyRoute('GET', '/api/procurement/documents').classification, ROUTE_CLASSES.readOnly)
   assert.equal(classifyRoute('GET', '/api/sales-demand/orders').classification, ROUTE_CLASSES.readOnly)
+  assert.equal(classifyRoute('GET', '/api/evidence-graph/sku/SKU-00412').classification, ROUTE_CLASSES.readOnly)
+  assert.equal(classifyRoute('GET', '/api/evidence-graph/sku/SKU-00412').writesJson, false)
   assert.equal(classifyRoute('GET', '/api/inventory/availability').classification, ROUTE_CLASSES.readOnly)
   assert.equal(classifyRoute('GET', '/api/inventory/reservation-preview').classification, ROUTE_CLASSES.readOnly)
   assert.equal(classifyRoute('POST', '/api/action-drafts/preview').classification, ROUTE_CLASSES.previewOnly)
@@ -57,6 +59,7 @@ test('database mode blocks legacy mutation routes but allows read and preview ro
     ['GET', '/api/master-data/items'],
     ['GET', '/api/procurement/documents'],
     ['GET', '/api/sales-demand/orders'],
+    ['GET', '/api/evidence-graph/purchase-order/PO-1'],
     ['GET', '/api/inventory/items'],
     ['GET', '/api/inventory/available-to-promise'],
     ['GET', '/api/mrp-plan'],
@@ -73,7 +76,7 @@ test('database mode blocks legacy mutation routes but allows read and preview ro
 test('route classification metadata includes major route groups and clean block payload', () => {
   const groups = new Set(listRouteClassifications().map((route) => route.group))
 
-  for (const group of ['ai', 'sales-demand', 'master-data', 'procurement-read', 'inventory-read', 'action-drafts', 'purchase-requests', 'rfqs', 'purchase-orders', 'receiving', 'forecast', 'planning', 'market', 'auth']) {
+  for (const group of ['ai', 'sales-demand', 'evidence-graph', 'master-data', 'procurement-read', 'inventory-read', 'action-drafts', 'purchase-requests', 'rfqs', 'purchase-orders', 'receiving', 'forecast', 'planning', 'market', 'auth']) {
     assert.equal(groups.has(group), true, group)
   }
 
@@ -86,6 +89,7 @@ test('route classification metadata includes major route groups and clean block 
 test('database mode route metadata reflects migrated master data read adapter', () => {
   assert.equal(classifyRoute('GET', '/api/master-data/items').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/sales-demand/orders').databaseMode, 'allowed-db-read')
+  assert.equal(classifyRoute('GET', '/api/evidence-graph').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/procurement/documents').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/inventory/items').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/inventory/demand-supply-gap').databaseMode, 'allowed-db-read')

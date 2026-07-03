@@ -9,7 +9,7 @@
     "api": "node server/index.mjs",
     "start": "node server/index.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test server/domain/*.test.mjs",
+    "test": "node --test server/domain/*.test.mjs server/routes/*.test.mjs",
     "test:browser": "playwright test",
     "test:browser:ai": "playwright test tests/browser/ai-copilot.spec.ts",
     "test:browser:ai:empty": "node scripts/browser-uat-ai-empty.mjs",

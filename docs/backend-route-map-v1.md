@@ -4,7 +4,7 @@
 
 - Read: returns current workspace/read-model state without mutation.
 - Preview: prepares reviewable draft data and does not mutate business records.
-- Manual/legacy write: existing demo workflow write route, not used by AI autonomous execution.
+- Manual/legacy write: existing local workflow write route, not used by AI autonomous execution.
 
 ## Auth / Context
 
@@ -44,6 +44,23 @@
 | `GET` | `/api/sales-demand/risks` | Read | sales demand read model | None | Delivery risk rows for customer order review. |
 | `GET` | `/api/sales-demand/impact?sku=:sku` | Read | sales demand read model | None | Affected customer orders for a SKU. |
 | `GET` | `/api/sales-demand/po-impact?poId=:poId` | Read | sales demand read model | None | Customer orders affected by a purchase order. |
+
+## Evidence Graph Read APIs
+
+| Method | Path | Class | Source | Mutation | Notes |
+|---|---|---|---|---|---|
+| `GET` | `/api/evidence-graph?entityType=:type&entityId=:id&depth=2` | Read | evidence graph read model | None | Cross-module evidence graph with anchor, nodes, edges, primary path, related records, risk signals, navigation hints, and data limitations. |
+| `GET` | `/api/evidence-graph/related?entityType=:type&entityId=:id&depth=2` | Read | evidence graph read model | None | Related records for the selected business object. |
+| `GET` | `/api/evidence-graph/sales-order/:id` | Read | evidence graph read model | None | Customer order evidence chain. |
+| `GET` | `/api/evidence-graph/sku/:sku` | Read | evidence graph read model | None | SKU supply-demand evidence chain. |
+| `GET` | `/api/evidence-graph/purchase-order/:poId` | Read | evidence graph read model | None | Purchase order delivery impact evidence chain. |
+| `GET` | `/api/evidence-graph/purchase-request/:prId` | Read | evidence graph read model | None | Purchase request sourcing evidence chain. |
+| `GET` | `/api/evidence-graph/rfq/:rfqId` | Read | evidence graph read model | None | RFQ sourcing evidence chain. |
+| `GET` | `/api/evidence-graph/receiving/:grnId` | Read | evidence graph read model | None | Receiving evidence chain. |
+| `GET` | `/api/evidence-graph/supplier/:supplierIdOrName` | Read | evidence graph read model | None | Supplier operational evidence chain. |
+| `GET` | `/api/evidence-graph/invoice/:invoiceId` | Read | evidence graph read model | None | Supplier invoice evidence chain. |
+
+All Evidence Graph routes are GET-only and do not create drafts, write audit events, update inventory, close documents, or send external notifications.
 
 ## Procurement Read APIs
 
@@ -124,14 +141,14 @@ These routes remain for compatibility/manual local workflow surfaces. They are n
 |---|---|---|---|---|
 | `GET` | `/api/purchase-requests` | Read | legacy workflow route | None |
 | `POST` | `/api/purchase-requests` | Manual/legacy write | workflow domain | Creates local PR |
-| `PATCH` | `/api/purchase-requests/:pr/status` | Manual/legacy write | workflow domain | Changes demo PR status |
+| `PATCH` | `/api/purchase-requests/:pr/status` | Manual/legacy write | workflow domain | Changes local PR status |
 | `POST` | `/api/purchase-requests/:pr/convert-to-po` | Manual/legacy write | workflow domain | Creates local PO |
 | `GET` | `/api/rfqs` | Read | legacy workflow route | None |
 | `POST` | `/api/rfqs` | Manual/legacy write | workflow domain | Creates local RFQ |
-| `PATCH` | `/api/rfqs/:id/status` | Manual/legacy write | workflow domain | Changes demo RFQ status |
+| `PATCH` | `/api/rfqs/:id/status` | Manual/legacy write | workflow domain | Changes local RFQ status |
 | `GET` | `/api/purchase-orders` | Read | legacy workflow route | None |
 | `POST` | `/api/purchase-orders` | Manual/legacy write | workflow domain | Creates local PO |
-| `PATCH` | `/api/purchase-orders/:po/status` | Manual/legacy write | workflow domain | Changes demo PO status |
+| `PATCH` | `/api/purchase-orders/:po/status` | Manual/legacy write | workflow domain | Changes local PO status |
 | `GET` | `/api/receiving-docs` | Read | legacy receiving route | None |
 | `POST` | `/api/receiving-docs` | Manual/legacy write | receiving workflow | Creates local GRN |
 | `PATCH` | `/api/receiving-docs/:grn` | Manual/legacy write | receiving workflow | Updates/posts local GRN |

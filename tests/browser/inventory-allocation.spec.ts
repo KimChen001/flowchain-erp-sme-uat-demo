@@ -60,8 +60,19 @@ test.describe("Inventory Allocation and ATP", () => {
     await expect(inventory).toContainText("可承诺量");
     await expect(inventory).toContainText("在途采购");
     await expect(inventory).toContainText("缺口");
+    await expect(inventory).toContainText("证据链预览");
+    await expect(inventory).toContainText("SKU → 库存可用量 → 客户订单 → 采购订单 → 供应商 → 收货单");
     await expect(inventory).toContainText("系统仅生成内部通知草稿，不会自动发送到外部协同工具。");
 
+    await page.getByRole("button", { name: "调拨影响预览" }).first().click();
+    await expect(inventory).toContainText("调拨与库存影响使用边界");
+    await expect(inventory).toContainText("调拨影响预览");
+    await expect(inventory).toContainText("库存影响预览");
+    await expect(inventory).toContainText("不会自动下发 WMS");
+    await expect(inventory).toContainText("不会自动更新库存余额");
+    await expect(inventory).not.toContainText(/已批准并下发|调入库存已更新|调拨单已创建|新建调拨单|提交审批|生成出库建议|差异已审批入账/);
+
+    await page.getByRole("button", { name: /库存总览/ }).first().click();
     await page.getByRole("button", { name: "查看销售需求" }).first().click();
     await expect(page.getByText("SKU-00412 已聚焦，销售需求页面可查看受影响客户订单。")).toBeVisible();
 
@@ -71,6 +82,8 @@ test.describe("Inventory Allocation and ATP", () => {
     await expect(sales).toContainText("当前订单分配量");
     await expect(sales).toContainText("库存预留建议");
     await expect(sales).toContainText("供需缺口");
+    await expect(sales).toContainText("证据链预览");
+    await expect(sales).toContainText("客户订单 → SKU → 库存可用量 → 采购订单 → 供应商 → 收货单");
 
     await openAssistant(page);
     const shortage = await askAssistant(page, "SKU-00412 为什么缺货？");

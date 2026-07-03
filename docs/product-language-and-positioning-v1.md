@@ -66,6 +66,12 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 | Reservation Preview | 预留建议 / 预留影响预览 |
 | Collaboration Notification Draft | 内部通知草稿 |
 | Evidence Link | 证据链接 |
+| Evidence Graph | 证据图谱 / 跨模块证据链 |
+| Related Records | 相关业务记录 |
+| Primary Evidence Path | 主证据链路 |
+| Upstream / Downstream Impact | 上游 / 下游影响 |
+| Delivery Impact | 交付影响 |
+| Data Limitation | 数据限制 / 不确定性 |
 | Control Tower | 运营控制台 / 今日风险工作台 |
 | Exception Case | 异常工单 |
 | Finance Collaboration | 财务协同 |
@@ -136,3 +142,27 @@ Bad:
 Good:
 
 “生成内部通知草稿，后续可适配企业微信、钉钉、飞书、Email、Slack 或 Microsoft Teams；系统不会自动外发。”
+
+Bad:
+
+“系统已下发 WMS 并更新库存。”
+
+Good:
+
+“系统仅生成库存影响预览，不会自动下发 WMS，也不会自动更新库存余额。”
+
+Bad:
+
+“自动完成调拨签收。”
+
+Good:
+
+“系统生成调拨签收影响预览，需人工复核后才能进入受控流程。”
+
+Bad:
+
+“显示 raw entityType/documentType 关系图。”
+
+Good:
+
+“显示客户订单、SKU、库存可用量、采购订单、供应商和收货单之间的业务证据链。”

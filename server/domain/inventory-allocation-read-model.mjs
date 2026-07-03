@@ -317,7 +317,7 @@ export function listSkuAvailability(db = {}, filters = {}) {
 
 export function getSkuAvailability(db = {}, sku = '', options = {}) {
   const key = decodeURIComponent(text(sku)).toLowerCase()
-  return buildInventoryAllocationReadModel(db, options).availability.find((item) => item.sku.toLowerCase() === key || item.itemName.toLowerCase() === key) || null
+  return buildInventoryAllocationReadModel(db, options).availability.find((item) => text(item.sku).toLowerCase() === key || text(item.itemName).toLowerCase() === key) || null
 }
 
 export function buildInventoryAllocationSummary(db = {}) {

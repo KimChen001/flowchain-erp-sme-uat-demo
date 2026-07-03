@@ -539,9 +539,9 @@ function InventoryLots({
                   <div className="text-xs font-medium" style={{ color: A.label }}>{l.name} · {l.lot}</div>
                   <div className="text-[11px]" style={{ color: A.sub }}>剩余 {l.qty} · 效期 {l.expiry} · {l.warehouse}</div>
                 </div>
-                <button onClick={() => toast.success(`已生成 ${l.lot} 优先出库建议`)}
+                <button onClick={() => toast.success(`已生成 ${l.lot} FEFO 复核建议`, { description: "仅用于批次复核，不会自动出库。" })}
                   className="text-[11px] px-3 py-1.5 rounded-md font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
-                  生成出库建议
+                  生成 FEFO 复核建议
                 </button>
               </div>
             );
@@ -559,28 +559,36 @@ function InventoryTransfers() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ from: "上海总仓", to: "苏州分仓", sku: SKU_CATALOG[0].sku, qty: 10 });
 
+  function previewStatus(s: string) {
+    if (s === "已签收") return "复核完成（未过账）";
+    if (s === "在途" || s === "已发出") return "影响预览";
+    if (s === "待审批") return "待复核";
+    return s;
+  }
+
   function statusColor(s: string) {
-    return s === "已签收" ? A.green : s === "在途" || s === "已发出" ? A.blue : s === "待审批" ? A.orange : A.gray1;
+    const status = previewStatus(s);
+    return status === "复核完成（未过账）" ? A.green : status === "影响预览" ? A.blue : status === "待复核" ? A.orange : A.gray1;
   }
 
   function approve(id: string) {
-    setList((arr) => arr.map((t) => t.id === id ? { ...t, status: "已发出" } : t));
-    toast.success(`${id} 已批准并下发 WMS`);
+    setList((arr) => arr.map((t) => t.id === id ? { ...t, status: "影响预览" } : t));
+    toast.success(`${id} 已生成调拨复核草稿`, { description: "仅用于人工复核，不会下发 WMS，也不会自动更新库存余额。" });
   }
   function receive(id: string) {
-    setList((arr) => arr.map((t) => t.id === id ? { ...t, status: "已签收" } : t));
-    toast.success(`${id} 已签收`, { description: "调入库存已更新" });
+    setList((arr) => arr.map((t) => t.id === id ? { ...t, status: "复核完成（未过账）" } : t));
+    toast.success(`${id} 已生成签收影响预览`, { description: "仅预览库存影响，不会自动过账或更新库存余额。" });
   }
   function createTransfer() {
     const item = SKU_CATALOG.find((s) => s.sku === form.sku)!;
     const id = `TR-260527-${String(Math.floor(Math.random() * 99)).padStart(3, "0")}`;
     setList((arr) => [{
       id, from: form.from, to: form.to, sku: form.sku, name: item.name,
-      qty: form.qty, status: "待审批", created: "5月27日", eta: "5月30日",
+      qty: form.qty, status: "待复核", created: "5月27日", eta: "5月30日",
       requester: "张磊", carrier: "—",
     }, ...arr]);
     setCreateOpen(false);
-    toast.success(`${id} 调拨单已创建`, { description: `${form.from} → ${form.to} · ${form.qty} ${item.unit}` });
+    toast.success(`${id} 已生成调拨影响预览`, { description: `${form.from} → ${form.to} · ${form.qty} ${item.unit}，不会自动更新库存余额。` });
   }
 
   function exportTransfersCsv() {
@@ -595,25 +603,32 @@ function InventoryTransfers() {
       "承运商": transfer.carrier,
       "创建日期": transfer.created,
       "ETA": transfer.eta,
-      "状态": transfer.status,
+      "状态": previewStatus(transfer.status),
     })));
   }
 
-  const onTransit = list.filter((t) => t.status === "在途" || t.status === "已发出").length;
-  const pending = list.filter((t) => t.status === "待审批").length;
+  const impactPreview = list.filter((t) => ["在途", "已发出", "影响预览"].includes(t.status)).length;
+  const pending = list.filter((t) => ["待审批", "待复核"].includes(t.status)).length;
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="本月调拨" value={String(list.length)} sub="跨 4 个仓"     icon={ArrowLeftRight} color={A.blue}   />
-        <KpiCard label="在途数量" value={String(onTransit)}   sub="平均时长 1.8 天"  icon={Truck}          color={A.teal}   />
-        <KpiCard label="待审批"   value={String(pending)}      sub="平均 2.4 小时" delta={pending > 0 ? "需处理" : "无"} positive={pending === 0} icon={AlertCircle} color={A.orange} />
+        <KpiCard label="影响预览" value={String(impactPreview)}   sub="需人工复核"  icon={Truck}          color={A.teal}   />
+        <KpiCard label="待复核"   value={String(pending)}      sub="平均 2.4 小时" delta={pending > 0 ? "需处理" : "无"} positive={pending === 0} icon={AlertCircle} color={A.orange} />
         <KpiCard label="调拨准时率" value="96.8%"               sub="同比 +2.1pts"   delta="+2.1pts" positive icon={Activity}     color={A.green}  />
       </div>
 
+      <Card className="p-5">
+        <SectionHeader title="调拨与库存影响使用边界" />
+        <p className="text-xs leading-6" style={{ color: A.sub }}>
+          当前页面仅展示调拨复核草稿、批次复核建议和库存影响预览。系统不会自动下发 WMS、不会自动出库、不会自动签收，也不会自动更新库存余额。任何后续库存变动都需要人工复核并通过受控流程处理。
+        </p>
+      </Card>
+
       <Card>
         <div className="flex items-center px-5 py-3.5 gap-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>仓间调拨单</h2>
+          <h2 className="text-sm font-semibold" style={{ color: A.label }}>调拨影响预览</h2>
           <span className="text-xs" style={{ color: A.gray2 }}>{list.length} 条</span>
           <button onClick={exportTransfersCsv}
             className="ml-auto flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity"
@@ -623,7 +638,7 @@ function InventoryTransfers() {
           <button onClick={() => setCreateOpen(true)}
             className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
             style={{ background: A.blue }}>
-            <Plus size={11} /> 新建调拨单
+            <Plus size={11} /> 新建调拨影响预览
           </button>
         </div>
         <div className={tableScrollClass}>
@@ -651,15 +666,15 @@ function InventoryTransfers() {
                 <td className={`${tdNameClass} max-w-[150px] truncate`} style={{ color: A.sub }}>{t.carrier}</td>
                 <td className={tdNowrapClass} style={{ color: A.gray1 }}>{t.created}</td>
                 <td className={tdNowrapClass} style={{ color: A.gray1 }}>{t.eta}</td>
-                <td className={tdNowrapClass}><Chip label={t.status} color={statusColor(t.status)} bg={`${statusColor(t.status)}18`} /></td>
+                <td className={tdNowrapClass}><Chip label={previewStatus(t.status)} color={statusColor(t.status)} bg={`${statusColor(t.status)}18`} /></td>
                 <td className={`${tdActionClass} min-w-[150px]`}>
-                  {t.status === "待审批" && (
-                    <button onClick={() => approve(t.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white whitespace-nowrap" style={{ background: A.blue }}>批准</button>
+                  {previewStatus(t.status) === "待复核" && (
+                    <button onClick={() => approve(t.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white whitespace-nowrap" style={{ background: A.blue }}>生成影响预览</button>
                   )}
-                  {(t.status === "在途" || t.status === "已发出") && (
-                    <button onClick={() => receive(t.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white whitespace-nowrap" style={{ background: A.green }}>签收</button>
+                  {previewStatus(t.status) === "影响预览" && (
+                    <button onClick={() => receive(t.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white whitespace-nowrap" style={{ background: A.green }}>复核签收影响</button>
                   )}
-                  {t.status === "已签收" && (
+                  {previewStatus(t.status) === "复核完成（未过账）" && (
                     <span className="text-[11px]" style={{ color: A.gray2 }}>—</span>
                   )}
                 </td>
@@ -670,10 +685,10 @@ function InventoryTransfers() {
         </div>
       </Card>
 
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="新建调拨单" subtitle="跨仓库存调配"
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="新建调拨影响预览" subtitle="跨仓库存调配复核草稿"
         footer={<>
           <button onClick={() => setCreateOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.1)" }}>取消</button>
-          <button onClick={createTransfer} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>提交审批</button>
+          <button onClick={createTransfer} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>生成复核草稿</button>
         </>}>
         <div className="grid grid-cols-2 gap-4">
           <Field label="源仓库">
@@ -826,7 +841,7 @@ function InventoryCycleCount() {
 
       <Card>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>盘点差异待审批</h2>
+          <h2 className="text-sm font-semibold" style={{ color: A.label }}>盘点差异影响预览</h2>
           <div className="flex items-center gap-2">
             <button onClick={exportVariancesCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
@@ -859,8 +874,8 @@ function InventoryCycleCount() {
                 <td className="px-4 py-3" style={{ color: A.sub }}>{v.reason}</td>
                 <td className="px-4 py-3 tabular-nums" style={{ color: A.red }}>¥{v.value.toLocaleString()}</td>
                 <td className="px-4 py-3 flex gap-1">
-                  <button onClick={() => toast.success(`${v.lot} 差异已审批入账`)}
-                    className="text-[11px] px-2 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>批准</button>
+                  <button onClick={() => toast.success(`${v.lot} 已生成盘点差异影响预览`, { description: "仅用于人工复核，不会自动过账或更新库存余额。" })}
+                    className="text-[11px] px-2 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>生成影响预览</button>
                   <button onClick={() => toast(`${v.lot} 已发起复盘`)}
                     className="text-[11px] px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.label }}>复盘</button>
                 </td>
@@ -1222,6 +1237,15 @@ function InventoryAllocationPanel({
               <div>{selected.deliveryRiskPropagation}</div>
               <div>建议动作：先复核客户订单、在途采购、供应商承诺和预留冲突，再进行草稿预览。</div>
             </div>
+            <div className="mt-3 rounded-lg p-3" style={{ background: A.white }}>
+              <div className="text-xs font-semibold" style={{ color: A.label }}>证据链预览</div>
+              <div className="mt-2 text-[11px] leading-5" style={{ color: A.gray1 }}>
+                SKU → 库存可用量 → 客户订单 → 采购订单 → 供应商 → 收货单
+              </div>
+              <div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>
+                当前证据链基于工作区内的客户订单、库存、采购、供应商、收货和发票协同记录生成。系统只展示关联证据，不会自动创建、修改或关闭任何业务单据。
+              </div>
+            </div>
             {!!selected.dataLimitations.length && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {selected.dataLimitations.map((item) => (
@@ -1322,7 +1346,7 @@ export default function InventoryPage({
   const tabs = [
     { id: "overview",  label: "库存总览",  icon: Package,         count: summary.itemCount || stockItems.length },
     { id: "lots",      label: "批次/序列号", icon: Layers,          count: summary.lotCount || lots.length },
-    { id: "transfer",  label: "库间调拨",    icon: ArrowLeftRight,  count: TRANSFERS.length },
+    { id: "transfer",  label: "调拨影响预览",    icon: ArrowLeftRight,  count: TRANSFERS.length },
     { id: "count",     label: "循环盘点",    icon: ClipboardCheck,  count: COUNT_PLANS.length },
     { id: "abcxyz",    label: "ABC/XYZ 分类", icon: Boxes,           count: "10" },
     { id: "movements", label: "事务流水",    icon: History,         count: summary.movementCount || INVENTORY_MOVEMENT_LEDGER.length },
@@ -1417,7 +1441,7 @@ function InventoryLanding({
     { tab: "movements" as const, title: "库存事务流水", desc: "查看采购入库、退货、调拨、调整和盘点形成的库存变化。", signal: `${INVENTORY_MOVEMENT_LEDGER.length} 条流水`, icon: History },
     { tab: "exceptions" as const, title: "库存异常单据", desc: "解释库存变化原因、证据链和关闭动作。", signal: `${exceptionDocs.length} 张异常单据`, icon: AlertTriangle },
     { tab: "lots" as const, title: "批次 / 序列号", desc: "追踪批次、序列号、效期和冻结状态。", signal: `${LOTS.length} 个批次`, icon: Layers },
-    { tab: "transfer" as const, title: "库间调拨", desc: "跟进调拨申请、在途和签收差异。", signal: `${TRANSFERS.length} 张调拨`, icon: ArrowLeftRight },
+    { tab: "transfer" as const, title: "调拨影响预览", desc: "跟进调拨复核草稿、库存影响预览和差异复核。", signal: `${TRANSFERS.length} 条预览`, icon: ArrowLeftRight },
     { tab: "count" as const, title: "循环盘点", desc: "查看盘点计划、执行状态和差异复核。", signal: `${VARIANCES.length} 个差异`, icon: ClipboardCheck },
     { tab: "abcxyz" as const, title: "ABC/XYZ", desc: "按价值和需求波动查看库存策略。", signal: "策略矩阵", icon: Boxes },
     { tab: "bins" as const, title: "库位地图", desc: "查看库位容量、热度和可用状态。", signal: "库位热力", icon: Grid3x3 },
@@ -1578,7 +1602,7 @@ function InventoryLanding({
         <KpiCard label="风险 SKU" value={String(riskItems.length)} sub={topRisk?.sku || "稳定"} icon={Package} color={A.red} />
         <KpiCard label="库存异常单据" value={String(exceptionDocs.length)} sub="待复核/处理中" icon={AlertTriangle} color={A.orange} />
         <KpiCard label="冻结库存" value={String(frozenCount)} sub="QA 或锁定状态" icon={ShieldCheck} color={A.purple} />
-        <KpiCard label="调拨差异" value={String(transferExceptions.length)} sub="在途/待审批" icon={ArrowLeftRight} color={A.indigo} />
+        <KpiCard label="调拨差异" value={String(transferExceptions.length)} sub="待复核/影响预览" icon={ArrowLeftRight} color={A.indigo} />
         <KpiCard label="盘点差异" value={String(VARIANCES.length)} sub="待复核关闭" icon={ClipboardCheck} color={A.teal} />
       </div>
 

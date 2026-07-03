@@ -15,6 +15,7 @@ Default local runtime behavior uses a deterministic workspace dataset. No produc
 - Today Cockpit / 今日风险工作台
 - Sales Demand / Customer Orders Lite
 - Inventory Allocation / Availability / Available to Promise
+- Evidence Graph / Cross-module Evidence Links
 - Demand-to-Procurement Links
 - Procurement / P2P
 - Purchase Request
@@ -106,6 +107,16 @@ Read and preview APIs:
 - `GET /api/inventory/reservation-preview?sku=:sku&salesOrderId=:salesOrderId&requestedQty=:qty`
 - `GET /api/inventory/sales-order-impact?salesOrderId=:salesOrderId`
 - `GET /api/inventory/po-supply-impact?poId=:poId`
+- `GET /api/evidence-graph?entityType=:type&entityId=:id&depth=2`
+- `GET /api/evidence-graph/related?entityType=:type&entityId=:id&depth=2`
+- `GET /api/evidence-graph/sales-order/:id`
+- `GET /api/evidence-graph/sku/:sku`
+- `GET /api/evidence-graph/purchase-order/:poId`
+- `GET /api/evidence-graph/purchase-request/:prId`
+- `GET /api/evidence-graph/rfq/:rfqId`
+- `GET /api/evidence-graph/receiving/:grnId`
+- `GET /api/evidence-graph/supplier/:supplierIdOrName`
+- `GET /api/evidence-graph/invoice/:invoiceId`
 - `GET /api/master-data/items`
 - `GET /api/master-data/suppliers`
 - `GET /api/action-drafts/schema`
@@ -119,7 +130,7 @@ Legacy/manual local write routes still exist for compatibility, including purcha
 
 External AI providers are disabled by default. Placeholder `OPENAI_API_KEY`, `ARK_API_KEY`, or `DOUBAO_API_KEY` values do not enable provider calls.
 
-Cockpit-style prompts such as `今天最需要处理什么？` use a deterministic local fast path backed by Today Cockpit, procurement, inventory allocation, supplier, and planning read models. Unsupported prompts return guided, review-first responses when providers are disabled.
+Cockpit-style prompts such as `今天最需要处理什么？` use a deterministic local fast path backed by Today Cockpit, procurement, inventory allocation, supplier, evidence graph, and planning read models. Unsupported prompts return guided, review-first responses when providers are disabled.
 
 ## Draft-first Actions
 
@@ -159,9 +170,12 @@ Start here:
 - No ORM-backed production runtime.
 - No autonomous AI execution.
 - No complex WMS execution.
+- No automatic WMS release.
+- No automatic stock transfer posting.
 - No automatic inventory reservation or stock lock.
 - No automatic outbound shipment or inventory posting.
 - No automatic inventory mutation.
+- No automatic creation or closure of business documents.
 - No real supplier message sending from drafts.
 - No real external collaboration notification sending.
 - No payment execution.
@@ -177,7 +191,7 @@ Start here:
 - Phase 0 Product positioning and language governance
 - Phase 1 Sales Demand Lite
 - Phase 2 Inventory Allocation
-- Phase 3 Demand-to-Procurement Evidence Chain
+- Phase 3 Evidence Graph / Demand-to-Procurement Evidence Chain
 - Phase 4 AI Control Tower v2
 - Phase 5 Review-first Action Workflow
 - Phase 6 DB persistence, tenant isolation, RBAC, audit

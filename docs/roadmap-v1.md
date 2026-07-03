@@ -22,8 +22,9 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 
 - Explain available quantity, reserved quantity, in-transit quantity, and shortage quantity.
 - Connect stock risk to demand and procurement evidence.
-- Current implementation scope: Inventory Allocation / Availability / Available to Promise / Reservation Preview foundation.
+- Current implementation scope: Inventory Allocation / Availability / Available to Promise / Reservation Preview foundation completed.
 - Make allocation evidence explicit across customer orders, inventory item availability, open PO receipts, suppliers, receiving records, and shortage reasons.
+- Keep transfer, FEFO, variance, and inventory-impact surfaces review-first and preview-only.
 - Provide generic internal notification draft product slots without external sending.
 - Do not build complex WMS execution.
 
@@ -32,7 +33,9 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 - Link sales demand, shortage signals, PR, RFQ, PO, GRN, supplier, and invoice exception evidence.
 - Make evidence navigation and recovery paths stable for daily operations.
 - Keep relationship and evidence resolvers read-only.
-- Next focus after Phase 2: Demand-to-Procurement Evidence Chain.
+- Current implementation scope: Phase 3A Evidence Graph foundation with read-only nodes, edges, primary evidence path, related records, risk signals, navigation hints, and data limitations.
+- Next focus: Phase 3B Evidence Graph UI / Related Records / Return Path.
+- Follow-up: Phase 3C AI Evidence Graph Integration.
 
 ## Phase 4 AI Control Tower v2
 

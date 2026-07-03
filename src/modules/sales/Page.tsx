@@ -289,8 +289,8 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
 
           <Card>
             <div className="px-5 py-4" style={{ borderBottom: `1px solid ${A.border}` }}>
-              <SectionHeader title="订单证据区域" />
-              <p className="text-[11px] mt-1" style={{ color: A.sub }}>SKU、采购、供应商、收货和数据限制</p>
+              <SectionHeader title="证据链预览" />
+              <p className="text-[11px] mt-1" style={{ color: A.sub }}>客户订单 → SKU → 库存可用量 → 采购订单 → 供应商 → 收货单</p>
             </div>
             <div className="p-4 space-y-3">
               {(focusedOrder ? [focusedOrder] : visibleOrders.slice(0, 4)).map((order) => (
@@ -301,6 +301,9 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
                     <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><ShoppingCart size={12} /> {order.linkedPurchaseOrders.map((po) => `${po.id} ${po.status || ""}`).join("；") || "暂无完整采购订单关联"}</div>
                     <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><Users size={12} /> {order.linkedSuppliers.map((supplier) => `${supplier.name}${supplier.risk ? ` · ${supplier.risk}` : ""}`).join("；") || "暂无完整供应商风险记录"}</div>
                     <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><Truck size={12} /> {order.linkedReceivingDocs.map((grn) => `${grn.id} ${grn.status || ""}`).join("；") || "暂无完整收货记录"}</div>
+                  </div>
+                  <div className="mt-2 text-[11px] leading-5" style={{ color: A.sub }}>
+                    当前证据链基于工作区内的客户订单、库存、采购、供应商、收货和发票协同记录生成。系统只展示关联证据，不会自动创建、修改或关闭任何业务单据。
                   </div>
                   {!!order.dataLimitations.length && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
