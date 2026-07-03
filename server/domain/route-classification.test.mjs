@@ -14,6 +14,8 @@ test('route classification covers read preview legacy mutation and diagnostics r
   assert.equal(classifyRoute('GET', '/api/health').classification, ROUTE_CLASSES.diagnostics)
   assert.equal(classifyRoute('GET', '/api/procurement/documents').classification, ROUTE_CLASSES.readOnly)
   assert.equal(classifyRoute('GET', '/api/sales-demand/orders').classification, ROUTE_CLASSES.readOnly)
+  assert.equal(classifyRoute('GET', '/api/inventory/availability').classification, ROUTE_CLASSES.readOnly)
+  assert.equal(classifyRoute('GET', '/api/inventory/reservation-preview').classification, ROUTE_CLASSES.readOnly)
   assert.equal(classifyRoute('POST', '/api/action-drafts/preview').classification, ROUTE_CLASSES.previewOnly)
   assert.equal(classifyRoute('POST', '/api/action-drafts').classification, ROUTE_CLASSES.controlledPersistence)
   assert.equal(classifyRoute('POST', '/api/action-drafts/save').databaseMode, 'allowed-db-persistence')
@@ -56,6 +58,7 @@ test('database mode blocks legacy mutation routes but allows read and preview ro
     ['GET', '/api/procurement/documents'],
     ['GET', '/api/sales-demand/orders'],
     ['GET', '/api/inventory/items'],
+    ['GET', '/api/inventory/available-to-promise'],
     ['GET', '/api/mrp-plan'],
     ['GET', '/api/sop-cycle'],
     ['POST', '/api/action-drafts/preview'],
@@ -85,4 +88,5 @@ test('database mode route metadata reflects migrated master data read adapter', 
   assert.equal(classifyRoute('GET', '/api/sales-demand/orders').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/procurement/documents').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/inventory/items').databaseMode, 'allowed-db-read')
+  assert.equal(classifyRoute('GET', '/api/inventory/demand-supply-gap').databaseMode, 'allowed-db-read')
 })

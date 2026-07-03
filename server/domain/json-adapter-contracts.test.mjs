@@ -193,13 +193,14 @@ test('JSON adapter contract: today cockpit aggregation is deterministic and draf
       'cards',
       'followups',
       'salesRisks',
+      'allocationRisks',
       'inventoryRisks',
       'recentDocuments',
       'recentMovements',
       'recommendedActions',
       'evidence',
     ])
-    assert.equal(first.cards.length, 9)
+    assert.equal(first.cards.length, 12)
     assert.equal(first.recommendedActions.every((item) => item.id && item.nextAction && item.route !== undefined), true)
     for (const group of Object.values(first.evidence)) {
       for (const item of Array.isArray(group) ? group : []) {

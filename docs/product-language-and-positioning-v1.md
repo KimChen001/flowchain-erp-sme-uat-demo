@@ -57,6 +57,14 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 | Sales Demand | 销售需求 |
 | Customer Order | 客户订单 |
 | Inventory Allocation | 库存分配 |
+| Available to Promise / ATP | 可承诺量 |
+| On-hand inventory | 实物库存 |
+| Reserved inventory | 已预留库存 |
+| Incoming supply | 在途采购 |
+| Demand-supply gap | 供需缺口 |
+| Projected available | 预计可用量 |
+| Reservation Preview | 预留建议 / 预留影响预览 |
+| Collaboration Notification Draft | 内部通知草稿 |
 | Evidence Link | 证据链接 |
 | Control Tower | 运营控制台 / 今日风险工作台 |
 | Exception Case | 异常工单 |
@@ -85,7 +93,7 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 - 要做轻量销售需求 / 客户订单，不做完整 CRM。
 - 要做库存可用量、预留量、在途量、缺口解释，不做复杂 WMS。
 - 要做财务协同异常可见，不做完整总账、付款、税务。
-- 要做钉钉/企微通知草稿与待办入口，不默认真实外发。
+- 要做通用内部通知草稿与待办入口，后续可适配企业微信、钉钉、飞书、Email、Slack 或 Microsoft Teams，不默认真实外发。
 
 ## UI Copy Examples
 
@@ -104,3 +112,27 @@ Bad:
 Good:
 
 “当前物料需求计划基于工作区内的商品、库存、采购、销售需求与供应商记录生成只读计划证据，仅用于人工审阅采购建议。”
+
+Bad:
+
+“订单确认后自动锁库。”
+
+Good:
+
+“系统生成库存预留建议和预留影响预览，需人工复核后才能继续处理，不会自动锁定库存。”
+
+Bad:
+
+“当前使用演示库存数据计算 ATP。”
+
+Good:
+
+“当前可承诺量基于工作区内的库存、销售需求和在途采购记录计算。”
+
+Bad:
+
+“发送钉钉通知。”
+
+Good:
+
+“生成内部通知草稿，后续可适配企业微信、钉钉、飞书、Email、Slack 或 Microsoft Teams；系统不会自动外发。”

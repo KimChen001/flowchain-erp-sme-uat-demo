@@ -4,6 +4,7 @@ import {
   listMasterWarehouses,
 } from './master-data.mjs'
 import { buildInventoryItems } from './inventory-read.mjs'
+import { listSkuAvailability } from './inventory-allocation-read-model.mjs'
 import { listSalesOrders } from './sales-demand-read-model.mjs'
 
 const TYPE_ALIASES = {
@@ -16,6 +17,7 @@ const TYPE_ALIASES = {
   supplier: ['supplier', '供应商'],
   item: ['item', 'sku', '物料', '品名'],
   inventory_item: ['inventory', '库存', '低库存', '补货'],
+  inventory_availability: ['库存可用量', '可承诺量', '供需缺口', '库存分配', 'ATP'],
   warehouse: ['warehouse', '仓库'],
   bin: ['bin', '库位'],
 }
@@ -416,6 +418,43 @@ function inventoryResults(db) {
     })
 }
 
+function inventoryAvailabilityResults(db) {
+  return listSkuAvailability(db)
+    .map((item) => makeResult({
+      type: 'inventory_availability',
+      label: item.sku,
+      subtitle: compact([
+        item.itemName,
+        `库存可用量 ${numberText(item.availableQty)}${text(item.unit)}`,
+        `可承诺量 ${numberText(item.availableToPromiseQty)}${text(item.unit)}`,
+        `供需缺口 ${numberText(item.shortageQty)}${text(item.unit)}`,
+      ]).join(' · '),
+      status: item.riskLabel,
+      moduleId: 'inventory',
+      entityType: 'inventory_item',
+      entityId: item.sku,
+      entityLabel: item.itemName || item.sku,
+      fields: {
+        sku: item.sku,
+        itemName: item.itemName,
+        availabilityLabel: '库存可用量 可承诺量 供需缺口 库存分配 ATP',
+        availableQty: item.availableQty,
+        availableToPromiseQty: item.availableToPromiseQty,
+        shortageQty: item.shortageQty,
+        projectedAvailableQty: item.projectedAvailableQty,
+        linkedSalesOrders: item.affectedSalesOrders.map((order) => order.salesOrderId).join(' '),
+        linkedPurchaseOrders: item.linkedPurchaseOrders.map((po) => po.poId).join(' '),
+      },
+      evidence: [
+        evidence('库存可用量', `${numberText(item.availableQty)}${text(item.unit)}`),
+        evidence('可承诺量', `${numberText(item.availableToPromiseQty)}${text(item.unit)}`),
+        evidence('供需缺口', `${numberText(item.shortageQty)}${text(item.unit)}`),
+        evidence('客户订单', item.affectedSalesOrders.map((order) => order.salesOrderId).join('、')),
+        evidence('采购订单', item.linkedPurchaseOrders.map((po) => po.poId).join('、')),
+      ],
+    }))
+}
+
 function warehouseResults(db) {
   return listMasterWarehouses(db).map((item) => makeResult({
     type: item.type === 'bin' ? 'bin' : 'warehouse',
@@ -452,6 +491,7 @@ export function buildGlobalBusinessSearchIndex(contextOrData = {}) {
     ...supplierResults(db),
     ...itemResults(db),
     ...inventoryResults(db),
+    ...inventoryAvailabilityResults(db),
     ...warehouseResults(db),
   ]
 }

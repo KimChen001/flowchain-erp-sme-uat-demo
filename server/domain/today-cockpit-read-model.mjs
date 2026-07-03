@@ -11,6 +11,7 @@ import {
   buildInventorySummary,
 } from './inventory-read.mjs'
 import { buildSalesDemandReadModel } from './sales-demand-read-model.mjs'
+import { buildInventoryAllocationReadModel } from './inventory-allocation-read-model.mjs'
 
 function asArray(value) {
   return Array.isArray(value) ? value : []
@@ -83,7 +84,7 @@ function card(id, title, value, subtitle, severity, module, target, evidence = [
   }
 }
 
-function buildSummaryCards(summary, procurementDocuments, followups, inventoryRisks, salesRisks = []) {
+function buildSummaryCards(summary, procurementDocuments, followups, inventoryRisks, salesRisks = [], allocationRisks = []) {
   const firstByType = (type) => procurementDocuments.find((item) => item.documentType === type && isOpenStatus(item.status || item.invoiceStatus || item.matchStatus))
   const openPr = firstByType('pr')
   const openRfq = firstByType('rfq')
@@ -98,14 +99,17 @@ function buildSummaryCards(summary, procurementDocuments, followups, inventoryRi
 
   return [
     card('customer-delivery-risk', '客户交付风险', summary.customerDeliveryRiskCount || 0, '客户订单缺口与承诺交付风险', summary.highRiskSalesOrderCount ? 'high' : summary.customerDeliveryRiskCount ? 'medium' : 'low', 'sales', evidenceTarget('sales', 'sales_order', salesRisks[0]?.salesOrderId), salesRisks[0]?.evidence, { route: 'sales' }),
-    card('open-prs', 'Open PRs', summary.openPrCount, '等待采购审批或转单', summary.openPrCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:requests', 'procurement_document', openPr?.id), documentType: 'pr' }, openPr?.evidence),
-    card('active-rfqs', 'Active RFQs', summary.activeRfqCount, '待报价、比价或授标', summary.activeRfqCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:rfq', 'procurement_document', openRfq?.id), documentType: 'rfq' }, openRfq?.evidence),
-    card('open-pos', 'Open POs', summary.openPoCount, '未关闭采购订单', summary.openPoCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:orders', 'procurement_document', openPo?.id), documentType: 'po' }, openPo?.evidence),
-    card('pending-receiving', 'Pending Receiving', summary.pendingReceivingCount, '待收货或待复核 GRN', summary.pendingReceivingCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:receiving', 'procurement_document', openGrn?.id), documentType: 'grn' }, openGrn?.evidence),
-    card('match-exceptions', 'Match Exceptions', summary.invoiceExceptionCount + summary.threeWayMatchExceptionCount, '发票与三单匹配差异', summary.invoiceExceptionCount || summary.threeWayMatchExceptionCount ? 'high' : 'low', 'finance', { ...evidenceTarget('procurement:invoices', 'procurement_document', matchException?.id), documentType: matchException?.documentType }, matchException?.evidence),
-    card('inventory-risk', 'Inventory Risks', summary.lowStockCount + summary.inventoryExceptionCount, '低库存、缺货或库存异常', summary.highRiskInventoryCount ? 'high' : summary.lowStockCount ? 'medium' : 'low', 'inventory', evidenceTarget('inventory', 'inventory_item', inventoryRisk?.sku), inventoryRisk?.evidence, { route: inventoryRisk?.route || inventoryRoute('item', inventoryRisk?.sku) }),
-    card('urgent-followups', 'Urgent Followups', summary.urgentFollowupCount, '高优先级采购跟进', summary.urgentFollowupCount ? 'high' : 'low', 'procurement', { ...evidenceTarget('procurement', 'followup', urgent?.id), documentType: urgent?.documentType, entityId: urgent?.documentId }, urgent?.evidence),
-    card('total-open-amount', 'Total Open Amount', summary.totalOpenAmount, 'PR、PO、发票开放金额', summary.totalOpenAmount ? 'medium' : 'low', 'finance', evidenceTarget('finance', 'amount', 'total-open-amount'), [], { valueKind: 'currency', currency: summary.currency || 'CNY' }),
+    card('inventory-allocation-risk', '库存分配风险', summary.inventoryAllocationRiskCount || 0, '库存占用、可承诺量与预留冲突', allocationRisks[0]?.riskLevel === 'blocked' ? 'high' : summary.inventoryAllocationRiskCount ? 'medium' : 'low', 'inventory', evidenceTarget('inventory', 'inventory_item', allocationRisks[0]?.sku), allocationRisks[0]?.evidence, { route: inventoryRoute('item', allocationRisks[0]?.sku), riskType: 'inventory_allocation_risk' }),
+    card('available-to-promise-risk', '可承诺量风险', summary.atpInsufficientSkuCount || 0, '客户订单占用后的可承诺量不足', summary.atpInsufficientSkuCount ? 'high' : 'low', 'inventory', evidenceTarget('inventory', 'inventory_item', allocationRisks[0]?.sku), allocationRisks[0]?.evidence, { route: inventoryRoute('item', allocationRisks[0]?.sku), riskType: 'available_to_promise_risk' }),
+    card('demand-supply-gap', '供需缺口', summary.totalInventoryShortageQty || 0, '销售需求、安全库存与在途采购缺口', summary.totalInventoryShortageQty ? 'high' : 'low', 'inventory', evidenceTarget('inventory', 'inventory_item', allocationRisks[0]?.sku), allocationRisks[0]?.evidence, { route: inventoryRoute('item', allocationRisks[0]?.sku), riskType: 'demand_supply_gap' }),
+    card('open-prs', '待处理采购申请', summary.openPrCount, '等待采购审批或转单', summary.openPrCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:requests', 'procurement_document', openPr?.id), documentType: 'pr' }, openPr?.evidence),
+    card('active-rfqs', '进行中询价', summary.activeRfqCount, '待报价、比价或授标', summary.activeRfqCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:rfq', 'procurement_document', openRfq?.id), documentType: 'rfq' }, openRfq?.evidence),
+    card('open-pos', '未关闭采购订单', summary.openPoCount, '未关闭采购订单', summary.openPoCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:orders', 'procurement_document', openPo?.id), documentType: 'po' }, openPo?.evidence),
+    card('pending-receiving', '待收货复核', summary.pendingReceivingCount, '待收货或待复核 GRN', summary.pendingReceivingCount ? 'medium' : 'low', 'procurement', { ...evidenceTarget('procurement:receiving', 'procurement_document', openGrn?.id), documentType: 'grn' }, openGrn?.evidence),
+    card('match-exceptions', '三单匹配异常', summary.invoiceExceptionCount + summary.threeWayMatchExceptionCount, '发票与三单匹配差异', summary.invoiceExceptionCount || summary.threeWayMatchExceptionCount ? 'high' : 'low', 'finance', { ...evidenceTarget('procurement:invoices', 'procurement_document', matchException?.id), documentType: matchException?.documentType }, matchException?.evidence),
+    card('inventory-risk', '库存风险', summary.lowStockCount + summary.inventoryExceptionCount, '低库存、缺货或库存异常', summary.highRiskInventoryCount ? 'high' : summary.lowStockCount ? 'medium' : 'low', 'inventory', evidenceTarget('inventory', 'inventory_item', inventoryRisk?.sku), inventoryRisk?.evidence, { route: inventoryRisk?.route || inventoryRoute('item', inventoryRisk?.sku) }),
+    card('urgent-followups', '紧急跟进事项', summary.urgentFollowupCount, '高优先级采购跟进', summary.urgentFollowupCount ? 'high' : 'low', 'procurement', { ...evidenceTarget('procurement', 'followup', urgent?.id), documentType: urgent?.documentType, entityId: urgent?.documentId }, urgent?.evidence),
+    card('total-open-amount', '未结业务金额', summary.totalOpenAmount, 'PR、PO、发票开放金额', summary.totalOpenAmount ? 'medium' : 'low', 'finance', evidenceTarget('finance', 'amount', 'total-open-amount'), [], { valueKind: 'currency', currency: summary.currency || 'CNY' }),
   ]
 }
 
@@ -208,7 +212,7 @@ function buildRecentMovements(movements) {
     .slice(0, 8)
 }
 
-function buildRecommendedActions({ followups, inventoryRisks, summary, recentDocuments, salesRisks = [] }) {
+function buildRecommendedActions({ followups, inventoryRisks, summary, recentDocuments, salesRisks = [], allocationRisks = [] }) {
   const actions = []
   const salesRisk = salesRisks[0]
   if (salesRisk) {
@@ -240,6 +244,32 @@ function buildRecommendedActions({ followups, inventoryRisks, summary, recentDoc
     })
   }
   const inventoryRisk = inventoryRisks[0]
+  const allocationRisk = allocationRisks[0]
+  if (allocationRisk) {
+    actions.push({
+      id: `action-allocation-${allocationRisk.sku}`,
+      priority: allocationRisk.riskLevel === 'blocked' ? 'high' : allocationRisk.riskLevel,
+      title: `${allocationRisk.sku} 库存分配风险`,
+      reason: `${allocationRisk.riskReason} 可用量 ${allocationRisk.availableQty}，可承诺量 ${allocationRisk.availableToPromiseQty}，缺口 ${allocationRisk.shortageQty}。`,
+      nextAction: '先复核客户订单、可承诺量、在途采购和预留冲突，再生成内部通知草稿预览',
+      module: 'inventory',
+      route: inventoryRoute('item', allocationRisk.sku),
+      target: evidenceTarget('inventory', 'inventory_item', allocationRisk.sku),
+      evidence: firstEvidence(allocationRisk.evidence),
+      category: allocationRisk.availableToPromiseQty <= 0 ? 'available_to_promise_risk' : 'inventory_allocation_risk',
+      workItemType: allocationRisk.shortageQty > 0 ? 'demand_supply_gap' : 'reservation_conflict_risk',
+      affectedSalesOrders: allocationRisk.affectedSalesOrders.map((order) => order.salesOrderId),
+      linkedPurchaseOrders: allocationRisk.linkedPurchaseOrders.map((po) => po.poId),
+      linkedSuppliers: allocationRisk.linkedSuppliers.map((supplier) => supplier.name || supplier.id),
+      dataLimitations: allocationRisk.dataLimitations,
+      notificationDraftPreview: {
+        label: '生成内部通知草稿',
+        externalSendEnabled: false,
+        reviewRequired: true,
+        message: '系统仅生成内部通知草稿，不会自动发送到外部协同工具。',
+      },
+    })
+  }
   if (inventoryRisk) {
     actions.push({
       id: `action-${inventoryRisk.id}`,
@@ -281,7 +311,7 @@ function buildRecommendedActions({ followups, inventoryRisks, summary, recentDoc
       evidence: firstEvidence(rfq?.evidence),
     })
   }
-  return actions.slice(0, 5)
+  return actions.slice(0, 6)
 }
 
 function buildEvidence({ procurementDocuments, followups, inventoryRisks, recentMovements, links, salesRisks = [] }) {
@@ -311,6 +341,8 @@ export function buildTodayCockpit(data = {}, options = {}) {
   const inventoryRisks = buildInventoryRisks(inventoryItems, inventoryExceptions)
   const salesDemand = buildSalesDemandReadModel(data, options)
   const salesRisks = salesDemand.risks
+  const allocationModel = buildInventoryAllocationReadModel(data, options)
+  const allocationRisks = allocationModel.risks.slice(0, 5)
   const summary = {
     ...procurementSummary,
     customerDeliveryRiskCount: salesDemand.summary.riskOrderCount,
@@ -321,17 +353,22 @@ export function buildTodayCockpit(data = {}, options = {}) {
     highRiskInventoryCount: inventorySummary.highRiskCount,
     inventoryExceptionCount: inventorySummary.exceptionCount,
     movementCount: inventorySummary.movementCount,
+    inventoryAllocationRiskCount: allocationRisks.length,
+    atpInsufficientSkuCount: allocationModel.summary.atpInsufficientSkuCount,
+    reservationConflictRiskCount: allocationRisks.filter((item) => item.reservationConflictOrders.length > 1).length,
+    totalInventoryShortageQty: allocationModel.summary.totalShortageQty,
   }
   const recentDocuments = buildRecentDocuments(procurementDocuments)
   const recentMovements = buildRecentMovements(inventoryMovements)
-  const cards = buildSummaryCards(summary, procurementDocuments, followups, inventoryRisks, salesRisks)
-  const recommendedActions = buildRecommendedActions({ followups, inventoryRisks, summary, recentDocuments, salesRisks })
+  const cards = buildSummaryCards(summary, procurementDocuments, followups, inventoryRisks, salesRisks, allocationRisks)
+  const recommendedActions = buildRecommendedActions({ followups, inventoryRisks, summary, recentDocuments, salesRisks, allocationRisks })
 
   return {
     summary,
     cards,
     followups: followups.slice(0, 8),
     salesRisks: salesRisks.slice(0, 5),
+    allocationRisks,
     inventoryRisks,
     recentDocuments,
     recentMovements,

@@ -14,7 +14,7 @@ Default local runtime behavior uses a deterministic workspace dataset. No produc
 
 - Today Cockpit / 今日风险工作台
 - Sales Demand / Customer Orders Lite
-- Inventory Allocation / Availability
+- Inventory Allocation / Availability / Available to Promise
 - Demand-to-Procurement Links
 - Procurement / P2P
 - Purchase Request
@@ -96,6 +96,16 @@ Read and preview APIs:
 - `GET /api/inventory/movements`
 - `GET /api/inventory/exceptions`
 - `GET /api/inventory/summary`
+- `GET /api/inventory/availability`
+- `GET /api/inventory/availability/:sku`
+- `GET /api/inventory/allocation`
+- `GET /api/inventory/allocation/:sku`
+- `GET /api/inventory/shortages`
+- `GET /api/inventory/demand-supply-gap?sku=:sku`
+- `GET /api/inventory/available-to-promise?sku=:sku`
+- `GET /api/inventory/reservation-preview?sku=:sku&salesOrderId=:salesOrderId&requestedQty=:qty`
+- `GET /api/inventory/sales-order-impact?salesOrderId=:salesOrderId`
+- `GET /api/inventory/po-supply-impact?poId=:poId`
 - `GET /api/master-data/items`
 - `GET /api/master-data/suppliers`
 - `GET /api/action-drafts/schema`
@@ -109,7 +119,7 @@ Legacy/manual local write routes still exist for compatibility, including purcha
 
 External AI providers are disabled by default. Placeholder `OPENAI_API_KEY`, `ARK_API_KEY`, or `DOUBAO_API_KEY` values do not enable provider calls.
 
-Cockpit-style prompts such as `今天最需要处理什么？` use a deterministic local fast path backed by Today Cockpit, procurement, inventory, supplier, and planning read models. Unsupported prompts fall back safely when providers are disabled.
+Cockpit-style prompts such as `今天最需要处理什么？` use a deterministic local fast path backed by Today Cockpit, procurement, inventory allocation, supplier, and planning read models. Unsupported prompts return guided, review-first responses when providers are disabled.
 
 ## Draft-first Actions
 
@@ -148,7 +158,12 @@ Start here:
 - No production database.
 - No ORM-backed production runtime.
 - No autonomous AI execution.
+- No complex WMS execution.
+- No automatic inventory reservation or stock lock.
+- No automatic outbound shipment or inventory posting.
+- No automatic inventory mutation.
 - No real supplier message sending from drafts.
+- No real external collaboration notification sending.
 - No payment execution.
 - No tax filing.
 - No full finance/GL.
@@ -166,5 +181,5 @@ Start here:
 - Phase 4 AI Control Tower v2
 - Phase 5 Review-first Action Workflow
 - Phase 6 DB persistence, tenant isolation, RBAC, audit
-- Phase 7 DingTalk / WeCom notification draft adapter
+- Phase 7 Collaboration Notification Draft Adapters: Email, Slack, Microsoft Teams, DingTalk, WeCom, Feishu
 - Phase 8 deployment and launch hardening

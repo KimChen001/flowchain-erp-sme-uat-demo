@@ -3,6 +3,7 @@ import { AlertTriangle, Bot, Boxes, ClipboardList, PackageSearch, ShoppingCart, 
 import { apiJson } from "../../lib/api-client";
 import { A, Card, Chip, KpiCard, SectionHeader } from "../../components/ui";
 import { typography } from "../../components/ui/typography";
+import type { InventoryAvailability } from "../inventory/api";
 
 type SalesOrder = {
   salesOrderId: string;
@@ -75,6 +76,7 @@ function qty(value: number) {
 
 export default function SalesDemandPage({ initialView, focus, onNavigate, onOpenAi }: SalesDemandPageProps) {
   const [orders, setOrders] = useState<SalesOrder[]>([]);
+  const [availability, setAvailability] = useState<InventoryAvailability[]>([]);
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -83,11 +85,15 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    apiJson<{ orders: SalesOrder[]; summary: SalesSummary }>("/api/sales-demand/orders")
-      .then((payload) => {
+    Promise.all([
+      apiJson<{ orders: SalesOrder[]; summary: SalesSummary }>("/api/sales-demand/orders"),
+      apiJson<{ availability: InventoryAvailability[] }>("/api/inventory/availability"),
+    ])
+      .then(([payload, allocationPayload]) => {
         if (!alive) return;
         setOrders(payload.orders || []);
         setSummary(payload.summary || null);
+        setAvailability(allocationPayload.availability || []);
         setError("");
       })
       .catch((err) => {
@@ -102,6 +108,7 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
     if (!focus?.entityId) return null;
     return orders.find((order) => order.salesOrderId === focus.entityId) || null;
   }, [focus, orders]);
+  const availabilityBySku = useMemo(() => new Map(availability.map((item) => [item.sku, item])), [availability]);
   const visibleOrders = useMemo(() => {
     const rows = view === "risks" ? orders.filter((order) => order.deliveryRiskLevel !== "low") : orders;
     if (!focusedOrder) return rows;
@@ -151,6 +158,41 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
         <KpiCard label="受影响客户" value={String(activeSummary.affectedCustomerCount)} sub="需人工复核" icon={Users} color={A.blue} />
       </div>
 
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <Card className="p-4">
+          <SectionHeader title="库存预留建议" />
+          <div className="mt-3 space-y-2">
+            {availability.slice(0, 3).map((item) => (
+              <div key={`reservation-${item.sku}`} className="rounded-lg p-3" style={{ background: A.gray6 }}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold tabular-nums" style={{ color: A.blue }}>{item.sku} · {item.itemName}</div>
+                  <Chip label={`建议 ${qty(item.reservationSuggestedQty)}`} color={item.reservationShortageQty > 0 ? A.orange : A.green} bg={item.reservationShortageQty > 0 ? "#fff8f0" : "#f0faf4"} />
+                </div>
+                <div className="mt-2 text-[11px] leading-5" style={{ color: A.sub }}>
+                  可预留 {qty(item.reservableQty)}，预留缺口 {qty(item.reservationShortageQty)}；仅预览，不会自动锁库。
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card className="p-4">
+          <SectionHeader title="供需缺口" />
+          <div className="mt-3 space-y-2">
+            {availability.filter((item) => item.shortageQty > 0 || item.projectedAvailableQty < 0).slice(0, 3).map((item) => (
+              <div key={`gap-${item.sku}`} className="rounded-lg p-3" style={{ background: A.gray6 }}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold tabular-nums" style={{ color: A.label }}>{item.sku}</div>
+                  <Chip label={item.riskLabel} color={item.riskLevel === "medium" ? A.orange : A.red} bg={item.riskLevel === "medium" ? "#fff8f0" : "#fff1f0"} />
+                </div>
+                <div className="mt-2 text-[11px] leading-5" style={{ color: A.sub }}>
+                  销售需求 {qty(item.salesDemandQty)}，在途采购 {qty(item.incomingPurchaseQty)}，预计可用 {qty(item.projectedAvailableQty)}，缺口 {qty(item.shortageQty)}。
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
       {error && <Card className="p-4 text-sm" style={{ color: A.red }}>{error}</Card>}
       {loading && <Card className="p-6 text-sm" style={{ color: A.sub }}>正在读取销售需求...</Card>}
 
@@ -164,6 +206,7 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
             <div className="divide-y" style={{ borderColor: A.border }}>
               {visibleOrders.map((order) => {
                 const focused = focusedOrder?.salesOrderId === order.salesOrderId;
+                const allocation = availabilityBySku.get(order.sku);
                 return (
                   <div key={order.salesOrderId} data-testid={`sales-order-${order.salesOrderId}`} className="p-4" style={{ background: focused ? "#f0f6ff" : A.white }}>
                     <div className="flex items-start justify-between gap-3">
@@ -192,6 +235,33 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
                           <div className="text-sm font-semibold tabular-nums" style={{ color: label === "缺口" && order.shortageQty > 0 ? A.red : A.label }}>{value}</div>
                         </div>
                       ))}
+                    </div>
+                    <div className="mt-3 rounded-xl p-3" style={{ background: "#f0f6ff" }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-semibold" style={{ color: A.label }}>库存分配信息</div>
+                        <Chip label={allocation?.riskLabel || "需复核"} color={allocation?.riskLevel === "low" ? A.green : allocation?.riskLevel === "medium" ? A.orange : A.red} bg={allocation?.riskLevel === "low" ? "#f0faf4" : allocation?.riskLevel === "medium" ? "#fff8f0" : "#fff1f0"} />
+                      </div>
+                      {allocation ? (
+                        <div className="mt-2 grid grid-cols-4 gap-2 text-[11px] lg:grid-cols-8">
+                          {[
+                            ["实物库存", allocation.onHandQty],
+                            ["已预留", allocation.reservedQty],
+                            ["当前订单分配量", order.reservedQty],
+                            ["可承诺量", allocation.availableToPromiseQty],
+                            ["缺口", allocation.shortageQty],
+                            ["在途采购", allocation.incomingPurchaseQty],
+                            ["预计可用", allocation.projectedAvailableQty],
+                            ["预留建议", Math.min(Math.max(order.orderedQty - order.reservedQty - order.fulfilledQty, 0), allocation.reservableQty)],
+                          ].map(([label, value]) => (
+                            <div key={label} className="rounded-lg px-2 py-2" style={{ background: A.white }}>
+                              <div className="text-[9px]" style={{ color: A.gray2 }}>{label}</div>
+                              <div className="font-semibold tabular-nums" style={{ color: (label === "缺口" || label === "预计可用") && Number(value) > 0 && label === "缺口" ? A.red : A.label }}>{Number(value).toLocaleString("zh-CN")}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-[11px] leading-5" style={{ color: A.orange }}>当前工作区缺少完整库存分配记录，因此可承诺量和预留建议需人工复核。</div>
+                      )}
                     </div>
                     <p className="mt-3 text-xs leading-5" style={{ color: A.gray1 }}>{order.deliveryRiskReason}</p>
                     <div className="mt-3 flex flex-wrap gap-2">

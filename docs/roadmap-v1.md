@@ -22,7 +22,9 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 
 - Explain available quantity, reserved quantity, in-transit quantity, and shortage quantity.
 - Connect stock risk to demand and procurement evidence.
-- Next focus: make allocation evidence more explicit across customer orders, inventory item availability, open PO receipts, and shortage reasons.
+- Current implementation scope: Inventory Allocation / Availability / Available to Promise / Reservation Preview foundation.
+- Make allocation evidence explicit across customer orders, inventory item availability, open PO receipts, suppliers, receiving records, and shortage reasons.
+- Provide generic internal notification draft product slots without external sending.
 - Do not build complex WMS execution.
 
 ## Phase 3 Demand-to-Procurement Evidence Chain
@@ -30,6 +32,7 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 - Link sales demand, shortage signals, PR, RFQ, PO, GRN, supplier, and invoice exception evidence.
 - Make evidence navigation and recovery paths stable for daily operations.
 - Keep relationship and evidence resolvers read-only.
+- Next focus after Phase 2: Demand-to-Procurement Evidence Chain.
 
 ## Phase 4 AI Control Tower v2
 
@@ -49,11 +52,12 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 - Add tenant isolation, user roles, permissions, and audit logs.
 - Keep local JSON-backed behavior available for development until explicitly replaced.
 
-## Phase 7 DingTalk / WeCom Notification Draft Adapter
+## Phase 7 Collaboration Notification Draft Adapters
 
 - Prepare notification drafts and task handoff payloads.
 - Do not send real external messages by default.
 - Keep user review and confirmation in the loop.
+- Future adapter candidates: Email, Slack, Microsoft Teams, DingTalk, WeCom, Feishu.
 
 ## Phase 8 Deployment and Launch Hardening
 

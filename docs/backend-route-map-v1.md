@@ -2,7 +2,7 @@
 
 ## Route Classification
 
-- Read: returns current demo/read-model state without mutation.
+- Read: returns current workspace/read-model state without mutation.
 - Preview: prepares reviewable draft data and does not mutate business records.
 - Manual/legacy write: existing demo workflow write route, not used by AI autonomous execution.
 
@@ -10,10 +10,10 @@
 
 | Method | Path | Class | Source | Mutation | Notes |
 |---|---|---|---|---|---|
-| `GET` | `/api/me` | Read | context route / users fallback | None | Demo user and permissions context. |
-| `GET` | `/api/tenants/current` | Read | context route | None | Demo tenant settings. |
-| `POST` | `/api/auth/login` | Manual/legacy write | JSON demo users | Writes login/user event | Demo login only. |
-| `GET` | `/api/auth/me` | Read | JSON demo users | None | Legacy auth profile lookup. |
+| `GET` | `/api/me` | Read | context route / current users | None | Current user and permissions context. |
+| `GET` | `/api/tenants/current` | Read | context route | None | Current tenant settings. |
+| `POST` | `/api/auth/login` | Manual/legacy write | local users | Writes login/user event | Local login only. |
+| `GET` | `/api/auth/me` | Read | local users | None | Legacy auth profile lookup. |
 
 ## AI
 
@@ -66,6 +66,16 @@
 | `GET` | `/api/inventory/movements` | Read | inventory read model | None | Read-only inventory movements. |
 | `GET` | `/api/inventory/exceptions` | Read | inventory read model | None | Read-only exception documents. |
 | `GET` | `/api/inventory/summary` | Read | inventory read model | None | Counts and risk totals. |
+| `GET` | `/api/inventory/availability` | Read | inventory allocation read model | None | SKU availability, ATP, demand-supply gap, risks, evidence, and data limitations. |
+| `GET` | `/api/inventory/availability/:sku` | Read | inventory allocation read model | None | Single SKU availability and evidence. |
+| `GET` | `/api/inventory/allocation` | Read | inventory allocation read model | None | Alias for allocation-focused availability rows. |
+| `GET` | `/api/inventory/allocation/:sku` | Read | inventory allocation read model | None | Single SKU allocation row. |
+| `GET` | `/api/inventory/shortages` | Read | inventory allocation read model | None | Blocked, high, or medium allocation risk rows. |
+| `GET` | `/api/inventory/demand-supply-gap?sku=:sku` | Read | inventory allocation read model | None | Demand, supply, projected availability, shortage, and linked records. |
+| `GET` | `/api/inventory/available-to-promise?sku=:sku` | Read | inventory allocation read model | None | ATP and reservable quantity explanation. |
+| `GET` | `/api/inventory/reservation-preview?sku=:sku&salesOrderId=:id&requestedQty=:qty` | Read | inventory allocation read model | None | Preview-only reservation suggestion; does not lock stock. |
+| `GET` | `/api/inventory/sales-order-impact?salesOrderId=:id` | Read | inventory allocation read model | None | Inventory allocation impact for a customer order. |
+| `GET` | `/api/inventory/po-supply-impact?poId=:id` | Read | inventory allocation read model | None | PO incoming supply impact on SKUs and customer orders. |
 | `GET` | `/api/inventory-movements` | Read | legacy movement route | None | Compatibility movement endpoint. |
 
 ## Action Drafts
@@ -97,38 +107,38 @@
 
 | Method | Path | Class | Source | Mutation | Notes |
 |---|---|---|---|---|---|
-| `GET` | `/api/mrp-plan` | Read | MRP route/domain | None | Demo planning output. |
-| `GET` | `/api/sop-cycle` | Read | S&OP route/domain | None | Demo S&OP cycle. |
-| `POST` | `/api/sop-cycle` | Manual/legacy write | S&OP route/domain | Writes demo cycle | Manual demo write. |
+| `GET` | `/api/mrp-plan` | Read | MRP route/domain | None | Planning output. |
+| `GET` | `/api/sop-cycle` | Read | S&OP route/domain | None | S&OP cycle. |
+| `POST` | `/api/sop-cycle` | Manual/legacy write | S&OP route/domain | Writes local cycle | Manual local write. |
 | `GET` | `/api/supplier-performance` | Read | supplier performance helper | None | Supplier scoring view. |
 | `GET` | `/api/supplier-recommendations` | Read | supplier recommendation helper | None | Sourcing recommendation view. |
-| `GET` | `/api/external-signals` | Read | market route | May refresh remote demo signals | Not an AI provider call. |
-| `GET` | `/api/market-prices` | Read | market route | None | Demo market price cards. |
-| `POST` | `/api/market-prices/refresh` | Manual/legacy write | market route | Writes demo market data | Demo refresh only. |
+| `GET` | `/api/external-signals` | Read | market route | May refresh remote signals | Not an AI provider call. |
+| `GET` | `/api/market-prices` | Read | market route | None | Market price cards. |
+| `POST` | `/api/market-prices/refresh` | Manual/legacy write | market route | Writes local market data | Local refresh only. |
 
 ## Legacy Procurement Workflow Routes
 
-These routes remain for compatibility/manual demo workflow surfaces. They are not invoked by AI autonomous actions.
+These routes remain for compatibility/manual local workflow surfaces. They are not invoked by AI autonomous actions.
 
 | Method | Path | Class | Source | Mutation |
 |---|---|---|---|---|
 | `GET` | `/api/purchase-requests` | Read | legacy workflow route | None |
-| `POST` | `/api/purchase-requests` | Manual/legacy write | workflow domain | Creates demo PR |
+| `POST` | `/api/purchase-requests` | Manual/legacy write | workflow domain | Creates local PR |
 | `PATCH` | `/api/purchase-requests/:pr/status` | Manual/legacy write | workflow domain | Changes demo PR status |
-| `POST` | `/api/purchase-requests/:pr/convert-to-po` | Manual/legacy write | workflow domain | Creates demo PO |
+| `POST` | `/api/purchase-requests/:pr/convert-to-po` | Manual/legacy write | workflow domain | Creates local PO |
 | `GET` | `/api/rfqs` | Read | legacy workflow route | None |
-| `POST` | `/api/rfqs` | Manual/legacy write | workflow domain | Creates demo RFQ |
+| `POST` | `/api/rfqs` | Manual/legacy write | workflow domain | Creates local RFQ |
 | `PATCH` | `/api/rfqs/:id/status` | Manual/legacy write | workflow domain | Changes demo RFQ status |
 | `GET` | `/api/purchase-orders` | Read | legacy workflow route | None |
-| `POST` | `/api/purchase-orders` | Manual/legacy write | workflow domain | Creates demo PO |
+| `POST` | `/api/purchase-orders` | Manual/legacy write | workflow domain | Creates local PO |
 | `PATCH` | `/api/purchase-orders/:po/status` | Manual/legacy write | workflow domain | Changes demo PO status |
 | `GET` | `/api/receiving-docs` | Read | legacy receiving route | None |
-| `POST` | `/api/receiving-docs` | Manual/legacy write | receiving workflow | Creates demo GRN |
-| `PATCH` | `/api/receiving-docs/:grn` | Manual/legacy write | receiving workflow | Updates/posts demo GRN |
+| `POST` | `/api/receiving-docs` | Manual/legacy write | receiving workflow | Creates local GRN |
+| `PATCH` | `/api/receiving-docs/:grn` | Manual/legacy write | receiving workflow | Updates/posts local GRN |
 
 ## Safety Notes
 
-- Default persistence is JSON/demo data.
+- Default persistence is local JSON workspace data.
 - See [Route mutation classification](route-mutation-classification-v1.md) for the complete database-mode v1 guard. In explicit database mode, read-only and preview-only routes remain available while legacy mutation routes are blocked until migrated.
 - External AI provider access is disabled by default.
 - Action drafts are preview-only.

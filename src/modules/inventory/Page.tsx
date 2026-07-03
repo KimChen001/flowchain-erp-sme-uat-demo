@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import {
   Activity, AlertCircle, AlertTriangle, ArrowLeftRight, ArrowRight, Boxes, CheckCircle2,
   ClipboardCheck, Clock, FileSpreadsheet, Grid3x3, Hash, History, Inbox, Layers,
-  Loader2, Package, Plus, Search, ShieldCheck, Truck, X, XCircle,
+  Loader2, Package, PackageSearch, Plus, Search, ShieldCheck, Truck, X, XCircle,
 } from "lucide-react";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
@@ -27,7 +27,10 @@ import {
   fetchInventoryLots,
   fetchInventorySerials,
   fetchInventorySummary,
+  fetchInventoryAvailability,
   inventoryReadFallbackScopes,
+  type InventoryAllocationSummary,
+  type InventoryAvailability,
   type InventoryStockItem,
 } from "./api";
 import {
@@ -1100,6 +1103,172 @@ function InventoryWarehouseMap() {
 
 // ─── Inventory · Master Wrapper ───────────────────────────────────────────────
 type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins" | "exceptions";
+
+function limitationText(code: string) {
+  return ({
+    missing_inventory_balance: "当前工作区缺少完整库存余额记录",
+    missing_sales_demand_records: "当前工作区缺少完整销售需求记录",
+    missing_purchase_order_links: "当前工作区缺少完整采购订单关联",
+    missing_receiving_records: "当前工作区缺少完整收货记录",
+    missing_daily_demand_history: "当前工作区缺少完整日均需求历史",
+    missing_reservation_records: "当前工作区缺少完整库存分配记录",
+    current_workspace_data_limited: "当前数据范围有限，需人工复核",
+    record_not_found: "未找到对应记录",
+  } as Record<string, string>)[code] || code;
+}
+
+function AllocationRiskPill({ level, label }: { level: string; label: string }) {
+  const color = level === "blocked" || level === "high" ? A.red : level === "medium" ? A.orange : A.green;
+  return <Chip label={label || "正常"} color={color} bg={`${color}16`} />;
+}
+
+function InventoryAllocationPanel({
+  availability,
+  summary,
+  selectedSku,
+  onSelectSku,
+  onOpenTab,
+  onReviewActionDraft,
+}: {
+  availability: InventoryAvailability[];
+  summary: InventoryAllocationSummary;
+  selectedSku: string;
+  onSelectSku: (sku: string) => void;
+  onOpenTab: (tab: InvTab) => void;
+  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
+}) {
+  const rows = availability.length ? availability : [];
+  const selected = rows.find((item) => item.sku === selectedSku) || rows[0] || null;
+
+  function previewPurchaseRequest() {
+    if (!selected) return;
+    void onReviewActionDraft;
+    toast("采购申请草稿预览", { description: `${selected.sku} 建议按 ${selected.shortageQty.toLocaleString("zh-CN")} ${selected.unit} 缺口人工复核，不会自动创建采购订单。` });
+  }
+
+  function previewNotificationDraft() {
+    toast("内部通知草稿预览", { description: "系统仅生成内部通知草稿，不会自动发送到外部协同工具。" });
+  }
+
+  return (
+    <Card className="p-5">
+      <SectionHeader
+        title="库存可用量使用边界"
+        right={<Chip label="只读分析" color={A.blue} bg="#f0f6ff" />}
+      />
+      <p className="mt-2 max-w-5xl text-[11px] leading-5" style={{ color: A.sub }}>
+        当前页面基于工作区内的库存、销售需求、采购订单、收货和供应商记录计算库存可用量、可承诺量与供需缺口。系统仅提供库存预留建议和采购补货建议，不会自动锁定库存、自动出库或自动创建采购订单。
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <KpiCard label="高风险 SKU" value={String(summary.highRiskSkuCount || 0)} sub="库存分配风险" icon={AlertTriangle} color={A.red} />
+        <KpiCard label="总缺口数量" value={(summary.totalShortageQty || 0).toLocaleString("zh-CN")} sub="供需缺口" icon={PackageSearch} color={A.orange} />
+        <KpiCard label="已预留数量" value={(summary.reservedQty || 0).toLocaleString("zh-CN")} sub="销售占用" icon={Boxes} color={A.green} />
+        <KpiCard label="在途采购数量" value={(summary.incomingPurchaseQty || 0).toLocaleString("zh-CN")} sub="未关闭 PO" icon={Truck} color={A.blue} />
+        <KpiCard label="可承诺量不足 SKU" value={String(summary.atpInsufficientSkuCount || 0)} sub="ATP 需复核" icon={ShieldCheck} color={A.purple} />
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded-lg" style={{ border: `1px solid ${A.border}` }}>
+        <table className={tableMinLgClass}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${A.border}` }}>
+              {["SKU / 物料", "实物库存", "已预留", "销售需求", "可用量", "可承诺量", "在途采购", "预计可用", "缺口", "覆盖天数", "风险等级"].map((h) => (
+                <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((item, index) => (
+              <tr
+                key={item.sku}
+                data-testid={`inventory-allocation-${item.sku}`}
+                onClick={() => onSelectSku(item.sku)}
+                className="cursor-pointer transition-colors hover:bg-blue-50/40"
+                style={{ borderBottom: index < rows.length - 1 ? `1px solid ${A.border}` : "none", background: selected?.sku === item.sku ? "#f0f6ff" : A.white }}
+              >
+                <td className={tdNameClass}>
+                  <div className="font-semibold tabular-nums" style={{ color: A.blue }}>{item.sku}</div>
+                  <div className="text-[10px] truncate" style={{ color: A.sub }}>{item.itemName}</div>
+                </td>
+                {[item.onHandQty, item.reservedQty, item.salesDemandQty, item.availableQty, item.availableToPromiseQty, item.incomingPurchaseQty, item.projectedAvailableQty, item.shortageQty].map((value, valueIndex) => (
+                  <td key={valueIndex} className={tdNumericClass} style={{ color: valueIndex === 7 && value > 0 ? A.red : A.label }}>{value.toLocaleString("zh-CN")}</td>
+                ))}
+                <td className={tdNumericClass}>{item.daysCover === null ? "需复核" : `${item.daysCover}天`}</td>
+                <td className={tdNowrapClass}><AllocationRiskPill level={item.riskLevel} label={item.riskLabel} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {selected && (
+        <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-xl p-4" style={{ background: A.gray6 }}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold" style={{ color: A.label }}>供需缺口详情 · {selected.sku}</div>
+                <div className="mt-1 text-[11px]" style={{ color: A.sub }}>{selected.riskReason}</div>
+              </div>
+              <AllocationRiskPill level={selected.riskLevel} label={selected.riskLabel} />
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+              <div style={{ color: A.gray1 }}>影响客户订单：{selected.affectedSalesOrders.map((order) => order.salesOrderId).join("、") || "暂无完整关联"}</div>
+              <div style={{ color: A.gray1 }}>相关采购订单：{selected.linkedPurchaseOrders.map((po) => po.poId).join("、") || "暂无完整关联"}</div>
+              <div style={{ color: A.gray1 }}>供应商：{selected.linkedSuppliers.map((supplier) => supplier.name).join("、") || "暂无完整记录"}</div>
+              <div style={{ color: A.gray1 }}>收货记录 / GRN：{selected.linkedReceivingDocs.map((grn) => grn.id).join("、") || "暂无完整记录"}</div>
+            </div>
+            <div className="mt-3 text-[11px] leading-5" style={{ color: A.sub }}>
+              <div>{selected.purchaseDelayImpact}</div>
+              <div>{selected.deliveryRiskPropagation}</div>
+              <div>建议动作：先复核客户订单、在途采购、供应商承诺和预留冲突，再进行草稿预览。</div>
+            </div>
+            {!!selected.dataLimitations.length && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {selected.dataLimitations.map((item) => (
+                  <span key={item} className="rounded-md px-2 py-1 text-[10px]" style={{ background: "#fff8f0", color: A.orange }}>{limitationText(item)}</span>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button onClick={() => toast("查看销售需求", { description: `${selected.sku} 已聚焦，销售需求页面可查看受影响客户订单。` })} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue }}>查看销售需求</button>
+              <button onClick={() => toast("查看采购订单", { description: selected.linkedPurchaseOrders.map((po) => po.poId).join("、") || "当前工作区缺少完整采购订单关联。" })} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue }}>查看采购订单</button>
+              <button onClick={() => toast("查看供应商", { description: selected.linkedSuppliers.map((supplier) => supplier.name).join("、") || "当前工作区缺少完整供应商记录。" })} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue }}>查看供应商</button>
+              <button onClick={() => toast("询问 AI", { description: `可以询问：${selected.sku} 为什么缺货？` })} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>询问 AI</button>
+              <button onClick={previewPurchaseRequest} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>生成采购申请草稿预览</button>
+              <button onClick={previewNotificationDraft} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>生成内部通知草稿预览</button>
+              <button onClick={() => onOpenTab("exceptions")} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.gray1 }}>生成异常工单草稿预览</button>
+            </div>
+          </div>
+
+          <div className="rounded-xl p-4" style={{ background: "#f0f6ff" }}>
+            <SectionHeader title="库存预留建议" right={<Chip label="仅预览，不会自动锁库" color={A.blue} bg={A.white} />} />
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {[
+                ["建议预留数量", selected.reservationSuggestedQty],
+                ["可预留数量", selected.reservableQty],
+                ["预留缺口", selected.reservationShortageQty],
+                ["可承诺量", selected.availableToPromiseQty],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg p-3" style={{ background: A.white }}>
+                  <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="mt-1 text-base font-semibold tabular-nums" style={{ color: label === "预留缺口" && Number(value) > 0 ? A.red : A.label }}>{Number(value).toLocaleString("zh-CN")}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 text-[11px] leading-5" style={{ color: A.sub }}>{selected.allocationExplanation}</div>
+            <div className="mt-3 text-[11px]" style={{ color: A.gray1 }}>
+              冲突订单：{selected.reservationConflictOrders.map((order) => order.salesOrderId).join("、") || "暂无明显冲突"}
+            </div>
+            <div className="mt-2 rounded-lg px-3 py-2 text-[11px]" style={{ background: A.white, color: A.blue }}>
+              系统仅生成内部通知草稿，不会自动发送到外部协同工具。
+            </div>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function InventoryPage({
   initialView = "overview",
   focus,
@@ -1116,6 +1285,16 @@ export default function InventoryPage({
   const [lots, setLots] = useState<typeof LOTS>(LOTS);
   const [serials, setSerials] = useState<typeof SERIALS>(SERIALS);
   const [summary, setSummary] = useState<{ itemCount?: number; movementCount?: number; exceptionCount?: number; lotCount?: number; serialCount?: number }>({});
+  const [availability, setAvailability] = useState<InventoryAvailability[]>([]);
+  const [allocationSummary, setAllocationSummary] = useState<InventoryAllocationSummary>({
+    skuCount: 0,
+    highRiskSkuCount: 0,
+    totalShortageQty: 0,
+    reservedQty: 0,
+    incomingPurchaseQty: 0,
+    atpInsufficientSkuCount: 0,
+    projectedNegativeSkuCount: 0,
+  });
   const [fallbackScopes, setFallbackScopes] = useState<string[]>([]);
   const exceptionCount = useMemo(() => buildInventoryExceptionDocuments().length, []);
   useEffect(() => {
@@ -1125,12 +1304,15 @@ export default function InventoryPage({
       fetchInventoryLots(LOTS),
       fetchInventorySerials(SERIALS),
       fetchInventorySummary(),
-    ]).then(([items, lotRows, serialRows, summarySnapshot]) => {
+      fetchInventoryAvailability(),
+    ]).then(([items, lotRows, serialRows, summarySnapshot, allocationSnapshot]) => {
       if (!alive) return;
       setStockItems(items);
       setLots(lotRows);
       setSerials(serialRows);
       setSummary(summarySnapshot);
+      setAvailability(allocationSnapshot.availability);
+      setAllocationSummary(allocationSnapshot.summary);
       setFallbackScopes(inventoryReadFallbackScopes());
     });
     return () => {
@@ -1169,7 +1351,7 @@ export default function InventoryPage({
           当前库存读模型有 {fallbackScopes.length} 个端点使用当前工作区数据补足，页面操作仍保持预览优先。
         </div>
       )}
-      {tab === "overview"  && <InventoryLanding items={stockItems} lots={lots} focus={focus} onOpenTab={setTab} onActiveContextChange={onActiveContextChange} onReviewActionDraft={onReviewActionDraft} />}
+      {tab === "overview"  && <InventoryLanding items={stockItems} lots={lots} availability={availability} allocationSummary={allocationSummary} focus={focus} onOpenTab={setTab} onActiveContextChange={onActiveContextChange} onReviewActionDraft={onReviewActionDraft} />}
       {tab === "lots"      && <InventoryLots lots={lots} serials={serials} />}
       {tab === "transfer"  && <InventoryTransfers />}
       {tab === "count"     && <InventoryCycleCount />}
@@ -1184,6 +1366,8 @@ export default function InventoryPage({
 function InventoryLanding({
   items,
   lots,
+  availability,
+  allocationSummary,
   focus,
   onOpenTab,
   onActiveContextChange,
@@ -1191,6 +1375,8 @@ function InventoryLanding({
 }: {
   items: InventoryStockItem[];
   lots: typeof LOTS;
+  availability: InventoryAvailability[];
+  allocationSummary: InventoryAllocationSummary;
   focus?: { entityType: string; entityId: string; at: number } | null;
   onOpenTab: (tab: InvTab) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
@@ -1205,6 +1391,7 @@ function InventoryLanding({
   const topException = exceptionDocs.find((doc) => doc.status !== "已关闭") || exceptionDocs[0];
   const frozenLot = lots.find((lot) => lot.status === "冻结" || lot.status === "近效期");
   const selectedItem = items.find((item) => item.sku === selectedSku) ?? null;
+  const selectedAvailability = availability.find((item) => item.sku === selectedSku) ?? availability[0] ?? null;
   const selectedPlannedItem = plannedItems.find((item) => item.sku === selectedSku) ?? null;
   const selectedMovements = selectedItem
     ? INVENTORY_MOVEMENT_LEDGER.filter((movement) => movement.sku === selectedItem.sku).slice(0, 3)
@@ -1298,6 +1485,15 @@ function InventoryLanding({
           </button>
         </div>
       </Card>
+
+      <InventoryAllocationPanel
+        availability={availability}
+        summary={allocationSummary}
+        selectedSku={selectedAvailability?.sku || selectedSku}
+        onSelectSku={setSelectedSku}
+        onOpenTab={onOpenTab}
+        onReviewActionDraft={onReviewActionDraft}
+      />
 
       {selectedItem && (
         <Card className="p-4" style={{ border: `1px solid ${A.blue}30` }}>

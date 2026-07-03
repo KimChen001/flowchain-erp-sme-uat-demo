@@ -66,6 +66,53 @@ type ApiInventorySummary = {
   serialCount?: number;
 };
 
+export type InventoryAvailability = {
+  sku: string;
+  itemName: string;
+  unit: string;
+  warehouseId?: string;
+  onHandQty: number;
+  reservedQty: number;
+  salesDemandQty: number;
+  allocatedDemandQty: number;
+  availableQty: number;
+  availableToPromiseQty: number;
+  reservableQty: number;
+  reservationSuggestedQty: number;
+  reservationShortageQty: number;
+  reservationConflictOrders: Array<{ salesOrderId: string; customerName?: string; shortageQty?: number }>;
+  incomingPurchaseQty: number;
+  overdueIncomingQty: number;
+  projectedAvailableQty: number;
+  shortageQty: number;
+  safetyStock: number;
+  reorderPoint: number;
+  daysCover: number | null;
+  riskLevel: "blocked" | "high" | "medium" | "low";
+  riskLabel: string;
+  riskReason: string;
+  allocationPolicy: string;
+  allocationExplanation: string;
+  purchaseDelayImpact: string;
+  deliveryRiskPropagation: string;
+  affectedSalesOrders: Array<{ salesOrderId: string; customerName: string; shortageQty: number; deliveryRiskLabel?: string }>;
+  linkedPurchaseOrders: Array<{ poId: string; supplierName?: string; status?: string; expectedDate?: string; incomingQty?: number }>;
+  linkedSuppliers: Array<{ id: string; name: string; risk?: string; status?: string }>;
+  linkedReceivingDocs: Array<{ id: string; poId?: string; status?: string }>;
+  evidence: Array<{ type: string; id: string; label: string; summary?: string; status?: string; route?: string }>;
+  dataLimitations: string[];
+};
+
+export type InventoryAllocationSummary = {
+  skuCount: number;
+  highRiskSkuCount: number;
+  totalShortageQty: number;
+  reservedQty: number;
+  incomingPurchaseQty: number;
+  atpInsufficientSkuCount: number;
+  projectedNegativeSkuCount: number;
+};
+
 const fallbackScopes = new Set<string>();
 
 export function inventoryReadFallbackScopes() {
@@ -293,5 +340,33 @@ export async function fetchInventorySummary(fallback?: ApiInventorySummary): Pro
     warnFallback("/api/inventory/summary", error);
     markSource("/api/inventory/summary", true);
     return fallback ?? {};
+  }
+}
+
+export async function fetchInventoryAvailability(): Promise<{
+  availability: InventoryAvailability[];
+  summary: InventoryAllocationSummary;
+  risks: InventoryAvailability[];
+  dataLimitations: string[];
+}> {
+  try {
+    const payload = await apiJson<unknown>("/api/inventory/availability");
+    if (!isRecord(payload) || !Array.isArray(payload.availability) || !isRecord(payload.summary)) {
+      throw new Error("Invalid inventory availability response");
+    }
+    return {
+      availability: payload.availability as InventoryAvailability[],
+      summary: payload.summary as InventoryAllocationSummary,
+      risks: Array.isArray(payload.risks) ? payload.risks as InventoryAvailability[] : [],
+      dataLimitations: Array.isArray(payload.dataLimitations) ? payload.dataLimitations.map(String) : [],
+    };
+  } catch (error) {
+    warnFallback("/api/inventory/availability", error);
+    return {
+      availability: [],
+      summary: { skuCount: 0, highRiskSkuCount: 0, totalShortageQty: 0, reservedQty: 0, incomingPurchaseQty: 0, atpInsufficientSkuCount: 0, projectedNegativeSkuCount: 0 },
+      risks: [],
+      dataLimitations: ["current_workspace_data_limited"],
+    };
   }
 }

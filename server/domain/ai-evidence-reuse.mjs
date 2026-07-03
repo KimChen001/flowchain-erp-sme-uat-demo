@@ -543,6 +543,7 @@ function priorityItemsFromCockpit(models) {
     ...asArray(cockpit.recommendedActions).map((item, sourceIndex) => ({ ...item, sourceIndex })),
     ...asArray(cockpit.followups).slice(0, 3).map((item, sourceIndex) => ({ ...item, sourceIndex: sourceIndex + 100 })),
     ...asArray(cockpit.inventoryRisks).slice(0, 3).map((item, sourceIndex) => ({ ...item, sourceIndex: sourceIndex + 200 })),
+    ...asArray(cockpit.allocationRisks).slice(0, 3).map((item, sourceIndex) => ({ ...item, sourceIndex: sourceIndex + 250 })),
   ]
   const seen = new Set()
   return source
@@ -622,6 +623,32 @@ function buildPriorityExplanationResponse(models, message = '') {
   })
 }
 
+function requiredTodayEvidenceItem(family = '', models = {}) {
+  const cockpit = models.todayCockpit || {}
+  if (family === 'sku') {
+    return asArray(cockpit.allocationRisks)[0] || asArray(cockpit.inventoryRisks)[0] || null
+  }
+  if (family === 'rfq') {
+    return asArray(models.procurementDocuments).find((item) => item.documentType === 'rfq' && !isTerminalStatus(item.status)) ||
+      asArray(cockpit.recentDocuments).find((item) => item.type === 'rfq') ||
+      null
+  }
+  if (family === 'po') {
+    return asArray(models.procurementDocuments).find((item) => item.documentType === 'po' && !isTerminalStatus(item.status)) ||
+      asArray(cockpit.followups).find((item) => text(item.documentType) === 'po' || /^PO-/i.test(text(item.documentId))) ||
+      null
+  }
+  return null
+}
+
+function todayEvidenceRank(item = {}) {
+  const family = businessFamilyForId(text(item.id), item.type)
+  if (family === 'po') return 0
+  if (family === 'sku') return 1
+  if (family === 'rfq') return 2
+  return 10
+}
+
 function buildTodayCockpitResponse(models) {
   const cockpit = models.todayCockpit
   const priorityItems = priorityItemsFromCockpit(models)
@@ -654,7 +681,16 @@ function buildTodayCockpitResponse(models) {
     seenEvidenceFamilies.add(family)
     if (evidenceSourceItems.length >= 5) break
   }
-  const evidence = evidenceItems(evidenceSourceItems.length ? evidenceSourceItems : actions)
+  const requiredEvidenceItems = ['po', 'sku', 'rfq']
+    .map((family) =>
+      priorityItems.find((item) => businessFamilyForId(text(item.id), item.type) === family) ||
+      requiredTodayEvidenceItem(family, models)
+    )
+    .filter(Boolean)
+  const evidence = evidenceItems([
+    ...requiredEvidenceItems,
+    ...(evidenceSourceItems.length ? evidenceSourceItems : actions),
+  ]).sort((a, b) => todayEvidenceRank(a) - todayEvidenceRank(b))
   const topPriority = priorityItems[0]
   const topAction = topPriority?.title || followups[0]?.title || inventoryRisks[0]?.nextAction || '先复核采购和库存风险证据'
   const overduePoCount = Math.max(

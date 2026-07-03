@@ -152,10 +152,13 @@ test('today cockpit returns stable top-level fields and cards', () => {
   const again = buildTodayCockpit(db, { now: '2026-06-29T00:00:00Z' })
 
   assert.equal(snapshot(db), before)
-  assert.deepEqual(Object.keys(cockpit), ['summary', 'cards', 'followups', 'salesRisks', 'inventoryRisks', 'recentDocuments', 'recentMovements', 'recommendedActions', 'evidence'])
+  assert.deepEqual(Object.keys(cockpit), ['summary', 'cards', 'followups', 'salesRisks', 'allocationRisks', 'inventoryRisks', 'recentDocuments', 'recentMovements', 'recommendedActions', 'evidence'])
   assert.deepEqual(cockpit, again)
   assert.deepEqual(cockpit.cards.map((item) => item.id), [
     'customer-delivery-risk',
+    'inventory-allocation-risk',
+    'available-to-promise-risk',
+    'demand-supply-gap',
     'open-prs',
     'active-rfqs',
     'open-pos',
@@ -165,8 +168,20 @@ test('today cockpit returns stable top-level fields and cards', () => {
     'urgent-followups',
     'total-open-amount',
   ])
+  assert.deepEqual(cockpit.cards.slice(3).map((item) => item.title), [
+    '供需缺口',
+    '待处理采购申请',
+    '进行中询价',
+    '未关闭采购订单',
+    '待收货复核',
+    '三单匹配异常',
+    '库存风险',
+    '紧急跟进事项',
+    '未结业务金额',
+  ])
   assert.equal(cockpit.cards.find((item) => item.id === 'customer-delivery-risk')?.module, 'sales')
   assert.equal(cockpit.cards.find((item) => item.id === 'total-open-amount')?.valueKind, 'currency')
+  assert.equal(/Open PRs|Active RFQs|Open POs|Pending Receiving|Match Exceptions|Inventory Risks|Urgent Followups|Total Open Amount/.test(JSON.stringify(cockpit.cards)), false)
 })
 
 test('today cockpit followups come from procurement read model', () => {
@@ -181,7 +196,7 @@ test('today cockpit handles missing inventory arrays safely', () => {
   assert.equal(cockpit.summary.lowStockCount, 0)
   assert.deepEqual(cockpit.inventoryRisks, [])
   assert.deepEqual(cockpit.recentMovements, [])
-  assert.equal(cockpit.cards.length, 9)
+  assert.equal(cockpit.cards.length, 12)
 })
 
 test('today cockpit recent documents include canonical procurement document types', () => {
