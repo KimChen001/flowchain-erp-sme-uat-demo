@@ -1046,7 +1046,8 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          normalizedSnapshot: snapshot,
+          previewId: snapshot.previewId,
+          datasetId: snapshot.datasetId,
           normalizedSnapshotHash: snapshot.normalizedSnapshotHash,
           scope: snapshot.scope || USER_DATA_SCOPE,
           confirmCommit: true,

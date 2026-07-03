@@ -72,6 +72,23 @@ function snapshotHash(snapshot = {}) {
   return createHash('sha256').update(stableStringify(body)).digest('hex')
 }
 
+function scopeFromCommitBody(body = {}) {
+  return body.scope || body.normalizedSnapshot?.scope || {
+    tenantId: text(body.tenantId),
+    userId: text(body.userId),
+  }
+}
+
+async function resolveCommitSnapshot(body = {}, repositories = {}) {
+  const previewId = text(body.previewId || body.normalizedSnapshot?.previewId)
+  const scope = scopeFromCommitBody(body)
+  if (previewId && repositories.userDataRuntime?.getPreviewSnapshot) {
+    const preview = await repositories.userDataRuntime.getPreviewSnapshot({ scope, previewId })
+    if (preview?.normalizedSnapshot) return preview.normalizedSnapshot
+  }
+  return body.normalizedSnapshot || null
+}
+
 function commitFeatureEnabled() {
   return process.env[ENABLE_USER_IMPORT_COMMIT_FLAG] === 'true'
 }
@@ -339,7 +356,7 @@ export async function handleUserDataRoute(ctx) {
     }
 
     const before = JSON.stringify(db)
-    const snapshot = body?.normalizedSnapshot
+    const snapshot = await resolveCommitSnapshot(body, repositories)
     const result = snapshot
       ? {
           ok: snapshot.validationSummary?.ok !== false,
@@ -376,7 +393,7 @@ export async function handleUserDataRoute(ctx) {
     }
 
     const errors = []
-    if (!snapshot) addCommitIssue(errors, 'missing_preview_snapshot', 'Commit requires a normalized preview snapshot.', 'normalizedSnapshot')
+    if (!snapshot) addCommitIssue(errors, 'missing_preview_snapshot', 'Commit requires previewId and a stored normalized preview snapshot.', 'previewId')
     if (body?.confirmCommit !== true) addCommitIssue(errors, 'missing_confirmation', 'Commit requires confirmCommit=true after user review.', 'confirmCommit')
     const providedHash = text(body?.normalizedSnapshotHash || snapshot?.normalizedSnapshotHash)
     const computedHash = snapshot ? snapshotHash(snapshot) : ''
@@ -489,6 +506,15 @@ export async function handleUserDataRoute(ctx) {
     }
 
     const payload = compactPreviewPayload(result)
+    await repositories.userDataRuntime?.savePreviewSnapshot?.({
+      scope: result.normalizedSnapshot.scope,
+      previewId: result.normalizedSnapshot.previewId,
+      datasetId: result.normalizedSnapshot.datasetId,
+      normalizedSnapshotHash: result.normalizedSnapshot.normalizedSnapshotHash,
+      normalizedSnapshot: result.normalizedSnapshot,
+      recordCounts: result.recordCounts,
+      validationSummary: result.normalizedSnapshot.validationSummary,
+    })
     if (url.pathname.endsWith('/preview')) {
       payload.normalizedRecords = compactRecords(result, 5)
       payload.previewLimit = 5

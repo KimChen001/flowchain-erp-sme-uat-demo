@@ -45,11 +45,13 @@ function recordsFromSnapshot(snapshot = {}) {
 }
 
 export function createInMemoryUserDataRuntimeRepository({ seed = [], state } = {}) {
-  const store = state || { batches: new Map(), datasets: new Map() }
+  const store = state || { batches: new Map(), datasets: new Map(), previews: new Map() }
   const batches = store.batches instanceof Map ? store.batches : new Map(store.batches || [])
   const datasets = store.datasets instanceof Map ? store.datasets : new Map(store.datasets || [])
+  const previews = store.previews instanceof Map ? store.previews : new Map(store.previews || [])
   store.batches = batches
   store.datasets = datasets
+  store.previews = previews
 
   function activeDataset(scope = {}) {
     const normalizedScope = assertScope(scope)
@@ -62,6 +64,35 @@ export function createInMemoryUserDataRuntimeRepository({ seed = [], state } = {
 
   const repository = {
     adapter: 'in-memory-user-data-runtime-v1',
+    savePreviewSnapshot: async (input = {}) => {
+      const snapshot = clone(input.normalizedSnapshot || input.snapshot)
+      const scope = assertScope(snapshot.scope || input.scope)
+      const previewId = text(snapshot.previewId || input.previewId)
+      const normalizedSnapshotHash = text(snapshot.normalizedSnapshotHash || input.normalizedSnapshotHash)
+      if (!previewId || !normalizedSnapshotHash) {
+        const error = new Error('Preview snapshot requires previewId and normalizedSnapshotHash.')
+        error.code = 'USER_DATA_PREVIEW_SNAPSHOT_REQUIRED'
+        throw error
+      }
+      const preview = {
+        previewId,
+        datasetId: text(snapshot.datasetId || input.datasetId),
+        scope,
+        normalizedSnapshotHash,
+        normalizedSnapshot: snapshot,
+        recordCounts: clone(snapshot.recordCounts || input.recordCounts || {}),
+        validationSummary: clone(snapshot.validationSummary || input.validationSummary || {}),
+        createdAt: input.createdAt || new Date().toISOString(),
+      }
+      previews.set(scopedDatasetKey(scope, previewId), preview)
+      return clone(preview)
+    },
+    getPreviewSnapshot: async (input = {}) => {
+      const scope = assertScope(input.scope || input)
+      const previewId = text(input.previewId)
+      if (!previewId) return null
+      return clone(previews.get(scopedDatasetKey(scope, previewId)) || null)
+    },
     createImportBatch: async (input = {}) => {
       const scope = assertScope(input.scope)
       const importBatchId = text(input.importBatchId) || `uib-${batches.size + 1}`
@@ -159,7 +190,7 @@ export function createInMemoryUserDataRuntimeRepository({ seed = [], state } = {
       }
       return changed ? clone(changed) : null
     },
-    _debugState: () => ({ batches: clone(Array.from(batches.values())), datasets: clone(Array.from(datasets.values())) }),
+    _debugState: () => ({ batches: clone(Array.from(batches.values())), datasets: clone(Array.from(datasets.values())), previews: clone(Array.from(previews.values())) }),
   }
 
   seed.forEach((item) => {
@@ -186,6 +217,8 @@ export function createInMemoryUserDataRuntimeRepository({ seed = [], state } = {
 export function createDisabledUserDataRuntimeRepository() {
   return {
     adapter: 'disabled-user-data-runtime-v1',
+    savePreviewSnapshot: async () => null,
+    getPreviewSnapshot: async () => null,
     createImportBatch: async () => {
       const error = new Error('User data runtime persistence is disabled by default.')
       error.code = 'USER_DATA_RUNTIME_DISABLED'

@@ -18,12 +18,12 @@ function payload() {
   }
 }
 
-function createRoute({ body, envEnabled = true, db = createEmptyDataset({ mode: 'user' }) } = {}) {
+function createRoute({ body, envEnabled = true, db = createEmptyDataset({ mode: 'user' }), repositories } = {}) {
   let response = null
   const previous = process.env.FLOWCHAIN_ENABLE_USER_IMPORT_COMMIT
   if (envEnabled) process.env.FLOWCHAIN_ENABLE_USER_IMPORT_COMMIT = 'true'
   else delete process.env.FLOWCHAIN_ENABLE_USER_IMPORT_COMMIT
-  const repositories = {
+  const routeRepositories = repositories || {
     userDataRuntime: createInMemoryUserDataRuntimeRepository(),
     auditLog: createAuditLogRepository(db),
   }
@@ -33,13 +33,13 @@ function createRoute({ body, envEnabled = true, db = createEmptyDataset({ mode: 
       res: {},
       url: new URL('/api/user-data/import/commit', 'http://localhost'),
       db,
-      repositories,
+      repositories: routeRepositories,
       readBody: async (req) => req.body,
       send(_res, status, payload) {
         response = { status, payload }
       },
     },
-    repositories,
+    repositories: routeRepositories,
     restore() {
       if (previous === undefined) delete process.env.FLOWCHAIN_ENABLE_USER_IMPORT_COMMIT
       else process.env.FLOWCHAIN_ENABLE_USER_IMPORT_COMMIT = previous
@@ -158,5 +158,41 @@ test('R176 preview exposes audit preview without writing audit log', async () =>
     assert.deepEqual(db.auditLog, [])
   } finally {
     route.restore()
+  }
+})
+
+test('R250 preview stores full snapshot and compact commit succeeds with preview id and hash', async () => {
+  const db = createEmptyDataset({ mode: 'user' })
+  const repositories = {
+    userDataRuntime: createInMemoryUserDataRuntimeRepository(),
+    auditLog: createAuditLogRepository(db),
+  }
+  const preview = createRoute({ body: payload(), db, repositories })
+  preview.ctx.url = new URL('/api/user-data/import/preview', 'http://localhost')
+  try {
+    assert.equal(await handleUserDataRoute(preview.ctx), true)
+    assert.equal(preview.response.status, 200)
+    assert.equal(preview.response.payload.normalizedSnapshot.normalizedRecords, undefined)
+    assert.equal(preview.response.payload.normalizedRecords.purchaseOrders[0].po, 'PO-R174-1')
+
+    const compactSnapshot = preview.response.payload.normalizedSnapshot
+    const commit = createRoute({
+      body: {
+        previewId: compactSnapshot.previewId,
+        scope: compactSnapshot.scope,
+        normalizedSnapshotHash: compactSnapshot.normalizedSnapshotHash,
+        confirmCommit: true,
+      },
+      db,
+      repositories,
+    })
+    assert.equal(await handleUserDataRoute(commit.ctx), true)
+    assert.equal(commit.response.status, 201)
+    assert.equal(commit.response.payload.commitAccepted, true)
+    assert.equal(commit.response.payload.recordCounts.purchaseOrders, 1)
+    const active = await repositories.userDataRuntime.getActiveDataset(compactSnapshot.scope)
+    assert.equal(active.records.purchaseOrders[0].po, 'PO-R174-1')
+  } finally {
+    preview.restore()
   }
 })
