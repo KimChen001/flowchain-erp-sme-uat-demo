@@ -52,8 +52,8 @@ test('R111 panel has explicit minimize restore outside click and cleanup behavio
 
 test('R111 minimize and navigation preserve messages input evidence and actions', () => {
   assert.match(panelSource, /const minimizeAssistant = \(\) => setOpen\(false\);/)
-  assert.match(panelSource, /const minimizeAfterNavigate = \(moduleId: string, focusTarget\?: CanonicalFocusTarget \| null\) => \{/)
-  assert.match(panelSource, /onNavigate\?\.\(moduleId, focusTarget \|\| null\);\s*minimizeAssistant\(\)/)
+  assert.match(panelSource, /const minimizeAfterNavigate: AiNavigate = \(moduleId, focusTarget, options\) => \{/)
+  assert.match(panelSource, /onNavigate\?\.\(moduleId, focusTarget \|\| null, \{ source: "ai", returnTo: activeContext\?\.route \|\| moduleId, \.\.\.options \}\);\s*minimizeAssistant\(\)/)
   assert.match(panelSource, /<AiResponseCards cards=\{message\.cards\} onNavigate=\{minimizeAfterNavigate\}/)
   assert.doesNotMatch(panelSource, /useEffect\(\(\) => \{[\s\S]*?setMessages\(\[\]\)[\s\S]*?\}, \[moduleId\]\)/)
 })

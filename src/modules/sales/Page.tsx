@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Boxes, ClipboardList, FileText, GitBranch, PackageSearch, ShoppingCart, Truck, Users } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { A, Card, Chip, KpiCard, SectionHeader } from "../../components/ui";
-import { typography } from "../../components/ui/typography";
 import type { InventoryAvailability } from "../inventory/api";
 import {
   BusinessObjectDetailModal,
@@ -13,6 +12,7 @@ import {
   EvidenceSummaryPanel,
   ReviewActionPanel,
 } from "../../components/business/BusinessObjectDetail";
+import EvidenceGraphPanel, { type EvidenceGraphResponse, type EvidenceNavigate } from "../../components/evidence/EvidenceGraphPanel";
 
 type SalesOrder = {
   salesOrderId: string;
@@ -59,7 +59,7 @@ type SalesView = "orders" | "risks" | "evidence";
 type SalesDemandPageProps = {
   initialView?: "risks" | "evidence" | string;
   focus?: FocusTarget;
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: EvidenceNavigate;
   onOpenAi?: () => void;
 };
 
@@ -142,8 +142,15 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
 
   useEffect(() => {
     if (!focus?.entityId) return;
-    setSelectedOrderId(focus.entityId);
-  }, [focus?.entityId]);
+    if (focus.entityType === "sales_order" || focus.entityType === "customer_order") {
+      setSelectedOrderId(focus.entityId);
+      return;
+    }
+    if (focus.entityType === "inventory_item" || focus.entityType === "item" || focus.entityType === "sku") {
+      const related = orders.find((order) => order.sku === focus.entityId);
+      if (related) setSelectedOrderId(related.salesOrderId);
+    }
+  }, [focus?.entityId, focus?.entityType, orders]);
 
   function openOrderDetail(orderId: string) {
     setSelectedOrderId(orderId);
@@ -335,7 +342,7 @@ function OrderDetailModal({
   allocation?: InventoryAvailability;
   allocationWarning: string;
   onClose: () => void;
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: EvidenceNavigate;
   onOpenAi?: () => void;
 }) {
   if (!order) return null;
@@ -437,11 +444,76 @@ function EvidenceChainView({
   allOrders: SalesOrder[];
   selectedOrderId: string;
   onSelectOrder: (orderId: string) => void;
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: EvidenceNavigate;
 }) {
   const hasSelectedOrder = Boolean(selectedOrderId);
+  const selectedOrder = orders[0] || allOrders.find((order) => order.salesOrderId === selectedOrderId) || null;
+  const [graph, setGraph] = useState<EvidenceGraphResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!selectedOrderId) {
+      setGraph(null);
+      setError("");
+      return;
+    }
+    let alive = true;
+    setLoading(true);
+    setError("");
+    apiJson<EvidenceGraphResponse>(`/api/evidence-graph/sales-order/${encodeURIComponent(selectedOrderId)}`)
+      .then((payload) => {
+        if (!alive) return;
+        setGraph(payload);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setGraph(null);
+        setError("当前暂未读取到完整证据链，请返回客户订单列表或切换业务对象后重试。");
+      })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [selectedOrderId]);
+
+  const returnContext = selectedOrder ? {
+    sourceModule: "sales",
+    sourceRoute: "sales:evidence",
+    sourceEntityType: "sales_order",
+    sourceEntityId: selectedOrder.salesOrderId,
+    sourceLabel: `客户订单 ${selectedOrder.salesOrderId}`,
+    returnLabel: `返回客户订单 ${selectedOrder.salesOrderId}`,
+    originIntent: "evidenceGraph",
+  } : null;
+
+  function retry() {
+    if (!selectedOrderId) return;
+    setGraph(null);
+    setError("");
+    setLoading(true);
+    apiJson<EvidenceGraphResponse>(`/api/evidence-graph/sales-order/${encodeURIComponent(selectedOrderId)}`)
+      .then(setGraph)
+      .catch(() => setError("当前暂未读取到完整证据链，请返回客户订单列表或切换业务对象后重试。"))
+      .finally(() => setLoading(false));
+  }
+
+  const fallbackSummary = selectedOrder ? (
+    <Card className="p-4">
+      <SectionHeader title="工作区关联摘要" right={<Chip label="需人工复核" color={A.orange} bg="#fff8f0" />} />
+      <div className="grid grid-cols-1 gap-1.5 text-[11px] leading-5">
+        <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><ClipboardList size={12} /> 客户订单：{selectedOrder.customerName} · {selectedOrder.statusLabel}</div>
+        <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><PackageSearch size={12} /> SKU库存：{selectedOrder.sku} / {selectedOrder.itemName} · 已预留 {qty(selectedOrder.reservedQty)} · 缺口 {qty(selectedOrder.shortageQty)}</div>
+        <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><ShoppingCart size={12} /> 采购订单：{selectedOrder.linkedPurchaseOrders.map((po) => `${po.id} ${po.status || ""}`).join("；") || "暂无完整采购订单关联"}</div>
+        <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><Users size={12} /> 供应商：{selectedOrder.linkedSuppliers.map((supplier) => `${supplier.name}${supplier.risk ? ` · ${supplier.risk}` : ""}`).join("；") || "暂无完整供应商记录"}</div>
+        <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><Truck size={12} /> 收货单：{selectedOrder.linkedReceivingDocs.map((grn) => `${grn.id} ${grn.status || ""}`).join("；") || "暂无完整收货记录"}</div>
+        <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><FileText size={12} /> 发票财务：按当前采购和收货记录人工追溯</div>
+        <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><AlertTriangle size={12} /> 异常工单：{selectedOrder.linkedExceptionCases.join("；") || "暂无关联异常工单"}</div>
+      </div>
+      <p className="mt-3 text-[11px] leading-5" style={{ color: A.sub }}>当前仅显示工作区内可追溯的关联摘要，需人工复核。</p>
+    </Card>
+  ) : null;
+
   return (
-    <div className="grid grid-cols-[0.9fr_1.1fr] gap-5">
+    <div className="space-y-4">
       <Card className="p-5">
         <SectionHeader title="主证据链" right={<Chip label="只读证据" color={A.blue} bg="#f0f6ff" />} />
         {!hasSelectedOrder && (
@@ -463,7 +535,7 @@ function EvidenceChainView({
             </div>
           </div>
         )}
-        <div className="mt-4 grid grid-cols-1 gap-2">
+        <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-6">
           {[
             ["客户订单", ClipboardList],
             ["SKU", PackageSearch],
@@ -489,40 +561,28 @@ function EvidenceChainView({
         </p>
       </Card>
 
-      <Card>
-        <div className="px-5 py-4" style={{ borderBottom: `1px solid ${A.border}` }}>
-          <SectionHeader title="相关记录与返回路径" />
-        </div>
-        <div className="p-4 space-y-3">
-          {orders.map((order) => (
-            <div key={`evidence-${order.salesOrderId}`} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-              <div className="font-semibold text-xs tabular-nums" style={{ color: A.label }}>{order.salesOrderId}</div>
-              <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px] leading-5">
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><ClipboardList size={12} /> 客户订单：{order.customerName} · {order.statusLabel}</div>
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><PackageSearch size={12} /> SKU库存：{order.sku} / {order.itemName} · 已预留 {qty(order.reservedQty)} · 缺口 {qty(order.shortageQty)}</div>
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><ShoppingCart size={12} /> 采购订单：{order.linkedPurchaseOrders.map((po) => `${po.id} ${po.status || ""}`).join("；") || "暂无完整采购订单关联"}</div>
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><Users size={12} /> 供应商：{order.linkedSuppliers.map((supplier) => `${supplier.name}${supplier.risk ? ` · ${supplier.risk}` : ""}`).join("；") || "暂无完整供应商记录"}</div>
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><Truck size={12} /> 收货单：{order.linkedReceivingDocs.map((grn) => `${grn.id} ${grn.status || ""}`).join("；") || "暂无完整收货记录"}</div>
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><FileText size={12} /> 发票财务：按当前采购和收货记录人工追溯</div>
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><AlertTriangle size={12} /> 异常工单：{order.linkedExceptionCases.join("；") || "暂无关联异常工单"}</div>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {(order.dataLimitations.length ? order.dataLimitations : ["current_workspace_data_limited"]).map((item) => (
-                  <span key={item} className={typography.compactMetadata} style={{ color: A.orange }}>{limitationLabel(item)}</span>
-                ))}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={() => onNavigate?.("sales")} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue }}>返回客户订单</button>
-                <button onClick={() => onNavigate?.("inventory")} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue }}>查看库存</button>
-                <button onClick={() => onNavigate?.("procurement:orders")} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue }}>查看采购订单</button>
-                <button onClick={() => onNavigate?.("srm:master")} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue }}>查看供应商</button>
-                <button className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>生成内部通知草稿预览</button>
-                <button className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>生成异常工单草稿预览</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
+      {hasSelectedOrder ? (
+        <>
+          <EvidenceGraphPanel
+            graph={graph}
+            loading={loading}
+            error={error}
+            onNavigate={onNavigate}
+            onRetry={retry}
+            onBack={() => onNavigate?.("sales")}
+            onReturnList={() => onNavigate?.("sales")}
+            onReturnSource={() => onNavigate?.("sales", { entityType: "sales_order", entityId: selectedOrderId }, { returnTo: "sales:evidence", entityLabel: `客户订单 ${selectedOrderId}`, returnContext })}
+            sourceLabel={selectedOrder ? `客户订单 ${selectedOrder.salesOrderId}` : ""}
+            returnContext={returnContext}
+            returnTo="sales:evidence"
+          />
+          {error && fallbackSummary}
+        </>
+      ) : (
+        <Card className="p-5 text-sm leading-6" style={{ color: A.sub }}>
+          请选择一条客户订单读取证据链。页面会展示主证据链、相关记录、风险信号、数据限制和返回路径。
+        </Card>
+      )}
     </div>
   );
 }

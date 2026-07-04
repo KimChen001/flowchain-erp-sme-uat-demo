@@ -23,6 +23,7 @@ import { fmt } from "../lib/format";
 import { A, Card, Field, inputStyle, Modal, RecoveryActions } from "../components/ui";
 import { BusinessBackLink } from "../components/navigation/BusinessBackLink";
 import type { WorkflowContext } from "../lib/workflowContext";
+import { buildReturnContext } from "../lib/workflowContext";
 import { typography } from "../components/ui/typography";
 import type {
   DemoUser,
@@ -282,6 +283,22 @@ const SEARCH_GROUP_ORDER = [
   "warehouse",
 ];
 const SEARCH_GROUP_VISIBLE_LIMIT = 5;
+
+const FOCUS_ENTITY_LABELS: Record<string, string> = {
+  customer_order: "客户订单",
+  sales_order: "客户订单",
+  inventory_availability: "库存可用量",
+  inventory_item: "SKU",
+  item: "SKU",
+  sku: "SKU",
+  purchase_request: "采购申请",
+  rfq: "RFx",
+  purchase_order: "采购订单",
+  receiving_doc: "收货单",
+  supplier: "供应商",
+  supplier_invoice: "供应商发票",
+  exception_case: "异常工单",
+};
 
 function searchGroupKey(type: string) {
   return type === "bin" ? "warehouse" : type;
@@ -591,12 +608,33 @@ export default function FlowChainApp() {
     returnContext?: WorkflowContext | null;
     source?: string;
   } = {}) {
+    const sourceLabel = activeChildLabel || activeModuleLabel;
+    const focusLabel = focusTarget
+      ? `${FOCUS_ENTITY_LABELS[focusTarget.entityType] || "业务对象"} ${focusTarget.entityId}`
+      : "";
+    const inferredReturnContext = focusTarget
+      ? buildReturnContext({
+          sourceModule: activeModule,
+          sourceRoute: active,
+          sourceEntityType: searchFocus?.entityType,
+          sourceEntityId: searchFocus?.entityId,
+          sourceLabel: searchFocus?.entityLabel || focusLabel || sourceLabel,
+          originIntent: options.source || "businessNavigation",
+          returnLabel: searchFocus?.entityId
+            ? `返回 ${FOCUS_ENTITY_LABELS[searchFocus.entityType] || "业务对象"} ${searchFocus.entityId}`
+            : options.source === "ai"
+              ? "返回 AI 结果"
+              : options.source === "globalSearch"
+                ? "返回全局搜索"
+                : `返回${sourceLabel}`,
+        })
+      : null;
     applyNavigationIntent(navigationIntentFromModule(moduleId, {
       focusTarget,
       source: options.source || (focusTarget ? "evidence" : undefined),
       returnTo: options.returnTo,
       entityLabel: options.entityLabel,
-    }), options.returnContext);
+    }), options.returnContext !== undefined ? options.returnContext : inferredReturnContext);
   }
 
   async function openActionDraftReview(request: ActionDraftPreviewRequest) {
@@ -667,8 +705,17 @@ export default function FlowChainApp() {
   }
 
   function returnFromFocus() {
-    setActive(focusReturnContext?.sourceRoute || focusReturnActive || "overview");
-    setSearchFocus(null);
+    const context = focusReturnContext;
+    setActive(context?.sourceRoute || focusReturnActive || "overview");
+    setSearchFocus(context?.sourceEntityId && context.sourceEntityType
+      ? {
+          entityType: context.sourceEntityType,
+          entityId: context.sourceEntityId,
+          entityLabel: context.sourceLabel,
+          source: context.originIntent || "businessReturn",
+          at: Date.now(),
+        }
+      : null);
     setFocusReturnContext(null);
   }
 
@@ -677,7 +724,7 @@ export default function FlowChainApp() {
       sourceModule: activeModule,
       sourceRoute: active,
       sourceLabel: activeChildLabel || activeModuleLabel,
-      returnLabel: `Back to ${activeChildLabel || activeModuleLabel}`,
+      returnLabel: "返回全局搜索",
       originIntent: "globalSearch",
     });
     setSearchOpen(false);
@@ -687,6 +734,13 @@ export default function FlowChainApp() {
   const focusEntityLabel = searchFocus
     ? `${SEARCH_TYPE_LABELS[searchFocus.entityType] || searchFocus.entityType} · ${searchFocus.entityLabel || searchFocus.entityId}`
     : "";
+  const focusSourceLabel = searchFocus?.source === "ai"
+    ? "AI 助手"
+    : searchFocus?.source === "globalSearch"
+      ? "全局搜索"
+      : searchFocus?.source === "evidenceGraph" || searchFocus?.source === "evidence"
+        ? "证据链"
+        : "业务跳转";
 
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
@@ -1016,13 +1070,13 @@ export default function FlowChainApp() {
                   <div className="min-w-0">
                     <div className="text-[11px] font-semibold" style={{ color: A.blue }}>当前聚焦</div>
                     <div className="mt-1 truncate text-sm font-semibold tabular-nums" style={{ color: A.label }}>{focusEntityLabel}</div>
-                    <div className="mt-1 text-[11px]" style={{ color: A.sub }}>来自搜索或证据入口，可返回上一层或清除聚焦。</div>
+                    <div className="mt-1 text-[11px]" style={{ color: A.sub }}>来源：{focusSourceLabel}，可返回来源对象或返回列表。</div>
                   </div>
                   <RecoveryActions
                     className="shrink-0"
                     actions={[
                       { key: "previous", label: "返回上一层", onClick: returnFromFocus, kind: "previous", tone: "primary" },
-                      { key: "module", label: `返回${activeModuleLabel}`, onClick: () => navigateTo(activeModule), kind: "module" },
+                      { key: "module", label: "返回列表", onClick: () => navigateTo(activeModule), kind: "module" },
                       { key: "clear", label: "清除聚焦", onClick: clearFocus, kind: "clear", tone: "subtle" },
                     ]}
                   />

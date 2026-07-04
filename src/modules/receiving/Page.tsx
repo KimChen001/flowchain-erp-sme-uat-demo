@@ -777,7 +777,7 @@ function ReceivingOps({
           sourceEntityId: selectedGrn.grn,
           sourceRoute: "procurement:receiving",
           sourceLabel: selectedGrn.grn,
-          returnLabel: `Back to ${selectedGrn.grn}`,
+          returnLabel: `返回收货单 ${selectedGrn.grn}`,
         };
         return (
           <Card className="p-5">
@@ -971,7 +971,7 @@ function ReceivingOps({
             sourceEntityId: selectedGrn.grn,
             sourceRoute: "procurement:receiving",
             sourceLabel: selectedGrn.grn,
-            returnLabel: `Back to ${selectedGrn.grn}`,
+            returnLabel: `返回收货单 ${selectedGrn.grn}`,
           };
           return (
             <DocumentShell

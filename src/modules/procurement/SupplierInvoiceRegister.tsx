@@ -367,7 +367,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
               sourceEntityId: selectedInvoice.invoiceNumber,
               sourceRoute: isProcurementMode ? "procurement:invoices" : "finance:invoices",
               sourceLabel: selectedInvoice.invoiceNumber,
-              returnLabel: `Back to ${selectedInvoice.invoiceNumber}`,
+              returnLabel: `返回供应商发票 ${selectedInvoice.invoiceNumber}`,
             };
             return (
           <DocumentShell

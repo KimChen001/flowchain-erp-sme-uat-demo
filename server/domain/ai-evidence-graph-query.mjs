@@ -72,13 +72,27 @@ function recommendedAction(graph = {}) {
     : '先复核当前工作区内的相关业务记录，再决定是否进入后续受控流程。'
 }
 
+function readableLimitation(code = '') {
+  return ({
+    record_not_found: '当前工作区未找到对应业务记录',
+    missing_daily_demand_history: '缺少完整日需求历史',
+    missing_inventory_balance: '缺少可用库存余额',
+    missing_source_pr: '缺少来源采购申请',
+    missing_rfq_link: '缺少询价关联',
+    missing_grn: '缺少收货记录',
+    missing_invoice_match: '缺少发票匹配记录',
+    route_not_available: '明细页暂不可用',
+  })[code] || '存在未完全覆盖的数据限制'
+}
+
 function response(graph = {}, anchor = {}) {
   const evidence = evidenceFromNodes(graph.nodes)
   const limitations = asArray(graph.dataLimitations)
+  const readableLimitations = limitations.map(readableLimitation)
   const path = readablePath(graph) || graph.anchor?.label || anchor.entityId
   const message = graph.dataLimitations?.includes('record_not_found') && graph.nodes?.length <= 1
-    ? `结论：当前工作区缺少完整关联记录，因此该证据链需要人工复核。关键证据：未找到 ${anchor.entityId || '该业务对象'} 的完整证据链。业务影响：暂无法判断上游或下游影响。建议动作：先确认业务编号和当前数据范围。可点击跳转：暂无完整证据链接。数据限制 / 不确定性：record_not_found。`
-    : `结论：${graph.anchor?.label || anchor.entityId} 的主证据链为 ${path}。关键证据：${evidence.slice(0, 5).map((item) => item.label).join('、') || '当前工作区缺少完整关联记录'}。业务影响：${businessImpact(graph)} 建议动作：${recommendedAction(graph)} 可点击跳转见证据链接。数据限制 / 不确定性：${limitations.join('、') || '当前工作区记录可支持初步判断'}。`
+    ? `结论：当前工作区缺少完整关联记录，因此该证据链需要人工复核。关键证据：未找到 ${anchor.entityId || '该业务对象'} 的完整证据链。业务影响：暂无法判断上游或下游影响。建议动作：先确认业务编号和当前数据范围。可点击跳转：暂无完整证据链接。数据限制 / 不确定性：当前工作区未找到对应业务记录。`
+    : `结论：${graph.anchor?.label || anchor.entityId} 的主证据链为 ${path}。关键证据：${evidence.slice(0, 5).map((item) => item.label).join('、') || '当前工作区缺少完整关联记录'}。业务影响：${businessImpact(graph)} 建议动作：${recommendedAction(graph)} 可点击跳转见证据链接。数据限制 / 不确定性：${readableLimitations.join('、') || '当前工作区记录可支持初步判断'}。`
   return {
     message,
     content: message,

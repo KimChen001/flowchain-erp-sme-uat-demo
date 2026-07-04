@@ -217,9 +217,14 @@ export function DocumentHistoryPanel({
   );
 }
 
-export function Card({ children, className = "", style = {} }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+export function Card({
+  children,
+  className = "",
+  style = {},
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   return (
-    <div className={`bg-white rounded-xl border ${className}`}
+    <div {...props} className={`bg-white rounded-xl border ${className}`}
       style={{ borderColor: A.border, boxShadow: "0 1px 2px rgba(15,23,42,0.04)", ...style }}>
       {children}
     </div>

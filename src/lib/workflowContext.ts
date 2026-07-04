@@ -10,6 +10,42 @@ export type WorkflowContext = {
   returnLabel?: string;
 };
 
+const SOURCE_MODULE_LABELS: Record<string, string> = {
+  overview: "每日工作台",
+  todayCockpit: "每日工作台",
+  sales: "销售需求",
+  procurement: "采购管理",
+  inventory: "库存管理",
+  srm: "供应商管理",
+  supplier: "供应商管理",
+  finance: "财务协同",
+  "master-data": "基础资料",
+  reports: "报表与分析",
+  imports: "数据接入与质量",
+  "exception-cases": "异常处理工单",
+  forecast: "预测与 MRP",
+  ai: "AI 助手",
+  globalSearch: "全局搜索",
+};
+
+const SOURCE_ENTITY_LABELS: Record<string, string> = {
+  customer_order: "客户订单",
+  sales_order: "客户订单",
+  inventory_availability: "库存可用量",
+  inventory_item: "SKU",
+  item: "SKU",
+  sku: "SKU",
+  purchase_request: "采购申请",
+  rfq: "RFx",
+  purchase_order: "采购订单",
+  receiving_doc: "收货单",
+  supplier: "供应商",
+  supplier_invoice: "供应商发票",
+  exception_case: "异常工单",
+  report: "报表",
+  import_batch: "数据导入批次",
+};
+
 function clean(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -75,10 +111,13 @@ export function buildReturnUrl(route: string, context: WorkflowContext | null | 
 
 export function formatReturnLabel(context: WorkflowContext | null | undefined) {
   const safe = buildReturnContext(context);
-  if (!safe) return "返回上一工作流";
+  if (!safe) return "返回上一级";
   if (safe.returnLabel) return safe.returnLabel;
   if (safe.sourceLabel) return `返回 ${safe.sourceLabel}`;
-  if (safe.sourceEntityId) return `返回 ${safe.sourceEntityId}`;
+  if (safe.sourceEntityId) {
+    const entityLabel = SOURCE_ENTITY_LABELS[safe.sourceEntityType || ""] || "";
+    return `返回 ${[entityLabel, safe.sourceEntityId].filter(Boolean).join(" ")}`;
+  }
   if (safe.sourceModule === "overview" || safe.sourceModule === "todayCockpit") return "返回今日驾驶舱";
-  return "返回上一工作流";
+  return `返回${SOURCE_MODULE_LABELS[safe.sourceModule] || "上一级"}`;
 }

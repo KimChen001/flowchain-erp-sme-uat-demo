@@ -311,7 +311,7 @@ export default function PurchasingOrdersPage({
     sourceEntityId: selectedPO.po,
     sourceRoute: "procurement:orders",
     sourceLabel: selectedPO.po,
-    returnLabel: `Back to ${selectedPO.po}`,
+    returnLabel: `返回采购订单 ${selectedPO.po}`,
   } : null;
 
   const detailContent = selectedPO && (

@@ -52,6 +52,7 @@ test('AI evidence graph reports missing anchor with business limitation', () => 
   const result = buildAiEvidenceGraphResponse(createDb(), { question: 'SKU-NOT-FOUND 的证据链是什么？' })
 
   assert.match(result.content, /当前工作区缺少完整关联记录/)
-  assert.match(result.content, /record_not_found/)
+  assert.match(result.content, /当前工作区未找到对应业务记录/)
+  assert.doesNotMatch(result.content, /record_not_found/)
   assertClean(result.content)
 })

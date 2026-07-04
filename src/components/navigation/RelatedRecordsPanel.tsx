@@ -2,6 +2,20 @@ import { Link2 } from "lucide-react";
 import { A, Card, Chip } from "../ui";
 import { groupBusinessLinkedRecords, type BusinessLinkedRecord } from "../../lib/businessLinks";
 
+const entityLabels: Record<string, string> = {
+  sales_order: "客户订单",
+  customer_order: "客户订单",
+  inventory_item: "SKU",
+  item: "SKU",
+  purchase_request: "采购申请",
+  rfq: "RFx",
+  purchase_order: "采购订单",
+  receiving_doc: "收货单",
+  supplier: "供应商",
+  supplier_invoice: "供应商发票",
+  exception_case: "异常工单",
+};
+
 export function RelatedRecordsPanel({
   records,
   onNavigate,
@@ -16,7 +30,7 @@ export function RelatedRecordsPanel({
     <Card className="p-4" data-testid="related-records-panel">
       <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: A.label }}>
         <Link2 size={13} />
-        Related records
+        相关记录
       </div>
       <div className="mt-3 space-y-3">
         {groupEntries.length ? groupEntries.map(([label, rows]) => (
@@ -34,7 +48,7 @@ export function RelatedRecordsPanel({
                       {record.status ? <Chip label={record.status} color={A.gray1} bg={A.gray6} /> : null}
                     </div>
                     <div className="mt-0.5 truncate text-[10px]" style={{ color: A.gray2 }}>
-                      {record.entityType} · {record.module || "unrouted"}
+                      {entityLabels[record.entityType] || "业务记录"}
                     </div>
                     <div className="mt-1 text-[10px] leading-4" style={{ color: record.disabledReason ? A.orange : A.sub }}>
                       {record.disabledReason || record.relationshipReason || "已找到关联依据。"}
@@ -65,7 +79,7 @@ export function RelatedRecordsPanel({
           </div>
         )) : (
           <div className="rounded-lg px-2.5 py-2 text-[11px]" style={{ background: A.gray6, color: A.sub }}>
-            No related records found.
+            暂无可追溯的相关记录。
           </div>
         )}
       </div>

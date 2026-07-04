@@ -91,13 +91,16 @@ test.describe("Sales Demand Lite browser flow", () => {
 
     await page.getByRole("button", { name: "订单证据链" }).click();
     await expect(moduleScope).toContainText("主证据链");
-    await expect(moduleScope).toContainText("选择客户订单");
-    await expect(moduleScope).toContainText("相关记录与返回路径");
-    await expect(moduleScope).toContainText("SKU库存");
-    await expect(moduleScope).toContainText("发票财务");
+    await moduleScope.getByRole("button", { name: /SO-2026-0412-A/ }).click();
+    await expect(page.getByTestId("evidence-graph-panel")).toBeVisible();
+    await expect(moduleScope).toContainText("相关记录");
+    await expect(moduleScope).toContainText("风险信号");
+    await expect(moduleScope).toContainText("数据限制");
+    await expect(moduleScope).toContainText("返回列表");
+    await expect(moduleScope).toContainText("SKU / 库存");
+    await expect(moduleScope).toContainText("采购订单");
     await expect(moduleScope).toContainText("客户订单 → SKU → 库存可用量 → 采购订单 → 供应商 → 收货单");
-    await expect(moduleScope).toContainText("生成内部通知草稿预览");
-    await expect(moduleScope).toContainText("生成异常工单草稿预览");
+    await expect(moduleScope).not.toContainText(/entityType|documentType|raw JSON|record_not_found|tool_result/i);
 
     await openAssistant(page);
     const assistant = await askAssistant(page, "哪些客户订单有交付风险？");

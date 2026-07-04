@@ -152,7 +152,7 @@ test('R92 AI panel preserves chat state across module and evidence navigation', 
   assert.doesNotMatch(source, /useEffect\(\(\) => \{[\s\S]*?setAsking\(false\)[\s\S]*?\}, \[moduleId\]\)/)
   assert.match(source, /function AiResponseCard/)
   assert.match(source, /minimizeAfterNavigate/)
-  assert.match(source, /onNavigate\(intent\.activeId, intent\.focusTarget \|\| null\)/)
+  assert.match(source, /onNavigate\(intent\.activeId, intent\.focusTarget \|\| null, \{ returnTo: "ai"/)
   assert.match(source, /requestInFlightRef\.current = false/)
 })
 
@@ -336,7 +336,7 @@ test('R100 AI copilot readiness checkpoint keeps core pilot contract intact', as
   assert.match(visible, /采购单 PO-2026-1282/)
   assert.match(visible, /SKU-00412/)
   assert.match(visible, /询价单 RFQ-26-0046/)
-  assert.match(panel, /onClick=\{\(\) => onNavigate\(intent\.activeId, intent\.focusTarget \|\| null\)\}/)
+  assert.match(panel, /onClick=\{\(\) => onNavigate\(intent\.activeId, intent\.focusTarget \|\| null, \{ returnTo: "ai", entityLabel: label, source: "ai" \}\)\}/)
   assert.doesNotMatch(panel, /useEffect\(\(\) => \{[\s\S]*?setMessages\(\[\]\)[\s\S]*?\}, \[moduleId\]\)/)
   assert.match(evidenceLinks, /navigationIntentFromApiRoute/)
 })

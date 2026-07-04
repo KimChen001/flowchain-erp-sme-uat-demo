@@ -58,6 +58,14 @@ type AiChatResponse = {
   externalMs?: number;
 };
 
+type AiNavigateOptions = {
+  returnTo?: string;
+  entityLabel?: string;
+  source?: string;
+};
+
+type AiNavigate = (moduleId: string, focusTarget?: CanonicalFocusTarget | null, options?: AiNavigateOptions) => void;
+
 type AiSessionGrounding = {
   lastIntent?: string;
   lastPrimaryEntity?: { type?: string; id?: string; label?: string } | null;
@@ -262,7 +270,7 @@ function EvidenceList({
   onNavigate,
 }: {
   evidence?: AiChatCard["evidence"];
-  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate?: AiNavigate;
 }) {
   const rows = (evidence || [])
     .map((item) => {
@@ -302,7 +310,7 @@ function EvidenceList({
             {navigableLink.clickable && intent && onNavigate ? (
               <button
                 type="button"
-                onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)}
+                onClick={() => onNavigate(intent.activeId, intent.focusTarget || null, { returnTo: "ai", entityLabel: label, source: "ai" })}
                 data-testid="ai-evidence-link"
                 data-business-id={displayId}
                 className={aiEvidenceLinkClass}
@@ -377,7 +385,7 @@ function AiResponseCard({
   onReviewActionDraft,
 }: {
   card: AiChatCard;
-  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate?: AiNavigate;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const data = card.data || {};
@@ -1048,7 +1056,7 @@ function AiResponseCard({
                 <button
                   key={`${action.label}-${action.target}`}
                   type="button"
-                  onClick={() => onNavigate(intent.activeId, intent.focusTarget || null)}
+                  onClick={() => onNavigate(intent.activeId, intent.focusTarget || null, { returnTo: "ai", entityLabel: action.label || intent.entityLabel, source: "ai" })}
                   data-testid="ai-action-link"
                   data-business-id={intent.focusTarget?.entityId || action.target || ""}
                   className={aiActionLinkClass}
@@ -1321,7 +1329,7 @@ function AiResponseCards({
   onReviewActionDraft,
 }: {
   cards?: AiChatCard[];
-  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate?: AiNavigate;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const visibleCards = cards.filter((card) => card.type);
@@ -1357,7 +1365,7 @@ export default function FloatingAiAssistant({
   moduleId: string;
   activeContext?: ActiveContext | null;
   openSignal?: number;
-  onNavigate?: (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => void;
+  onNavigate?: AiNavigate;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1379,8 +1387,8 @@ export default function FloatingAiAssistant({
 
   const minimizeAssistant = () => setOpen(false);
   const restoreAssistant = () => setOpen(true);
-  const minimizeAfterNavigate = (moduleId: string, focusTarget?: CanonicalFocusTarget | null) => {
-    onNavigate?.(moduleId, focusTarget || null);
+  const minimizeAfterNavigate: AiNavigate = (moduleId, focusTarget, options) => {
+    onNavigate?.(moduleId, focusTarget || null, { source: "ai", returnTo: activeContext?.route || moduleId, ...options });
     minimizeAssistant();
   };
 
