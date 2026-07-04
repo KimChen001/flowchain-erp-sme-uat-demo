@@ -45,7 +45,7 @@ test.describe("Sales Demand Lite browser flow", () => {
     await page.getByRole("button", { name: "销售需求" }).first().click();
     await expect(page.getByRole("heading", { name: "销售需求" })).toBeVisible();
     const moduleScope = page.getByTestId("module-export-scope");
-    await expect(page.getByRole("button", { name: "客户订单" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "客户订单", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "交付风险" })).toBeVisible();
     await expect(page.getByRole("button", { name: "订单证据链" })).toBeVisible();
     await expect(moduleScope).not.toContainText("客户订单与交付风险");

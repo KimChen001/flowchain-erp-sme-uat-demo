@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Boxes, ClipboardList, FileText, GitBranch, PackageSearch, ShoppingCart, Truck, Users } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { A, Card, Chip, KpiCard, SectionHeader } from "../../components/ui";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 import type { InventoryAvailability } from "../inventory/api";
 import {
   BusinessObjectDetailModal,
@@ -192,20 +193,23 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
   return (
     <div className="space-y-5">
       <Card className="p-5">
-        <div className="flex items-start gap-4">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#f0f6ff", color: A.blue }}>
-            <ClipboardList size={17} />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>销售需求</h1>
-            <p className="text-xs mt-0.5" style={{ color: A.sub }}>
-              {view === "orders" ? "客户订单" : view === "risks" ? "交付风险" : "订单证据链"}
-            </p>
-            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-              <span className="font-semibold">销售需求使用边界：</span>
-              当前页面基于工作区内的客户订单、库存、采购、收货和供应商记录识别交付风险。系统仅提供库存可用量、采购在途和供应商风险的辅助分析，不会自动确认订单、自动出库或自动通知客户。
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4 min-w-0">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#f0f6ff", color: A.blue }}>
+              <ClipboardList size={17} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>销售需求</h1>
+              <p className="text-xs mt-0.5" style={{ color: A.sub }}>
+                {view === "orders" ? "客户订单" : view === "risks" ? "交付风险" : "订单证据链"}
+              </p>
+              <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
+                <span className="font-semibold">销售需求使用边界：</span>
+                当前页面基于工作区内的客户订单、库存、采购、收货和供应商记录识别交付风险。系统仅提供库存可用量、采购在途和供应商风险的辅助分析，不会自动确认订单、自动出库或自动通知客户。
+              </div>
             </div>
           </div>
+          <ContextualImportActions entityLabel="客户订单" compact={false} />
         </div>
       </Card>
 

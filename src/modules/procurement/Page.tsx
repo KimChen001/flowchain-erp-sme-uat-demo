@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Calendar, ChevronRight, ClipboardCheck, FileSpreadsheet, FileText, Handshake, PackageCheck, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { A, Card, Chip, KpiCard, SubTabs } from "../../components/ui";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { CONTRACTS, PURCHASE_RETURNS, RFQS, SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/demo-data";
 import { isReturnException } from "../../domain/procurement/returns";
 import type { PurchaseIntent } from "../../types/scm";
@@ -276,6 +277,10 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-col gap-2">
+              <ContextualImportActions entityLabel="采购申请" templateName="采购申请" compact={false} />
+              <ContextualImportActions entityLabel="采购订单" templateName="采购订单" compact={false} />
+            </div>
             <button
               onClick={() => setRefreshStamp(new Date())}
               className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium"

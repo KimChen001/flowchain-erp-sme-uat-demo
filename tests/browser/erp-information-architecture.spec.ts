@@ -96,7 +96,7 @@ test.describe("ERP information architecture cleanup", () => {
     await expect(scope.getByRole("button", { name: /批准|拒绝|过账|编辑业务数据/ })).toHaveCount(0);
 
     await page.getByRole("button", { name: "数据接入与质量" }).first().click();
-    await expect(scope).toContainText("数据接入与质量用于集中复核数据导入");
+    await expect(scope).toContainText("数据接入与质量用于集中处理导入任务、字段映射、校验结果和失败项");
     await expect(scope).toContainText("不承担业务审批");
   });
 });

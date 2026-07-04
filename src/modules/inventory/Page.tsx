@@ -15,6 +15,7 @@ import {
 import {
   A, AppleTooltip, Card, Chip, Field, inputStyle, KpiCard, Modal, RecoveryActions, SectionHeader, SegmentedControl, SubTabs,
 } from "../../components/ui";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 import InventoryMovementLedger from "./InventoryMovementLedger";
 import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
 import { buildInventoryExceptionDocuments } from "../../domain/inventory/exceptions";
@@ -1504,9 +1505,15 @@ function InventoryLanding({
               先看风险 SKU、异常单据和冻结批次，其余明细放在事务流水、盘点和库位子页里。
             </div>
           </div>
-          <button onClick={() => onOpenTab("exceptions")} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>
-            处理异常
-          </button>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex flex-wrap justify-end gap-2">
+              <ContextualImportActions entityLabel="库存余额" templateName="库存余额" compact={false} />
+              <ContextualImportActions entityLabel="库存流水" templateName="库存流水" compact={false} />
+            </div>
+            <button onClick={() => onOpenTab("exceptions")} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>
+              处理异常
+            </button>
+          </div>
         </div>
       </Card>
 

@@ -121,10 +121,10 @@ export const navItems = [
   {
     icon: Upload, label: "数据接入与质量", id: "imports",
     children: [
-      { id: "imports", label: "数据导入" },
-      { id: "imports:templates", label: "导出模板" },
-      { id: "imports:validation", label: "数据质量检查" },
-      { id: "imports:failed", label: "数据缺失项" },
+      { id: "imports", label: "导入任务" },
+      { id: "imports:templates", label: "字段映射" },
+      { id: "imports:validation", label: "质量检查" },
+      { id: "imports:failed", label: "失败项处理" },
     ],
   },
 ] as const;

@@ -179,7 +179,7 @@ export default function SrmPage({
               点击供应商查看 360° 画像，展开各维度了解评分构成。
             </p>
           </div>
-          <ContextualImportActions entityLabel="供应商" templateName="供应商" compact />
+          <ContextualImportActions entityLabel="供应商资料" templateName="供应商资料" compact={false} />
         </div>
       </Card>
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -63,6 +63,8 @@ type ImportsPanelProps = {
   onNavigate?: (moduleId: string) => void;
   initialView?: "templates" | "validation" | "failed" | "user-data";
 };
+
+type BusinessImportView = "tasks" | "mapping" | "quality" | "failed";
 
 type UserDataIssue = {
   code?: string;
@@ -137,6 +139,351 @@ type UserDataStatus = {
 };
 
 const FILTERS = ["全部", "采购", "库存", "预测", "基础资料"] as const;
+
+const BUSINESS_VIEW_OPTIONS: { id: BusinessImportView; label: string; icon: typeof Upload }[] = [
+  { id: "tasks", label: "导入任务", icon: Upload },
+  { id: "mapping", label: "字段映射", icon: FileSpreadsheet },
+  { id: "quality", label: "质量检查", icon: ShieldCheck },
+  { id: "failed", label: "失败项处理", icon: AlertCircle },
+];
+
+const BUSINESS_IMPORT_TASKS = [
+  {
+    name: "客户订单 CSV 导入",
+    module: "销售需求",
+    type: "客户订单",
+    file: "customer-orders-july.csv",
+    records: 128,
+    passed: 119,
+    warnings: 6,
+    errors: 3,
+    status: "有错误",
+    owner: "张磊",
+    time: "2026-07-04 10:18",
+    nextStep: "查看失败项并补齐客户订单字段",
+  },
+  {
+    name: "采购申请 CSV 导入",
+    module: "采购管理",
+    type: "采购申请",
+    file: "purchase-requests-q3.csv",
+    records: 86,
+    passed: 80,
+    warnings: 6,
+    errors: 0,
+    status: "有警告",
+    owner: "陈佳",
+    time: "2026-07-04 09:42",
+    nextStep: "复核付款条款和需求日期",
+  },
+  {
+    name: "库存余额 CSV 导入",
+    module: "库存管理",
+    type: "库存余额",
+    file: "inventory-balance.csv",
+    records: 240,
+    passed: 240,
+    warnings: 0,
+    errors: 0,
+    status: "校验通过",
+    owner: "李明",
+    time: "2026-07-03 16:25",
+    nextStep: "等待业务负责人复核",
+  },
+];
+
+const BUSINESS_MAPPING_ROWS = [
+  { source: "supplier_name", target: "供应商名称", value: "杭州精密组件", status: "已匹配", required: "是", hint: "名称可与供应商资料目录关联" },
+  { source: "sku", target: "SKU", value: "SKU-UI-1001", status: "已匹配", required: "是", hint: "SKU 存在于物料资料" },
+  { source: "quantity", target: "数量", value: "24", status: "已匹配", required: "是", hint: "数量需为正数" },
+  { source: "need_by_date", target: "需求日期", value: "2026/07/18", status: "格式异常", required: "是", hint: "建议统一为 YYYY-MM-DD" },
+  { source: "unit_price", target: "单价", value: "18.60", status: "需确认", required: "否", hint: "需确认币种和税率口径" },
+  { source: "payment_term", target: "付款条款", value: "N45", status: "未匹配", required: "否", hint: "建议选择系统已有付款条款" },
+];
+
+const BUSINESS_QUALITY_ISSUES = [
+  { type: "缺少必填字段", module: "销售需求", count: 3, severity: "阻断后续处理", impact: "客户订单无法进入交付风险复核", action: "补齐客户、SKU 和承诺日期", status: "待修正" },
+  { type: "SKU 未匹配", module: "库存管理", count: 5, severity: "需要确认", impact: "库存余额无法关联物料资料", action: "确认 SKU 是否已在物料资料维护", status: "需人工复核" },
+  { type: "供应商未匹配", module: "采购管理", count: 2, severity: "需要确认", impact: "采购申请无法关联供应商资料", action: "核对供应商名称或供应商编码", status: "待修正" },
+  { type: "日期格式异常", module: "采购管理", count: 6, severity: "提醒", impact: "需求日期可能影响到货计划判断", action: "统一修正为 YYYY-MM-DD", status: "待复核" },
+  { type: "重复业务编号", module: "财务协同", count: 1, severity: "需要确认", impact: "供应商发票可能重复进入对账复核", action: "核对发票号和供应商组合", status: "需人工复核" },
+];
+
+const BUSINESS_FAILED_ROWS = [
+  { row: 12, file: "customer-orders-july.csv", module: "销售需求", object: "客户订单", field: "sku", value: "SKU-UNKNOWN", reason: "SKU 未在物料资料中找到", suggestion: "补充物料资料或修正 SKU", status: "待修正" },
+  { row: 27, file: "purchase-requests-q3.csv", module: "采购管理", object: "采购申请", field: "need_by_date", value: "07/31/26", reason: "日期格式无法识别", suggestion: "改为 2026-07-31", status: "待修正" },
+  { row: 43, file: "supplier-invoices.csv", module: "财务协同", object: "供应商发票", field: "payment_term", value: "N45", reason: "付款条款未识别", suggestion: "选择 Net 45 或维护新条款", status: "需人工确认" },
+];
+
+function initialBusinessView(initialView?: ImportsPanelProps["initialView"]): BusinessImportView {
+  if (initialView === "templates") return "mapping";
+  if (initialView === "validation") return "quality";
+  if (initialView === "failed") return "failed";
+  return "tasks";
+}
+
+function statusTone(status: string) {
+  if (["校验通过", "已匹配"].includes(status)) return { color: A.green, bg: "#f0faf4" };
+  if (["有错误", "格式异常", "未匹配", "待修正", "阻断后续处理"].includes(status)) return { color: A.red, bg: "#fff1f0" };
+  if (["有警告", "需确认", "需要确认", "需人工确认", "需人工复核"].includes(status)) return { color: A.orange, bg: "#fff8f0" };
+  return { color: A.blue, bg: "#f0f6ff" };
+}
+
+function DisabledActionButton({ children }: { children: ReactNode }) {
+  return (
+    <button disabled className="px-2.5 py-1.5 rounded-md text-[11px] font-medium disabled:cursor-not-allowed" style={{ background: A.gray5, color: A.gray2 }}>
+      {children}
+    </button>
+  );
+}
+
+function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProps) {
+  const [view, setView] = useState<BusinessImportView>(() => initialBusinessView(initialView));
+
+  useEffect(() => {
+    setView(initialBusinessView(initialView));
+  }, [initialView]);
+
+  const currentViewLabel = BUSINESS_VIEW_OPTIONS.find((item) => item.id === view)?.label || "导入任务";
+
+  return (
+    <div className="space-y-5" data-testid="data-access-business-page">
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-5">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "#f0f6ff", color: A.blue }}>
+                <Upload size={17} />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>数据接入与质量</h1>
+                <p className="text-xs mt-0.5" style={{ color: A.sub }}>{currentViewLabel} · 集中处理导入任务、字段映射、校验结果和失败项</p>
+              </div>
+            </div>
+            <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
+              数据接入与质量用于集中处理导入任务、字段映射、校验结果和失败项。业务页面可发起 CSV 导入，本页面负责导入前校验和数据质量复核，不承担业务审批或自动写入。
+            </p>
+            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
+              当前页面仅展示导入前校验与质量复核结果；不会直接覆盖当前工作区数据。
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button onClick={() => setView("tasks")} className="text-xs px-3 py-2 rounded-xl font-medium" style={{ background: A.gray6, color: A.blue }}>
+              返回数据接入与质量
+            </button>
+            <button onClick={() => onNavigate?.("procurement")} className="text-xs px-3 py-2 rounded-xl font-medium" style={{ background: A.gray6, color: A.gray1 }}>
+              返回来源业务模块
+            </button>
+            <button onClick={() => window.history.back()} className="text-xs px-3 py-2 rounded-xl font-medium" style={{ background: A.gray6, color: A.gray1 }}>
+              返回上一级
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="导入任务" value={String(BUSINESS_IMPORT_TASKS.length)} sub="等待业务复核" icon={Upload} color={A.blue} />
+        <KpiCard label="字段映射" value={String(BUSINESS_MAPPING_ROWS.length)} sub="外部字段到系统字段" icon={FileSpreadsheet} color={A.purple} />
+        <KpiCard label="质量检查" value={String(BUSINESS_QUALITY_ISSUES.length)} sub="跨模块问题" icon={ShieldCheck} color={A.orange} />
+        <KpiCard label="失败项处理" value={String(BUSINESS_FAILED_ROWS.length)} sub="需人工复核" icon={AlertCircle} color={A.red} />
+      </div>
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-4">
+          <SegmentedControl
+            options={BUSINESS_VIEW_OPTIONS.map((item) => ({ label: item.label, value: item.id }))}
+            value={view}
+            onChange={(value) => setView(value as BusinessImportView)}
+          />
+          <Chip label="仅导入前校验" color={A.blue} bg="#f0f6ff" />
+        </div>
+      </Card>
+
+      {view === "tasks" && (
+        <Card>
+          <div className="px-5 py-4" style={{ borderBottom: `1px solid ${A.border}` }}>
+            <SectionHeader title="导入任务" />
+            <p className="text-[11px] leading-5" style={{ color: A.sub }}>从销售、采购、库存、供应商和财务页面发起的 CSV 导入会先进入这里复核。</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] text-xs">
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${A.border}` }}>
+                  {["任务名称", "来源模块", "导入类型", "文件名", "记录数", "通过记录", "警告记录", "错误记录", "当前状态", "发起人", "发起时间", "下一步", "操作"].map((header) => (
+                    <th key={header} className="px-4 py-3 text-left font-semibold whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BUSINESS_IMPORT_TASKS.map((task, index) => {
+                  const tone = statusTone(task.status);
+                  return (
+                    <tr key={task.name} style={{ borderBottom: index < BUSINESS_IMPORT_TASKS.length - 1 ? `1px solid ${A.border}` : "none" }}>
+                      <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{task.name}</td>
+                      <td className="px-4 py-3" style={{ color: A.sub }}>{task.module}</td>
+                      <td className="px-4 py-3" style={{ color: A.sub }}>{task.type}</td>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: A.blue }}>{task.file}</td>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: A.label }}>{task.records}</td>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: A.green }}>{task.passed}</td>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: A.orange }}>{task.warnings}</td>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: A.red }}>{task.errors}</td>
+                      <td className="px-4 py-3"><Chip label={task.status} color={tone.color} bg={tone.bg} /></td>
+                      <td className="px-4 py-3" style={{ color: A.sub }}>{task.owner}</td>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.sub }}>{task.time}</td>
+                      <td className="px-4 py-3 min-w-[180px]" style={{ color: A.gray1 }}>{task.nextStep}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          <button onClick={() => setView("quality")} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#f0f6ff", color: A.blue }}>查看校验结果</button>
+                          <button onClick={() => setView("mapping")} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>查看字段映射</button>
+                          <button onClick={() => setView("failed")} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.red }}>查看失败项</button>
+                          <DisabledActionButton>下载失败项</DisabledActionButton>
+                          <DisabledActionButton>重新上传</DisabledActionButton>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {view === "mapping" && (
+        <Card>
+          <div className="px-5 py-4" style={{ borderBottom: `1px solid ${A.border}` }}>
+            <SectionHeader title="字段映射" />
+            <p className="text-[11px] leading-5" style={{ color: A.sub }}>复核外部字段如何对应系统字段，本轮只展示映射结果和质量提示。</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[880px] text-xs">
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${A.border}` }}>
+                  {["来源字段", "系统字段", "来源示例值", "映射状态", "是否必填", "质量提示"].map((header) => (
+                    <th key={header} className="px-5 py-3 text-left font-semibold whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BUSINESS_MAPPING_ROWS.map((row, index) => {
+                  const tone = statusTone(row.status);
+                  return (
+                    <tr key={row.source} style={{ borderBottom: index < BUSINESS_MAPPING_ROWS.length - 1 ? `1px solid ${A.border}` : "none" }}>
+                      <td className="px-5 py-3 font-mono" style={{ color: A.blue }}>{row.source}</td>
+                      <td className="px-5 py-3 font-semibold" style={{ color: A.label }}>{row.target}</td>
+                      <td className="px-5 py-3" style={{ color: A.sub }}>{row.value}</td>
+                      <td className="px-5 py-3"><Chip label={row.status} color={tone.color} bg={tone.bg} /></td>
+                      <td className="px-5 py-3" style={{ color: A.sub }}>{row.required}</td>
+                      <td className="px-5 py-3" style={{ color: A.gray1 }}>{row.hint}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {view === "quality" && (
+        <Card>
+          <div className="px-5 py-4" style={{ borderBottom: `1px solid ${A.border}` }}>
+            <SectionHeader title="质量检查" />
+            <p className="text-[11px] leading-5" style={{ color: A.sub }}>集中查看跨模块数据质量问题、业务影响和建议处理方式。</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-xs">
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${A.border}` }}>
+                  {["问题类型", "来源模块", "影响记录数", "严重程度", "业务影响", "建议处理", "状态"].map((header) => (
+                    <th key={header} className="px-5 py-3 text-left font-semibold whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BUSINESS_QUALITY_ISSUES.map((issue, index) => {
+                  const tone = statusTone(issue.severity);
+                  const status = statusTone(issue.status);
+                  return (
+                    <tr key={`${issue.type}-${issue.module}`} style={{ borderBottom: index < BUSINESS_QUALITY_ISSUES.length - 1 ? `1px solid ${A.border}` : "none" }}>
+                      <td className="px-5 py-3 font-semibold" style={{ color: A.label }}>{issue.type}</td>
+                      <td className="px-5 py-3" style={{ color: A.sub }}>{issue.module}</td>
+                      <td className="px-5 py-3 tabular-nums" style={{ color: A.label }}>{issue.count}</td>
+                      <td className="px-5 py-3"><Chip label={issue.severity} color={tone.color} bg={tone.bg} /></td>
+                      <td className="px-5 py-3 min-w-[220px]" style={{ color: A.gray1 }}>{issue.impact}</td>
+                      <td className="px-5 py-3 min-w-[220px]" style={{ color: A.blue }}>{issue.action}</td>
+                      <td className="px-5 py-3"><Chip label={issue.status} color={status.color} bg={status.bg} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {view === "failed" && (
+        <Card>
+          <div className="px-5 py-4" style={{ borderBottom: `1px solid ${A.border}` }}>
+            <SectionHeader title="失败项处理" />
+            <p className="text-[11px] leading-5" style={{ color: A.sub }}>展示失败行的业务字段、错误原因和建议修正，不在此处修改当前业务数据。</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1040px] text-xs">
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${A.border}` }}>
+                  {["行号", "来源文件", "来源模块", "业务对象", "错误字段", "当前值", "错误原因", "建议修正", "状态", "操作"].map((header) => (
+                    <th key={header} className="px-4 py-3 text-left font-semibold whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BUSINESS_FAILED_ROWS.map((row, index) => {
+                  const tone = statusTone(row.status);
+                  return (
+                    <tr key={`${row.file}-${row.row}`} style={{ borderBottom: index < BUSINESS_FAILED_ROWS.length - 1 ? `1px solid ${A.border}` : "none" }}>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: A.label }}>{row.row}</td>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: A.blue }}>{row.file}</td>
+                      <td className="px-4 py-3" style={{ color: A.sub }}>{row.module}</td>
+                      <td className="px-4 py-3" style={{ color: A.sub }}>{row.object}</td>
+                      <td className="px-4 py-3 font-mono" style={{ color: A.red }}>{row.field}</td>
+                      <td className="px-4 py-3" style={{ color: A.label }}>{row.value}</td>
+                      <td className="px-4 py-3 min-w-[200px]" style={{ color: A.red }}>{row.reason}</td>
+                      <td className="px-4 py-3 min-w-[200px]" style={{ color: A.blue }}>{row.suggestion}</td>
+                      <td className="px-4 py-3"><Chip label={row.status} color={tone.color} bg={tone.bg} /></td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          <DisabledActionButton>已忽略</DisabledActionButton>
+                          <DisabledActionButton>已修正</DisabledActionButton>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      <Card className="p-5">
+        <SectionHeader title="智能助手复核边界" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
+          {[
+            ["解释校验结果", "帮助业务用户理解错误记录、警告记录和影响范围。"],
+            ["总结失败原因", "按字段、模块和业务对象汇总失败项。"],
+            ["建议字段映射", "对需确认和未匹配字段给出候选系统字段。"],
+            ["生成修正建议", "生成可复核的修正建议，由人工决定后续处理。"],
+          ].map(([title, body]) => (
+            <div key={title} className="rounded-lg p-3" style={{ background: A.gray6, border: `1px solid ${A.border}` }}>
+              <div className="font-semibold mb-1" style={{ color: A.label }}>{title}</div>
+              <div>{body}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 function userDatasetStatusMessage(status?: UserDataStatus | null, state?: string) {
   if (state === "loading") return "读取中...";
@@ -865,6 +1212,8 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 }
 
 export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelProps) {
+  return <BusinessImportsExperience onNavigate={onNavigate} initialView={initialView} />;
+
   const [selectedId, setSelectedId] = useState<ImportTypeId>("supplierQuotes");
   const [moduleFilter, setModuleFilter] = useState<typeof FILTERS[number]>("全部");
   const [fileName, setFileName] = useState("");
