@@ -55,7 +55,7 @@ test.describe("Sales Demand Lite browser flow", () => {
     await expect(moduleScope.getByRole("button", { name: "询问 AI" })).toHaveCount(0);
     await expect(moduleScope).toContainText("SO-2026-0412-A");
     await expect(moduleScope).toContainText("SKU-00412");
-    await expect(moduleScope).toContainText("请选择一个客户订单查看库存分配和证据链详情。");
+    await expect(moduleScope).toContainText("列表保持完整宽度");
     await expect(moduleScope).not.toContainText("采购订单：");
 
     const searchBox = page.getByPlaceholder("搜索业务记录");
@@ -69,17 +69,32 @@ test.describe("Sales Demand Lite browser flow", () => {
     await expect(page.getByTestId("sales-order-SO-2026-0412-A")).toBeVisible();
     await expect(page.getByTestId("sales-order-SO-2026-0412-A")).toContainText(/已阻塞|缺货风险/);
     await page.getByTestId("sales-order-SO-2026-0412-A").getByRole("button", { name: "查看详情" }).click();
-    await expect(moduleScope).toContainText("库存分配摘要");
-    await expect(moduleScope).toContainText("可承诺量");
+    await expect(page.getByRole("heading", { name: "库存影响" })).toBeVisible();
+    await expect(page.getByText("可承诺量", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "复核动作" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "拒绝" })).toBeVisible();
+    await page.getByRole("button", { name: "拒绝" }).click();
+    await page.getByRole("button", { name: "生成复核预览" }).click();
+    await expect(page.getByText("拒绝需要填写原因")).toBeVisible();
+    await page.getByPlaceholder("填写复核原因、补充资料要求或暂缓说明").fill("库存缺口需销售确认");
+    await page.getByRole("button", { name: "生成复核预览" }).click();
+    await expect(page.getByText("已生成拒绝复核记录预览")).toBeVisible();
+    await page.keyboard.press("Escape");
 
     await page.getByRole("button", { name: "交付风险", exact: true }).click();
     await expect(moduleScope).toContainText("交付风险队列");
-    await expect(moduleScope).toContainText("建议动作");
+    await expect(moduleScope).toContainText("优先复核库存分配、在途采购和供应商交付承诺");
+    const firstRiskRow = moduleScope.locator(".p-4").filter({ hasText: "SO-2026-0412-A" }).first();
+    await expect(firstRiskRow.getByRole("button", { name: "查看详情" })).toHaveCount(1);
+    await expect(firstRiskRow.getByRole("button", { name: /让 AI 解释|查看采购订单|查看库存|查看订单/ })).toHaveCount(0);
     await expect(moduleScope).not.toContainText("主证据链");
 
     await page.getByRole("button", { name: "订单证据链" }).click();
     await expect(moduleScope).toContainText("主证据链");
+    await expect(moduleScope).toContainText("选择客户订单");
     await expect(moduleScope).toContainText("相关记录与返回路径");
+    await expect(moduleScope).toContainText("SKU库存");
+    await expect(moduleScope).toContainText("发票财务");
     await expect(moduleScope).toContainText("客户订单 → SKU → 库存可用量 → 采购订单 → 供应商 → 收货单");
     await expect(moduleScope).toContainText("生成内部通知草稿预览");
     await expect(moduleScope).toContainText("生成异常工单草稿预览");

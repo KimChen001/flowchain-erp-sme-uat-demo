@@ -60,9 +60,9 @@ export const navItems = [
     icon: Users, label: "供应商管理", id: "srm",
     children: [
       { id: "srm", label: "SRM 总览" },
-      { id: "srm:master", label: "供应商主数据" },
-      { id: "srm:performance", label: "供应商绩效与风险" },
-      { id: "srm:certification", label: "认证与准入" },
+      { id: "srm:master", label: "供应商资料目录" },
+      { id: "srm:performance", label: "绩效评分与风险队列" },
+      { id: "srm:certification", label: "认证资料与准入复核" },
       { id: "srm:sourcing", label: "RFx 参与" },
       { id: "srm:contracts", label: "合同与目录" },
     ],
@@ -131,6 +131,6 @@ export const navItems = [
 
 export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
-  { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "master-data", "finance", "forecast", "exception-cases"] },
-  { label: "数据", itemIds: ["reports", "imports"] },
+  { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast", "exception-cases"] },
+  { label: "数据", itemIds: ["master-data", "reports", "imports"] },
 ] as const;

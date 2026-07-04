@@ -91,6 +91,7 @@ test.describe("Inventory Allocation and ATP", () => {
     await expect(sales).toContainText("库存分配摘要");
     await expect(sales).toContainText("可承诺量");
     await expect(sales).toContainText("在途采购");
+    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "订单证据链" }).click();
     await expect(sales).toContainText("主证据链");
     await expect(sales).toContainText("客户订单 → SKU → 库存可用量 → 采购订单 → 供应商 → 收货单");

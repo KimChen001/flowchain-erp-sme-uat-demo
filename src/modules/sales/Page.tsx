@@ -4,6 +4,15 @@ import { apiJson } from "../../lib/api-client";
 import { A, Card, Chip, KpiCard, SectionHeader } from "../../components/ui";
 import { typography } from "../../components/ui/typography";
 import type { InventoryAvailability } from "../inventory/api";
+import {
+  BusinessObjectDetailModal,
+  CompactKpiStrip,
+  DataLimitationsPanel,
+  DetailFieldGrid,
+  DetailSection,
+  EvidenceSummaryPanel,
+  ReviewActionPanel,
+} from "../../components/business/BusinessObjectDetail";
 
 type SalesOrder = {
   salesOrderId: string;
@@ -98,6 +107,7 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
   const [ordersError, setOrdersError] = useState("");
   const [allocationWarning, setAllocationWarning] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -134,6 +144,11 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
     if (!focus?.entityId) return;
     setSelectedOrderId(focus.entityId);
   }, [focus?.entityId]);
+
+  function openOrderDetail(orderId: string) {
+    setSelectedOrderId(orderId);
+    setDetailOpen(true);
+  }
 
   const focusedOrder = useMemo(() => {
     if (!focus?.entityId) return null;
@@ -188,11 +203,20 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
       </Card>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="客户订单" value={String(activeSummary.totalOrders)} sub="当前订单视图" icon={ClipboardList} color={A.blue} />
+        <KpiCard label="客户订单" value={String(activeSummary.totalOrders)} sub="当前工作区订单" icon={ClipboardList} color={A.blue} />
         <KpiCard label="交付风险" value={String(activeSummary.riskOrderCount)} sub={`${activeSummary.highRiskOrderCount} 个高风险`} icon={AlertTriangle} color={activeSummary.highRiskOrderCount ? A.red : A.orange} />
-        <KpiCard label="缺口数量" value={qty(activeSummary.shortageQty)} sub="按当前订单汇总" icon={PackageSearch} color={A.red} />
-        <KpiCard label="已预留数量" value={qty(activeSummary.reservedQty)} sub="当前库存分配" icon={Boxes} color={A.green} />
+        <KpiCard label="缺口数量" value={qty(activeSummary.shortageQty)} sub="影响交付承诺" icon={PackageSearch} color={A.red} />
+        <KpiCard label="已预留数量" value={qty(activeSummary.reservedQty)} sub="已分配库存" icon={Boxes} color={A.green} />
       </div>
+
+      <OrderDetailModal
+        order={detailOpen ? selectedOrder : null}
+        allocation={selectedOrder ? availabilityBySku.get(selectedOrder.sku) : undefined}
+        allocationWarning={allocationWarning}
+        onClose={() => setDetailOpen(false)}
+        onNavigate={onNavigate}
+        onOpenAi={onOpenAi}
+      />
 
       {ordersError && <Card className="p-4 text-sm" style={{ color: A.red }}>{ordersError}</Card>}
       {loadingOrders && <Card className="p-6 text-sm" style={{ color: A.sub }}>正在读取客户订单...</Card>}
@@ -203,7 +227,10 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
       )}
 
       {!loadingOrders && !ordersError && orders.length > 0 && view === "orders" && (
-        <div className="grid grid-cols-[1.3fr_0.7fr] gap-5">
+        <div className="space-y-3">
+          <Card className="p-4 text-xs leading-5" style={{ color: A.sub }}>
+            选择一条客户订单查看库存影响、采购在途、证据链和复核动作。详情以独立业务对象面板打开，列表保持完整宽度。
+          </Card>
           <Card>
             <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${A.border}` }}>
               <SectionHeader title="客户订单列表" />
@@ -234,7 +261,7 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
                       <td className="px-3 py-3"><Chip label={order.deliveryRiskLabel} color={riskColor[order.deliveryRiskLevel] || A.gray1} bg={`${riskColor[order.deliveryRiskLevel] || A.gray1}16`} /></td>
                       <td className="px-3 py-3" style={{ color: A.sub }}>{order.statusLabel}</td>
                       <td className="px-3 py-3">
-                        <button onClick={() => setSelectedOrderId(order.salesOrderId)} className="px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看详情</button>
+                        <button onClick={() => openOrderDetail(order.salesOrderId)} className="px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看详情</button>
                       </td>
                     </tr>
                   ))}
@@ -242,13 +269,6 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
               </table>
             </div>
           </Card>
-
-          <OrderDetailPanel
-            order={selectedOrder}
-            allocation={selectedOrder ? availabilityBySku.get(selectedOrder.sku) : undefined}
-            allocationWarning={allocationWarning}
-            onNavigate={onNavigate}
-          />
         </div>
       )}
 
@@ -261,20 +281,30 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
           <div className="divide-y" style={{ borderColor: A.border }}>
             {riskOrders.map((order) => (
               <div key={order.salesOrderId} className="p-4">
-                <div className="grid grid-cols-[120px_1fr_120px_160px] gap-3 items-start">
+                <div className="grid grid-cols-[120px_1fr_180px_120px] gap-3 items-start">
                   <Chip label={order.deliveryRiskLabel} color={riskColor[order.deliveryRiskLevel] || A.gray1} bg={`${riskColor[order.deliveryRiskLevel] || A.gray1}16`} />
                   <div className="min-w-0">
                     <div className="font-semibold text-sm tabular-nums" style={{ color: A.label }}>{order.salesOrderId} · {order.customerName}</div>
                     <div className="mt-1 text-xs truncate" style={{ color: A.sub }}>{order.sku} / {order.itemName} · 缺口 {qty(order.shortageQty)} · 承诺日期 {order.promisedDate || "待确认"}</div>
                     <div className="mt-1 text-[11px] leading-5 line-clamp-2" style={{ color: A.gray1 }}>{order.deliveryRiskReason}</div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {[
+                        ["订单", "sales"],
+                        ["库存", "inventory"],
+                        ["采购", "procurement:orders"],
+                        ["证据链", "sales:evidence"],
+                      ].map(([label, target]) => (
+                        <button key={label} onClick={() => { if (target === "sales:evidence") setSelectedOrderId(order.salesOrderId); onNavigate?.(target); }}
+                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{ background: A.gray6, color: A.blue }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-[11px] leading-5" style={{ color: A.orange }}>建议动作：复核库存分配、在途采购和供应商交付承诺。</div>
-                  <div className="flex flex-wrap gap-1.5 justify-end">
-                    <button onClick={() => { setSelectedOrderId(order.salesOrderId); onNavigate?.("sales"); }} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看订单</button>
-                    <button onClick={() => onNavigate?.("inventory")} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看库存</button>
-                    <button onClick={() => onNavigate?.("procurement:orders")} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看采购订单</button>
-                    <button onClick={() => { setSelectedOrderId(order.salesOrderId); onNavigate?.("sales:evidence"); }} className="px-2 py-1 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>查看证据链</button>
-                    <button onClick={onOpenAi} className="px-2 py-1 rounded-md font-medium" style={{ background: "#fff8f0", color: A.orange }}>让 AI 解释此风险</button>
+                  <div className="text-[11px] leading-5" style={{ color: A.orange }}>建议动作：优先复核库存分配、在途采购和供应商交付承诺。</div>
+                  <div className="flex justify-end">
+                    <button onClick={() => openOrderDetail(order.salesOrderId)} className="px-3 py-1.5 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button>
                   </div>
                 </div>
               </div>
@@ -287,100 +317,152 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
       )}
 
       {!loadingOrders && !ordersError && orders.length > 0 && view === "evidence" && (
-        <EvidenceChainView orders={evidenceOrders} onNavigate={onNavigate} />
+        <EvidenceChainView orders={evidenceOrders} allOrders={orders} selectedOrderId={selectedOrder?.salesOrderId || ""} onSelectOrder={setSelectedOrderId} onNavigate={onNavigate} />
       )}
     </div>
   );
 }
 
-function OrderDetailPanel({
+function OrderDetailModal({
   order,
   allocation,
   allocationWarning,
+  onClose,
   onNavigate,
+  onOpenAi,
 }: {
   order: SalesOrder | null;
   allocation?: InventoryAvailability;
   allocationWarning: string;
+  onClose: () => void;
   onNavigate?: (moduleId: string) => void;
+  onOpenAi?: () => void;
 }) {
-  if (!order) {
-    return (
-      <Card className="p-6 text-sm leading-6" style={{ color: A.sub }}>
-        请选择一个客户订单查看库存分配和证据链详情。
-      </Card>
-    );
-  }
+  if (!order) return null;
+  const allocationRiskColor = allocation?.riskLevel === "low" ? A.green : allocation?.riskLevel === "medium" ? A.orange : A.red;
   return (
-    <Card>
-      <div className="px-5 py-4" style={{ borderBottom: `1px solid ${A.border}` }}>
-        <SectionHeader title="客户订单详情" />
-        <p className="text-[11px] mt-1 tabular-nums" style={{ color: A.sub }}>{order.salesOrderId} · {order.customerName}</p>
-      </div>
-      <div className="p-4 space-y-3">
-        <div className="grid grid-cols-2 gap-2 text-[11px]">
-          {[
-            ["订单数量", qty(order.orderedQty)],
-            ["已预留", qty(order.reservedQty)],
-            ["缺口", qty(order.shortageQty)],
-            ["状态", order.statusLabel],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-lg p-2" style={{ background: A.gray6 }}>
-              <div style={{ color: A.gray2 }}>{label}</div>
-              <div className="mt-1 font-semibold tabular-nums" style={{ color: label === "缺口" && order.shortageQty > 0 ? A.red : A.label }}>{value}</div>
-            </div>
-          ))}
+    <BusinessObjectDetailModal
+      open={Boolean(order)}
+      onClose={onClose}
+      title={`${order.salesOrderId} · ${order.customerName}`}
+      subtitle={`${order.sku} / ${order.itemName}`}
+      width={1120}
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip label={order.statusLabel} color={A.blue} bg="#f0f6ff" />
+          <Chip label={order.deliveryRiskLabel} color={riskColor[order.deliveryRiskLevel] || A.gray1} bg={`${riskColor[order.deliveryRiskLevel] || A.gray1}16`} />
+          <span className="text-xs" style={{ color: A.sub }}>承诺日期 {order.promisedDate || "待确认"}</span>
         </div>
 
-        <div className="rounded-xl p-3" style={{ background: "#f0f6ff" }}>
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-xs font-semibold" style={{ color: A.label }}>库存分配摘要</div>
-            <Chip label={allocation?.riskLabel || "需人工复核"} color={allocation?.riskLevel === "low" ? A.green : allocation?.riskLevel === "medium" ? A.orange : A.red} bg={allocation?.riskLevel === "low" ? "#f0faf4" : allocation?.riskLevel === "medium" ? "#fff8f0" : "#fff1f0"} />
-          </div>
+        <CompactKpiStrip items={[
+          { label: "订单数量", value: qty(order.orderedQty) },
+          { label: "已预留", value: qty(order.reservedQty), tone: "good" },
+          { label: "缺口", value: qty(order.shortageQty), tone: order.shortageQty > 0 ? "danger" : "default" },
+          { label: "优先级", value: order.priority, tone: order.priority === "高" ? "warning" : "default" },
+        ]} />
+
+        <DetailSection title="基本信息">
+          <DetailFieldGrid fields={[
+            { label: "客户", value: order.customerName },
+            { label: "客户层级", value: order.customerTier },
+            { label: "SKU", value: order.sku },
+            { label: "物料", value: order.itemName },
+            { label: "状态", value: order.statusLabel },
+            { label: "风险原因", value: order.deliveryRiskReason, tone: "warning" },
+            { label: "关联供应商", value: order.linkedSuppliers.map((supplier) => supplier.name).join("；") || "待关联" },
+            { label: "异常工单", value: order.linkedExceptionCases.join("；") || "暂无" },
+          ]} />
+        </DetailSection>
+
+        <DetailSection title="库存影响" right={<Chip label={allocation?.riskLabel || "需人工复核"} color={allocationRiskColor} bg={allocation?.riskLevel === "low" ? "#f0faf4" : allocation?.riskLevel === "medium" ? "#fff8f0" : "#fff1f0"} />}>
+          <div className="mb-2 text-[11px] font-semibold" style={{ color: A.gray1 }}>库存分配摘要</div>
           {allocation ? (
-            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-              {[
-                ["可承诺量", allocation.availableToPromiseQty],
-                ["可预留", allocation.reservableQty],
-                ["在途采购", allocation.incomingPurchaseQty],
-                ["预计可用", allocation.projectedAvailableQty],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-lg px-2 py-2" style={{ background: A.white }}>
-                  <div style={{ color: A.gray2 }}>{label}</div>
-                  <div className="font-semibold tabular-nums" style={{ color: A.label }}>{Number(value).toLocaleString("zh-CN")}</div>
-                </div>
-              ))}
-            </div>
+            <DetailFieldGrid fields={[
+              { label: "可承诺量", value: qty(allocation.availableToPromiseQty), tone: "info" },
+              { label: "可预留", value: qty(allocation.reservableQty), tone: "good" },
+              { label: "在途采购", value: qty(allocation.incomingPurchaseQty), tone: "info" },
+              { label: "预计可用", value: qty(allocation.projectedAvailableQty), tone: allocation.projectedAvailableQty < order.orderedQty ? "warning" : "good" },
+            ]} />
           ) : (
-            <div className="mt-2 text-[11px] leading-5" style={{ color: A.orange }}>
+            <div className="text-xs leading-6" style={{ color: A.orange }}>
               {allocationWarning || "当前工作区暂未读取到完整库存分配记录，因此可承诺量和预留建议需人工复核。"}
             </div>
           )}
-        </div>
+        </DetailSection>
 
-        <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
-          <div className="text-xs font-semibold" style={{ color: A.label }}>数据限制</div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {(order.dataLimitations.length ? order.dataLimitations : ["current_workspace_data_limited"]).map((item) => (
-              <span key={item} className={typography.compactMetadata} style={{ color: A.orange }}>{limitationLabel(item)}</span>
-            ))}
+        <EvidenceSummaryPanel groups={[
+          { label: "客户订单", value: `${order.salesOrderId} · ${order.customerName} · ${order.statusLabel}` },
+          { label: "SKU库存", value: `${order.sku} · 已预留 ${qty(order.reservedQty)} · 缺口 ${qty(order.shortageQty)}`, tone: order.shortageQty > 0 ? "danger" : "good" },
+          { label: "采购订单", value: order.linkedPurchaseOrders.map((po) => `${po.id} ${po.status || ""} ${po.expectedDate || ""}`).join("；") || "暂无完整采购订单关联" },
+          { label: "供应商", value: order.linkedSuppliers.map((supplier) => `${supplier.name}${supplier.risk ? ` · ${supplier.risk}` : ""}`).join("；") || "暂无完整供应商记录" },
+          { label: "收货单", value: order.linkedReceivingDocs.map((grn) => `${grn.id} ${grn.status || ""}`).join("；") || "暂无完整收货记录" },
+          { label: "发票财务", value: "按当前采购、收货与供应商记录人工追溯" },
+          { label: "异常工单", value: order.linkedExceptionCases.join("；") || "暂无关联异常工单" },
+        ]} />
+
+        <DataLimitationsPanel items={order.dataLimitations} labelFor={limitationLabel} />
+
+        <DetailSection title="AI 辅助与跳转">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => onNavigate?.("sales:evidence")} className="text-xs px-3 py-2 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>进入证据链</button>
+            <button onClick={() => onNavigate?.("sales:risks")} className="text-xs px-3 py-2 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>查看交付风险</button>
+            <button onClick={onOpenAi} className="text-xs px-3 py-2 rounded-lg font-medium" style={{ background: A.white, color: A.blue }}>解释风险信号</button>
+            <button className="text-xs px-3 py-2 rounded-lg font-medium" style={{ background: A.white, color: A.green }}>生成内部通知草稿预览</button>
           </div>
-        </div>
+        </DetailSection>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => onNavigate?.("sales:evidence")} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>进入证据链</button>
-          <button onClick={() => onNavigate?.("sales:risks")} className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>进入交付风险</button>
-        </div>
+        <ReviewActionPanel objectLabel={`客户订单 ${order.salesOrderId}`} />
+
+        <DetailSection title="审计与时间线">
+          <div className="grid grid-cols-3 gap-2 text-[11px] leading-5" style={{ color: A.sub }}>
+            <div className="rounded-lg p-2" style={{ background: A.white }}>订单读取：已进入当前工作区视图</div>
+            <div className="rounded-lg p-2" style={{ background: A.white }}>库存复核：根据可承诺量和在途采购判断</div>
+            <div className="rounded-lg p-2" style={{ background: A.white }}>后续动作：负责人确认后进入业务流程</div>
+          </div>
+        </DetailSection>
       </div>
-    </Card>
+    </BusinessObjectDetailModal>
   );
 }
 
-function EvidenceChainView({ orders, onNavigate }: { orders: SalesOrder[]; onNavigate?: (moduleId: string) => void }) {
+function EvidenceChainView({
+  orders,
+  allOrders,
+  selectedOrderId,
+  onSelectOrder,
+  onNavigate,
+}: {
+  orders: SalesOrder[];
+  allOrders: SalesOrder[];
+  selectedOrderId: string;
+  onSelectOrder: (orderId: string) => void;
+  onNavigate?: (moduleId: string) => void;
+}) {
+  const hasSelectedOrder = Boolean(selectedOrderId);
   return (
     <div className="grid grid-cols-[0.9fr_1.1fr] gap-5">
       <Card className="p-5">
         <SectionHeader title="主证据链" right={<Chip label="只读证据" color={A.blue} bg="#f0f6ff" />} />
+        {!hasSelectedOrder && (
+          <div className="mb-4 rounded-xl p-3" style={{ background: A.gray6 }}>
+            <div className="text-xs font-semibold" style={{ color: A.label }}>选择客户订单</div>
+            <div className="mt-2 grid grid-cols-1 gap-2">
+              {allOrders.slice(0, 6).map((order) => (
+                <button
+                  key={order.salesOrderId}
+                  type="button"
+                  onClick={() => onSelectOrder(order.salesOrderId)}
+                  className="rounded-lg px-3 py-2 text-left text-[11px]"
+                  style={{ background: A.white, color: A.label }}
+                >
+                  <span className="font-semibold tabular-nums">{order.salesOrderId}</span>
+                  <span style={{ color: A.sub }}> · {order.customerName} · {order.deliveryRiskLabel}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="mt-4 grid grid-cols-1 gap-2">
           {[
             ["客户订单", ClipboardList],
@@ -417,11 +499,11 @@ function EvidenceChainView({ orders, onNavigate }: { orders: SalesOrder[]; onNav
               <div className="font-semibold text-xs tabular-nums" style={{ color: A.label }}>{order.salesOrderId}</div>
               <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px] leading-5">
                 <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><ClipboardList size={12} /> 客户订单：{order.customerName} · {order.statusLabel}</div>
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><PackageSearch size={12} /> SKU / 库存可用量：{order.sku} / {order.itemName}</div>
+                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><PackageSearch size={12} /> SKU库存：{order.sku} / {order.itemName} · 已预留 {qty(order.reservedQty)} · 缺口 {qty(order.shortageQty)}</div>
                 <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><ShoppingCart size={12} /> 采购订单：{order.linkedPurchaseOrders.map((po) => `${po.id} ${po.status || ""}`).join("；") || "暂无完整采购订单关联"}</div>
                 <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><Users size={12} /> 供应商：{order.linkedSuppliers.map((supplier) => `${supplier.name}${supplier.risk ? ` · ${supplier.risk}` : ""}`).join("；") || "暂无完整供应商记录"}</div>
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><Truck size={12} /> 收货单 / GRN：{order.linkedReceivingDocs.map((grn) => `${grn.id} ${grn.status || ""}`).join("；") || "暂无完整收货记录"}</div>
-                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><FileText size={12} /> 发票 / 财务协同：按当前采购和收货记录人工追溯</div>
+                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><Truck size={12} /> 收货单：{order.linkedReceivingDocs.map((grn) => `${grn.id} ${grn.status || ""}`).join("；") || "暂无完整收货记录"}</div>
+                <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><FileText size={12} /> 发票财务：按当前采购和收货记录人工追溯</div>
                 <div className="flex items-center gap-1.5" style={{ color: A.gray1 }}><AlertTriangle size={12} /> 异常工单：{order.linkedExceptionCases.join("；") || "暂无关联异常工单"}</div>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">

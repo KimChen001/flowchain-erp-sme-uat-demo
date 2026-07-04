@@ -41,7 +41,7 @@ export function matchesSupplierName(value: unknown, supplier: SupplierRelationsh
 
 export function buildSrmSupplierRows(suppliers: SupplierRelationshipProfile[] = SUPPLIER_MASTER) {
   return suppliers.map((supplier) => {
-    const portal = PORTAL_SUPPLIERS.find((item) => matchesSupplierName(item.name, supplier));
+    const supplierOperationsProfile = PORTAL_SUPPLIERS.find((item) => matchesSupplierName(item.name, supplier));
     const pos = purchaseOrders.filter((order) => matchesSupplierName(order.supplier, supplier));
     const openPoCount = pos.filter((order) => !["已完成", "已取消", "已驳回"].includes(order.status)).length;
     const grns = receivingDocs.filter((doc) => matchesSupplierName(doc.supplier, supplier));
@@ -65,13 +65,13 @@ export function buildSrmSupplierRows(suppliers: SupplierRelationshipProfile[] = 
             : "持续监控";
     return {
       supplier,
-      portal,
+      supplierOperationsProfile,
       category: supplier.category,
-      rating: portal?.rating ?? supplier.rating,
-      onTimeRate: portal?.onTime ?? supplier.onTimeRate,
-      qualityRate: portal?.quality ?? supplier.qualityRate,
-      responseScore: portal?.resp ?? Math.round((supplier.onTimeRate + supplier.qualityRate) / 2),
-      flag: portal?.flag ?? (supplier.riskStatus === "高" ? "整改" : supplier.rating >= 4.5 ? "战略" : "核心"),
+      rating: supplierOperationsProfile?.rating ?? supplier.rating,
+      onTimeRate: supplierOperationsProfile?.onTime ?? supplier.onTimeRate,
+      qualityRate: supplierOperationsProfile?.quality ?? supplier.qualityRate,
+      responseScore: supplierOperationsProfile?.resp ?? Math.round((supplier.onTimeRate + supplier.qualityRate) / 2),
+      flag: supplierOperationsProfile?.flag ?? (supplier.riskStatus === "高" ? "整改" : supplier.rating >= 4.5 ? "战略" : "核心"),
       openPoCount,
       poCount: pos.length,
       grnExceptionCount: grns.filter((doc) => doc.status === "异常处理" || doc.failed > 0).length,

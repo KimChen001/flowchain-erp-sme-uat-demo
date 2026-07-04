@@ -266,14 +266,14 @@ test('R280/R290/R300 source guardrails preserve boundaries no keys and no standa
   assert.match(uiSource, /保存财务协同备注/)
   assert.match(uiSource, /预览发票异常工单/)
   assert.match(uiSource, /不审批、不付款、不过账/)
-  assert.match(uiSource, /供应商风险依据/)
-  assert.match(uiSource, /预览供应商跟进备注/)
-  assert.match(uiSource, /不修改供应商主数据/)
+  assert.match(uiSource, /风险判断来源/)
+  assert.match(uiSource, /供应商跟进备注草稿/)
+  assert.match(uiSource, /不修改供应商资料|不自动改主档/)
   assert.match(uiSource, /不自动发送外部邮件/)
   assert.match(uiSource, /运营控制塔/)
   assert.match(uiSource, /紧急、需复核、等待供应商、等待内部、已解决待关闭和数据缺口/)
-  assert.match(uiSource, /创建工单草稿/)
-  assert.match(uiSource, /解释依据/)
+  assert.match(uiSource, /生成内部跟进草稿/)
+  assert.match(uiSource, /风险信号/)
   for (const forbidden of [
     /Operations Control Tower/,
     /Receiving Review Boundary/,

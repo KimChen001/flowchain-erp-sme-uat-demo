@@ -109,7 +109,7 @@ const REVIEW_ACTION_LABELS: Record<string, string> = {
   create_case_after_review: "复核后创建工单",
   review_existing_case: "复核已有工单",
   preview_supplier_followup: "预览供应商跟进",
-  preview_supplier_followup_note: "预览供应商跟进备注",
+  preview_supplier_followup_note: "供应商跟进备注草稿",
   review_grn_evidence: "复核收货证据",
   review_case_closure: "复核工单关闭",
 };
@@ -295,7 +295,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
             </p>
           </div>
           <button onClick={openDraft} className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-white ${typography.denseButton}`} style={{ background: A.blue }}>
-            <Plus size={14} /> 创建工单草稿
+            <Plus size={14} /> 生成内部跟进草稿
           </button>
         </div>
       </Card>
@@ -389,7 +389,7 @@ export default function ExceptionCasesPage({ onNavigate }: Props) {
 
       {!draft && guidedDraftState && (
         <Card className="p-4">
-          <p className={typography.subsectionTitle} style={{ color: A.label }}>创建工单草稿</p>
+          <p className={typography.subsectionTitle} style={{ color: A.label }}>生成内部跟进草稿</p>
           <p className={`${typography.metadata} mt-1`} style={{ color: A.sub }}>{guidedDraftState}</p>
         </Card>
       )}

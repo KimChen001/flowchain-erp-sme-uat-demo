@@ -489,7 +489,7 @@ export function TodayCockpitPanel({ cockpit, loading, error = false, onNavigate,
             </div>
           </div>
           <div className="flex flex-wrap justify-end gap-2 text-[11px]">
-            {["创建工单草稿", "预览跟进备注", "解释依据"].map((label) => (
+            {["生成内部跟进草稿", "跟进备注草稿", "风险信号"].map((label) => (
               <span key={label} className="rounded-md px-2.5 py-1 font-medium" style={{ background: A.white, color: A.blue }}>{label}</span>
             ))}
           </div>

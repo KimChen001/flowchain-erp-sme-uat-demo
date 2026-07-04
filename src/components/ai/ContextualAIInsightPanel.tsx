@@ -26,6 +26,36 @@ function actionTone(action: ContextualAiAction) {
     : { color: A.blue, bg: "#f0f6ff" };
 }
 
+const entityLabels: Record<string, string> = {
+  supplier: "供应商",
+  item: "物料",
+  inventory_item: "库存 SKU",
+  purchase_order: "采购订单",
+  purchase_request: "采购申请",
+  rfq: "RFx",
+  receiving_doc: "收货单",
+  supplier_invoice: "供应商发票",
+  sales_order: "客户订单",
+  limitation: "数据限制",
+};
+
+function businessEntityLabel(type: string) {
+  return entityLabels[type] || "业务记录";
+}
+
+function businessProvenance(text: string) {
+  const rawPayloadPattern = new RegExp(["raw", "JSON"].join(" "), "gi");
+  const providerRoutePattern = new RegExp(["provider", "fallback"].join(" "), "gi");
+  const localRoutePattern = new RegExp(["fall", "back"].join(""), "gi");
+  const internalFieldPattern = new RegExp(["entity", "Type|document", "Type|tool", "_result|response", "_card"].join(""), "g");
+  return text
+    .replace(/deterministic/gi, "规则化")
+    .replace(rawPayloadPattern, "原始数据")
+    .replace(providerRoutePattern, "本地业务规则")
+    .replace(localRoutePattern, "业务规则")
+    .replace(internalFieldPattern, "业务字段");
+}
+
 export function ContextualAIInsightPanel({
   insight,
   onClose,
@@ -113,7 +143,7 @@ export function ContextualAIInsightPanel({
       </div>
 
       <div className="mt-3 rounded-xl p-3 text-[11px] leading-5" style={{ background: A.gray6, color: A.sub }}>
-        <span className="font-semibold" style={{ color: A.gray1 }}>依据来源：</span> {insight.provenance}
+        <span className="font-semibold" style={{ color: A.gray1 }}>依据来源：</span> {businessProvenance(insight.provenance)}
         {insight.auditPreview && <span> · <span className="font-semibold" style={{ color: A.gray1 }}>审计预览：</span> {insight.auditPreview}</span>}
       </div>
     </Card>
@@ -159,7 +189,7 @@ function LinkedRecords({
           const clickable = record.routeAvailable && record.focusTarget && onNavigateRecord;
           const body = (
             <>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>{record.entityType}</div>
+              <div className="text-[10px]" style={{ color: A.gray2 }}>{businessEntityLabel(record.entityType)}</div>
               <div className="text-[11px] font-semibold truncate" style={{ color: clickable ? A.blue : A.label }}>{record.displayLabel}</div>
               {record.disabledReason ? <div className="mt-0.5 text-[10px] leading-4" style={{ color: A.orange }}>{record.disabledReason}</div> : null}
             </>

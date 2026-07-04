@@ -542,7 +542,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       name: "Supplier Performance Report",
       module: "供应商",
       description: "供应商评分、准时率、质量率、响应分、PO 数和 YTD 采购额。",
-      source: "PORTAL_SUPPLIERS · supplier performance API supplement",
+      source: "供应商绩效补充数据",
       sourceKind: "API supplement",
       updated: "API supplement baseline",
       filename: "supplier-performance-export.csv",

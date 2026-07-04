@@ -49,18 +49,18 @@ type IncomingSrmTab = SrmTab | "risk" | "portal" | "scoring";
 
 const tabs = [
   { id: "overview", label: "SRM 总览", icon: Sparkles },
-  { id: "master", label: "供应商主数据", icon: Building2 },
-  { id: "performance", label: "供应商绩效与风险", icon: Award },
-  { id: "certification", label: "认证与准入", icon: ShieldCheck },
+  { id: "master", label: "供应商资料目录", icon: Building2 },
+  { id: "performance", label: "绩效评分与风险队列", icon: Award },
+  { id: "certification", label: "认证资料与准入复核", icon: ShieldCheck },
   { id: "sourcing", label: "RFx 参与", icon: ClipboardCheck },
   { id: "contracts", label: "合同与目录", icon: Handshake },
 ] as const;
 
 const tabSubtitles: Record<SrmTab, string> = {
   overview: "聚焦供应商健康度、异常协同和下一步处理优先级。",
-  master: "查看供应商主档、商业条款、默认税码和基础状态。",
-  performance: "跟踪供应商评分、准时率、质量、响应、风险、开放 PO、发票差异和对账异常。",
-  certification: "复核供应商准入、认证状态、整改和到期风险。",
+  master: "按供应商主档、联系人、商业条款、默认税码和当前记录状态查看资料。",
+  performance: "跟踪供应商评分、准时率、质量、响应、开放 PO、发票差异和对账异常。",
+  certification: "复核认证资料、准入状态、缺失文件、到期风险和整改事项。",
   sourcing: "汇总 RFx 邀请、报价参与和寻源结果。",
   contracts: "查看框架合同、目录覆盖、价格条款和消耗进度。",
 };
@@ -183,29 +183,33 @@ export default function SrmPage({
         </div>
       </Card>
 
-      <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="供应商总数" value={String(kpis.totalSuppliers)} sub="SRM 覆盖" icon={Building2} color={A.blue} />
-        <KpiCard label="高风险供应商" value={String(kpis.highRiskSuppliers)} sub="风险或整改" icon={AlertTriangle} color={A.red} />
-        <KpiCard label="待认证 / 待复核" value={String(kpis.certificationReview)} sub="准入状态" icon={ShieldCheck} color={A.orange} />
-        <KpiCard label="开放 RFx" value={String(kpis.openRfqs)} sub="寻源参与" icon={ClipboardCheck} color={A.purple} />
-      </div>
-
-      <Card className="p-5">
-        <SectionHeader title="供应商风险依据" right={<Chip label="先复核后确认" color={A.blue} bg="#eef6ff" />} />
-        <div className="grid grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
-          {[
-            ["解释依据", "信号来自 PO 延误、质检冻结、发票差异、RFQ 响应和未关闭异常工单。"],
-            ["创建工单草稿", "风险跟进只打开异常工单草稿，负责人复核后才进入流程。"],
-            ["预览供应商跟进备注", "供应商沟通保持为草稿，不自动发送外部邮件。"],
-            ["主数据安全边界", "风险评分不修改供应商主数据，也不会自动触发采购冻结。"],
-          ].map(([title, body]) => (
-            <div key={title} className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-              <div className="font-semibold" style={{ color: A.label }}>{title}</div>
-              <div className="mt-1">{body}</div>
-            </div>
-          ))}
+      {tab === "overview" && (
+        <div className="grid grid-cols-4 gap-3">
+          <KpiCard label="供应商总数" value={String(kpis.totalSuppliers)} sub="SRM 覆盖" icon={Building2} color={A.blue} />
+          <KpiCard label="高风险供应商" value={String(kpis.highRiskSuppliers)} sub="风险或整改" icon={AlertTriangle} color={A.red} />
+          <KpiCard label="待认证 / 待复核" value={String(kpis.certificationReview)} sub="准入状态" icon={ShieldCheck} color={A.orange} />
+          <KpiCard label="开放 RFx" value={String(kpis.openRfqs)} sub="寻源参与" icon={ClipboardCheck} color={A.purple} />
         </div>
-      </Card>
+      )}
+
+      {(tab === "overview" || tab === "performance") && (
+        <Card className="p-5">
+          <SectionHeader title="风险判断来源" right={<Chip label="先复核后确认" color={A.blue} bg="#eef6ff" />} />
+          <div className="grid grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
+            {[
+              ["风险信号", "信号来自 PO 延误、质检冻结、发票差异、RFQ 响应和未关闭异常工单。"],
+              ["生成内部跟进草稿", "风险跟进只打开内部草稿，负责人复核后才进入流程。"],
+              ["供应商跟进备注草稿", "供应商沟通保持为草稿，不自动发送外部邮件。"],
+              ["资料安全边界", "风险评分不修改供应商资料，也不会自动触发采购冻结。"],
+            ].map(([title, body]) => (
+              <div key={title} className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
+                <div className="font-semibold" style={{ color: A.label }}>{title}</div>
+                <div className="mt-1">{body}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {tab !== "overview" && (
         <>
@@ -221,6 +225,12 @@ export default function SrmPage({
           </div>
 
           <div className="text-xs leading-5 px-1" style={{ color: A.sub }}>{tabSubtitles[tab]}</div>
+          {["master", "performance", "certification"].includes(tab) && (
+            <Card className="p-4">
+              <SectionHeader title={tabs.find((item) => item.id === tab)?.label || "供应商管理"} />
+              <p className="text-xs leading-5" style={{ color: A.sub }}>{tabSubtitles[tab]}</p>
+            </Card>
+          )}
 
           {["master", "performance", "certification"].includes(tab) && (
             <Card className="p-4">
@@ -245,7 +255,7 @@ export default function SrmPage({
                 </label>
                 {[
                   ["category", "品类", categoryOptions],
-                  ["riskStatus", "风险", riskOptions],
+                  ["riskStatus", tab === "master" ? "资料风险" : "风险", riskOptions],
                   ["certificationStatus", "认证", certificationOptions],
                   ["status", "状态", statusOptions],
                 ].map(([key, label, options]) => (
@@ -257,27 +267,31 @@ export default function SrmPage({
                     {(options as string[]).map((option) => <option key={option} value={option}>{label}: {option}</option>)}
                   </select>
                 ))}
-                <input value={filters.scoreFrom} onChange={(event) => updateFilter("scoreFrom", event.target.value)}
-                  placeholder="评分从"
-                  className="h-8 rounded-lg px-2 text-xs outline-none"
-                  style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }} />
-                <input value={filters.scoreTo} onChange={(event) => updateFilter("scoreTo", event.target.value)}
-                  placeholder="评分到"
-                  className="h-8 rounded-lg px-2 text-xs outline-none"
-                  style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }} />
-                {[
-                  ["hasOpenPo", "开放 PO"],
-                  ["hasInvoiceVariance", "发票差异"],
-                  ["hasReconciliationException", "对账异常"],
-                ].map(([key, label]) => (
-                  <select key={key} value={filters[key as keyof SrmSupplierWorkbenchFilters] as string}
-                    onChange={(event) => updateFilter(key as keyof SrmSupplierWorkbenchFilters, event.target.value as SupplierFlagFilter as never)}
-                    className="h-8 rounded-lg px-2 text-xs outline-none"
-                    style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}
-                    aria-label={label}>
-                    {(["全部", "是", "否"] as const).map((option) => <option key={option} value={option}>{label}: {option}</option>)}
-                  </select>
-                ))}
+                {tab === "performance" && (
+                  <>
+                    <input value={filters.scoreFrom} onChange={(event) => updateFilter("scoreFrom", event.target.value)}
+                      placeholder="评分从"
+                      className="h-8 rounded-lg px-2 text-xs outline-none"
+                      style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }} />
+                    <input value={filters.scoreTo} onChange={(event) => updateFilter("scoreTo", event.target.value)}
+                      placeholder="评分到"
+                      className="h-8 rounded-lg px-2 text-xs outline-none"
+                      style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }} />
+                    {[
+                      ["hasOpenPo", "开放 PO"],
+                      ["hasInvoiceVariance", "发票差异"],
+                      ["hasReconciliationException", "对账异常"],
+                    ].map(([key, label]) => (
+                      <select key={key} value={filters[key as keyof SrmSupplierWorkbenchFilters] as string}
+                        onChange={(event) => updateFilter(key as keyof SrmSupplierWorkbenchFilters, event.target.value as SupplierFlagFilter as never)}
+                        className="h-8 rounded-lg px-2 text-xs outline-none"
+                        style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}
+                        aria-label={label}>
+                        {(["全部", "是", "否"] as const).map((option) => <option key={option} value={option}>{label}: {option}</option>)}
+                      </select>
+                    ))}
+                  </>
+                )}
               </div>
             </Card>
           )}

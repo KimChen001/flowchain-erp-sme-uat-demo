@@ -169,7 +169,7 @@ function SupplierPortraitPanel({ row, onDetail, onOpenScoring }: { row: Supplier
     dimension: item.label,
     score: item.score,
   }));
-  const spend = row.portal?.spend ?? row.openPoCount * 380000 + row.rfqCount * 240000;
+  const spend = row.supplierOperationsProfile?.spend ?? row.openPoCount * 380000 + row.rfqCount * 240000;
   const issueDimensions = snapshot.dimensions.filter((item) => item.score < 65);
   const defaultOpen = issueDimensions.length ? issueDimensions.map((item) => item.id) : [snapshot.dimensions[0]?.id].filter(Boolean);
   const [openDims, setOpenDims] = useState<string[]>(defaultOpen);

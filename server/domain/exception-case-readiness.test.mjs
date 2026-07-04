@@ -216,7 +216,7 @@ test('R238-R240 UI and integration guardrails keep case management business-faci
   assert.match(routes, /label:\s*"异常处理工单"/)
   assert.doesNotMatch(routes, /label:\s*["']AI Assistant["']|label:\s*["']AI Command Center["']|label:\s*["']Ask AI["']/)
   assert.match(app, /ExceptionCasesPage/)
-  for (const text of ['暂无异常处理工单', '创建工单草稿', '确认创建工单', '预览跟进备注', '确认后保存备注', '工单字段已更新', '工单状态已更新']) {
+  for (const text of ['暂无异常处理工单', '生成内部跟进草稿', '确认创建工单', '预览跟进备注', '确认后保存备注', '工单字段已更新', '工单状态已更新']) {
     assert.match(page, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
   for (const text of ['Exception Cases', 'Case List', 'Open Cases', 'Review Queue', 'Case fields updated', 'Case status updated']) {
