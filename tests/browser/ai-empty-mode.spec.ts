@@ -44,7 +44,7 @@ test("R159 empty mode browser AI answers without demo records or fake actions", 
   await openLoggedInApp(page);
   const assistant = await askAssistant(page, "有什么需要我注意的？");
   await expect(assistant).not.toContainText(demoIds);
-  await expect(assistant).not.toContainText(/外部 AI Provider|provider_disabled|api key/i);
+  await expect(assistant).not.toContainText(/AI Provider|外部 AI Provider|外部模型|provider disabled|provider_disabled|deterministic|fallback|api key/i);
   await expect(assistant).toContainText(/没有|暂无|当前|有限/);
   await expect(page.getByTestId("ai-evidence-link")).toHaveCount(0);
   await expect(page.getByTestId("ai-action-draft-preview")).toHaveCount(0);

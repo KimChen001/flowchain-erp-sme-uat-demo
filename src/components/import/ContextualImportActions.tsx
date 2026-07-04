@@ -13,13 +13,13 @@ export default function ContextualImportActions({ entityLabel, templateName, com
 
   function queueImport() {
     toast.success("导入任务已进入校验队列", {
-      description: `${entityLabel} · 请在数据管理中查看校验结果`,
+      description: `${entityLabel} · 请在数据接入与质量中查看校验结果`,
     });
   }
 
   function downloadTemplate() {
     toast.success("模板已准备", {
-      description: `${label} · 失败行可在数据管理中处理`,
+      description: `${label} · 失败行可在数据接入与质量中处理`,
     });
   }
 

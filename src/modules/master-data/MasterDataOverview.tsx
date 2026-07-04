@@ -22,8 +22,8 @@ function masterDataQualitySignals(data: MasterDataSnapshot) {
 export default function MasterDataOverview({ data, onOpenTab }: { data: MasterDataSnapshot; onOpenTab: (tab: MasterDataTab) => void }) {
   const quality = masterDataQualitySignals(data);
   const entries = [
-    { tab: "items" as const, title: "物料主数据", desc: "SKU、规格、库存策略、默认仓库、默认供应商和税码。", signal: `${data.items.length} 条记录`, icon: Package },
-    { tab: "suppliers" as const, title: "供应商主数据", desc: "供应商编码、付款条款、默认税码、联系人和启停状态。", signal: `${data.suppliers.length} 条记录`, icon: Truck },
+    { tab: "items" as const, title: "物料资料", desc: "SKU、规格、库存策略、默认仓库、默认供应商和税码。", signal: `${data.items.length} 条记录`, icon: Package },
+    { tab: "suppliers" as const, title: "供应商资料", desc: "供应商编码、付款条款、默认税码、联系人和启停状态。", signal: `${data.suppliers.length} 条记录`, icon: Truck },
     { tab: "warehouses" as const, title: "仓库 / 库位", desc: "仓库、库区、库位容量、QA 状态和负责人。", signal: `${data.warehouses.length} 个库位`, icon: Warehouse },
     { tab: "tax-codes" as const, title: "税码", desc: "采购与发票协同使用的税码、税率和默认状态。", signal: `${data.taxCodes.length} 个税码`, icon: Tags },
     { tab: "payment-terms" as const, title: "付款条款", desc: "供应商协同和 AP 可见性使用的付款规则。", signal: `${data.paymentTerms.length} 个条款`, icon: FileSpreadsheet },
@@ -32,9 +32,9 @@ export default function MasterDataOverview({ data, onOpenTab }: { data: MasterDa
   return (
     <div className="p-5 space-y-4">
       <div className="rounded-xl p-4" style={{ background: "#f0f6ff" }}>
-        <div className="text-sm font-semibold" style={{ color: A.label }}>主数据控制范围</div>
+        <div className="text-sm font-semibold" style={{ color: A.label }}>基础资料控制范围</div>
         <p className="text-xs leading-5 mt-1" style={{ color: A.sub }}>
-          主数据只维护源头记录，为采购、库存、发票和 SRM 提供基础数据；供应商风险解释和交易处理仍回到对应业务工作台。
+          基础资料只维护源头记录，为采购、库存、发票和 SRM 提供基础数据；供应商风险解释和交易处理仍回到对应业务工作台。
         </p>
       </div>
       <div className="grid grid-cols-3 gap-3">

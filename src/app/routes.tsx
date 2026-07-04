@@ -24,8 +24,8 @@ export const navItems = [
   {
     icon: ClipboardList, label: "销售需求", id: "sales",
     children: [
-      { id: "sales", label: "客户订单与交付风险" },
-      { id: "sales:risks", label: "交付风险订单" },
+      { id: "sales", label: "客户订单" },
+      { id: "sales:risks", label: "交付风险" },
       { id: "sales:evidence", label: "订单证据链" },
     ],
   },
@@ -41,7 +41,6 @@ export const navItems = [
       { id: "procurement:invoices", label: "发票协同" },
       { id: "procurement:match", label: "三单匹配" },
       { id: "procurement:returns", label: "采购退货 / 贷项" },
-      { id: "procurement:portal", label: "供应商门户" },
     ],
   },
   {
@@ -62,23 +61,20 @@ export const navItems = [
     children: [
       { id: "srm", label: "SRM 总览" },
       { id: "srm:master", label: "供应商主数据" },
-      { id: "srm:performance", label: "供应商绩效" },
-      { id: "srm:risk", label: "供应商风险" },
+      { id: "srm:performance", label: "供应商绩效与风险" },
       { id: "srm:certification", label: "认证与准入" },
-      { id: "srm:scoring", label: "评分体系" },
       { id: "srm:sourcing", label: "RFx 参与" },
       { id: "srm:contracts", label: "合同与目录" },
-      { id: "srm:portal", label: "供应商门户" },
     ],
   },
   {
-    icon: Database, label: "主数据", id: "master-data",
+    icon: Database, label: "基础资料", id: "master-data",
     children: [
-      { id: "master-data", label: "主数据总览" },
-      { id: "master-data:items", label: "物料主数据" },
-      { id: "master-data:suppliers", label: "供应商主数据" },
-      { id: "master-data:warehouses", label: "仓库 / 库位" },
-      { id: "master-data:tax-codes", label: "税码" },
+      { id: "master-data", label: "基础资料总览" },
+      { id: "master-data:items", label: "物料资料" },
+      { id: "master-data:suppliers", label: "供应商资料" },
+      { id: "master-data:warehouses", label: "仓库资料" },
+      { id: "master-data:tax-codes", label: "条款与税码" },
       { id: "master-data:payment-terms", label: "付款条款" },
     ],
   },
@@ -104,12 +100,14 @@ export const navItems = [
     ],
   },
   {
-    icon: FileSpreadsheet, label: "报表中心", id: "reports",
+    icon: FileSpreadsheet, label: "报表与分析", id: "reports",
     children: [
-      { id: "reports", label: "跨模块报表" },
+      { id: "reports", label: "报表总览" },
       { id: "reports:procurement", label: "采购报表" },
       { id: "reports:inventory", label: "库存报表" },
-      { id: "reports:finance", label: "财务报表" },
+      { id: "reports:finance", label: "供应商报表" },
+      { id: "reports:delivery", label: "交付风险报表" },
+      { id: "reports:quality", label: "数据质量报表" },
     ],
   },
   {
@@ -121,12 +119,12 @@ export const navItems = [
     ],
   },
   {
-    icon: Upload, label: "数据管理", id: "imports",
+    icon: Upload, label: "数据接入与质量", id: "imports",
     children: [
-      { id: "imports", label: "导入任务记录" },
-      { id: "imports:templates", label: "模板管理" },
-      { id: "imports:validation", label: "数据校验结果" },
-      { id: "imports:failed", label: "失败行处理" },
+      { id: "imports", label: "数据导入" },
+      { id: "imports:templates", label: "导出模板" },
+      { id: "imports:validation", label: "数据质量检查" },
+      { id: "imports:failed", label: "数据缺失项" },
     ],
   },
 ] as const;

@@ -35,7 +35,7 @@ test('overview evidence builders preserve module targets and export fields', () 
     'procurement:rfq',
     'procurement:receiving',
     'procurement:invoices',
-    'srm:risk',
+    'srm:performance',
     'master-data',
   ]) {
     assert.match(evidence, new RegExp(moduleId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))

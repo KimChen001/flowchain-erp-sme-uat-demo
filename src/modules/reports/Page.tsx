@@ -66,7 +66,7 @@ import { srmReportRows, supplierCertificationReportRows, supplierRiskReportRows 
 import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 
-type ReportModule = "采购" | "库存" | "主数据" | "财务" | "预测/MRP" | "供应商" | "审计";
+type ReportModule = "采购" | "库存" | "基础资料" | "财务" | "预测/MRP" | "供应商" | "审计";
 type SourceKind = "Core" | "Computed" | "API" | "API supplement" | "Module";
 type RouteId = "procurement" | "finance" | "inventory" | "forecast" | "master-data" | "srm" | `procurement:${string}` | `inventory:${string}` | `finance:${string}` | `master-data:${string}` | `srm:${string}`;
 type ReportRows = Record<string, unknown>[];
@@ -90,7 +90,7 @@ type ReportsPanelProps = {
   initialView?: "procurement" | "inventory" | "finance";
 };
 
-const FILTERS = ["全部", "采购", "库存", "主数据", "财务", "预测/MRP", "供应商", "审计"] as const;
+const FILTERS = ["全部", "采购", "库存", "基础资料", "财务", "预测/MRP", "供应商", "审计"] as const;
 const DEFAULT_METHOD: Method = "hw";
 const DEFAULT_HORIZON = 6;
 
@@ -122,7 +122,7 @@ function moduleColor(module: ReportModule) {
   return ({
     采购: A.purple,
     库存: A.green,
-    主数据: A.gray1,
+    基础资料: A.gray1,
     财务: A.teal,
     "预测/MRP": A.orange,
     供应商: A.teal,
@@ -159,7 +159,7 @@ function buildInventoryStockRows() {
 
 function buildAbcXyzRows() {
   const strategy: Record<string, string> = {
-    AX: "自动补货 · 高服务水平 99%",
+    AX: "补货建议 · 高服务水平 99%",
     AY: "周预测 · 服务 97%",
     AZ: "JIT · 紧密协同",
     BX: "月预测 · 服务 95%",
@@ -546,7 +546,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       sourceKind: "API supplement",
       updated: "API supplement baseline",
       filename: "supplier-performance-export.csv",
-      sourceModule: "procurement:portal",
+      sourceModule: "srm:performance",
       rows: () => PORTAL_SUPPLIERS.map((row) => ({ 供应商: row.name, 评分: row.rating, 准时率: row.onTime, 质量率: row.quality, 响应分: row.resp, YTD_PO: row.po, YTD采购额: row.spend, 标签: row.flag })),
     },
     {
@@ -577,7 +577,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       id: "supplier-certification",
       name: "Supplier Certification Report",
       module: "供应商",
-      description: "供应商认证与准入状态、主数据状态、联系人、付款条款、默认税码和下一步动作。",
+      description: "供应商认证与准入状态、基础资料状态、联系人、付款条款、默认税码和下一步动作。",
       source: "SRM helpers",
       sourceKind: "Computed",
       updated: "Computed standard report",
@@ -588,8 +588,8 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
     {
       id: "item-master",
       name: "Master Data Item Report",
-      module: "主数据",
-      description: "物料主数据、默认供应商、默认仓库库位、补货参数、管理标识和默认税码。",
+      module: "基础资料",
+      description: "物料资料、默认供应商、默认仓库库位、补货参数、管理标识和默认税码。",
       source: "ITEM_MASTER · master data",
       sourceKind: "Core",
       updated: "2026 baseline",
@@ -600,8 +600,8 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
     {
       id: "supplier-master",
       name: "Supplier Master Report",
-      module: "主数据",
-      description: "供应商主数据、付款条款、税号、默认税码、绩效指标和认证状态。",
+      module: "基础资料",
+      description: "供应商资料、付款条款、税号、默认税码、绩效指标和认证状态。",
       source: "SUPPLIER_MASTER · master data",
       sourceKind: "Core",
       updated: "2026 baseline",
@@ -612,7 +612,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
     {
       id: "warehouse-bin-master",
       name: "Warehouse / Bin Master Report",
-      module: "主数据",
+      module: "基础资料",
       description: "仓库、库区、库位、容量、利用率、温控要求、QA 状态和负责人。",
       source: "WAREHOUSE_BINS · master data",
       sourceKind: "Core",
@@ -624,7 +624,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
     {
       id: "tax-code-master",
       name: "Tax Code Report",
-      module: "主数据",
+      module: "基础资料",
       description: "税码、税码名称、税率、税种、区域、默认标识和状态。",
       source: "TAX_CODES · master data",
       sourceKind: "Core",
@@ -636,7 +636,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
     {
       id: "payment-terms-master",
       name: "Payment Terms Report",
-      module: "主数据",
+      module: "基础资料",
       description: "付款条款、净账期天数、折扣规则、到期规则和状态。",
       source: "PAYMENT_TERMS · master data",
       sourceKind: "Core",
@@ -918,19 +918,19 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
                 <FileSpreadsheet size={17} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>报表中心</h1>
+                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>报表与分析</h1>
                 <p className="text-xs mt-0.5" style={{ color: A.sub }}>统一查看标准经营报表、数据来源与 CSV 导出入口 · {filterLabel}</p>
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
-              报表中心导出预定义字段和业务/API 数据；如需导出某个业务页面的当前筛选或临时操作状态，请使用模块内导出。
+              报表与分析只做汇总、趋势、分析和导出，不编辑业务数据，也不承担审批动作；如需导出某个业务页面的当前筛选或临时操作状态，请使用模块内导出。
             </p>
           </div>
           {onNavigate && (
             <button onClick={() => onNavigate("imports")}
               className="text-xs px-3 py-2 rounded-xl font-medium flex items-center gap-1.5 shrink-0"
               style={{ background: A.gray6, color: A.blue }}>
-              <FileSpreadsheet size={13} /> 需要复核导入？打开数据管理
+              <FileSpreadsheet size={13} /> 需要复核导入？打开数据接入与质量
             </button>
           )}
           <SegmentedControl
@@ -942,8 +942,8 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       </Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="标准报表" value={String(reports.length)} sub="报表中心 v1" icon={FileSpreadsheet} color={A.blue} />
-        <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="采购/库存/主数据/财务/计划/供应商/审计" icon={Database} color={A.green} />
+        <KpiCard label="标准报表" value={String(reports.length)} sub="报表与分析 v1" icon={FileSpreadsheet} color={A.blue} />
+        <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="采购/库存/基础资料/财务/计划/供应商/审计" icon={Database} color={A.green} />
         <KpiCard label="API / 当前数据范围" value={String(apiCount)} sub="只读现有端点" icon={RefreshCw} color={A.orange} />
         <KpiCard label="可导出" value={String(exportReadyCount)} sub="CSV 标准导出" icon={ShieldCheck} color={A.purple} />
       </div>

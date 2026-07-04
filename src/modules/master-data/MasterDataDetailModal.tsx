@@ -19,7 +19,7 @@ export default function MasterDataDetailModal({ detail, onClose }: { detail: Det
           : detail.item.name;
 
   return (
-    <Modal open={Boolean(detail)} onClose={onClose} title={title} subtitle="主数据详情" width={760}>
+    <Modal open={Boolean(detail)} onClose={onClose} title={title} subtitle="基础资料详情" width={760}>
       <div className="space-y-4">
         {detail.type === "items" && (() => {
           const item = detail.item;
@@ -75,7 +75,7 @@ export default function MasterDataDetailModal({ detail, onClose }: { detail: Det
                 准时率 {item.onTimeRate}% · 质量合格率 {item.qualityRate}% · 风险状态 {item.riskStatus} · 认证状态 {item.certificationStatus}
               </p>
               <p className="text-xs leading-5" style={{ color: A.sub }}>
-                主数据维护供应商编码、付款条款、默认税码、联系人和启停状态；供应商绩效、风险、认证与协同证据集中在供应商管理中复核。
+                基础资料维护供应商编码、付款条款、默认税码、联系人和启停状态；供应商绩效、风险、认证与协同证据集中在供应商管理中复核。
               </p>
             </>
           );

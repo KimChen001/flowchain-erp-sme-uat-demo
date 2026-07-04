@@ -19,7 +19,7 @@ async function openLoggedInApp(page: Page) {
 
 test("R181-R190 Data Management user data import UI previews safely and handles disabled commit", async ({ page }) => {
   await openLoggedInApp(page);
-  await page.getByRole("button", { name: /数据管理/ }).first().click();
+  await page.getByRole("button", { name: /数据接入与质量/ }).first().click();
 
   const panel = page.getByTestId("user-data-import-panel");
   await expect(panel).toBeVisible();

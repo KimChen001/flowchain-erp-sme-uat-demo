@@ -721,7 +721,7 @@ function AiResponseCard({
       );
     case "master_data_quality_summary":
       return (
-        <CardShell title={card.title || "主数据质量摘要"}>
+        <CardShell title={card.title || "基础资料质量摘要"}>
           <KeyValueGrid fields={[
             ["物料", data.itemCount],
             ["供应商", data.supplierCount],
@@ -752,13 +752,13 @@ function AiResponseCard({
       );
     case "master_data_next_actions":
       return (
-        <CardShell title={card.title || "主数据下一步"}>
+        <CardShell title={card.title || "基础资料下一步"}>
           <MiniList items={arrayValue(data.actions).map((action) => ({ title: textValue(action) }))} limit={5} />
         </CardShell>
       );
     case "master_data_boundary_notice":
       return (
-        <CardShell title={card.title || "主数据 Alpha 边界"}>
+        <CardShell title={card.title || "基础资料边界"}>
           <p className={aiBoundaryNoticeClass}>{textValue(data.message || card.title)}</p>
         </CardShell>
       );

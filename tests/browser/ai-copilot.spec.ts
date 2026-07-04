@@ -41,7 +41,7 @@ async function expectCleanAssistantOutput(assistant: Locator) {
 
 async function expectRuntimeHotfixGate(assistant: Locator) {
   await expectCleanAssistantOutput(assistant);
-  await expect(assistant).not.toContainText(/外部 AI Provider|未启用外部|provider_disabled|api key/i);
+  await expect(assistant).not.toContainText(/AI Provider|外部 AI Provider|外部模型|未启用外部|provider disabled|provider_disabled|deterministic|fallback|api key/i);
   await expect(assistant).not.toContainText(/打开采购单据并确认责任人与截止日期|复核库存覆盖与再订货点|确认待回复供应商、最佳报价和授标依据/);
   await expect(assistant).not.toContainText(/逾期\s*PO\s*[=:：]?\s*0/);
 }

@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  AlertTriangle,
   Award,
+  AlertTriangle,
   Building2,
   ClipboardCheck,
   FileSpreadsheet,
   Handshake,
   Search,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
@@ -20,7 +19,6 @@ import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   buildSrmSupplierRows,
   supplierCertificationReportRows,
-  supplierRiskReportRows,
   srmKpis,
   srmReportRows,
   type SupplierSrmRow,
@@ -33,11 +31,9 @@ import {
   type SrmSupplierWorkbenchFilters,
   type SupplierFlagFilter,
 } from "./filters";
-import ScoringRulesWorkbench from "./ScoringRulesWorkbench";
 import SrmOverview from "./SrmOverview";
 import SupplierDetailModal from "./SupplierDetailModal";
 import SupplierTable, { type SupplierTableMode } from "./SupplierTable";
-import { scoreDimensions } from "./scoring";
 import {
   tableMinMdClass,
   tableScrollClass,
@@ -48,30 +44,25 @@ import {
   thWideClass,
 } from "../../components/ui/workbenchTable";
 
-type SrmTab = "overview" | "master" | "performance" | "risk" | "certification" | "sourcing" | "contracts" | "portal" | "scoring";
+type SrmTab = "overview" | "master" | "performance" | "certification" | "sourcing" | "contracts";
+type IncomingSrmTab = SrmTab | "risk" | "portal" | "scoring";
 
 const tabs = [
   { id: "overview", label: "SRM 总览", icon: Sparkles },
   { id: "master", label: "供应商主数据", icon: Building2 },
-  { id: "performance", label: "供应商绩效", icon: Award },
-  { id: "risk", label: "供应商风险", icon: AlertTriangle },
+  { id: "performance", label: "供应商绩效与风险", icon: Award },
   { id: "certification", label: "认证与准入", icon: ShieldCheck },
-  { id: "scoring", label: "评分体系", icon: SlidersHorizontal },
   { id: "sourcing", label: "RFx 参与", icon: ClipboardCheck },
   { id: "contracts", label: "合同与目录", icon: Handshake },
-  { id: "portal", label: "供应商门户", icon: FileSpreadsheet },
 ] as const;
 
 const tabSubtitles: Record<SrmTab, string> = {
   overview: "聚焦供应商健康度、异常协同和下一步处理优先级。",
   master: "查看供应商主档、商业条款、默认税码和基础状态。",
-  performance: "跟踪准时率、质量合格率、响应分和绩效证据。",
-  risk: "识别高风险、收货异常、发票差异和对账影响供应商。",
+  performance: "跟踪供应商评分、准时率、质量、响应、风险、开放 PO、发票差异和对账异常。",
   certification: "复核供应商准入、认证状态、整改和到期风险。",
-  scoring: "维护供应商评分维度、指标权重、阈值颜色和刷新频率，让评分不再是黑箱。",
   sourcing: "汇总 RFx 邀请、报价参与和寻源结果。",
   contracts: "查看框架合同、目录覆盖、价格条款和消耗进度。",
-  portal: "汇总供应商协同状态；采购侧报价、订单与收货协同仍在采购工作台处理。",
 };
 
 function statusStyle(status: string) {
@@ -93,9 +84,15 @@ function uniqueOptions(values: Array<string | undefined>) {
 }
 
 function supplierRowsForTab(rows: SupplierSrmRow[], tab: SrmTab) {
-  if (tab === "risk") return rows.filter((row) => row.supplier.riskStatus !== "低" || row.invoiceVarianceCount > 0 || row.reconciliationException);
+  if (tab === "performance") return rows;
   if (tab === "certification") return rows.filter((row) => row.supplier.certificationStatus !== "已认证" || row.supplier.status !== "启用");
   return rows;
+}
+
+function normalizeSrmTab(tab?: IncomingSrmTab): SrmTab {
+  if (tab === "risk" || tab === "scoring") return "performance";
+  if (tab === "portal") return "overview";
+  return tab || "overview";
 }
 
 export default function SrmPage({
@@ -103,17 +100,17 @@ export default function SrmPage({
   focus,
   onActiveContextChange,
 }: {
-  initialView?: SrmTab;
+  initialView?: IncomingSrmTab;
   focus?: { entityType: string; entityId: string; at: number } | null;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
-  const [tab, setTab] = useState<SrmTab>(initialView);
+  const [tab, setTab] = useState<SrmTab>(normalizeSrmTab(initialView));
   const [filters, setFilters] = useState<SrmSupplierWorkbenchFilters>(defaultSrmSupplierWorkbenchFilters);
   const [selected, setSelected] = useState<SupplierSrmRow | null>(null);
   const [supplierProfiles, setSupplierProfiles] = useState<SrmSupplierProfile[]>(SUPPLIER_MASTER);
 
   useEffect(() => {
-    if (initialView) setTab(initialView);
+    if (initialView) setTab(normalizeSrmTab(initialView));
   }, [initialView]);
 
   useEffect(() => {
@@ -164,20 +161,7 @@ export default function SrmPage({
   }, [selected?.supplier.code, selected?.supplier.name, onActiveContextChange]);
 
   function exportCurrent() {
-    if (tab === "risk") return exportCsv("supplier-risk-report.csv", supplierRiskReportRows(tabRows));
     if (tab === "certification") return exportCsv("supplier-certification-report.csv", supplierCertificationReportRows(tabRows));
-    if (tab === "scoring") return exportCsv("srm-score-rules-export.csv", scoreDimensions.flatMap((dimension) =>
-      dimension.items.map((item) => ({
-        维度: dimension.title,
-        维度权重: `${dimension.weight}%`,
-        子指标: item.name,
-        子指标权重: `${item.weight}%`,
-        计算规则: item.rule,
-        数据来源: dimension.source,
-        刷新频率: dimension.refresh,
-        负责人: dimension.owner,
-      }))
-    ));
     if (tab === "contracts") return exportCsv("srm-contract-catalog-export.csv", CONTRACTS.map((contract) => ({ 合同编号: contract.id, 供应商: contract.supplier, 范围: contract.scope, 承诺量: contract.commitVol, 价格条款: contract.price, 起始日期: contract.start, 到期日期: contract.end, 消耗率: contract.consumed, 状态: contract.status })));
     if (tab === "sourcing") return exportCsv("srm-rfx-participation-export.csv", RFQS.map((rfq) => ({ RFx编号: rfq.id, 标题: rfq.title, 品类: rfq.category, 邀请供应商: rfq.suppliers, 已报价: rfq.quoted, 最优供应商: rfq.bestSupplier, 最优报价: rfq.bestPrice, 截止日期: rfq.due, 状态: rfq.status })));
     return exportCsv("supplier-srm-performance-report.csv", srmReportRows(tabRows));
@@ -238,7 +222,7 @@ export default function SrmPage({
 
           <div className="text-xs leading-5 px-1" style={{ color: A.sub }}>{tabSubtitles[tab]}</div>
 
-          {["master", "performance", "risk", "certification"].includes(tab) && (
+          {["master", "performance", "certification"].includes(tab) && (
             <Card className="p-4">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
@@ -304,12 +288,8 @@ export default function SrmPage({
         <SrmOverview rows={rows} onDetail={setSelected} onOpenTab={(next) => setTab(next)} />
       )}
 
-      {["master", "performance", "risk", "certification"].includes(tab) && (
+      {["master", "performance", "certification"].includes(tab) && (
         <SupplierTable rows={rows} mode={tab as SupplierTableMode} onDetail={setSelected} />
-      )}
-
-      {tab === "scoring" && (
-        <ScoringRulesWorkbench />
       )}
 
       {tab === "sourcing" && (
@@ -352,25 +332,6 @@ export default function SrmPage({
                 </tr>;
               })}</tbody>
             </table>
-          </div>
-        </Card>
-      )}
-
-      {tab === "portal" && (
-        <Card className="p-5">
-          <SectionHeader title="供应商门户协同概览" />
-          <p className="text-xs leading-6" style={{ color: A.sub }}>
-            SRM 汇总供应商主数据、绩效、风险、准入和合同协同；采购工作台中的供应商门户继续承载采购侧报价、订单和收货协作视图。
-          </p>
-          <div className="grid grid-cols-4 gap-3 mt-4">
-            {rows.slice(0, 4).map((row) => (
-              <div key={row.supplier.code} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                <div className="text-xs font-semibold" style={{ color: A.label }}>{row.supplier.name}</div>
-                <div className="text-[11px] mt-1 leading-5" style={{ color: A.sub }}>
-                  门户分级 {row.flag} · 开放 PO {row.openPoCount} · 下一步 {row.nextAction}
-                </div>
-              </div>
-            ))}
           </div>
         </Card>
       )}

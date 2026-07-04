@@ -20,7 +20,7 @@
 | Method | Path | Class | Source | Mutation | Notes |
 |---|---|---|---|---|---|
 | `GET` | `/api/ai/tools` | Read | AI tool registry | None | Tools are read/draft-first; no autonomous writes. |
-| `POST` | `/api/ai/chat` | Read / draft-prep response | AI route and read models | Best-effort audit only | Provider disabled by default; cockpit fast path is deterministic/local. |
+| `POST` | `/api/ai/chat` | Read / draft-prep response | AI route and read models | Best-effort audit only | External provider calls are disabled by default; cockpit fast path is local and read-only. |
 
 ## Search
 
@@ -108,7 +108,9 @@ All Evidence Graph routes are GET-only and do not create drafts, write audit eve
 |---|---|---|---|---|---|
 | `GET` | `/api/audit-log` | Read | audit log repository | None | Lists existing audit entries with optional filters. |
 
-## Master Data
+## Foundation Data / 基础资料
+
+User-visible IA names this area 基础资料. API paths retain `/api/master-data/...` for compatibility.
 
 | Method | Path | Class | Source | Mutation | Notes |
 |---|---|---|---|---|---|

@@ -248,7 +248,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       object: item.name,
       evidence: `${item.flag || "需复核"} · 准时率 ${Number(item.onTime || 0).toFixed(1)}% · 质量 ${Number(item.quality || 0).toFixed(1)}%`,
       module: "供应商与绩效",
-      moduleId: "srm:risk",
+      moduleId: "srm:performance",
       cta: "查看供应商",
       detail: buildSupplierEvidence(item),
     })),
@@ -282,7 +282,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       riskWarning: "供应商风险建议仅用于复核，不会自动切换供应商。",
       suggestedAction: "打开供应商与绩效",
       module: "供应商与绩效",
-      moduleId: "srm:risk",
+      moduleId: "srm:performance",
       detail: supplierDecisionDetail,
     },
     {
@@ -318,7 +318,7 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       title: "供应商延迟 / 质量",
       evidence: supplierRisks[0] ? `${supplierRisks[0].flag} · 响应 ${Number(supplierRisks[0].resp || 0).toFixed(0)} · 质量 ${Number(supplierRisks[0].quality || 0).toFixed(1)}%` : "关键供应商绩效稳定",
       next: "复核供应商绩效和备选供应商",
-      moduleId: "srm:risk",
+      moduleId: "srm:performance",
       detail: supplierRisks[0] ? buildSupplierEvidence(supplierRisks[0]) : null,
     },
     {
@@ -350,8 +350,8 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
     },
     {
       level: "低",
-      object: "主数据控制",
-      title: "主数据质量",
+      object: "基础资料控制",
+      title: "基础资料质量",
       evidence: `缺少默认税码 ${masterDataSignal.missingTaxCode} · 缺少默认供应商 ${masterDataSignal.missingSupplier} · 库位需复核 ${masterDataSignal.inactiveBins}`,
       next: "复核税码、供应商和库位维护状态",
       moduleId: "master-data",

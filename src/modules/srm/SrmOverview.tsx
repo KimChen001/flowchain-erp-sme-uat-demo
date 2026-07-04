@@ -20,7 +20,7 @@ export default function SrmOverview({
 }: {
   rows: SupplierSrmRow[];
   onDetail: (row: SupplierSrmRow) => void;
-  onOpenTab: (tab: "scoring") => void;
+  onOpenTab: (tab: "performance") => void;
 }) {
   const [selectedCode, setSelectedCode] = useState(rows[0]?.supplier.code ?? "");
   const [filter, setFilter] = useState<"all" | "critical" | "warning" | "normal">("all");
@@ -97,7 +97,7 @@ export default function SrmOverview({
         </div>
       </Card>
 
-      <SupplierPortraitPanel row={selected} onDetail={onDetail} onOpenScoring={() => onOpenTab("scoring")} />
+      <SupplierPortraitPanel row={selected} onDetail={onDetail} onOpenScoring={() => onOpenTab("performance")} />
     </div>
   );
 }
@@ -202,7 +202,7 @@ function SupplierPortraitPanel({ row, onDetail, onOpenScoring }: { row: Supplier
           </button>
           <button onClick={onOpenScoring} className="h-8 px-3 rounded-lg text-xs font-medium"
             style={{ background: A.gray6, color: A.gray1 }}>
-            评分规则
+            绩效与风险
           </button>
         </div>
       </div>
@@ -248,7 +248,7 @@ function SupplierPortraitPanel({ row, onDetail, onOpenScoring }: { row: Supplier
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="text-sm font-semibold" style={{ color: A.label }}>维度评分</h3>
-            <p className="text-[11px] mt-1" style={{ color: A.gray1 }}>问题维度已自动展开，点击任意维度查看构成</p>
+            <p className="text-[11px] mt-1" style={{ color: A.gray1 }}>问题维度默认展开，点击任意维度查看构成</p>
           </div>
           <button className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ color: A.gray1, background: A.gray6 }}>
             <MoreHorizontal size={15} />
@@ -317,4 +317,3 @@ function SupplierDimensionCard({
     </div>
   );
 }
-

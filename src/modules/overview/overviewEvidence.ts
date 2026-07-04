@@ -336,7 +336,7 @@ export function buildSupplierEvidence(item: SupplierPerformance): EvidenceDetail
     priority: item.flag === "整改" || exceptions > 2 ? "中" : "低",
     object: item.name,
     module: "供应商与绩效",
-    moduleId: "srm:risk",
+    moduleId: "srm:performance",
     businessReason: "供应商准时率、质量率和异常次数会影响交付承诺、收货质量和替代供应商策略。",
     evidence: [
       { label: "供应商", value: item.name },
@@ -382,18 +382,18 @@ export function buildMasterDataEvidence(): EvidenceDetail {
   const signal = masterDataQualitySignals();
   return {
     id: "master-data-quality",
-    title: "主数据质量证据",
+    title: "基础资料质量证据",
     priority: signal.totalIssues > 0 ? "中" : "低",
-    object: "主数据控制",
-    module: "主数据",
+    object: "基础资料控制",
+    module: "基础资料",
     moduleId: "master-data",
-    businessReason: "默认税码、默认供应商和库位主数据会影响采购申请、发票匹配、税额拆分、收货和库存事务处理。",
+    businessReason: "默认税码、默认供应商和库位资料会影响采购申请、发票匹配、税额拆分、收货和库存事务处理。",
     evidence: [
       { label: "缺少默认税码", value: signal.missingTaxCode },
       { label: "缺少默认供应商", value: signal.missingSupplier },
       { label: "库位需复核", value: signal.inactiveBins },
     ],
     confidence: "规则检查",
-    suggestedAction: "打开主数据，复核物料、供应商、税码和库位维护状态。",
+    suggestedAction: "打开基础资料，复核物料、供应商、税码和库位维护状态。",
   };
 }

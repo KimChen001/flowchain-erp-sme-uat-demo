@@ -14,11 +14,11 @@ export type MasterDataTab = "overview" | "items" | "suppliers" | "warehouses" | 
 export type MasterDataTableTab = Exclude<MasterDataTab, "overview">;
 
 const tabs = [
-  { id: "overview", label: "主数据总览", icon: Database },
-  { id: "items", label: "物料主数据", icon: Package },
-  { id: "suppliers", label: "供应商主数据", icon: Truck },
-  { id: "warehouses", label: "仓库 / 库位", icon: Warehouse },
-  { id: "tax-codes", label: "税码", icon: Tags },
+  { id: "overview", label: "基础资料总览", icon: Database },
+  { id: "items", label: "物料资料", icon: Package },
+  { id: "suppliers", label: "供应商资料", icon: Truck },
+  { id: "warehouses", label: "仓库资料", icon: Warehouse },
+  { id: "tax-codes", label: "条款与税码", icon: Tags },
   { id: "payment-terms", label: "付款条款", icon: FileSpreadsheet },
 ] as const;
 
@@ -138,9 +138,9 @@ export default function MasterDataPage({
   }
 
   const importLabels = {
-    overview: ["主数据", "主数据"],
-    items: ["物料主数据", "物料"],
-    suppliers: ["供应商主数据", "供应商"],
+    overview: ["基础资料", "基础资料"],
+    items: ["物料资料", "物料"],
+    suppliers: ["供应商资料", "供应商"],
     warehouses: ["仓库库位", "库位"],
     "tax-codes": ["税码", "税码"],
     "payment-terms": ["付款条款", "付款条款"],
@@ -154,12 +154,12 @@ export default function MasterDataPage({
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>主数据</h1>
+            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>基础资料</h1>
             <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
-              统一维护物料、供应商、仓库库位、税码与付款条款，为采购、库存、发票和 SRM 流程提供基础数据。
+              统一维护物料、供应商、仓库库位、税码与付款条款，为采购、库存、发票和 SRM 流程提供基础资料。
             </p>
             <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-              首屏先看质量摘要和控制范围，再进入具体主数据表。
+              基础资料只维护业务对象基础记录，不做报表分析或业务审批。
             </div>
           </div>
           <ContextualImportActions entityLabel={entityLabel} templateName={templateName} compact />
@@ -167,8 +167,8 @@ export default function MasterDataPage({
       </Card>
 
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="物料主数据" value={String(masterData.items.length)} sub={`${masterData.items.filter((item) => item.status === "待完善").length} 条待完善`} icon={Package} color={A.blue} />
-        <KpiCard label="供应商主数据" value={String(masterData.suppliers.length)} sub={`${masterData.suppliers.filter((item) => item.riskStatus === "高").length} 个高风险`} icon={Truck} color={A.purple} />
+        <KpiCard label="物料资料" value={String(masterData.items.length)} sub={`${masterData.items.filter((item) => item.status === "待完善").length} 条待完善`} icon={Package} color={A.blue} />
+        <KpiCard label="供应商资料" value={String(masterData.suppliers.length)} sub={`${masterData.suppliers.filter((item) => item.riskStatus === "高").length} 个高风险`} icon={Truck} color={A.purple} />
         <KpiCard label="仓库 / 库位" value={String(masterData.warehouses.length)} sub={`${masterData.warehouses.filter((item) => item.available).length} 个可用`} icon={Warehouse} color={A.green} />
         <KpiCard label="税码" value={String(masterData.taxCodes.length)} sub={`${masterData.taxCodes.filter((item) => item.status === "启用").length} 个启用`} icon={Tags} color={A.orange} />
       </div>
@@ -179,7 +179,7 @@ export default function MasterDataPage({
           <div className="h-8 px-2 rounded-lg flex items-center gap-1.5" style={{ background: A.white, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
             <Search size={12} style={{ color: A.gray2 }} />
             <input value={search} onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索主数据"
+              placeholder="搜索基础资料"
               className="w-44 bg-transparent outline-none text-xs"
               style={{ color: A.label }} />
           </div>

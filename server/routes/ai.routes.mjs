@@ -75,7 +75,7 @@ function aiConfidence(body, db, result = {}, ctx) {
   let forecastScore = 50
   if (products.length >= 6) {
     forecastScore += 8
-    forecastEvidence.push(`${products.length} 个 SKU 主数据`)
+    forecastEvidence.push(`${products.length} 个 SKU 基础资料`)
   } else {
     forecastScore -= 6
     forecastWarnings.push('SKU 覆盖偏少')
@@ -477,7 +477,7 @@ async function callConfiguredAi(body, db, ctx) {
 }
 
 function providerDisabledResponse({ startedAt, branchStartedAt, body }) {
-  const message = '我暂时没有找到可以直接回答这个问题的业务规则。当前环境未启用外部 AI Provider，因此不会调用外部模型。'
+  const message = '当前工作区缺少足够业务规则或记录，暂无法形成可靠判断。请指定客户订单、SKU、采购订单或供应商后重试。'
   return {
     provider: 'local',
     providerStatus: 'blocked',

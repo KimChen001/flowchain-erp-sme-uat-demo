@@ -728,11 +728,11 @@ function InventoryCycleCount() {
 
   function start(id: string) {
     setPlans((arr) => arr.map((p) => p.id === id ? { ...p, status: "进行中", counter: "刘建华" } : p));
-    toast.success(`${id} 已下发至手持终端`);
+    toast.success(`${id} 已生成盘点复核任务预览`, { description: "仅用于人工复核，不会下发手持终端。" });
   }
   function complete(id: string) {
     setPlans((arr) => arr.map((p) => p.id === id ? { ...p, status: "完成", counted: p.scope } : p));
-    toast.success(`${id} 盘点完成`);
+    toast.success(`${id} 已生成盘点结果影响预览`, { description: "不会自动更新库存余额或关闭盘点任务。" });
   }
 
   function exportCountPlansCsv() {
@@ -767,8 +767,8 @@ function InventoryCycleCount() {
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="本周计划"   value={String(plans.length)} sub="ABC 循环盘点"             icon={ClipboardCheck} color={A.blue}   />
-        <KpiCard label="完成"        value={String(completed)}     sub={`完成率 ${(completed / plans.length * 100).toFixed(0)}%`} icon={CheckCircle2}   color={A.green}  />
-        <KpiCard label="进行中"      value={String(inProgress)}    sub="手持终端回传"              icon={Loader2}        color={A.orange} />
+        <KpiCard label="完成影响预览" value={String(completed)}     sub={`预览率 ${(completed / plans.length * 100).toFixed(0)}%`} icon={CheckCircle2}   color={A.green}  />
+        <KpiCard label="复核任务预览" value={String(inProgress)}    sub="人工复核记录"              icon={Loader2}        color={A.orange} />
         <KpiCard label="盘点准确率"  value={`${accuracy}%`}        sub="行业基准 99.5%"           delta={parseFloat(accuracy) >= 99.5 ? "达标" : "未达"} positive={parseFloat(accuracy) >= 99.5} icon={Activity} color={A.purple} />
       </div>
 
@@ -782,7 +782,7 @@ function InventoryCycleCount() {
             </button>
             <button onClick={() => toast("已按 ABC 重新生成下周计划")}
               className="text-[11px] px-2.5 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>
-              生成下周计划
+              生成复核任务
             </button>
           </div>
         </div>
@@ -822,10 +822,10 @@ function InventoryCycleCount() {
                     bg={p.status === "完成" ? "#f0faf4" : p.status === "进行中" ? "#fff8f0" : A.gray6} /></td>
                   <td className="px-4 py-3">
                     {p.status === "待执行" && (
-                      <button onClick={() => start(p.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>开始</button>
+                      <button onClick={() => start(p.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white" style={{ background: A.blue }}>生成复核任务</button>
                     )}
                     {p.status === "进行中" && (
-                      <button onClick={() => complete(p.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white" style={{ background: A.green }}>完结</button>
+                      <button onClick={() => complete(p.id)} className="text-[11px] px-2 py-1 rounded-md font-medium text-white" style={{ background: A.green }}>生成完成影响预览</button>
                     )}
                     {p.status === "完成" && (
                       <button onClick={() => toast(`${p.id} 报告已生成`)} className="text-[11px] px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.label }}>报告</button>
@@ -905,7 +905,7 @@ function InventoryABCXYZ() {
   for (const it of items) matrix[it.abc + it.xyz].push(it);
 
   const strategy: Record<string, { policy: string; color: string }> = {
-    AX: { policy: "自动补货 · 高服务水平 99%",   color: A.green   },
+    AX: { policy: "补货建议 · 高服务水平 99%",   color: A.green   },
     AY: { policy: "周预测 · 服务 97%",            color: A.green   },
     AZ: { policy: "JIT · 紧密协同",                color: A.orange  },
     BX: { policy: "月预测 · 服务 95%",            color: A.blue    },
@@ -943,7 +943,7 @@ function InventoryABCXYZ() {
       <Card className="p-5">
         <SectionHeader title="ABC × XYZ 策略矩阵" right={
           <div className="flex gap-2 text-[10px]" style={{ color: A.sub }}>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.green }} />自动补货</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.green }} />补货建议</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.blue }} />周期补</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.orange }} />按订单</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.red }} />不备库</span>

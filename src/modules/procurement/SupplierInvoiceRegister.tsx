@@ -37,7 +37,7 @@ function invoiceStatusStyle(status: SupplierInvoiceStatus) {
 
 function invoiceSourceLabel(source: SupplierInvoice["source"]) {
   return ({
-    "supplier-portal": "供应商门户",
+    "supplier-portal": "供应商协同导入",
     "email-upload": "邮件上传",
     "manual-entry": "手工录入",
     "edi-sample": "EDI",

@@ -54,7 +54,7 @@ export function inventoryPlan(item: InventoryItem) {
     ? needsSourcing ? "补供应商/报价" : priority === "高" ? "立即生成 PR" : "纳入本周补货"
     : profile.qaHold > 0 ? "释放冻结库存" : item.qty > item.max * 0.8 && item.turnover < 4 ? "降频采购/清理呆滞" : "保持监控";
   const policy = profile.abc === "A" && profile.xyz === "X"
-    ? "AX 自动补货"
+    ? "AX 补货建议"
     : profile.abc === "A" ? "A 类周滚动复核"
     : profile.xyz === "Z" ? "Z 类按单采购"
     : "周期补货";

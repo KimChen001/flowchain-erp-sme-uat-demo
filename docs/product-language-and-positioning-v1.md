@@ -6,6 +6,8 @@
 
 FlowChain 是面向中小企业的 AI 进销存与供应链协同工作台。
 
+FlowChain 借鉴传统中小企业进销存 ERP 的对象骨架，包括基础资料、采购、销售需求、库存、结算可见性、报表和系统管理，但不做完整 ERP 替代。产品差异化在 AI 证据链、交付风险分析、库存可承诺量、可复核动作草稿和数据限制说明。
+
 English:
 
 FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier operations platform for SMEs.
@@ -75,6 +77,11 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 | Control Tower | 运营控制台 / 今日风险工作台 |
 | Exception Case | 异常工单 |
 | Finance Collaboration | 财务协同 |
+| Master Data | 基础资料 |
+| Data Management | 数据接入与质量 |
+| Reports Center | 报表与分析 |
+| Supplier Performance + Risk | 供应商绩效与风险 |
+| Workbench / Dashboard / Cockpit | 工作台 / 运营看板 / 今日风险工作台 |
 
 ## Data Wording Replacements
 
@@ -97,9 +104,23 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 ## Scope Rules
 
 - 要做轻量销售需求 / 客户订单，不做完整 CRM。
+- 销售需求当前聚焦客户订单、交付风险、订单证据链；未来可扩展销售总览、库存预留建议、供需缺口、客户沟通草稿和订单导入，但不要新增空菜单。
 - 要做库存可用量、预留量、在途量、缺口解释，不做复杂 WMS。
 - 要做财务协同异常可见，不做完整总账、付款、税务。
 - 要做通用内部通知草稿与待办入口，后续可适配企业微信、钉钉、飞书、Email、Slack 或 Microsoft Teams，不默认真实外发。
+- 当前不提供供应商门户能力，不显示外部供应商账号、供应商登录、供应商自助维护资料、供应商在线确认订单或供应商在线提交发票。
+- 基础资料只维护业务对象基础资料，不做报表分析。
+- 数据接入与质量只做导入、映射、校验、导入历史、质量检查、缺失项和模板，不做业务审批。
+- 报表与分析只做汇总、趋势、分析和导出，不编辑业务数据。
+
+## Workbench Discipline
+
+- 工作台 / dashboard / cockpit 只做汇总数字、pending 数量、风险数量、Top priority list、跳转入口、草稿预览入口。
+- 工作台不做直接批准、直接拒绝、直接签收、直接过账、直接下发、直接发外部通知或直接创建真实业务单据。
+- 工作台按钮文案优先使用：查看详情、进入复核、查看证据链、生成草稿预览、生成内部通知草稿。
+- 详细复核动作必须嵌入对应业务对象详情页、详情抽屉或复核面板中，不新增独立复核中心。
+- PR 的批准 / 拒绝在采购申请详情中完成；RFQ 的授标复核在 RFQ 详情中完成；PO 的变更复核在采购订单详情中完成；GRN 的异常复核在收货单详情中完成；客户订单预留建议的复核在客户订单详情中完成；供应商准入复核在供应商详情或准入详情中完成；发票差异复核在发票协同详情中完成；异常工单复核在异常工单详情中完成。
+- 拒绝、要求修改和取消必须填写原因。批准可以没有原因，但可以填写备注；延期建议填写负责人或后续日期。
 
 ## UI Copy Examples
 

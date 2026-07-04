@@ -72,17 +72,27 @@ test.describe("Inventory Allocation and ATP", () => {
     await expect(inventory).toContainText("不会自动更新库存余额");
     await expect(inventory).not.toContainText(/已批准并下发|调入库存已更新|调拨单已创建|新建调拨单|提交审批|生成出库建议|差异已审批入账/);
 
+    await page.getByRole("button", { name: "循环盘点" }).first().click();
+    await expect(inventory).toContainText("生成复核任务");
+    await expect(inventory).toContainText("生成完成影响预览");
+
+    await page.getByRole("button", { name: "ABC/XYZ 分类" }).first().click();
+    await expect(inventory).toContainText("补货建议");
+    await expect(inventory).not.toContainText(/自动补货|已下发至手持终端|盘点完成|自动出库|自动更新库存|自动过账/);
+
     await page.getByRole("button", { name: /库存总览/ }).first().click();
     await page.getByRole("button", { name: "查看销售需求" }).first().click();
     await expect(page.getByText("SKU-00412 已聚焦，销售需求页面可查看受影响客户订单。")).toBeVisible();
 
     await page.getByRole("button", { name: "销售需求" }).first().click();
     const sales = page.getByTestId("module-export-scope");
-    await expect(sales).toContainText("库存分配信息");
-    await expect(sales).toContainText("当前订单分配量");
-    await expect(sales).toContainText("库存预留建议");
-    await expect(sales).toContainText("供需缺口");
-    await expect(sales).toContainText("证据链预览");
+    await expect(sales).toContainText("客户订单列表");
+    await page.getByTestId("sales-order-SO-2026-0412-A").getByRole("button", { name: "查看详情" }).click();
+    await expect(sales).toContainText("库存分配摘要");
+    await expect(sales).toContainText("可承诺量");
+    await expect(sales).toContainText("在途采购");
+    await page.getByRole("button", { name: "订单证据链" }).click();
+    await expect(sales).toContainText("主证据链");
     await expect(sales).toContainText("客户订单 → SKU → 库存可用量 → 采购订单 → 供应商 → 收货单");
 
     await openAssistant(page);

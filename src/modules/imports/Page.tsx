@@ -136,7 +136,7 @@ type UserDataStatus = {
   overwritesDemoData?: boolean;
 };
 
-const FILTERS = ["全部", "采购", "库存", "预测", "主数据"] as const;
+const FILTERS = ["全部", "采购", "库存", "预测", "基础资料"] as const;
 
 function userDatasetStatusMessage(status?: UserDataStatus | null, state?: string) {
   if (state === "loading") return "读取中...";
@@ -232,10 +232,10 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     requiredFields: ["发票号码", "供应商", "PO", "发票日期", "接收日期", "到期日", "未税金额", "税额", "总额", "付款条款"],
     optionalFields: ["GRN", "币种", "运费", "来源", "匹配状态", "发票状态", "差异类型", "差异金额", "AP负责人", "已过账应付", "已付款", "备注"],
     sampleRows: [
-      { 发票号码: "INV-IMPORT-001", 供应商: "深圳新元电气", PO: "PO-2026-1283", GRN: "GRN-202605-0422", 发票日期: "2026-05-20", 接收日期: "2026-05-20", 到期日: "2026-06-19", 币种: "CNY", 未税金额: 118000, 税额: 15340, 运费: 0, 总额: 133340, 付款条款: "Net 30", 来源: "supplier-portal", 匹配状态: "未匹配", 发票状态: "待匹配", 差异类型: "无差异", 差异金额: 0, AP负责人: "赵敏", 已过账应付: "否", 已付款: "否", 备注: "" },
+      { 发票号码: "INV-IMPORT-001", 供应商: "深圳新元电气", PO: "PO-2026-1283", GRN: "GRN-202605-0422", 发票日期: "2026-05-20", 接收日期: "2026-05-20", 到期日: "2026-06-19", 币种: "CNY", 未税金额: 118000, 税额: 15340, 运费: 0, 总额: 133340, 付款条款: "Net 30", 来源: "supplier-collaboration-upload", 匹配状态: "未匹配", 发票状态: "待匹配", 差异类型: "无差异", 差异金额: 0, AP负责人: "赵敏", 已过账应付: "否", 已付款: "否", 备注: "" },
       { 发票号码: "INV-IMPORT-002", 供应商: "江苏铝合金集团", PO: "PO-2026-1285", GRN: "", 发票日期: "2026-05-21", 接收日期: "2026-05-21", 到期日: "2026-07-05", 币种: "CNY", 未税金额: 198000, 税额: 25740, 运费: 0, 总额: 223740, 付款条款: "Net 45", 来源: "email-upload", 匹配状态: "人工复核", 发票状态: "待匹配", 差异类型: "缺少收货", 差异金额: 223740, AP负责人: "赵敏", 已过账应付: "否", 已付款: "否", 备注: "待收货匹配" },
     ],
-    notes: ["适用于供应商门户、邮件上传或 EDI 发票。", "当前执行 CSV 校验和批次预览，AP 过账或付款需在应付流程中处理。"],
+    notes: ["适用于供应商协同文件、邮件上传或 EDI 发票。", "当前执行 CSV 校验和批次预览，AP 过账或付款需在应付流程中处理。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["发票号码", "供应商", "PO", "发票日期", "接收日期", "到期日", "未税金额", "税额", "总额", "付款条款"]);
       const subtotal = parseNonNegativeNumber(value(row, "未税金额"));
@@ -556,7 +556,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
   {
     id: "supplierPerformance",
     label: "供应商绩效导入",
-    module: "主数据",
+    module: "基础资料",
     description: "导入供应商准时率、质量合格率、响应分和评级，用于供应商管理绩效视图校验。",
     templateFilename: "supplier-performance-template.csv",
     requiredFields: ["供应商编码", "供应商名称", "准时率", "质量合格率", "响应分", "评级", "统计期间"],
@@ -584,7 +584,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
   {
     id: "supplierCertification",
     label: "供应商认证导入",
-    module: "主数据",
+    module: "基础资料",
     description: "导入供应商认证、准入、风险和有效期信息，用于供应商管理认证视图校验。",
     templateFilename: "supplier-certification-template.csv",
     requiredFields: ["供应商编码", "供应商名称", "认证状态", "风险状态", "有效期至", "负责人"],
@@ -656,8 +656,8 @@ const IMPORT_CONFIGS: ImportConfig[] = [
   },
   {
     id: "suppliers",
-    label: "供应商主数据导入",
-    module: "主数据",
+    label: "供应商资料导入",
+    module: "基础资料",
     description: "校验预览供应商编码、品类、联系人、邮箱和绩效指标。",
     templateFilename: "suppliers-template.csv",
     requiredFields: ["供应商编号", "供应商名称", "品类", "联系人", "联系邮箱"],
@@ -665,7 +665,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     sampleRows: [
       { 供应商编号: "S-3001", 供应商名称: "深圳新元电气", 品类: "电气元件", 联系人: "李工", 联系邮箱: "li@example.com", 评级: "A", 准时率: 96.8, 质量合格率: 99.2, 付款条款: "Net 30", 备注: "" },
     ],
-    notes: ["供应商主数据导入用于主数据校验预览，绩效口径由供应商管理流程维护。"],
+    notes: ["供应商资料导入用于基础资料校验预览，绩效口径由供应商管理流程维护。"],
     validateRow: (row) => {
       const errors = baseErrors(row, ["供应商编号", "供应商名称", "品类", "联系人", "联系邮箱"]);
       const warnings = emailWarning(value(row, "联系邮箱"), "联系邮箱");
@@ -682,8 +682,8 @@ const IMPORT_CONFIGS: ImportConfig[] = [
   },
   {
     id: "itemMaster",
-    label: "物料主数据导入",
-    module: "主数据",
+    label: "物料资料导入",
+    module: "基础资料",
     description: "校验预览 SKU、物料分类、默认仓库库位、补货参数、管理标识和默认税码。",
     templateFilename: "item-master-template.csv",
     requiredFields: ["SKU", "物料名称", "物料分类", "单位", "默认仓库", "默认库位", "默认供应商", "默认税码"],
@@ -691,7 +691,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     sampleRows: [
       { SKU: "SKU-01188", 物料名称: "工业传感器 M12", 物料分类: "电气元件", 规格型号: "M12 / PNP", 单位: "件", 默认仓库: "上海总仓", 默认库位: "D-04-01", 安全库存: 50, 最大库存: 300, ROP: 80, 采购提前期: 14, 批次管理: "是", 序列号管理: "是", 质检要求: "是", 默认供应商: "深圳新元电气", 默认税码: "VAT13-IN", 状态: "启用" },
     ],
-    notes: ["物料主数据是采购、库存、MRP 和发票税拆分的基础。", "默认税码缺失会影响供应商发票税额拆分复核。"],
+    notes: ["物料资料是采购、库存、MRP 和发票税拆分的基础。", "默认税码缺失会影响供应商发票税额拆分复核。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["SKU", "物料名称", "物料分类", "单位", "默认仓库", "默认库位", "默认供应商", "默认税码"]);
       const safety = parseOptionalNonNegative(row, "安全库存", errors);
@@ -710,7 +710,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
   {
     id: "warehouseBins",
     label: "仓库库位导入",
-    module: "主数据",
+    module: "基础资料",
     description: "校验预览仓库、库区、库位、容量、利用率、温控要求和 QA 状态。",
     templateFilename: "warehouse-bins-template.csv",
     requiredFields: ["仓库编码", "仓库名称", "库区", "库位", "容量", "负责人"],
@@ -718,7 +718,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     sampleRows: [
       { 仓库编码: "WH-SH-01", 仓库名称: "上海总仓", 库区: "D 区电气", 库位: "D-04-01", 容量: 300, 利用率: 0.32, 温控要求: "防静电", QA状态: "可用", 可用: "是", 负责人: "陈思远" },
     ],
-    notes: ["仓库库位主数据用于收货、库存事务流水、盘点和库位地图。"],
+    notes: ["仓库库位资料用于收货、库存事务流水、盘点和库位地图。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["仓库编码", "仓库名称", "库区", "库位", "容量", "负责人"]);
       const capacity = parsePositiveNumber(value(row, "容量"));
@@ -736,7 +736,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
   {
     id: "taxCodes",
     label: "税码导入",
-    module: "主数据",
+    module: "基础资料",
     description: "校验预览税码、税码名称、税率、税种、区域、默认标识和状态。",
     templateFilename: "tax-codes-template.csv",
     requiredFields: ["税码", "税码名称", "税率", "税种", "区域"],
@@ -744,7 +744,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     sampleRows: [
       { 税码: "VAT13-IN", 税码名称: "进项税 13%", 税率: 0.13, 税种: "进项税", 区域: "中国大陆", 默认: "是", 状态: "启用", 描述: "标准采购物料进项税率" },
     ],
-    notes: ["税码用于供应商发票、贷项通知和税额拆分可视化。", "模板用于税码主数据校验和发票税额拆分复核。"],
+    notes: ["税码用于供应商发票、贷项通知和税额拆分可视化。", "模板用于税码资料校验和发票税额拆分复核。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["税码", "税码名称", "税率", "税种", "区域"]);
       const rate = parseNonNegativeNumber(value(row, "税率"));
@@ -760,7 +760,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
   {
     id: "paymentTerms",
     label: "付款条款导入",
-    module: "主数据",
+    module: "基础资料",
     description: "校验预览付款条款编码、净账期天数、折扣规则和到期规则。",
     templateFilename: "payment-terms-template.csv",
     requiredFields: ["条款编码", "条款名称", "净账期天数", "到期规则"],
@@ -768,7 +768,7 @@ const IMPORT_CONFIGS: ImportConfig[] = [
     sampleRows: [
       { 条款编码: "NET30", 条款名称: "Net 30", 净账期天数: 30, 折扣规则: "无现金折扣", 到期规则: "发票日期后 30 天到期", 状态: "启用", 描述: "标准供应商付款条款" },
     ],
-    notes: ["付款条款用于供应商主数据、发票到期日和 AP 可视化。"],
+    notes: ["付款条款用于供应商资料、发票到期日和 AP 可视化。"],
     validateRow: (row, rows) => {
       const errors = baseErrors(row, ["条款编码", "条款名称", "净账期天数", "到期规则"]);
       const netDays = parseInteger(value(row, "净账期天数"));
@@ -1136,12 +1136,12 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
                 <Upload size={17} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>数据管理</h1>
+                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>数据接入与质量</h1>
                 <p className="text-xs mt-0.5" style={{ color: A.sub }}>{sectionLabel} · 集中查看导入任务、模板、校验结果与失败行处理</p>
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
-              业务数据导入可在对应业务页面发起；数据管理用于集中复核导入任务记录、模板管理、数据校验结果、失败行处理和导入历史。
+              业务数据导入可在对应业务页面发起；数据接入与质量用于集中复核数据导入、字段映射、导入历史、质量检查、缺失项和导出模板，不承担业务审批。
             </p>
             <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
               首屏聚焦导入复核，不替代业务页面里的上下文导入。

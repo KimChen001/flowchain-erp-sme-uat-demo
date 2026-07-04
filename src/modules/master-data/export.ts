@@ -100,7 +100,7 @@ export function exportMasterDataCsv(
   } satisfies Record<MasterDataTableTab, { filename: string; rows: Record<string, unknown>[] }>;
 
   if (tab === "overview") {
-    toast("请选择一个主数据视图导出");
+    toast("请选择一个基础资料视图导出");
     return;
   }
 

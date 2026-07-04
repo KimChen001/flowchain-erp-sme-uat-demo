@@ -4,6 +4,8 @@ FlowChain is an AI-assisted operations platform for SMEs to manage sales demand,
 
 FlowChain 是面向中小企业的 AI 进销存与供应链协同工作台，帮助团队围绕销售需求、库存、采购、收货、供应商和发票协同异常，识别交付风险、解释供需缺口、生成可复核动作，并形成可追踪的异常处理闭环。
 
+FlowChain 参考传统中小企业进销存 ERP 的对象骨架，如基础资料、采购、销售、库存、结算可见性、报表和系统管理，但不是完整 ERP 替代。当前差异化重点是 AI 证据链、交付风险分析、库存可承诺量、可复核动作草稿和数据限制说明。
+
 ## Current Status
 
 FlowChain is an early-stage local development project. It is not yet production-ready SaaS infrastructure.
@@ -24,11 +26,12 @@ Default local runtime behavior uses a deterministic workspace dataset. No produc
 - Receiving / GRN
 - Inventory and inventory exceptions
 - Supplier operations / SRM
-- Master Data
+- Foundation Data / 基础资料
+- Data Intake and Quality / 数据接入与质量
+- Reports and Analytics / 报表与分析
 - Forecast / MRP
 - AI Assistant
 - Finance collaboration visibility
-- Reports / Imports / Data Management
 
 ## Non-goals
 
@@ -44,6 +47,10 @@ FlowChain is intentionally focused. It is not:
 - an autonomous AI execution platform.
 
 AI-assisted actions are review-first. The system may prepare drafts and explanations, but it must not autonomously issue purchase orders, send supplier emails, post inventory, approve invoices, execute payments, or mutate supplier master data.
+
+Supplier-facing portal capability is not currently provided. FlowChain does not create external supplier accounts, supplier logins, supplier self-service profile maintenance, online PO confirmation, or online invoice submission.
+
+Workbench/dashboard/cockpit surfaces are summary and navigation surfaces only. They show pending counts, risk counts, top priority lists, evidence links, and draft preview entry points. Detailed review actions belong in the corresponding business object detail, drawer, or review panel, where reject, request-changes, and cancel decisions must include a reason.
 
 ## Run Locally
 

@@ -9,7 +9,7 @@ import {
   thClass,
 } from "../../components/ui/workbenchTable";
 
-export type SupplierTableMode = "master" | "performance" | "risk" | "certification";
+export type SupplierTableMode = "master" | "performance" | "certification";
 
 function statusStyle(status: string) {
   if (["低", "已认证", "启用", "战略", "核心", "执行中"].includes(status)) return { color: A.green, bg: "#f0faf4" };
@@ -18,9 +18,7 @@ function statusStyle(status: string) {
 }
 
 export default function SupplierTable({ rows, onDetail, mode }: { rows: SupplierSrmRow[]; onDetail: (row: SupplierSrmRow) => void; mode: SupplierTableMode }) {
-  const visible = mode === "risk"
-    ? rows.filter((row) => row.supplier.riskStatus !== "低" || row.invoiceVarianceCount > 0 || row.reconciliationException)
-    : mode === "certification"
+  const visible = mode === "certification"
       ? rows.filter((row) => row.supplier.certificationStatus !== "已认证" || row.supplier.status !== "启用")
       : rows;
 

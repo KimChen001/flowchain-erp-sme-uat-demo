@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
-import { Building2, Calendar, ChevronRight, ClipboardCheck, FileSpreadsheet, FileText, Handshake, PackageCheck, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
+import { Calendar, ChevronRight, ClipboardCheck, FileSpreadsheet, FileText, Handshake, PackageCheck, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { A, Card, Chip, KpiCard, SubTabs } from "../../components/ui";
-import { CONTRACTS, PORTAL_SUPPLIERS, PURCHASE_RETURNS, RFQS, SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/demo-data";
+import { CONTRACTS, PURCHASE_RETURNS, RFQS, SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/demo-data";
 import { isReturnException } from "../../domain/procurement/returns";
 import type { PurchaseIntent } from "../../types/scm";
 import ContractsPanel from "./ContractsPanel";
 import PurchaseReturnsPanel from "./PurchaseReturnsPanel";
 import SupplierInvoiceRegister from "./SupplierInvoiceRegister";
-import SupplierPortalPanel from "./SupplierPortalPanel";
 import ThreeWayMatchPanel from "./ThreeWayMatchPanel";
 import PurchasingRequests from "../purchase-requests/Page";
 import PurchasingOrders from "../purchasing/Page";
@@ -15,7 +14,7 @@ import PurchasingRFQ from "../rfq/Page";
 import ReceivingPanel from "../receiving/Page";
 import type { ActiveContext } from "../ai-assistant/Panel";
 
-type PurTab = "overview" | "requests" | "rfq" | "orders" | "contracts" | "receiving" | "invoices" | "match" | "returns" | "portal";
+type PurTab = "overview" | "requests" | "rfq" | "orders" | "contracts" | "receiving" | "invoices" | "match" | "returns";
 type WorkbenchFilter = "all" | "approval" | "overdue" | "tracking";
 
 type ProcurementPanelProps = {
@@ -36,7 +35,6 @@ export default function ProcurementPanel({ intent = null, onOpenRfq, view, onNav
   if (view === "match") return <ThreeWayMatchPanel />;
   if (view === "returns") return <PurchaseReturnsPanel />;
   if (view === "receiving") return <ReceivingPanel focus={focus} onNavigate={onNavigate} />;
-  if (view === "portal") return <SupplierPortalPanel />;
 
   return <PurchasingPanel intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
 }
@@ -65,7 +63,6 @@ function PurchasingPanel({
     { id: "invoices",  label: "发票协同",   icon: FileText,        count: SUPPLIER_INVOICES.filter((invoice) => invoice.matchStatus !== "自动匹配" || invoice.varianceType !== "无差异").length },
     { id: "match",     label: "三单匹配",   icon: ShieldCheck,     count: SUPPLIER_INVOICES.filter((invoice) => invoice.matchStatus !== "自动匹配").length },
     { id: "returns",   label: "采购退货 / 贷项", icon: RotateCcw,  count: PURCHASE_RETURNS.filter((row) => isReturnException(row)).length },
-    { id: "portal",    label: "供应商门户", icon: Building2,       count: PORTAL_SUPPLIERS.length },
   ] as const;
 
   useEffect(() => {
@@ -84,7 +81,6 @@ function PurchasingPanel({
       {tab === "invoices"  && <SupplierInvoiceRegister mode="procurement" focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
       {tab === "match"     && <ThreeWayMatchPanel />}
       {tab === "returns"   && <PurchaseReturnsPanel />}
-      {tab === "portal"    && <SupplierPortalPanel />}
     </div>
   );
 }
@@ -250,25 +246,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
       tone: queueTone("采购退货 / 贷项", row.createdDate),
     }));
 
-  const portalRow = PORTAL_SUPPLIERS
-    .find((item) => item.flag === "整改") || PORTAL_SUPPLIERS[0];
-
-  const portalRows: WorkbenchRow[] = portalRow ? [{
-    id: `portal-${portalRow.name}`,
-    bucket: ["tracking"],
-    kind: "供应商",
-    docNo: portalRow.name,
-    title: `${portalRow.name} · ${portalRow.flag || "待复核"}`,
-    supplier: portalRow.name,
-    amount: "—",
-    due: portalRow.flag === "整改" ? "本月" : "本周",
-    status: portalRow.flag || "待复核",
-    moduleId: "portal",
-    note: `准时率 ${portalRow.onTime}% · 质量 ${portalRow.quality}%`,
-    tone: queueTone("供应商"),
-  }] : [];
-
-  const queue = [...queueRows, ...rfqRows, ...invoiceRows, ...receivingRows, ...returnRows, ...portalRows].sort((a, b) => {
+  const queue = [...queueRows, ...rfqRows, ...invoiceRows, ...receivingRows, ...returnRows].sort((a, b) => {
     const score = (row: WorkbenchRow) => (row.bucket.includes("overdue") ? 100 : row.bucket.includes("approval") ? 80 : 50);
     return score(b) - score(a);
   });
