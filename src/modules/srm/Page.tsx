@@ -16,6 +16,7 @@ import { A, Card, Chip, KpiCard, SectionHeader, SubTabs } from "../../components
 import { CONTRACTS, RFQS } from "../../data/demo-data";
 import { SUPPLIER_MASTER } from "../../data/master-data";
 import type { ActiveContext } from "../ai-assistant/Panel";
+import type { CanonicalFocusTarget } from "../../lib/evidenceLinks";
 import {
   buildSrmSupplierRows,
   supplierCertificationReportRows,
@@ -46,6 +47,7 @@ import {
 
 type SrmTab = "overview" | "master" | "performance" | "certification" | "sourcing" | "contracts";
 type IncomingSrmTab = SrmTab | "risk" | "portal" | "scoring";
+type NavigateFn = (moduleId: string, focusTarget?: CanonicalFocusTarget | null, options?: { returnTo?: string; entityLabel?: string; source?: string }) => void;
 
 const tabs = [
   { id: "overview", label: "SRM 总览", icon: Sparkles },
@@ -98,10 +100,12 @@ function normalizeSrmTab(tab?: IncomingSrmTab): SrmTab {
 export default function SrmPage({
   initialView = "overview",
   focus,
+  onNavigate,
   onActiveContextChange,
 }: {
   initialView?: IncomingSrmTab;
   focus?: { entityType: string; entityId: string; at: number } | null;
+  onNavigate?: NavigateFn;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [tab, setTab] = useState<SrmTab>(normalizeSrmTab(initialView));
@@ -169,7 +173,7 @@ export default function SrmPage({
 
   return (
     <div className="space-y-4">
-      <SupplierDetailModal row={selected} onClose={() => setSelected(null)} />
+      <SupplierDetailModal row={selected} onClose={() => setSelected(null)} onOpenTab={(next) => setTab(next)} onNavigate={onNavigate} />
 
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">

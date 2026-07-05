@@ -1,5 +1,6 @@
 import { A, Card, Chip } from "../../components/ui";
 import type { SupplierSrmRow } from "../../domain/srm/helpers";
+import { fmt } from "../../lib/format";
 import {
   tdActionClass,
   tdNameClass,
@@ -21,7 +22,7 @@ export default function SupplierTable({ rows, onDetail, mode }: { rows: Supplier
       ? rows.filter((row) => row.supplier.certificationStatus !== "已认证" || row.supplier.status !== "启用")
       : rows;
   const headers = mode === "master"
-    ? ["供应商编码", "供应商名称", "品类", "类型", "资料状态", "认证状态", "联系人", "邮箱", "电话", "付款条款", "默认税码", "默认币种", "区域", "当前记录", "操作"]
+    ? ["供应商编号 / 供应商编码", "供应商名称", "供应商类型 / 品类", "状态", "主要联系人", "默认币种", "采购负责人", "相关 RFQ 数", "相关 PO 数", "未完成 PO 数", "收货异常数", "发票差异数", "已收未票金额", "最近交易日期", "风险等级", "下一步", "操作"]
     : mode === "certification"
       ? ["供应商", "认证状态", "准入状态", "缺失资料", "到期风险", "整改事项", "复核项目", "负责人", "下一步", "操作"]
       : ["供应商", "评分", "准时率", "质量合格率", "响应分", "风险状态", "开放 PO", "发票差异", "对账异常", "下一步", "操作"];
@@ -29,7 +30,7 @@ export default function SupplierTable({ rows, onDetail, mode }: { rows: Supplier
   return (
     <Card>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs min-w-[1180px]">
+        <table className="w-full text-xs min-w-[1480px]">
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
               {headers.map((header) => (
@@ -43,9 +44,6 @@ export default function SupplierTable({ rows, onDetail, mode }: { rows: Supplier
               const certStyle = statusStyle(row.supplier.certificationStatus);
               const recordStyle = statusStyle(row.supplier.status);
               const supplierType = row.flag === "整改" ? "整改关注" : row.flag === "战略" ? "战略" : "核心";
-              const region = row.supplier.phone.startsWith("021") ? "华东"
-                : row.supplier.phone.startsWith("0755") || row.supplier.phone.startsWith("020") || row.supplier.phone.startsWith("0757") ? "华南"
-                  : "华中";
               const missingDocs = row.supplier.certificationStatus === "已认证" ? "无" : "营业执照 / 质量体系";
               const expiryRisk = row.supplier.certificationStatus === "整改中" ? "证照即将到期" : row.supplier.certificationStatus === "待复核" ? "需年度复核" : "低";
               const remediation = row.supplier.certificationStatus === "已认证" ? "年度复核" : row.nextAction;
@@ -54,20 +52,22 @@ export default function SupplierTable({ rows, onDetail, mode }: { rows: Supplier
                   <tr key={row.supplier.code} style={{ borderBottom: index < visible.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                     <td className={tdNowrapClass} style={{ color: A.blue }}>{row.supplier.code}</td>
                     <td className={`${tdNameClass} max-w-[220px] font-semibold`} style={{ color: A.label }}>{row.supplier.name}</td>
-                    <td className={tdNowrapClass} style={{ color: A.sub }}>{row.category}</td>
-                    <td className={tdNowrapClass} style={{ color: A.label }}>{supplierType}</td>
-                    <td className={tdNowrapClass}><Chip label={row.supplier.status} color={recordStyle.color} bg={recordStyle.bg} /></td>
-                    <td className={tdNowrapClass}><Chip label={row.supplier.certificationStatus} color={certStyle.color} bg={certStyle.bg} /></td>
+                    <td className={`${tdNameClass} max-w-[180px]`} style={{ color: A.sub }}>{supplierType} / {row.category}</td>
+                    <td className={tdNowrapClass}><Chip label={row.operationalStatus} color={recordStyle.color} bg={recordStyle.bg} /></td>
                     <td className={tdNowrapClass} style={{ color: A.label }}>{row.supplier.contact}</td>
-                    <td className={`${tdNameClass} max-w-[220px] truncate`} style={{ color: A.sub }}>{row.supplier.email}</td>
-                    <td className={tdNowrapClass} style={{ color: A.sub }}>{row.supplier.phone}</td>
-                    <td className={tdNowrapClass} style={{ color: A.label }}>{row.supplier.paymentTerms}</td>
-                    <td className={tdNowrapClass} style={{ color: A.label }}>{row.supplier.defaultTaxCode}</td>
                     <td className={tdNowrapClass} style={{ color: A.label }}>{row.supplier.currency}</td>
-                    <td className={tdNowrapClass} style={{ color: A.sub }}>{region}</td>
-                    <td className={tdNowrapClass} style={{ color: A.green }}>当前有效</td>
+                    <td className={tdNowrapClass} style={{ color: A.label }}>{row.buyerOwner}</td>
+                    <td className={tdNumericClass} style={{ color: A.label }}>{row.p2pSummary.rfqCount}</td>
+                    <td className={tdNumericClass} style={{ color: A.label }}>{row.p2pSummary.poCount}</td>
+                    <td className={`${tdNumericClass} font-semibold`} style={{ color: row.p2pSummary.openPoCount ? A.blue : A.gray2 }}>{row.p2pSummary.openPoCount}</td>
+                    <td className={`${tdNumericClass} font-semibold`} style={{ color: row.p2pSummary.receivingExceptionCount ? A.orange : A.green }}>{row.p2pSummary.receivingExceptionCount}</td>
+                    <td className={`${tdNumericClass} font-semibold`} style={{ color: row.p2pSummary.invoiceVarianceCount ? A.orange : A.green }}>{row.p2pSummary.invoiceVarianceCount}</td>
+                    <td className={tdNumericClass} style={{ color: row.p2pSummary.receivedNotInvoicedAmount ? A.orange : A.green }}>{fmt(row.p2pSummary.receivedNotInvoicedAmount)}</td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{row.p2pSummary.latestTransactionDate}</td>
+                    <td className={tdNowrapClass}><Chip label={row.supplier.riskStatus} color={riskStyle.color} bg={riskStyle.bg} /></td>
+                    <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.blue }}>{row.nextAction}</td>
                     <td className={tdActionClass}>
-                      <button onClick={() => onDetail(row)} className="px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看详情</button>
+                      <button onClick={() => onDetail(row)} className="px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看运营档案</button>
                     </td>
                   </tr>
                 );

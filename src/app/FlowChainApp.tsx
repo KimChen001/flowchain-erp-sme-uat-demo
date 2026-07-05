@@ -753,7 +753,7 @@ export default function FlowChainApp() {
     rfq:         <ProcurementPanel view="rfq" focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     receiving:   <ReceivingPanel focus={searchFocus} onNavigate={navigateTo} />,
     procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => navigateTo("procurement:rfq")} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
-    srm: <SrmPage initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
+    srm: <SrmPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     "master-data": <MasterDataPage initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
     finance:     <FinanceWorkbench initialView={activeView as any} />,
     reports:     <ReportsPanel initialView={activeView as any} onNavigate={navigateTo} />,
