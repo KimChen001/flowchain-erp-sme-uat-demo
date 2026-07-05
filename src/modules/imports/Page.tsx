@@ -302,6 +302,9 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
             <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
               当前页面仅展示导入前校验与质量复核结果；不会直接覆盖当前工作区数据。
             </div>
+            <div className="mt-2 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0faf4", color: A.green }}>
+              用户数据导入采用预览模式：先运行导入预览，人工确认后再进入后续处理；预览阶段不保存业务数据。
+            </div>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <button onClick={() => setView("tasks")} className="text-xs px-3 py-2 rounded-xl font-medium" style={{ background: A.gray6, color: A.blue }}>
@@ -1408,8 +1411,8 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
       payload = JSON.parse(userPayloadText);
     } catch {
       setUserPreviewStatus("error");
-      setUserPreviewError("JSON 格式无效，无法进行 dry-run 预览。");
-      toast.error("用户数据 JSON 格式无效");
+      setUserPreviewError("导入内容格式无效，无法进行预览模式。");
+      toast.error("用户数据导入内容格式无效");
       return;
     }
     setUserPreviewStatus("loading");
@@ -1426,7 +1429,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
       const body = await readJsonResponse<UserDataPreview>(response);
       setUserPreview(body);
       setUserPreviewStatus(response.ok ? "success" : "error");
-      if (response.ok) toast.success("用户数据 dry-run 预览完成");
+      if (response.ok) toast.success("用户数据导入预览完成");
       else setUserPreviewError((body.errors || []).map(issueMessage).join("；") || "预览未通过校验。");
     } catch (error) {
       setUserPreviewStatus("error");
@@ -1437,7 +1440,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
   async function commitUserData() {
     const snapshot = userPreview?.normalizedSnapshot;
     if (!snapshot?.normalizedSnapshotHash) {
-      toast.warning("请先完成有效的 dry-run 预览");
+      toast.warning("请先完成有效的导入预览");
       return;
     }
     setUserCommitStatus("loading");
@@ -1466,7 +1469,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
       }
     } catch (error) {
       setUserCommitStatus("error");
-      setUserCommitResponse({ ok: false, errors: [{ code: "commit_request_failed", message: error instanceof Error ? error.message : "Commit 请求失败", path: "commit" }], writesFiles: false, writesDb: false, overwritesDemoData: false });
+      setUserCommitResponse({ ok: false, errors: [{ code: "commit_request_failed", message: error instanceof Error ? error.message : "提交请求失败", path: "commit" }], writesFiles: false, writesDb: false, overwritesDemoData: false });
     }
   }
 
@@ -1560,7 +1563,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               </div>
               <div>
                 <h2 className="text-sm font-semibold" style={{ color: A.label }}>用户数据导入预览</h2>
-                <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先复核后确认的范围化运行时导入 · dry-run 默认不写文件、不写 DB、不覆盖当前工作区数据</p>
+                <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先预览后确认的范围化导入 · 预览模式默认不保存文件结果、不保存业务数据、不覆盖当前工作区数据</p>
               </div>
             </div>
           </div>
@@ -1578,7 +1581,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               <button data-testid="user-data-preview-button" onClick={previewUserData} disabled={userPreviewStatus === "loading"}
                 className="text-xs px-3 py-2 rounded-xl font-medium text-white disabled:cursor-not-allowed"
                 style={{ background: userPreviewStatus === "loading" ? A.gray3 : A.blue }}>
-                {userPreviewStatus === "loading" ? "预览中" : "运行 dry-run 预览"}
+                {userPreviewStatus === "loading" ? "预览中" : "运行导入预览"}
               </button>
             </div>
             <textarea
@@ -1586,7 +1589,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               onChange={(event) => setUserPayloadText(event.target.value)}
               spellCheck={false}
               className={`${inputStyle} min-h-[300px] font-mono text-[11px] leading-5`}
-              aria-label="用户数据 JSON payload"
+              aria-label="用户数据导入内容"
             />
             {userPreviewError && (
               <div className="rounded-xl p-3 text-[11px] leading-5" style={{ background: "#fff1f0", color: A.red }}>
@@ -1598,7 +1601,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
           <div className="space-y-3">
             <div className="grid grid-cols-4 gap-2" data-testid="user-data-preview-result">
               {[
-                ["Dry-run", userPreview?.dryRun ? "是" : "—", userPreview?.dryRun ? A.green : A.gray2],
+                ["预览模式", userPreview?.dryRun ? "是" : "—", userPreview?.dryRun ? A.green : A.gray2],
                 ["记录数", recordCountTotal(userPreview?.recordCounts), A.blue],
                 ["警告", userPreview?.warnings?.length || 0, (userPreview?.warnings?.length || 0) ? A.orange : A.green],
                 ["错误", userPreview?.errors?.length || 0, (userPreview?.errors?.length || 0) ? A.red : A.green],
@@ -1612,25 +1615,25 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
 
             <div className="rounded-xl p-3 space-y-2" style={{ background: A.gray6 }}>
               <div className="flex flex-wrap gap-1.5">
-                <Chip label={`写文件：${userPreview?.writesFiles ? "是" : "否"}`} color={A.green} bg="#f0faf4" />
-                <Chip label={`写数据库：${userPreview?.writesDb ? "是" : "否"}`} color={A.green} bg="#f0faf4" />
+                <Chip label={`保存文件结果：${userPreview?.writesFiles ? "是" : "否"}`} color={A.green} bg="#f0faf4" />
+                <Chip label={`保存到业务数据集：${userPreview?.writesDb ? "是" : "否"}`} color={A.green} bg="#f0faf4" />
                 <Chip label={`覆盖当前工作区数据：${userPreview?.overwritesDemoData ? "是" : "否"}`} color={A.green} bg="#f0faf4" />
               </div>
               <div className="text-[11px] leading-5" style={{ color: A.sub }}>
-                预览仅执行 dry-run，不会改动业务数据。持久化需要用户明确确认，并通过后端功能开关。
+                预览模式不会改动业务数据。保存到业务数据集需要用户明确确认，并通过后端功能开关。
               </div>
             </div>
 
             <div className="rounded-xl p-3" style={{ background: "#f0f6ff" }}>
-              <div className="text-[10px] font-semibold mb-1" style={{ color: A.blue }}>快照元数据</div>
+              <div className="text-[10px] font-semibold mb-1" style={{ color: A.blue }}>数据快照</div>
               <div className="grid grid-cols-2 gap-2 text-[10px] leading-5">
-                <span style={{ color: A.gray1 }}>预览：{userPreview?.normalizedSnapshot?.previewId || "—"}</span>
-                <span style={{ color: A.gray1 }}>数据集：{userPreview?.normalizedSnapshot?.datasetId || "—"}</span>
-                <span style={{ color: A.gray1 }}>租户：{userPreview?.normalizedSnapshot?.scope?.tenantId || USER_DATA_SCOPE.tenantId}</span>
-                <span style={{ color: A.gray1 }}>用户：{userPreview?.normalizedSnapshot?.scope?.userId || USER_DATA_SCOPE.userId}</span>
+                <span style={{ color: A.gray1 }}>预览编号：{userPreview?.normalizedSnapshot?.previewId || "—"}</span>
+                <span style={{ color: A.gray1 }}>数据集编号：{userPreview?.normalizedSnapshot?.datasetId || "—"}</span>
+                <span style={{ color: A.gray1 }}>当前工作区：{userPreview?.normalizedSnapshot?.scope?.tenantId ? "已识别" : "—"}</span>
+                <span style={{ color: A.gray1 }}>当前用户范围：{userPreview?.normalizedSnapshot?.scope?.userId ? "已识别" : "—"}</span>
               </div>
               <div data-testid="user-data-snapshot-hash" className="mt-2 text-[10px] font-mono break-all" style={{ color: A.label }}>
-                哈希：{userPreview?.normalizedSnapshot?.normalizedSnapshotHash || "—"}
+                快照校验码：{userPreview?.normalizedSnapshot?.normalizedSnapshotHash || "—"}
               </div>
             </div>
 
@@ -1656,14 +1659,14 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
                 {Object.entries(userPreview?.recordCounts || {}).filter(([, count]) => count > 0).map(([key, count]) => (
                   <Chip key={key} label={`${key}: ${count}`} color={A.blue} bg={A.white} />
                 ))}
-                {recordCountTotal(userPreview?.recordCounts) === 0 && <span className="text-[11px]" style={{ color: A.gray2 }}>等待 dry-run 预览</span>}
+                {recordCountTotal(userPreview?.recordCounts) === 0 && <span className="text-[11px]" style={{ color: A.gray2 }}>等待导入预览</span>}
               </div>
             </div>
 
             <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
               <div className="text-[10px] font-semibold mb-1" style={{ color: A.label }}>审计预览</div>
               <div className="text-[10px] leading-5" style={{ color: A.sub }}>
-                动作：{String(userPreview?.auditPreview?.action || "—")} · 对象：{String((userPreview?.auditPreview?.entity as { id?: string } | undefined)?.id || "—")}
+                复核动作：{String(userPreview?.auditPreview?.action || "—")} · 业务对象：{String((userPreview?.auditPreview?.entity as { id?: string } | undefined)?.id || "—")}
               </div>
             </div>
           </div>
@@ -1680,7 +1683,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             </div>
             <label className="flex items-start gap-2 text-[11px] leading-5 mb-2" style={{ color: A.gray1 }}>
               <input type="checkbox" checked={confirmUserCommit} onChange={(event) => setConfirmUserCommit(event.target.checked)} />
-              我已复核数据集 ID、范围、记录计数、校验摘要、警告、错误和审计预览。
+              我已复核数据集编号、当前范围、记录计数、校验摘要、警告、错误和审计预览。
             </label>
             <label className="flex items-start gap-2 text-[11px] leading-5 mb-3" style={{ color: (userPreview?.warnings || []).length ? A.orange : A.gray2 }}>
               <input type="checkbox" checked={acceptUserWarnings} disabled={(userPreview?.warnings || []).length === 0} onChange={(event) => setAcceptUserWarnings(event.target.checked)} />
@@ -1695,7 +1698,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               {userCommitResponse
                 ? userCommitResponse.commitAccepted
                   ? `已提交 ${userCommitResponse.importBatchId || "导入批次"} · 审计 ${userCommitResponse.auditEventId || "—"}`
-                  : `提交已关闭或被拒绝 · ${userCommitResponse.featureFlag || "FLOWCHAIN_ENABLE_USER_IMPORT_COMMIT"} · 写数据库：${userCommitResponse.writesDb ? "是" : "否"}`
+                  : `提交已关闭或被拒绝 · 功能开关状态需复核 · 保存到业务数据集：${userCommitResponse.writesDb ? "是" : "否"}`
                 : "当前环境提交关闭，需后端功能开关启用后才能提交。"}
             </div>
           </div>
@@ -1709,10 +1712,10 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               {userDatasetStatusMessage(userDatasetStatus, userDatasetStatusState)}
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] leading-5">
-              <span style={{ color: A.gray1 }}>数据集：{userDatasetStatus?.dataset?.datasetId || "—"}</span>
+              <span style={{ color: A.gray1 }}>数据集编号：{userDatasetStatus?.dataset?.datasetId || "—"}</span>
               <span style={{ color: A.gray1 }}>批次：{userDatasetStatus?.dataset?.importBatchId || "—"}</span>
-              <span style={{ color: A.gray1 }}>租户：{userDatasetStatus?.scope?.tenantId || USER_DATA_SCOPE.tenantId}</span>
-              <span style={{ color: A.gray1 }}>用户：{userDatasetStatus?.scope?.userId || USER_DATA_SCOPE.userId}</span>
+              <span style={{ color: A.gray1 }}>当前工作区：{userDatasetStatus?.scope?.tenantId ? "已识别" : "—"}</span>
+              <span style={{ color: A.gray1 }}>当前用户范围：{userDatasetStatus?.scope?.userId ? "已识别" : "—"}</span>
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {Object.entries(userDatasetStatus?.dataset?.recordCounts || {}).filter(([, count]) => count > 0).map(([key, count]) => (
@@ -1725,7 +1728,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             <div className="text-xs font-semibold mb-2" style={{ color: A.label }}>智能数据来源</div>
             <div className="text-[11px] leading-5" style={{ color: A.sub }}>
               {userDatasetStatus?.active
-                ? `数据来源：已持久化用户数据集 · ${userDatasetStatus.dataset?.datasetId || "数据集"} · 批次 ${userDatasetStatus.dataset?.importBatchId || "—"}`
+                ? `数据来源：已保存用户数据集 · ${userDatasetStatus.dataset?.datasetId || "数据集"} · 批次 ${userDatasetStatus.dataset?.importBatchId || "—"}`
                 : "数据限制：未找到当前用户数据集。"}
             </div>
             <div className="mt-3 rounded-lg p-2 text-[10px] leading-5" style={{ background: A.white, color: A.gray1 }}>
@@ -1758,7 +1761,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               <div className="mt-2 text-[10px] leading-5" style={{ color: userDeactivateResponse?.deactivated ? A.green : A.gray1 }}>
                 {userDeactivateResponse
                   ? userDeactivateResponse.deactivated
-                    ? `已停用 ${userDeactivateResponse.importBatchId || activeImportBatchId} · 审计 ${userDeactivateResponse.auditEventId || "—"} · 写数据库：${userDeactivateResponse.writesDb ? "是" : "否"}`
+                    ? `已停用 ${userDeactivateResponse.importBatchId || activeImportBatchId} · 审计 ${userDeactivateResponse.auditEventId || "—"} · 保存到业务数据集：${userDeactivateResponse.writesDb ? "是" : "否"}`
                     : `停用被拒绝 · ${(userDeactivateResponse.errors || []).map(issueMessage).join("；") || "功能开关未启用"}`
                   : "停用同样需要后端功能开关和显式确认。"}
               </div>

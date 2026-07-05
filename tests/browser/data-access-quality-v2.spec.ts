@@ -98,4 +98,10 @@ test("Data Access Quality v2 shows data coverage impacts review boundaries and n
   const reopened = await openDataAccess(page);
   await expect(reopened.quality).not.toContainText(forbiddenExecutionText);
   await expect(reopened.quality).not.toContainText(forbiddenTechnicalText);
+  await expect(reopened.pageScope).toContainText("预览模式");
+  await expect(reopened.pageScope).toContainText("导入预览");
+  await expect(reopened.pageScope).toContainText("不保存业务数据");
+  await expect(reopened.pageScope).toContainText("当前工作区数据");
+  await expect(reopened.pageScope).toContainText("人工确认");
+  await expect(reopened.pageScope).not.toContainText(forbiddenTechnicalText);
 });

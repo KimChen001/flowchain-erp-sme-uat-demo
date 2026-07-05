@@ -65,6 +65,8 @@ import { inventoryExceptionExportRows } from "../../domain/inventory/exceptions"
 import { srmReportRows, supplierCertificationReportRows, supplierRiskReportRows } from "../../domain/srm/helpers";
 import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
+import { ReportsAnalyticsV2 } from "../../components/reports/ReportsAnalyticsV2";
+import { fetchReportsAnalyticsV2, type ReportsAnalyticsV2 as ReportsAnalyticsV2Payload } from "./reportsAnalytics";
 
 type ReportModule = "采购" | "库存" | "基础资料" | "财务" | "预测/MRP" | "供应商" | "审计";
 type SourceKind = "Core" | "Computed" | "API" | "API supplement" | "Module";
@@ -86,7 +88,7 @@ type ReportEntry = {
 };
 
 type ReportsPanelProps = {
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
   initialView?: "procurement" | "inventory" | "finance";
 };
 
@@ -311,12 +313,25 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
   const [savedPlans, setSavedPlans] = useState<any[]>([]);
   const [mrpPlan, setMrpPlan] = useState<MrpPlan | null>(null);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+  const [reportsAnalytics, setReportsAnalytics] = useState<ReportsAnalyticsV2Payload | null>(null);
+  const [reportsAnalyticsLoading, setReportsAnalyticsLoading] = useState(true);
+  const [reportsAnalyticsError, setReportsAnalyticsError] = useState(false);
 
   useEffect(() => {
     apiJson<PurchaseRequest[]>("/api/purchase-requests").then(setPurchaseRequests).catch(() => setPurchaseRequests([]));
     apiJson<any[]>("/api/forecast-plans").then(setSavedPlans).catch(() => setSavedPlans([]));
     apiJson<MrpPlan>("/api/mrp-plan?periods=6").then(setMrpPlan).catch(() => setMrpPlan(null));
     apiJson<AuditEntry[]>("/api/audit-log").then(setAuditLog).catch(() => setAuditLog([]));
+    fetchReportsAnalyticsV2()
+      .then((data) => {
+        setReportsAnalytics(data);
+        setReportsAnalyticsError(false);
+      })
+      .catch(() => {
+        setReportsAnalytics(null);
+        setReportsAnalyticsError(true);
+      })
+      .finally(() => setReportsAnalyticsLoading(false));
   }, []);
   useEffect(() => {
     setFilter(reportFilterFromView(initialView));
@@ -910,6 +925,13 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
 
   return (
     <div className="space-y-5">
+      <ReportsAnalyticsV2
+        analytics={reportsAnalytics}
+        loading={reportsAnalyticsLoading}
+        error={reportsAnalyticsError}
+        onNavigate={onNavigate}
+      />
+
       <Card className="p-5">
         <div className="flex items-start justify-between gap-6">
           <div>
