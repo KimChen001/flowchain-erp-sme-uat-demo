@@ -522,10 +522,10 @@ export default function FlowChainApp() {
   const activeNavItem = navItems.find((item) => item.id === activeModule);
   const activeChildLabel = activeNavItem?.children?.find((item) => item.id === active)?.label;
   const contentMaxWidthClass = activeModule === "srm"
-    ? "max-w-[1600px]"
+    ? "max-w-[1440px]"
     : ["overview", "reports", "imports", "review-actions"].includes(activeModule)
-      ? "max-w-[1500px]"
-      : "max-w-[1480px]";
+      ? "max-w-[1360px]"
+      : "max-w-[1320px]";
   const searchGroups = useMemo(() => {
     const grouped = new Map<string, GlobalSearchResult[]>();
     searchResults.forEach((result) => {
