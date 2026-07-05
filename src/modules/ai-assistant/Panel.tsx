@@ -11,7 +11,9 @@ import {
 import { fmt } from "../../lib/format";
 import { A } from "../../components/ui";
 import { typography } from "../../components/ui/typography";
+import { AiResponseV2Renderer } from "../../components/ai/AiResponseV2Renderer";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
+import type { AiResponseV2 } from "../../domain/ai/response-contract";
 import { aiDisplayMessage, looksLikeRawJson, normalizeAiCardValue, safeUnknownCardMessage, sanitizeAiMessage } from "./presentation";
 import { getContextualQuickPrompts } from "./prompts";
 
@@ -390,6 +392,14 @@ function AiResponseCard({
 }) {
   const data = card.data || {};
   switch (card.type) {
+    case "ai_response_v2":
+      return (
+        <AiResponseV2Renderer
+          response={data as unknown as AiResponseV2}
+          onNavigate={onNavigate}
+          onReviewActionDraft={onReviewActionDraft}
+        />
+      );
     case "supplier_status":
       return (
         <CardShell title={card.title || textValue(data.name) || "供应商状态"}>
@@ -1229,6 +1239,23 @@ function collectBusinessIdsFromCards(cards: AiChatCard[] = []) {
     if (!grouped[type].includes(value)) grouped[type].push(value);
   };
   for (const card of cards) {
+    if (card.type === "ai_response_v2") {
+      const response = card.data as Record<string, unknown>;
+      for (const item of arrayValue(response.keyEvidence)) {
+        if (item && typeof item === "object") {
+          const row = item as Record<string, unknown>;
+          push(row.entityId);
+          push(visibleBusinessId(row.entityId, row.entityLabel, row.label, row.summary));
+        }
+      }
+      for (const item of arrayValue(response.navigationLinks)) {
+        if (item && typeof item === "object") {
+          const row = item as Record<string, unknown>;
+          push(row.entityId);
+          push(visibleBusinessId(row.entityId, row.label, row.reason));
+        }
+      }
+    }
     for (const evidence of card.evidence || []) {
       push(evidence.id);
       push(visibleBusinessId(evidence.id, evidence.route, evidence.label, evidence.summary));
@@ -1249,6 +1276,13 @@ function collectBusinessIdsFromCards(cards: AiChatCard[] = []) {
 }
 
 function primaryEntityFromCards(cards: AiChatCard[] = []) {
+  for (const card of cards) {
+    if (card.type !== "ai_response_v2") continue;
+    const response = card.data as Record<string, unknown>;
+    const firstEvidence = arrayValue(response.keyEvidence).find((item) => item && typeof item === "object") as Record<string, unknown> | undefined;
+    const id = visibleBusinessId(firstEvidence?.entityId, firstEvidence?.entityLabel, firstEvidence?.label, firstEvidence?.summary);
+    if (id) return { type: businessTypeFromId(id), id, label: id };
+  }
   for (const card of cards) {
     const data = card.data || {};
     const priorityItems = arrayValue(data.priorityItems);
@@ -1308,6 +1342,11 @@ export function getAiFollowUpChips(message: AiChatMessage) {
     if (firstSku) chips.push({ label: "查看关联 SKU", prompt: "它和哪个 SKU 有关系？" });
     chips.push({ label: "哪些数据不完整？", prompt: "哪些数据依据不够完整？" });
     if (firstPo || firstRfq) chips.push({ label: "预览跟进草稿", prompt: "预览供应商跟进草稿" });
+  }
+  if (cardTypes.has("ai_response_v2")) {
+    if (firstPo) chips.push({ label: "为什么这个 PO 优先？", prompt: "这个 PO 为什么优先？" });
+    if (firstSku) chips.push({ label: "查看关联 SKU", prompt: "这个 SKU 和哪些单据有关？" });
+    chips.push({ label: "哪些数据不完整？", prompt: "哪些数据依据不完整？" });
   }
   if (cardTypes.has("inventory_status") || firstSku) {
     chips.push({ label: "需要补货吗？", prompt: "这个 SKU 需要补货吗？" });

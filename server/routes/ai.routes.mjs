@@ -9,6 +9,7 @@ import { buildAiMasterDataQualityResponse } from '../domain/ai-master-data-quali
 import { buildAiSalesDemandResponse } from '../domain/ai-sales-demand-query.mjs'
 import { buildAiInventoryAllocationResponse } from '../domain/ai-inventory-allocation-query.mjs'
 import { buildAiEvidenceGraphResponse } from '../domain/ai-evidence-graph-query.mjs'
+import { buildAiResponseContractV2 } from '../domain/ai-response-contract-v2.mjs'
 import { buildAiCockpitFastPathResponse, buildAiDataLimitationResponse, buildAiEvidenceReuseResponse } from '../domain/ai-evidence-reuse.mjs'
 import { buildAiSessionGroundedResponse } from '../domain/ai-session-grounding.mjs'
 import { buildAiCompoundQueryResponse, buildAiReceivingGapResponse, detectCompoundBusinessQuery } from '../domain/ai-compound-query.mjs'
@@ -525,6 +526,22 @@ export async function handleAiRoute(ctx) {
     if (!body.question) return send(res, 400, { error: 'question is required' })
 
     let branchStartedAt = Date.now()
+    const responseContractV2 = detectCompoundBusinessQuery(body)
+      ? null
+      : buildAiResponseContractV2(db, body, { ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs })
+    if (responseContractV2) {
+      const result = {
+        ...responseContractV2,
+        fastPath: 'response_contract_v2',
+        timingMs: Date.now() - startedAt,
+        modelMs: Date.now() - branchStartedAt,
+      }
+      void recordAiEventBestEffort({ db, event, writeDb, repositories, action: 'ai_response_contract_v2', summary: `AI answered ${result.intent.name} with response contract v2`, entity: result.intent.name, persist: false })
+      logAiTiming({ startedAt, branchStartedAt, branch: 'response_contract_v2', body, result })
+      return send(res, 200, result)
+    }
+
+    branchStartedAt = Date.now()
     const sessionGrounded = buildAiSessionGroundedResponse(db, body, { cache: {} })
     if (sessionGrounded) {
       const result = {
