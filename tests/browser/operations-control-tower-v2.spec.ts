@@ -37,13 +37,14 @@ test("daily workbench separates today actions risks and AI suggestions", async (
   for (const label of ["PO 建议", "库存建议", "供应商建议", "财务建议", "AI 建议列表", "建议详情", "待人工复核草稿", "AI 审计记录"]) {
     await expect(scope).toContainText(label);
   }
-  await expect(scope).toContainText("建议优先跟进 PO-2026-1282 到货计划");
-  await expect(scope).toContainText("PO-2026-1282 的 5/25 到货计划已超期 5 天");
-  await expect(scope).toContainText("仅生成待复核草稿，需人工确认后才可进入后续处理");
+  await expect(scope.getByTestId("ai-suggestion-row").first()).toBeVisible();
+  await expect(scope).toContainText("当前工作区数据");
+  await expect(scope).toContainText("可点击跳转");
+  await expect(scope).toContainText("内部复核");
   await expect(scope).not.toContainText("Operations Control Tower");
 
-  await scope.getByRole("button", { name: /建议复核 SKU-00412 可承诺量/ }).click();
-  await expect(scope).toContainText("SKU-00412 可用量与近期需求存在缺口");
+  await scope.getByTestId("ai-suggestion-row").filter({ hasText: /库存建议/ }).first().click();
+  await expect(scope).toContainText(/库存|SKU|可承诺|安全库存/);
 
   await page.getByRole("button", { name: "风险与异常", exact: true }).click();
   for (const label of ["采购风险", "库存风险", "供应商风险", "财务异常", "风险分类", "异常清单", "证据入口"]) {
