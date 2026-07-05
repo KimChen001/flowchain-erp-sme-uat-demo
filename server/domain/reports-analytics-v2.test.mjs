@@ -64,7 +64,7 @@ test('finance analytics covers invoice variance match and received not invoiced'
   assert.ok(report.financeAnalytics.some((item) => Object.hasOwn(item, 'receivedNotInvoicedAmount')))
 })
 
-test('control tower analytics aligns with operations categories', () => {
+test('risk workspace analytics aligns with operations categories', () => {
   const db = loadDb()
   const report = buildReportsAnalyticsV2(db)
   const tower = buildOperationsControlTowerV2(db)
@@ -82,7 +82,7 @@ test('data quality impact aligns with Data Access Quality v2 issues', () => {
   assert.ok(report.dataQualityImpact.length >= 1)
   const impactCount = report.dataQualityImpact.reduce((sum, item) => sum + item.issueCount, 0)
   assert.ok(impactCount <= quality.qualityIssues.length)
-  assert.ok(report.dataQualityImpact.some((item) => /AI|Operations|Three-way|Data Access|报表/.test(`${item.affectedModule} ${item.impactSummary}`)))
+  assert.ok(report.dataQualityImpact.some((item) => /AI|风险与异常|Three-way|Data Access|报表/.test(`${item.affectedModule} ${item.impactSummary}`)))
 })
 
 test('report insights are review-first and read-only', () => {

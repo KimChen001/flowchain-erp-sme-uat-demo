@@ -744,7 +744,7 @@ export default function FlowChainApp() {
         : "业务跳转";
 
   const panels: Record<string, React.ReactNode> = {
-    overview:    <OverviewPanel onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
+    overview:    <OverviewPanel initialView={activeView} onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
     sales:       <SalesDemandPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onOpenAi={() => setAiOpenSignal(Date.now())} />,
     inventory:   <InventoryPanel initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} onReviewActionDraft={openActionDraftReview} />,
     forecast:    <ForecastPanel initialView={activeView as any} onNavigate={navigateTo} onReviewActionDraft={openActionDraftReview} />,

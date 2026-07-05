@@ -11,11 +11,14 @@ function readSource(filePath) {
   return fs.readFileSync(filePath, 'utf8')
 }
 
-test('today cockpit UI is extracted from overview page', () => {
+test('overview page reuses focused today cockpit pieces without mounting the full cockpit', () => {
   const overview = readSource(overviewPath)
 
-  assert.match(overview, /import \{ TodayCockpitPanel \} from "\.\/TodayCockpitPanel"/)
-  assert.match(overview, /<TodayCockpitPanel\b/)
+  assert.match(overview, /import \{ TodayCockpitRecentDocuments \} from "\.\/TodayCockpitPanel"/)
+  assert.match(overview, /<TodayCockpitRecentDocuments\b/)
+  assert.match(overview, /import AiSuggestionsPage from "\.\/AiSuggestionsPage"/)
+  assert.match(overview, /<AiSuggestionsPage\b/)
+  assert.doesNotMatch(overview, /<TodayCockpitPanel\b/)
   assert.doesNotMatch(overview, /function TodayCockpitV2Panel/)
   assert.doesNotMatch(overview, /function CockpitInventoryRiskList/)
   assert.doesNotMatch(overview, /function cockpitCardValue/)

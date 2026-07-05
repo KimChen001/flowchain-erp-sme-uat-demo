@@ -12,7 +12,7 @@ const filterOptions = [
   { key: "info", label: "需要补充信息" },
   { key: "high", label: "高优先级" },
   { key: "ai_response", label: "AI" },
-  { key: "control_tower", label: "Control Tower" },
+  { key: "control_tower", label: "风险与异常" },
   { key: "reports_analytics", label: "Reports" },
   { key: "data_access_quality", label: "Data Access" },
   { key: "p2p", label: "P2P" },
@@ -23,7 +23,7 @@ const filterOptions = [
 
 const sourceLabels: Record<string, string> = {
   ai_response: "AI Response",
-  control_tower: "Operations Control Tower",
+  control_tower: "风险与异常",
   reports_analytics: "Reports & Analytics",
   data_access_quality: "Data Access & Quality",
   purchase_request: "PR / RFQ / PO / GRN / Invoice",

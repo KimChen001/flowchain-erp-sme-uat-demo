@@ -41,7 +41,7 @@ test("Data Access Quality v2 shows data coverage impacts review boundaries and n
     await expect(quality).toContainText(label);
   }
 
-  for (const label of ["数据源数量", "已接入数据源", "已映射字段", "未映射字段", "高风险质量问题", "关系断链", "证据缺口", "受影响 AI 判断", "Control Tower"]) {
+  for (const label of ["数据源数量", "已接入数据源", "已映射字段", "未映射字段", "高风险质量问题", "关系断链", "证据缺口", "受影响 AI 判断", "风险与异常"]) {
     await expect(quality).toContainText(label);
   }
 
@@ -69,7 +69,7 @@ test("Data Access Quality v2 shows data coverage impacts review boundaries and n
   await expect(evidence).toContainText(/缺失证据|影响|建议/);
 
   const downstream = page.getByTestId("downstream-impact");
-  for (const label of ["AI Response Contract v2", "Operations Control Tower", "Supplier Operational Profile", "Three-way Match"]) {
+  for (const label of ["AI Response Contract v2", "风险与异常", "Supplier Operational Profile", "Three-way Match"]) {
     await expect(downstream).toContainText(label);
   }
 
@@ -91,8 +91,11 @@ test("Data Access Quality v2 shows data coverage impacts review boundaries and n
 
   await page.goto("/");
   await openDataAccess(page);
-  await page.getByTestId("quality-issues").getByTestId("data-quality-nav-link").filter({ hasText: /Operations Control Tower/ }).first().click();
-  await expect(page.getByTestId("operations-control-tower-v2")).toContainText(/Action Inbox|行动收件箱/);
+  await page.getByTestId("quality-issues").getByTestId("data-quality-nav-link").filter({ hasText: /风险与异常/ }).first().click();
+  const riskScope = page.getByTestId("module-export-scope");
+  await expect(riskScope).toContainText("风险与异常");
+  await expect(riskScope).toContainText(/风险分类|异常清单/);
+  await expect(riskScope).not.toContainText("AI 建议列表");
 
   await page.goto("/");
   const reopened = await openDataAccess(page);

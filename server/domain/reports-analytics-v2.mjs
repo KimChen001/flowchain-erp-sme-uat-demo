@@ -42,7 +42,7 @@ function moduleFor(type = '') {
   if (type === 'invoice' || type === 'match') return 'procurement:invoices'
   if (type === 'supplier') return 'srm:master'
   if (type === 'inventory') return 'inventory'
-  if (type === 'operations') return 'overview'
+  if (type === 'operations') return 'overview:risks'
   if (type === 'data_quality') return 'imports'
   return 'reports'
 }
@@ -67,7 +67,7 @@ function objectLabel(type = '', id = '') {
   if (type === 'match') return `三单匹配 ${id}`.trim()
   if (type === 'supplier') return `供应商 ${id}`.trim()
   if (type === 'inventory') return `SKU ${id}`.trim()
-  if (type === 'operations') return 'Operations Control Tower'
+  if (type === 'operations') return '风险与异常'
   if (type === 'data_quality') return 'Data Access & Quality'
   return 'Reports & Analytics'
 }
@@ -261,7 +261,7 @@ function buildControlTowerAnalytics(tower) {
       draftAvailableCount: items.filter((item) => asArray(item.reviewActions).some((action) => action.previewOnly)).length,
       topPriorityItem: top?.title || '当前无开放事项',
       businessImpact: top?.businessImpact?.[0]?.explanation || '用于聚合 Action Inbox 风险分布。',
-      navigationLinks: [nav('打开 Operations Control Tower', 'operations', top?.entityId || 'data-quality-gap-workspace')],
+      navigationLinks: [nav('打开风险与异常', 'operations', top?.entityId || 'data-quality-gap-workspace')],
     }
   })
 }
@@ -341,7 +341,7 @@ export function buildReportsAnalyticsV2(data = {}, options = {}) {
       severity: inventoryAnalytics.some((item) => item.shortageQty > 0) ? 'high' : 'info',
       conclusion: '低于安全库存的 SKU 需要关联 PR / PO / RFQ 才能解释补货路径。',
       keyEvidence: inventoryAnalytics.slice(0, 3).map((item) => `${item.sku}: 缺口 ${item.shortageQty}`),
-      businessImpact: '会影响补货草稿、MRP 判断和 Control Tower 库存风险。',
+      businessImpact: '会影响补货草稿、MRP 判断和风险与异常中的库存风险。',
       suggestedAction: '打开库存页面并复核相关 PR / PO。',
       navigationLinks: [inventoryAnalytics[0] ? nav('打开 Inventory', 'inventory', inventoryAnalytics[0].sku) : nav('打开 Inventory', 'inventory', '')],
       dataLimitations: [],
@@ -350,11 +350,11 @@ export function buildReportsAnalyticsV2(data = {}, options = {}) {
       title: '数据质量问题影响报表可信度',
       insightType: 'data_quality',
       severity: dataQuality.summary.criticalIssueCount > 0 ? 'high' : 'warning',
-      conclusion: 'Data Access & Quality 中的质量问题会直接影响 AI、Control Tower 和报表指标解释。',
+      conclusion: 'Data Access & Quality 中的质量问题会直接影响 AI、风险与异常和报表指标解释。',
       keyEvidence: dataQualityImpact.slice(0, 3).map((item) => `${item.issueCategory}: ${item.issueCount}`),
       businessImpact: '报表结论需要伴随数据限制和复核建议展示。',
       suggestedAction: '打开 Data Access & Quality 逐项复核。',
-      navigationLinks: [nav('打开 Data Access & Quality', 'data_quality', 'data-quality-gap-workspace'), nav('打开 Operations Control Tower', 'operations', 'data-quality-gap-workspace')],
+      navigationLinks: [nav('打开 Data Access & Quality', 'data_quality', 'data-quality-gap-workspace'), nav('打开风险与异常', 'operations', 'data-quality-gap-workspace')],
       dataLimitations: [dataLimitations[2]],
     }),
   ]
@@ -387,7 +387,7 @@ export function buildReportsAnalyticsV2(data = {}, options = {}) {
     dataQualityImpact,
     reportInsights,
     navigationLinks: [
-      nav('打开 Operations Control Tower', 'operations', 'data-quality-gap-workspace'),
+      nav('打开风险与异常', 'operations', 'data-quality-gap-workspace'),
       nav('打开 Data Access & Quality', 'data_quality', 'data-quality-gap-workspace'),
       nav('打开 AI Assistant', 'ai', 'reports-analytics'),
     ],

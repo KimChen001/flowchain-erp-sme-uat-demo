@@ -114,7 +114,7 @@ export function DataAccessQualityV2({ quality, loading, error = false, onNavigat
         <KpiCard label="已映射字段" value={String(summary.mappedFieldCount)} sub={`未映射字段 ${summary.unmappedFieldCount}`} icon={FileCheck2} color={A.green} />
         <KpiCard label="高风险质量问题" value={String(summary.criticalIssueCount)} sub={`提醒 ${summary.warningIssueCount}`} icon={AlertTriangle} color={summary.criticalIssueCount ? A.red : A.orange} />
         <KpiCard label="关系断链" value={String(summary.relationshipGapCount)} sub={`证据缺口 ${summary.evidenceGapCount}`} icon={GitBranch} color={A.orange} />
-        <KpiCard label="受影响 AI 判断" value={String(summary.affectedAiInsightCount)} sub={`Control Tower ${summary.affectedControlTowerItemCount}`} icon={ShieldCheck} color={A.purple} />
+        <KpiCard label="受影响 AI 判断" value={String(summary.affectedAiInsightCount)} sub={`风险与异常 ${summary.affectedControlTowerItemCount}`} icon={ShieldCheck} color={A.purple} />
       </div>
 
       <Card data-testid="data-source-coverage">

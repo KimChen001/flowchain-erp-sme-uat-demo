@@ -49,7 +49,7 @@ function moduleFor(type = '') {
   if (type === 'invoice' || type === 'three_way_match') return 'procurement:invoices'
   if (type === 'supplier') return 'srm:master'
   if (type === 'inventory') return 'inventory'
-  if (type === 'operations') return 'overview'
+  if (type === 'operations') return 'overview:risks'
   if (type === 'ai') return 'overview'
   return 'imports'
 }
@@ -74,7 +74,7 @@ function objectLabel(type = '', id = '') {
   if (type === 'three_way_match') return `三单匹配 ${id}`.trim()
   if (type === 'supplier') return `供应商 ${id}`.trim()
   if (type === 'inventory') return `SKU ${id}`.trim()
-  if (type === 'operations') return 'Operations Control Tower'
+  if (type === 'operations') return '风险与异常'
   if (type === 'ai') return 'AI Response Contract v2'
   return '数据接入与质量'
 }
@@ -209,8 +209,8 @@ function fixPreview(input) {
 
 function collectSources({ docs, rfqs, purchaseOrders, receivingDocs, invoices, suppliers, inventoryItems, products }) {
   const configs = [
-    ['source-pr', '采购申请数据', 'Procurement / PR', docs.filter((doc) => doc.type === 'purchase_request').length, ['requester', 'requiredDate', 'lines', 'source demand'], ['AI Response Contract v2', 'Operations Control Tower', '采购申请详情']],
-    ['source-rfq', 'RFQ / 寻源数据', 'RFQ / Sourcing', rfqs.length, ['source PR', 'supplier response', 'quote line'], ['RFQ 比价', 'Award draft', 'Operations Control Tower']],
+    ['source-pr', '采购申请数据', 'Procurement / PR', docs.filter((doc) => doc.type === 'purchase_request').length, ['requester', 'requiredDate', 'lines', 'source demand'], ['AI Response Contract v2', '风险与异常', '采购申请详情']],
+    ['source-rfq', 'RFQ / 寻源数据', 'RFQ / Sourcing', rfqs.length, ['source PR', 'supplier response', 'quote line'], ['RFQ 比价', 'Award draft', '风险与异常']],
     ['source-po', '采购订单数据', 'PO', purchaseOrders.length, ['source PR', 'source RFQ', 'warehouse', 'ETA'], ['PO 证据链', '未收货优先级', '供应商档案']],
     ['source-grn', '收货 / GRN 数据', 'Receiving / GRN', receivingDocs.length, ['PO Line', 'received qty', 'quality status'], ['三单匹配', '已收未票', '库存风险']],
     ['source-invoice', '发票 / 三单匹配数据', 'Invoice / Three-way Match', invoices.length, ['Invoice Line', 'GRN Line', 'tax amount'], ['三单匹配', '已收未票', 'AI 发票解释']],
@@ -276,7 +276,7 @@ function collectQuality({ docs, rfqs, purchaseOrders, receivingDocs, invoices, s
       suggestedFix: '补齐供应商回复明细或标记未回复原因。',
       affectedModule: 'RFQ / Sourcing',
       affectedControlTowerCategories: ['rfq_pending_response', 'supplier_risk'],
-      navigationLinks: [nav('打开 RFQ', 'rfq', rfqMissingResponse.id), nav('打开 Operations Control Tower', 'operations', 'data-quality-gap-workspace')],
+      navigationLinks: [nav('打开 RFQ', 'rfq', rfqMissingResponse.id), nav('打开风险与异常', 'operations', 'data-quality-gap-workspace')],
     }))
   }
 
@@ -292,7 +292,7 @@ function collectQuality({ docs, rfqs, purchaseOrders, receivingDocs, invoices, s
       fieldLabel: 'GRN Line',
       issueType: '缺失收货行',
       explanation: `${poMissingGrn.po} 当前没有可关联的 GRN Line。`,
-      businessImpact: '会影响 PO 收货状态、已收未票判断、三单匹配和 Control Tower PO 未收货优先级。',
+      businessImpact: '会影响 PO 收货状态、已收未票判断、三单匹配和风险与异常中的 PO 未收货优先级。',
       suggestedFix: '复核收货记录，确认是否存在未关联 GRN Line。',
       affectedModule: 'PO / GRN / Invoice Evidence',
       affectedControlTowerCategories: ['po_unreceived', 'received_not_invoiced', 'three_way_match_variance'],
@@ -373,7 +373,7 @@ function collectQuality({ docs, rfqs, purchaseOrders, receivingDocs, invoices, s
       fieldLabel: '默认仓库 / 默认供应商',
       issueType: '证据缺口',
       explanation: `${inventoryMissing.sku} 有库存风险，但默认仓库或采购证据不完整。`,
-      businessImpact: '会影响 Inventory Risk、补货建议和 Control Tower 库存风险解释。',
+      businessImpact: '会影响 Inventory Risk、补货建议和风险与异常中的库存风险解释。',
       suggestedFix: '复核 SKU 的默认仓库、默认供应商和补货证据。',
       affectedModule: 'Inventory Risk',
       affectedControlTowerCategories: ['inventory_risk'],
@@ -384,19 +384,19 @@ function collectQuality({ docs, rfqs, purchaseOrders, receivingDocs, invoices, s
   if (tower.items.some((item) => item.category === 'data_quality_gap')) {
     issues.push(issue({
       id: 'control-tower-data-quality-gap-workspace',
-      title: 'Control Tower 数据缺口需对应复核',
+      title: '风险与异常数据缺口需对应复核',
       severity: 'warning',
       category: 'data_quality_gap',
       businessObjectType: 'data_quality',
       businessObjectId: 'data-quality-gap-workspace',
       fieldLabel: '证据链完整性',
       issueType: '关系断链',
-      explanation: 'Operations Control Tower 已生成数据缺口事项，Data Access 需展示对应问题来源。',
+      explanation: '风险与异常已生成数据缺口事项，Data Access 需展示对应问题来源。',
       businessImpact: '会影响行动优先级解释、AI 数据限制和跨模块证据链可信度。',
       suggestedFix: '按 RFQ、GRN、Invoice、供应商资料和字段映射分组复核。',
-      affectedModule: 'Operations Control Tower',
+      affectedModule: '风险与异常',
       affectedControlTowerCategories: ['data_quality_gap', 'supplier_risk', 'po_unreceived', 'received_not_invoiced', 'invoice_variance', 'three_way_match_variance', 'rfq_pending_response', 'inventory_risk'],
-      navigationLinks: [nav('打开 Operations Control Tower', 'operations', 'data-quality-gap-workspace')],
+      navigationLinks: [nav('打开风险与异常', 'operations', 'data-quality-gap-workspace')],
     }))
   }
 
@@ -540,14 +540,14 @@ function collectEvidenceGaps(qualityIssues, relationshipGaps) {
     }),
     evidenceGap({
       id: 'evidence-control-tower-data-quality',
-      title: 'Control Tower 数据缺口证据需汇总',
+      title: '风险与异常数据缺口证据需汇总',
       severity: 'warning',
       evidenceType: '行动优先级依据',
-      affectedObject: 'Operations Control Tower',
+      affectedObject: '风险与异常',
       missingEvidence: 'RFQ、GRN、Invoice、供应商资料和字段映射缺口的统一说明',
-      consequence: 'Action Inbox 的数据缺口事项需要在 Data Access 找到对应来源。',
-      suggestedNextStep: '打开 Operations Control Tower 核对 data quality gap。',
-      navigationLinks: [nav('打开 Operations Control Tower', 'operations', 'data-quality-gap-workspace')],
+      consequence: '异常清单的数据缺口事项需要在 Data Access 找到对应来源。',
+      suggestedNextStep: '打开风险与异常核对 data quality gap。',
+      navigationLinks: [nav('打开风险与异常', 'operations', 'data-quality-gap-workspace')],
     }),
   ]
 }
@@ -567,12 +567,12 @@ function collectDownstreamImpacts(issues) {
     }),
     downstreamImpact({
       id: 'impact-operations-control-tower',
-      target: 'Operations Control Tower',
-      targetType: 'Control Tower',
-      affectedQuestion: '哪些 Action Inbox 事项受数据缺口影响？',
-      affectedModule: 'Operations Control Tower',
+      target: '风险与异常',
+      targetType: '风险工作台',
+      affectedQuestion: '哪些异常清单事项受数据缺口影响？',
+      affectedModule: '风险与异常',
       impactSummary: 'supplier_risk、po_unreceived、received_not_invoiced、invoice_variance、three_way_match_variance、rfq_pending_response、inventory_risk 均需要显示数据限制。',
-      dataLimitationLabel: 'Control Tower 行动依据限制',
+      dataLimitationLabel: '风险与异常行动依据限制',
       relatedIssueIds: issues.filter((item) => item.affectedControlTowerCategories?.length).map((item) => item.id),
     }),
     downstreamImpact({
@@ -644,7 +644,7 @@ export function buildDataAccessQualityV2(data = {}, options = {}) {
     fixPreview({ title: '生成异常行复核备注草稿预览', description: '把关系断链和证据缺口整理成内部复核备注。', draftType: 'exception_note', targetObject: '质量问题', payload: { relationshipGapIds: relationshipGaps.map((item) => item.id), evidenceGapIds: evidenceGaps.map((item) => item.id) } }),
   ]
   const dataLimitations = [
-    limitation('Invoice Line 覆盖不足', '当前工作区缺少结构化发票行，已收未票和三单匹配判断需要显示限制。', ['AI Response Contract v2', 'Operations Control Tower', 'Three-way Match']),
+    limitation('Invoice Line 覆盖不足', '当前工作区缺少结构化发票行，已收未票和三单匹配判断需要显示限制。', ['AI Response Contract v2', '风险与异常', 'Three-way Match']),
     limitation('供应商资料证据不足', '部分供应商联系人、证书或交易证据需要人工复核。', ['Supplier Operational Profile', 'supplier_risk']),
     limitation('字段映射待复核', '部分外部字段尚未确认标准业务字段，会影响财务协同和 AI 解释。', ['Data Access page itself', 'AI Response Contract v2']),
   ]

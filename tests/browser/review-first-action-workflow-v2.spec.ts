@@ -53,7 +53,7 @@ test("Review-first Action Workflow renders lifecycle workspace and safe navigati
   }
 
   const sourceSummary = page.getByTestId("review-workflow-source-summary");
-  for (const label of ["AI Response", "Operations Control Tower", "Reports & Analytics", "Data Access & Quality", "PR / RFQ / PO / GRN / Invoice", "Supplier Operational Profile", "Inventory Risk"]) {
+  for (const label of ["AI Response", "风险与异常", "Reports & Analytics", "Data Access & Quality", "PR / RFQ / PO / GRN / Invoice", "Supplier Operational Profile", "Inventory Risk"]) {
     await expect(sourceSummary).toContainText(label);
   }
 
@@ -66,7 +66,7 @@ test("Review-first Action Workflow renders lifecycle workspace and safe navigati
     await expect(inbox).toContainText(label);
   }
 
-  for (const filter of ["等待人工复核", "高优先级", "AI", "Control Tower", "Reports", "Data Access", "P2P", "Supplier", "Inventory", "数据限制"]) {
+  for (const filter of ["等待人工复核", "高优先级", "AI", "风险与异常", "Reports", "Data Access", "P2P", "Supplier", "Inventory", "数据限制"]) {
     await page.getByTestId("review-workflow-filters").getByRole("button", { name: filter }).click();
     await expect(inbox.getByRole("row").nth(1)).toBeVisible();
   }
@@ -117,8 +117,11 @@ test("Review-first Action Workflow renders lifecycle workspace and safe navigati
 
   await page.goto("/");
   await openWorkflow(page);
-  await page.getByTestId("review-workflow-nav-link").filter({ hasText: /Operations Control Tower/ }).first().click();
-  await expect(page.getByTestId("operations-control-tower-v2")).toContainText(/Action Inbox|行动收件箱/);
+  await page.getByTestId("review-workflow-nav-link").filter({ hasText: /风险与异常/ }).first().click();
+  const riskScope = page.getByTestId("module-export-scope");
+  await expect(riskScope).toContainText("风险与异常");
+  await expect(riskScope).toContainText(/风险分类|异常清单/);
+  await expect(riskScope).not.toContainText("AI 建议列表");
 
   await page.goto("/");
   const reopened = await openWorkflow(page);

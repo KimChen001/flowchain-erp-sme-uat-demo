@@ -39,7 +39,7 @@ test("Reports Analytics v2 renders operational insights and safe navigation", as
     await expect(reports).toContainText(label);
   }
 
-  for (const label of ["PR", "RFQ", "PO", "GRN", "Invoice", "三单匹配差异", "风险供应商", "库存风险", "Control Tower", "数据质量问题"]) {
+  for (const label of ["PR", "RFQ", "PO", "GRN", "Invoice", "三单匹配差异", "风险供应商", "库存风险", "风险与异常", "数据质量问题"]) {
     await expect(reports).toContainText(label);
   }
 
@@ -69,7 +69,7 @@ test("Reports Analytics v2 renders operational insights and safe navigation", as
   }
 
   const dataQuality = page.getByTestId("reports-data-quality-impact");
-  for (const label of ["AI Response Contract v2", "Operations Control Tower", "Three-way Match", "Data Access"]) {
+  for (const label of ["AI Response Contract v2", "风险与异常", "Three-way Match", "Data Access"]) {
     await expect(dataQuality).toContainText(label);
   }
 
@@ -93,8 +93,11 @@ test("Reports Analytics v2 renders operational insights and safe navigation", as
 
   await page.goto("/");
   await openReports(page);
-  await page.getByTestId("reports-control-tower").getByTestId("reports-analytics-nav-link").filter({ hasText: /Operations Control Tower/ }).first().click();
-  await expect(page.getByTestId("operations-control-tower-v2")).toContainText(/Action Inbox|行动收件箱/);
+  await page.getByTestId("reports-control-tower").getByTestId("reports-analytics-nav-link").filter({ hasText: /风险与异常/ }).first().click();
+  const riskScope = page.getByTestId("module-export-scope");
+  await expect(riskScope).toContainText("风险与异常");
+  await expect(riskScope).toContainText(/风险分类|异常清单/);
+  await expect(riskScope).not.toContainText("AI 建议列表");
 
   await page.goto("/");
   const reopened = await openReports(page);

@@ -43,9 +43,13 @@ test.describe("Inventory Allocation and ATP", () => {
 
     const overview = page.getByTestId("module-export-scope");
     await expect(overview).not.toContainText(/Open PRs|Active RFQs|Open POs|Pending Receiving|Match Exceptions|Inventory Risks|Urgent Followups|Total Open Amount/);
-    await expect(overview).toContainText("库存分配风险");
-    await expect(overview).toContainText("可承诺量风险");
-    await expect(overview).toContainText("供需缺口");
+    await expect(overview).toContainText("今日行动");
+    await expect(overview).toContainText("PO 看板");
+    await expect(overview).toContainText("库存管理");
+    await expect(overview).toContainText("供应商状态");
+    await expect(overview).toContainText("财务协同");
+    await expect(overview).not.toContainText("AI 建议列表");
+    await expect(overview).not.toContainText("待人工复核草稿");
 
     await page.getByRole("button", { name: "库存管理" }).first().click();
     const inventory = page.getByTestId("module-export-scope");

@@ -2,18 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  ArrowRight,
   ClipboardList,
+  CircleDollarSign,
   FileCheck2,
   FileSpreadsheet,
   Package,
   PackageCheck,
   TrendingUp,
+  Truck,
+  Users,
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, Card, Chip, KpiCard, Modal, SectionHeader } from "../../components/ui";
-import { OperationsControlTowerV2 } from "../../components/operations/OperationsControlTowerV2";
 import { INVENTORY_MOVEMENT_LEDGER, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
 import { INVENTORY_MOVEMENT_TYPE_LABELS, isInventoryMovementException, netInventoryImpact } from "../../domain/inventory/movements";
 import { isStatementException, statementToCockpitSignal } from "../../domain/procurement/reconciliation";
@@ -21,9 +24,9 @@ import { calculateReturnFinancialImpact, isReturnException, returnToCockpitSigna
 import { masterDataQualitySignals } from "../../domain/master-data/helpers";
 import type { PurchaseOrder, PurchaseRequest, ReceivingDoc, RfqRecord, SupplierInvoice } from "../../types/scm";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
-import { TodayCockpitPanel } from "./TodayCockpitPanel";
+import { TodayCockpitRecentDocuments } from "./TodayCockpitPanel";
+import AiSuggestionsPage from "./AiSuggestionsPage";
 import { fetchTodayCockpit, type TodayCockpitResponse } from "./todayCockpit";
-import { fetchOperationsControlTower, type OperationsControlTowerResponse } from "./operationsControlTower";
 import {
   buildForecastEvidence,
   buildInventoryEvidence,
@@ -45,6 +48,7 @@ import {
 } from "./overviewEvidence";
 
 type OverviewPanelProps = {
+  initialView?: string;
   onNavigate: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
   onPrepareReplenishmentRequest: (sku: string) => void;
   onOpenAi: () => void;
@@ -83,16 +87,13 @@ function priorityStyle(priority: ActionRow["priority"]) {
   return { color: A.green, bg: "#f0faf4" };
 }
 
-export default function OverviewPanel({ onNavigate, onPrepareReplenishmentRequest, onOpenAi, onReviewActionDraft }: OverviewPanelProps) {
+export default function OverviewPanel({ initialView = "", onNavigate, onPrepareReplenishmentRequest, onOpenAi, onReviewActionDraft }: OverviewPanelProps) {
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceDetail | null>(null);
   const [showAllActions, setShowAllActions] = useState(false);
   const [showMoreSummary, setShowMoreSummary] = useState(false);
   const [todayCockpit, setTodayCockpit] = useState<TodayCockpitResponse | null>(null);
   const [todayCockpitLoading, setTodayCockpitLoading] = useState(true);
   const [todayCockpitError, setTodayCockpitError] = useState(false);
-  const [operationsTower, setOperationsTower] = useState<OperationsControlTowerResponse | null>(null);
-  const [operationsTowerLoading, setOperationsTowerLoading] = useState(true);
-  const [operationsTowerError, setOperationsTowerError] = useState(false);
   const [dashboardOrders, setDashboardOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [dashboardRequests, setDashboardRequests] = useState<PurchaseRequest[]>([]);
   const [dashboardRfqs, setDashboardRfqs] = useState<RfqRecord[]>(RFQS);
@@ -105,10 +106,6 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       .then((data) => { if (alive) { setTodayCockpit(data); setTodayCockpitError(false); } })
       .catch(() => { if (alive) { setTodayCockpit(null); setTodayCockpitError(true); } })
       .finally(() => { if (alive) setTodayCockpitLoading(false); });
-    fetchOperationsControlTower()
-      .then((data) => { if (alive) { setOperationsTower(data); setOperationsTowerError(false); } })
-      .catch(() => { if (alive) { setOperationsTower(null); setOperationsTowerError(true); } })
-      .finally(() => { if (alive) setOperationsTowerLoading(false); });
     apiJson<PurchaseOrder[]>("/api/purchase-orders").then((data) => { if (alive) setDashboardOrders(data); }).catch(() => {});
     apiJson<PurchaseRequest[]>("/api/purchase-requests").then((data) => { if (alive) setDashboardRequests(data); }).catch(() => {});
     apiJson<RfqRecord[]>("/api/rfqs").then((data) => { if (alive) setDashboardRfqs(data); }).catch(() => {});
@@ -411,201 +408,8 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
     toast.success("证据文件已生成");
   }
 
-  return (
-    <div className="space-y-4">
-      <OperationsControlTowerV2
-        tower={operationsTower}
-        loading={operationsTowerLoading}
-        error={operationsTowerError}
-        onNavigate={onNavigate}
-        onReviewActionDraft={onReviewActionDraft}
-      />
-
-      <TodayCockpitPanel cockpit={todayCockpit} loading={todayCockpitLoading} error={todayCockpitError} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />
-
-      <Card className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>今日运营驾驶舱</h1>
-              <Chip label="运营工作台" color={A.blue} bg="#f0f6ff" />
-              <Chip label="证据链" color={A.gray1} bg={A.gray6} />
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ color: A.green, background: "#f0faf4" }}>
-                今日更新
-              </span>
-            </div>
-            <p className="text-sm" style={{ color: A.sub }}>从重点动作、运营风险、决策建议和证据包开始处理。</p>
-            <div className="mt-3 rounded-xl px-3 py-2 text-xs leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-              今日重点集中在供应商延迟、库存短缺和发票/收货差异，建议优先处理高影响事项。
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <div className="grid grid-cols-4 gap-3">
-        {visibleKpis.map((kpi) => (
-          <KpiCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} color={kpi.color} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-5 gap-4">
-        <Card className="col-span-3 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold" style={{ color: A.label }}>优先事项</h2>
-              <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先看最重要的三条，再进入证据或处理页面。</p>
-            </div>
-            <button onClick={() => setShowMoreSummary((value) => !value)}
-              className="text-[11px] px-3 py-1.5 rounded-md font-medium"
-              style={{ background: showMoreSummary ? A.gray6 : "#eef4ff", color: A.blue }}>
-              {showMoreSummary ? "收起摘要" : "更多摘要"}
-            </button>
-          </div>
-          <div className="mt-3 space-y-2">
-            {focusCards.map((risk) => {
-              const style = priorityStyle(risk.level as ActionRow["priority"]);
-              return (
-                <div key={risk.title} className="flex items-center justify-between gap-3 rounded-lg px-3 py-3 border" style={{ background: A.white, borderColor: A.border }}>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Chip label={risk.level} color={style.color} bg={style.bg} />
-                      <div className="text-[12px] font-semibold" style={{ color: A.label }}>{risk.title}</div>
-                    </div>
-                    <div className="text-[11px] mt-1 truncate" style={{ color: A.sub }}>{risk.object} · {risk.evidence}</div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {risk.detail && (
-                      <button onClick={() => setSelectedEvidence(risk.detail)}
-                        className="text-[11px] px-2.5 py-1.5 rounded-md font-medium"
-                        style={{ background: "#eef4ff", color: A.blue }}>
-                        查看证据
-                      </button>
-                    )}
-                    <button onClick={() => onNavigate(risk.moduleId)}
-                      className="text-[11px] px-2.5 py-1.5 rounded-md font-medium text-white"
-                      style={{ background: A.blue }}>
-                      进入处理
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        <Card className="col-span-2 p-4">
-          <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>进入工作台</h2>
-            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先进入模块，详细表格在模块内展开。</p>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {quickLinks.map((link) => {
-              const signal = link.id === "procurement" ? `${pendingRequests.length + pendingOrders.length}`
-                : link.id === "inventory" ? `${inventoryRiskItems.length}`
-                  : link.id === "srm" ? `${supplierRisks.length}`
-                    : link.id === "finance" ? `${invoiceRisks.length}`
-                      : "MRP";
-              return (
-                <button key={link.id} onClick={() => onNavigate(link.id)}
-                  className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium hover:bg-slate-50 transition-colors"
-                  style={{ background: A.white, borderColor: A.border, color: A.label }}>
-                  <span className="truncate">{link.label}</span>
-                  <span className="rounded px-1.5 py-px text-[10px]" style={{ background: "#eef4ff", color: A.blue }}>{signal}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-4 rounded-lg border px-3 py-3" style={{ borderColor: A.border, background: A.gray6 }}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-[12px] font-semibold" style={{ color: A.label }}>今日关键动作</h3>
-                <p className="text-[10px] mt-0.5" style={{ color: A.sub }}>完整行动队列按需展开。</p>
-              </div>
-              <button onClick={() => setShowAllActions((value) => !value)}
-                className="text-[11px] px-3 py-1.5 rounded-md font-medium"
-                style={{ background: showAllActions ? A.white : A.blue, color: showAllActions ? A.label : A.white }}>
-                {showAllActions ? "收起" : `${actionRows.length} 项`}
-              </button>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {showMoreSummary && (
-        <Card className="p-4">
-          <SectionHeader title="更多摘要" />
-          <div className="grid grid-cols-3 gap-3">
-            {decisionCards.slice(0, 3).map((card) => (
-              <div key={card.id} className="rounded-lg p-3" style={{ background: A.gray6 }}>
-                <div className="text-xs font-semibold" style={{ color: A.blue }}>{card.recommendation}</div>
-                <div className="text-[10px] leading-4 mt-2" style={{ color: A.sub }}>{card.businessImpact}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 grid grid-cols-7 gap-2">
-            {pulse.map((item) => (
-              <div key={item.label} className="rounded-lg p-3" style={{ background: A.white, border: `1px solid ${A.border}` }}>
-                <div className="text-[10px] truncate" style={{ color: A.gray2 }}>{item.label}</div>
-                <div className="text-base font-semibold mt-1 truncate" style={{ color: item.color }}>{item.value}</div>
-                <div className="text-[10px] mt-0.5 truncate" style={{ color: A.sub }}>{item.note}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {showAllActions && (
-        <Card>
-          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div>
-              <h2 className="text-sm font-semibold" style={{ color: A.label }}>今日关键动作</h2>
-              <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>最多展示 8 条，先处理影响交付、现金和供应连续性的事项。</p>
-            </div>
-            <Chip label={`${actionRows.length} actions`} color={A.blue} bg="#f0f6ff" />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                  {["优先级", "动作", "对象", "依据", "模块", "下一步"].map((header) => (
-                    <th key={header} className="text-left px-4 py-3 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {actionRows.map((row, index) => {
-                  const style = priorityStyle(row.priority);
-                  return (
-                    <tr key={`${row.title}-${row.object}`} className="hover:bg-blue-50/40 transition-colors"
-                      style={{ borderBottom: index < actionRows.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                      <td className="px-4 py-3"><Chip label={row.priority} color={style.color} bg={style.bg} /></td>
-                      <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{row.title}</td>
-                      <td className="px-4 py-3 tabular-nums" style={{ color: A.blue }}>{row.object}</td>
-                      <td className="px-4 py-3 min-w-[260px]" style={{ color: A.sub }}>{row.evidence}</td>
-                      <td className="px-4 py-3" style={{ color: A.gray1 }}>{row.module}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => setSelectedEvidence(row.detail)}
-                            className="text-[11px] px-2 py-1 rounded-md font-medium"
-                            style={{ background: A.gray6, color: A.blue }}>
-                            查看证据
-                          </button>
-                          <button onClick={row.onClick || (() => onNavigate(row.moduleId))}
-                            className="text-[11px] px-2.5 py-1 rounded-md font-medium"
-                            style={{ background: style.bg, color: style.color }}>
-                            {row.cta}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
+  function renderEvidenceModal() {
+    return (
       <Modal
         open={Boolean(selectedEvidence)}
         onClose={() => setSelectedEvidence(null)}
@@ -674,6 +478,267 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
           </div>
         )}
       </Modal>
+    );
+  }
+
+  const recentDocuments = todayCockpit?.recentDocuments.slice(0, 6) || [];
+  const todaySummaryCards = [
+    { label: "PO 看板", value: String(pendingOrders.length + receivingRisks.length), sub: `${pendingOrders.length} 待审批 · ${receivingRisks.length} 待收货`, icon: Truck, color: A.blue },
+    { label: "库存管理", value: String(inventoryRiskItems.length), sub: topRiskSku?.sku || "库存稳定", icon: Package, color: A.green },
+    { label: "供应商状态", value: String(supplierRisks.length), sub: supplierRisks[0]?.name || "供应稳定", icon: Users, color: A.purple },
+    { label: "财务协同", value: String(invoiceRisks.length), sub: invoiceRisks[0]?.invoiceNumber || "发票稳定", icon: CircleDollarSign, color: A.orange },
+  ];
+  const riskKpis = [
+    { label: "采购风险", value: String(pendingOrders.length + receivingRisks.length + openRfqs.length), sub: pendingOrders[0]?.po || receivingRisks[0]?.grn || openRfqs[0]?.id || "稳定", icon: Truck, color: A.blue },
+    { label: "库存风险", value: String(inventoryRiskItems.length + inventoryMovementRisks.length), sub: topRiskSku?.sku || inventoryMovementRisks[0]?.movementId || "稳定", icon: Package, color: A.green },
+    { label: "供应商风险", value: String(supplierRisks.length + reconciliationRisks.length), sub: supplierRisks[0]?.name || reconciliationRisks[0]?.supplier || "稳定", icon: Users, color: A.purple },
+    { label: "财务异常", value: String(invoiceRisks.length + returnRisks.length), sub: invoiceRisks[0]?.invoiceNumber || returnRisks[0]?.returnNo || "稳定", icon: CircleDollarSign, color: A.orange },
+  ];
+  const riskCategories = [
+    { title: "采购风险", rows: risks.filter((risk) => ["库存短缺", "价格异常"].includes(risk.title) || risk.object.startsWith("PO")).slice(0, 2), color: A.blue },
+    { title: "库存风险", rows: risks.filter((risk) => risk.title === "库存短缺" || risk.title === "预测偏差").slice(0, 2), color: A.green },
+    { title: "供应商风险", rows: risks.filter((risk) => risk.title === "供应商延迟 / 质量" || risk.title === "价格异常").slice(0, 2), color: A.purple },
+    { title: "财务异常", rows: risks.filter((risk) => risk.title === "发票金额 / 收货差异" || risk.title === "基础资料质量").slice(0, 2), color: A.orange },
+  ];
+
+  if (initialView === "ai") {
+    return <AiSuggestionsPage onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />;
+  }
+
+  if (initialView === "risks") {
+    return (
+      <div className="space-y-4">
+        <Card className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>风险与异常</h1>
+              <p className="mt-1 max-w-3xl text-[14px] leading-6" style={{ color: A.sub }}>
+                聚合采购、库存、供应商和财务异常，优先进入证据和业务模块处理。
+              </p>
+            </div>
+            <button onClick={() => onNavigate("exception-cases")}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-[13px] font-semibold text-white"
+              style={{ background: A.blue }}>
+              异常处理工单 <ArrowRight size={14} />
+            </button>
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {riskKpis.map((kpi) => <KpiCard key={kpi.label} {...kpi} />)}
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+          <Card className="p-4">
+            <SectionHeader title="风险分类" />
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {riskCategories.map((category) => (
+                <div key={category.title} className="rounded-xl border p-3" style={{ borderColor: A.border, background: A.white }}>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full" style={{ background: category.color }} />
+                    <div className="text-[13px] font-semibold" style={{ color: A.label }}>{category.title}</div>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {category.rows.map((risk) => {
+                      const style = priorityStyle(risk.level as ActionRow["priority"]);
+                      return (
+                        <button key={`${category.title}-${risk.title}`} type="button" onClick={() => risk.detail && setSelectedEvidence(risk.detail)}
+                          className="w-full rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+                          style={{ background: A.gray6 }}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-[12px] font-semibold" style={{ color: A.label }}>{risk.title}</span>
+                            <Chip label={risk.level} color={style.color} bg={style.bg} />
+                          </div>
+                          <div className="mt-1 truncate text-[11px]" style={{ color: A.sub }}>{risk.object} · {risk.evidence}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <div className="px-5 py-4" style={{ borderBottom: `1px solid ${A.border}` }}>
+              <h2 className="text-[16px] font-semibold" style={{ color: A.label }}>异常清单</h2>
+              <p className="mt-1 text-[12px]" style={{ color: A.sub }}>按交付、现金和供应连续性影响排序。</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left">
+                <thead style={{ background: "#fbfdff" }}>
+                  <tr>
+                    {["等级", "异常", "对象", "依据", "入口"].map((header) => (
+                      <th key={header} className="px-4 py-3 text-[12px] font-semibold" style={{ color: A.gray1 }}>{header}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {risks.slice(0, 6).map((risk, index) => {
+                    const style = priorityStyle(risk.level as ActionRow["priority"]);
+                    return (
+                      <tr key={`${risk.title}-${risk.object}`} style={{ borderTop: index ? `1px solid ${A.border}` : "none" }}>
+                        <td className="px-4 py-3"><Chip label={risk.level} color={style.color} bg={style.bg} /></td>
+                        <td className="px-4 py-3 text-[13px] font-semibold" style={{ color: A.label }}>{risk.title}</td>
+                        <td className="px-4 py-3 text-[13px] tabular-nums" style={{ color: A.blue }}>{risk.object}</td>
+                        <td className="px-4 py-3 text-[13px]" style={{ color: A.sub }}>{risk.evidence}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {risk.detail && (
+                              <button onClick={() => setSelectedEvidence(risk.detail)}
+                                className="rounded-md px-2.5 py-1.5 text-[12px] font-semibold"
+                                style={{ background: "#eef4ff", color: A.blue }}>
+                                证据入口
+                              </button>
+                            )}
+                            <button onClick={() => onNavigate(risk.moduleId)}
+                              className="rounded-md px-2.5 py-1.5 text-[12px] font-semibold"
+                              style={{ background: A.gray6, color: A.label }}>
+                              打开模块
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+
+        {renderEvidenceModal()}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>今日行动</h1>
+              <Chip label="运营工作台" color={A.blue} bg="#f0f6ff" />
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ color: A.green, background: "#f0faf4" }}>
+                今日更新
+              </span>
+            </div>
+            <p className="text-sm" style={{ color: A.sub }}>从今日摘要、四类业务看板、优先处理队列和最近单据开始处理。</p>
+            <div className="mt-3 rounded-xl px-3 py-2 text-xs leading-5" style={{ background: "#f8fafc", color: A.sub, border: `1px solid ${A.border}` }}>
+              今日重点集中在采购到货、库存短缺、供应商状态和发票协同，详细证据可从队列进入。
+            </div>
+          </div>
+          <button onClick={() => onNavigate("overview:ai")}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-[13px] font-semibold"
+            style={{ background: "#eef4ff", color: A.blue }}>
+            查看 AI 建议 <ArrowRight size={14} />
+          </button>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {todaySummaryCards.map((kpi) => (
+          <KpiCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} color={kpi.color} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-5 gap-4">
+        <Card className="col-span-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: A.label }}>今日优先处理队列</h2>
+              <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>按交付、现金和供应连续性影响排序。</p>
+            </div>
+            <button onClick={() => setShowAllActions((value) => !value)}
+              className="text-[11px] px-3 py-1.5 rounded-md font-medium"
+              style={{ background: showAllActions ? A.gray6 : "#eef4ff", color: A.blue }}>
+              {showAllActions ? "收起队列" : `查看全部 ${actionRows.length} 项`}
+            </button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {(showAllActions ? actionRows : actionRows.slice(0, 5)).map((row) => {
+              const style = priorityStyle(row.priority);
+              return (
+                <div key={`${row.title}-${row.object}`} className="flex items-center justify-between gap-3 rounded-lg px-3 py-3 border" style={{ background: A.white, borderColor: A.border }}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Chip label={row.priority} color={style.color} bg={style.bg} />
+                      <div className="text-[12px] font-semibold" style={{ color: A.label }}>{row.title}</div>
+                    </div>
+                    <div className="text-[11px] mt-1 truncate" style={{ color: A.sub }}>{row.object} · {row.evidence}</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => setSelectedEvidence(row.detail)}
+                      className="text-[11px] px-2.5 py-1.5 rounded-md font-medium"
+                      style={{ background: "#eef4ff", color: A.blue }}>
+                      查看证据
+                    </button>
+                    <button onClick={row.onClick || (() => onNavigate(row.moduleId))}
+                      className="text-[11px] px-2.5 py-1.5 rounded-md font-medium text-white"
+                      style={{ background: A.blue }}>
+                      {row.cta}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <Card className="col-span-2 p-4">
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>进入工作台</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先进入模块，详细表格在模块内展开。</p>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {quickLinks.map((link) => {
+              const signal = link.id === "procurement" ? `${pendingRequests.length + pendingOrders.length}`
+                : link.id === "inventory" ? `${inventoryRiskItems.length}`
+                  : link.id === "srm" ? `${supplierRisks.length}`
+                    : link.id === "finance" ? `${invoiceRisks.length}`
+                      : "MRP";
+              return (
+                <button key={link.id} onClick={() => onNavigate(link.id)}
+                  className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium hover:bg-slate-50 transition-colors"
+                  style={{ background: A.white, borderColor: A.border, color: A.label }}>
+                  <span className="truncate">{link.label}</span>
+                  <span className="rounded px-1.5 py-px text-[10px]" style={{ background: "#eef4ff", color: A.blue }}>{signal}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 rounded-lg border px-3 py-3" style={{ borderColor: A.border, background: A.gray6 }}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[12px] font-semibold" style={{ color: A.label }}>轻量入口</h3>
+                <p className="text-[10px] mt-0.5" style={{ color: A.sub }}>AI 建议已独立到专页。</p>
+              </div>
+              <button onClick={() => onNavigate("overview:ai")}
+                className="text-[11px] px-3 py-1.5 rounded-md font-medium"
+                style={{ background: A.white, color: A.blue }}>
+                查看 AI 建议
+              </button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>最近单据</h2>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>近期采购、收货、报价和财务协同记录。</p>
+          </div>
+          {todayCockpitLoading && <span className="text-[11px]" style={{ color: A.sub }}>加载中</span>}
+          {todayCockpitError && <span className="text-[11px]" style={{ color: A.orange }}>最近单据暂不可用</span>}
+        </div>
+        <div className="mt-3">
+          <TodayCockpitRecentDocuments documents={recentDocuments} onNavigate={onNavigate} />
+        </div>
+      </Card>
+
+      {renderEvidenceModal()}
     </div>
   );
 }

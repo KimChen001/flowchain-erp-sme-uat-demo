@@ -42,7 +42,7 @@ const DRAFT_TYPE_LABELS = {
 
 const SOURCE_LABELS = {
   ai_response: 'AI Response',
-  control_tower: 'Operations Control Tower',
+  control_tower: '风险与异常',
   reports_analytics: 'Reports & Analytics',
   data_access_quality: 'Data Access & Quality',
   purchase_request: 'PR / RFQ / PO / GRN / Invoice',
@@ -301,8 +301,8 @@ function draftsFromControlTower(tower) {
     title: action.draftTitle || action.label || item.title,
     draftType: draftTypeFromAction(action, item.category),
     sourceCategory: 'control_tower',
-    sourceModule: 'Operations Control Tower',
-    sourceLabel: 'Operations Control Tower',
+    sourceModule: '风险与异常',
+    sourceLabel: '风险与异常',
     sourceEntityType: item.entityType,
     sourceEntityId: item.entityId || item.businessObjectId || item.id,
     sourceEntityLabel: item.businessObjectLabel || item.title,
@@ -372,7 +372,7 @@ function draftsFromDataAccess(quality) {
     owner: '数据接入',
     conclusion: fix.description,
     keyEvidence: [fix.description],
-    businessImpact: ['影响 AI、Control Tower、三单匹配和报表可信度。'],
+    businessImpact: ['影响 AI、风险与异常、三单匹配和报表可信度。'],
     proposedDraftContent: `${fix.title}：${fix.description}`,
     reviewChecklist: ['核对字段含义', '确认来源业务对象', '补齐缺失证据'],
     missingInformation: asArray(fix.payload?.issueIds || fix.payload?.relationshipGapIds || fix.payload?.evidenceGapIds),
@@ -676,7 +676,7 @@ function buildSourceSummary(drafts) {
 }
 function sourceNavigation(category) {
   if (category === 'ai_response') return nav('打开 AI Assistant', 'ai', 'review-first-actions', { moduleId: 'overview' })
-  if (category === 'control_tower') return nav('打开 Operations Control Tower', 'data_quality', 'action-inbox', { moduleId: 'overview', entityType: 'operations_control_tower', entityLabel: 'Operations Control Tower' })
+  if (category === 'control_tower') return nav('打开风险与异常', 'data_quality', 'action-inbox', { moduleId: 'overview:risks', entityType: 'operations_control_tower', entityLabel: '风险与异常' })
   if (category === 'reports_analytics') return nav('打开 Reports & Analytics', 'reports', 'reports-analytics', { moduleId: 'reports', entityType: 'report_workspace' })
   if (category === 'data_access_quality') return nav('打开 Data Access & Quality', 'data_quality', 'data-quality-gap-workspace')
   if (category === 'supplier_profile') return nav('打开 Supplier Operational Profile', 'supplier', '')

@@ -46,11 +46,13 @@ test('overview evidence builders preserve module targets and export fields', () 
   }
 })
 
-test('overview page keeps UI state and Today Cockpit composition only', () => {
+test('overview page keeps UI state and split workbench composition only', () => {
   const page = readSource('src', 'modules', 'overview', 'Page.tsx')
 
   assert.match(page, /useState<EvidenceDetail \| null>/)
-  assert.match(page, /<TodayCockpitPanel\b/)
+  assert.match(page, /<TodayCockpitRecentDocuments\b/)
+  assert.match(page, /<AiSuggestionsPage\b/)
+  assert.doesNotMatch(page, /<TodayCockpitPanel\b/)
   assert.match(page, /exportRowsToCsv/)
   assert.match(page, /setSelectedEvidence/)
 })

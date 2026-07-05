@@ -62,11 +62,11 @@ test('relationship and evidence gaps include business chain breaks', () => {
   assert.match(evidence, /发票行/)
 })
 
-test('downstream impacts align with AI and Operations Control Tower', () => {
+test('downstream impacts align with AI and risk workspace', () => {
   const quality = buildDataAccessQualityV2(loadDb())
   const targets = quality.downstreamImpacts.map((impact) => impact.target)
   assert.ok(targets.includes('AI Response Contract v2'))
-  assert.ok(targets.includes('Operations Control Tower'))
+  assert.ok(targets.includes('风险与异常'))
   assert.ok(targets.includes('Supplier Operational Profile'))
   assert.ok(targets.includes('Three-way Match'))
   assert.ok(quality.downstreamImpacts.every((impact) => impact.relatedIssueIds.length >= 1))
@@ -103,7 +103,7 @@ test('data quality issue aligns with operations control tower data quality gap',
   assert.ok(towerGap)
   assert.ok(quality.qualityIssues.some((issue) =>
     issue.category === 'data_quality_gap'
-    || issue.affectedModule === 'Operations Control Tower'
+    || issue.affectedModule === '风险与异常'
     || issue.businessObjectId === towerGap.entityId
   ))
 })

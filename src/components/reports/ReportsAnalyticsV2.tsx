@@ -104,7 +104,7 @@ export function ReportsAnalyticsV2({ analytics, loading, error = false, onNaviga
         <KpiCard label="PO" value={String(summary.totalPoCount)} sub={`GRN ${summary.totalGrnCount}`} icon={GitBranch} color={A.green} />
         <KpiCard label="Invoice" value={String(summary.totalInvoiceCount)} sub={`三单匹配差异 ${summary.matchVarianceCount}`} icon={BarChart2} color={A.orange} />
         <KpiCard label="风险供应商" value={String(summary.supplierRiskCount)} sub={`库存风险 ${summary.inventoryRiskCount}`} icon={AlertTriangle} color={A.red} />
-        <KpiCard label="Control Tower" value={String(summary.controlTowerOpenItemCount)} sub={`数据质量问题 ${summary.dataQualityIssueCount}`} icon={ShieldCheck} color={A.purple} />
+        <KpiCard label="风险与异常" value={String(summary.controlTowerOpenItemCount)} sub={`数据质量问题 ${summary.dataQualityIssueCount}`} icon={ShieldCheck} color={A.purple} />
       </div>
 
       <Card data-testid="reports-p2p-pipeline">
@@ -215,7 +215,7 @@ export function ReportsAnalyticsV2({ analytics, loading, error = false, onNaviga
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card className="p-5" data-testid="reports-control-tower">
-          <SectionHeader title="Control Tower Analytics" />
+          <SectionHeader title="风险与异常分析" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {analytics.controlTowerAnalytics.map((row) => (
               <div key={row.category} className="rounded-lg p-3" style={{ background: A.gray6, border: `1px solid ${A.border}` }}>
@@ -235,7 +235,7 @@ export function ReportsAnalyticsV2({ analytics, loading, error = false, onNaviga
         <Card className="p-5" data-testid="reports-data-quality-impact">
           <SectionHeader title="Data Quality Impact" />
           <div className="text-[11px] leading-5 mb-3" style={{ color: A.sub }}>
-            影响范围：AI Response Contract v2 · Operations Control Tower · Three-way Match · Data Access & Quality
+            影响范围：AI Response Contract v2 · 风险与异常 · Three-way Match · Data Access & Quality
           </div>
           <div className="space-y-3">
             {analytics.dataQualityImpact.map((row) => (
