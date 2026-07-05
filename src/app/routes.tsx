@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Upload,
   ClipboardList,
+  FileCheck2,
 } from "lucide-react";
 
 export const navItems = [
@@ -119,6 +120,14 @@ export const navItems = [
     ],
   },
   {
+    icon: FileCheck2, label: "行动草稿与人工复核", id: "review-actions",
+    children: [
+      { id: "review-actions", label: "Action Draft Workspace" },
+      { id: "review-actions:waiting", label: "等待人工复核" },
+      { id: "review-actions:data-limited", label: "数据限制草稿" },
+    ],
+  },
+  {
     icon: Upload, label: "数据接入与质量", id: "imports",
     children: [
       { id: "imports", label: "导入任务" },
@@ -131,6 +140,6 @@ export const navItems = [
 
 export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
-  { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast", "exception-cases"] },
+  { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast", "exception-cases", "review-actions"] },
   { label: "数据", itemIds: ["master-data", "reports", "imports"] },
 ] as const;

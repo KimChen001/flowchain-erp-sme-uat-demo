@@ -39,6 +39,7 @@ import { handleSalesDemandRoute } from './sales-demand.routes.mjs'
 import { handleEvidenceGraphRoute } from './evidence-graph.routes.mjs'
 import { handleDataAccessQualityRoute } from './data-access-quality.routes.mjs'
 import { handleReportsAnalyticsRoute } from './reports-analytics.routes.mjs'
+import { handleReviewFirstActionWorkflowRoute } from './review-first-action-workflow.routes.mjs'
 import { handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import { handleActionDraftsRoute } from './action-drafts.routes.mjs'
@@ -1025,6 +1026,7 @@ export function createScmServer() {
     if (await handleEvidenceGraphRoute(routeContext)) return
     if (await handleDataAccessQualityRoute(routeContext)) return
     if (await handleReportsAnalyticsRoute(routeContext)) return
+    if (await handleReviewFirstActionWorkflowRoute(routeContext)) return
     if (await handleTodayCockpitRoute(routeContext)) return
     if (await handleInventoryRoute(routeContext)) return
     if (await handleProcurementReadRoute(routeContext)) return
