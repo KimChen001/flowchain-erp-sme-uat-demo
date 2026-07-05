@@ -13,6 +13,7 @@ import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { A, Card, Chip, KpiCard, Modal, SectionHeader } from "../../components/ui";
+import { OperationsControlTowerV2 } from "../../components/operations/OperationsControlTowerV2";
 import { INVENTORY_MOVEMENT_LEDGER, purchaseOrders, receivingDocs, RFQS, PORTAL_SUPPLIERS, PURCHASE_RETURNS, SUPPLIER_CREDIT_MEMOS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS } from "../../data/demo-data";
 import { INVENTORY_MOVEMENT_TYPE_LABELS, isInventoryMovementException, netInventoryImpact } from "../../domain/inventory/movements";
 import { isStatementException, statementToCockpitSignal } from "../../domain/procurement/reconciliation";
@@ -22,6 +23,7 @@ import type { PurchaseOrder, PurchaseRequest, ReceivingDoc, RfqRecord, SupplierI
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import { TodayCockpitPanel } from "./TodayCockpitPanel";
 import { fetchTodayCockpit, type TodayCockpitResponse } from "./todayCockpit";
+import { fetchOperationsControlTower, type OperationsControlTowerResponse } from "./operationsControlTower";
 import {
   buildForecastEvidence,
   buildInventoryEvidence,
@@ -43,7 +45,7 @@ import {
 } from "./overviewEvidence";
 
 type OverviewPanelProps = {
-  onNavigate: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null) => void;
+  onNavigate: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
   onPrepareReplenishmentRequest: (sku: string) => void;
   onOpenAi: () => void;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
@@ -88,6 +90,9 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
   const [todayCockpit, setTodayCockpit] = useState<TodayCockpitResponse | null>(null);
   const [todayCockpitLoading, setTodayCockpitLoading] = useState(true);
   const [todayCockpitError, setTodayCockpitError] = useState(false);
+  const [operationsTower, setOperationsTower] = useState<OperationsControlTowerResponse | null>(null);
+  const [operationsTowerLoading, setOperationsTowerLoading] = useState(true);
+  const [operationsTowerError, setOperationsTowerError] = useState(false);
   const [dashboardOrders, setDashboardOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [dashboardRequests, setDashboardRequests] = useState<PurchaseRequest[]>([]);
   const [dashboardRfqs, setDashboardRfqs] = useState<RfqRecord[]>(RFQS);
@@ -100,6 +105,10 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
       .then((data) => { if (alive) { setTodayCockpit(data); setTodayCockpitError(false); } })
       .catch(() => { if (alive) { setTodayCockpit(null); setTodayCockpitError(true); } })
       .finally(() => { if (alive) setTodayCockpitLoading(false); });
+    fetchOperationsControlTower()
+      .then((data) => { if (alive) { setOperationsTower(data); setOperationsTowerError(false); } })
+      .catch(() => { if (alive) { setOperationsTower(null); setOperationsTowerError(true); } })
+      .finally(() => { if (alive) setOperationsTowerLoading(false); });
     apiJson<PurchaseOrder[]>("/api/purchase-orders").then((data) => { if (alive) setDashboardOrders(data); }).catch(() => {});
     apiJson<PurchaseRequest[]>("/api/purchase-requests").then((data) => { if (alive) setDashboardRequests(data); }).catch(() => {});
     apiJson<RfqRecord[]>("/api/rfqs").then((data) => { if (alive) setDashboardRfqs(data); }).catch(() => {});
@@ -404,6 +413,14 @@ export default function OverviewPanel({ onNavigate, onPrepareReplenishmentReques
 
   return (
     <div className="space-y-4">
+      <OperationsControlTowerV2
+        tower={operationsTower}
+        loading={operationsTowerLoading}
+        error={operationsTowerError}
+        onNavigate={onNavigate}
+        onReviewActionDraft={onReviewActionDraft}
+      />
+
       <TodayCockpitPanel cockpit={todayCockpit} loading={todayCockpitLoading} error={todayCockpitError} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />
 
       <Card className="p-5">
