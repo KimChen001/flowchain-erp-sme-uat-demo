@@ -1,19 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  AlertCircle, CheckCircle2, FileSpreadsheet,
-  FileText, Filter, Plus, Sparkles, Truck,
+  AlertCircle,
+  CheckCircle2,
+  ClipboardCheck,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  PackageCheck,
+  ShieldCheck,
+  Truck,
 } from "lucide-react";
-import {
-  Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
-import { procurementTrend, purchaseOrders, receivingDocs, SUPPLIER_INVOICES } from "../../data/demo-data";
-import type { POStatus, PurchaseOrder, ReceivingDoc, ReceivingDocLine } from "../../types/scm";
+import { purchaseOrders, receivingDocs, SUPPLIER_INVOICES } from "../../data/demo-data";
+import type { PurchaseOrder, ReceivingDoc, SupplierInvoice } from "../../types/scm";
 import {
-  A, AppleTooltip, Card, DocumentHistoryPanel, Field, inputStyle, KpiCard,
+  A,
+  Card,
+  Chip,
+  DocumentHistoryPanel,
+  Field,
+  inputStyle,
+  KpiCard,
   RecoveryActions,
   SectionHeader,
 } from "../../components/ui";
@@ -28,27 +38,24 @@ import {
   statusTone,
   type TimelineStep,
 } from "../../components/document/DocumentShell";
-import ContextualImportActions from "../../components/import/ContextualImportActions";
-import { NewPOModal } from "./components/NewPOModal";
-import { POStatusPill } from "./components/POStatusPill";
-import { TrackShipmentModal } from "./components/TrackShipmentModal";
-import { lineStatusLabel, poLinesOf, poTotals, toNumber } from "../../domain/purchasing/helpers";
-import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
 import { getPoLinkedDocuments } from "../../domain/procurement/document-links";
-import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
-import { makePoInsight, poDelayedRisk, type ContextualAiAction } from "../../domain/contextual-ai";
-import type { WorkflowContext } from "../../lib/workflowContext";
+import { calculateInvoiceMatch } from "../../domain/procurement/invoice-matching";
 import { relatedRecordsForEntity } from "../../domain/relationships";
+import { poDelayedRisk } from "../../domain/contextual-ai";
+import { grnLinesOf } from "../../domain/receiving/helpers";
+import { lineRemaining, lineStatusLabel, poLinesOf, poTotals, toNumber } from "../../domain/purchasing/helpers";
+import type { WorkflowContext } from "../../lib/workflowContext";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   defaultPurchaseOrderWorkbenchFilters,
   filterPurchaseOrdersForWorkbench,
   type PurchaseOrderWorkbenchFilters,
 } from "./filters";
+import { POStatusPill } from "./components/POStatusPill";
 import {
-  tableMinLgClass,
-  tableScrollClass,
   tableLinkClass,
+  tableMinXlClass,
+  tableScrollClass,
   tdActionClass,
   tdIdClass,
   tdNameClass,
@@ -58,58 +65,407 @@ import {
 } from "../../components/ui/workbenchTable";
 
 type PurchaseOrderViewMode = "list" | "detail";
+type NavigateFn = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
+
+type PoEvidenceRow = {
+  poLineId: string;
+  sourcePrLine: string;
+  sourceRfqLine: string;
+  sku: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  lineAmount: number;
+  warehouse: string;
+  requiredDate: string;
+  promisedDate: string;
+  receivedQty: number;
+  remainingQty: number;
+  invoicedQty: number;
+  uninvoicedQty: number;
+  status: string;
+  risk: string;
+};
+
+type GrnEvidenceRow = {
+  grn: string;
+  grnLineId: string;
+  po: string;
+  poLineId: string;
+  supplier: string;
+  sku: string;
+  receivedQty: number;
+  unit: string;
+  arrived: string;
+  receiver: string;
+  unitPrice: number;
+  lineAmount: number;
+  status: string;
+  qcStatus: string;
+  invoiceImpact: string;
+  invoiceLine: string;
+  note: string;
+};
+
+type InvoiceEvidenceRow = {
+  invoiceNumber: string;
+  invoiceLineId: string;
+  supplier: string;
+  po: string;
+  poLineId: string;
+  grnLineId: string;
+  sku: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  invoiceAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  invoiceDate: string;
+  dueDate: string;
+  matchStatus: string;
+  varianceType: string;
+  varianceAmount: number;
+  risk: string;
+};
+
+type MatchEvidenceRow = {
+  poLineId: string;
+  grnLineId: string;
+  invoiceLineId: string;
+  poQty: number;
+  receivedQty: number;
+  invoiceQty: number;
+  poUnitPrice: number;
+  invoiceUnitPrice: number;
+  poAmount: number;
+  invoiceAmount: number;
+  qtyVariance: number;
+  priceVariance: number;
+  amountVariance: number;
+  receivingGap: number;
+  invoiceGap: number;
+  status: string;
+  suggestedAction: string;
+};
+
+type AccrualRow = {
+  po: string;
+  poLineId: string;
+  pr: string;
+  requestedBy: string;
+  item: string;
+  supplier: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  needBy: string;
+  uninvoicedQty: number;
+  uninvoicedTotal: number;
+  currency: string;
+  grnLine: string;
+  receivedQty: number;
+  approvedInvoicedQty: number;
+  openQty: number;
+  lineAmount: number;
+  approvedInvoicedAmount: number;
+  accrualExposure: number;
+  risk: string;
+  suggestedAction: string;
+};
+
+function statusChip(status: string) {
+  return <Chip label={status} color={statusTone(status) === "danger" ? A.red : statusTone(status) === "warning" ? A.orange : statusTone(status) === "success" ? A.green : A.blue} bg={statusTone(status) === "danger" ? "#fff1f0" : statusTone(status) === "warning" ? "#fff8f0" : statusTone(status) === "success" ? "#f0faf4" : "#f0f6ff"} />;
+}
+
+function safeText(value: unknown, fallback = "待补齐") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function staticPo(poId?: string) {
+  return purchaseOrders.find((item) => item.po === poId);
+}
+
+function poAmount(po?: PurchaseOrder | null) {
+  if (!po) return 0;
+  const fallback = staticPo(po.po);
+  const invoiceTotal = SUPPLIER_INVOICES.filter((invoice) => invoice.relatedPo === po.po)
+    .reduce((sum, invoice) => sum + Number(invoice.subtotal || 0), 0);
+  const totals = poTotals(po);
+  return Number(po.totalAmount || totals.totalAmount || po.amount || fallback?.amount || invoiceTotal || 0);
+}
+
+function poLineAmount(line: { quantityOrdered?: number; unitPrice?: number }, po?: PurchaseOrder | null) {
+  const direct = toNumber(line.quantityOrdered) * toNumber(line.unitPrice);
+  if (direct > 0) return direct;
+  const lines = poLinesOf(po);
+  const totalQty = lines.reduce((sum, item) => sum + toNumber(item.quantityOrdered), 0);
+  return totalQty ? Math.round(poAmount(po) * (toNumber(line.quantityOrdered) / totalQty)) : poAmount(po);
+}
+
+function unitPriceForLine(line: { quantityOrdered?: number; unitPrice?: number; poLineId?: string }, po?: PurchaseOrder | null) {
+  const direct = toNumber(line.unitPrice);
+  if (direct > 0) return direct;
+  const invoiceLine = SUPPLIER_INVOICES.flatMap((invoice) => invoice.lines)
+    .find((item) => item.poLine === line.poLineId);
+  if (invoiceLine?.unitPrice) return toNumber(invoiceLine.unitPrice);
+  const qty = toNumber(line.quantityOrdered);
+  return qty ? poLineAmount(line, po) / qty : 0;
+}
+
+function invoicesForPo(poId?: string) {
+  return SUPPLIER_INVOICES.filter((invoice) => invoice.relatedPo === poId);
+}
+
+function grnsForPo(poId?: string) {
+  return receivingDocs.filter((doc) => doc.po === poId);
+}
+
+function receivedStatus(po: PurchaseOrder) {
+  const totals = poTotals(po);
+  const grns = grnsForPo(po.po);
+  if (grns.some((doc) => doc.status === "异常处理")) return "异常处理";
+  if (totals.totalOrderedQty > 0 && totals.totalReceivedQty >= totals.totalOrderedQty) return "已收货";
+  if (totals.totalReceivedQty > 0) return "部分收货";
+  if (grns.length > 0) return "待收货";
+  return "未收货";
+}
+
+function invoiceStatus(po: PurchaseOrder) {
+  const invoices = invoicesForPo(po.po);
+  if (!invoices.length) return "未开票";
+  if (invoices.some((invoice) => invoice.varianceType !== "无差异" || invoice.matchStatus === "差异待处理")) return "发票差异";
+  if (invoices.every((invoice) => invoice.paid)) return "已付款";
+  return "已开票";
+}
+
+function matchStatus(po: PurchaseOrder) {
+  const invoices = invoicesForPo(po.po);
+  const grns = grnsForPo(po.po);
+  if (!invoices.length) return "缺少发票";
+  if (!grns.length || grns.some((doc) => doc.status === "待收货" || doc.status === "质检中")) return "缺少收货";
+  const variance = invoices.find((invoice) => invoice.varianceType !== "无差异" || invoice.varianceAmount > 0);
+  if (variance) return variance.varianceType;
+  if (invoices.every((invoice) => invoice.matchStatus === "自动匹配" || invoice.matchStatus === "已解决")) return "已匹配";
+  return "需人工复核";
+}
+
+function nextStepForPo(po: PurchaseOrder) {
+  const status = matchStatus(po);
+  if (status === "缺少收货") return "等待收货";
+  if (status === "缺少发票") return "等待发票";
+  if (status === "数量差异") return "复核收货记录";
+  if (status === "价格差异") return "复核供应商发票";
+  if (status === "已匹配") return "财务协同复核";
+  if (receivedStatus(po) === "异常处理") return "生成内部差异说明草稿";
+  return "需人工复核";
+}
 
 function poTimeline(po: PurchaseOrder): TimelineStep[] {
-  const cancelled = po.status === "已取消" || po.status === "已驳回";
-  const statusOrder = ["草稿", "待审批", "已审批", "已发出", "部分到货", "已完成"] as const;
-  const currentIndex = Math.max(0, statusOrder.indexOf(po.status as any));
-  const receivedTotal = poTotals(po).totalReceivedQty || Number(po.received || 0);
+  const receipt = receivedStatus(po);
+  const invoice = invoiceStatus(po);
+  const match = matchStatus(po);
   return [
-    { label: "草稿", status: cancelled ? "done" : currentIndex > 0 ? "done" : "current", helper: po.created },
-    { label: "待审批", status: cancelled ? "blocked" : currentIndex > 1 ? "done" : po.status === "待审批" ? "current" : "pending", helper: po.status === "已驳回" ? "已驳回" : "审批队列" },
-    { label: "已审批", status: currentIndex > 2 ? "done" : po.status === "已审批" ? "current" : "pending" },
-    { label: "已发出", status: currentIndex > 3 ? "done" : po.status === "已发出" ? "current" : "pending", helper: po.eta },
-    { label: "部分到货", status: cancelled ? "pending" : currentIndex > 4 ? "done" : po.status === "部分到货" ? "warning" : receivedTotal > 0 ? "warning" : "pending", helper: `${receivedTotal.toLocaleString()} 已收` },
-    { label: "已完成", status: po.status === "已完成" ? "done" : cancelled ? "blocked" : "pending", helper: cancelled ? po.status : po.paid ? "下游已付款" : "待下游发票/AP" },
+    { label: "来源确认", status: po.sourceRequest || po.sourceRfq ? "done" : "warning", helper: po.sourceRequest || po.sourceRfq || "来源待补齐" },
+    { label: "PO 已建立", status: "done", helper: po.created },
+    { label: "收货证据", status: receipt === "未收货" ? "pending" : receipt === "异常处理" ? "warning" : "done", helper: receipt },
+    { label: "发票证据", status: invoice === "未开票" ? "pending" : invoice === "发票差异" ? "warning" : "done", helper: invoice },
+    { label: "三单匹配", status: match === "已匹配" ? "done" : match === "缺少发票" || match === "缺少收货" ? "pending" : "warning", helper: match },
+    { label: "人工复核", status: match === "已匹配" ? "pending" : "current", helper: nextStepForPo(po) },
   ];
 }
 
-function exportPoDetail(po: PurchaseOrder) {
-  const lines = poLinesOf(po);
-  const totals = poTotals(po);
-  const headerRows = [
-    ["PO编号", po.po],
-    ["供应商", po.supplier],
-    ["创建日期", po.created],
-    ["ETA", po.eta],
-    ["采购负责人", po.owner],
-    ["优先级", po.priority],
-    ["状态", po.status],
-    ["付款状态", po.paid ? "已付款" : "未付款"],
-    ["来源类型", po.source || "manual"],
-    ["来源PR", po.sourceRequest || ""],
-    ["来源RFQ", po.sourceRfq || ""],
-    ["来源SKU", po.sourceSku || ""],
-    ["关联GRN", receivingDocs.filter((item) => item.po === po.po).map((item) => item.grn).join(", ")],
-    ["关联发票", SUPPLIER_INVOICES.filter((item) => item.relatedPo === po.po).map((item) => item.invoiceNumber).join(", ")],
-    ["金额", totals.totalAmount || po.amount],
-  ].map(([field, value]) => ({ section: "header", field, value }));
-  const lineRows = lines.map((line) => ({
-    section: "line",
-    field: line.poLineId,
-    value: `${line.sku} ${line.itemName}`,
-    订购数量: line.quantityOrdered,
-    已收货数量: line.quantityReceived,
-    合格数量: line.quantityAccepted,
-    拒收数量: line.quantityRejected,
-    单位: line.unit,
-    单价: line.unitPrice,
-    金额: toNumber(line.quantityOrdered) * toNumber(line.unitPrice),
-    仓库: line.warehouseId || "",
-    状态: line.status || "",
-  }));
-  exportRowsToCsv(`purchase-order-detail-${po.po}.csv`, [...headerRows, ...lineRows]);
-  toast.success("采购订单详情已导出");
+function buildPoLineRows(po: PurchaseOrder): PoEvidenceRow[] {
+  return poLinesOf(po).map((line, index) => {
+    const invoiceQty = SUPPLIER_INVOICES.flatMap((invoice) => invoice.lines)
+      .filter((invoiceLine) => invoiceLine.poLine === line.poLineId)
+      .reduce((sum, invoiceLine) => sum + toNumber(invoiceLine.quantity), 0);
+    const ordered = toNumber(line.quantityOrdered);
+    const received = toNumber(line.quantityReceived);
+    const remaining = lineRemaining(line);
+    const unitPrice = unitPriceForLine(line, po);
+    return {
+      poLineId: line.poLineId,
+      sourcePrLine: po.sourceRequest ? `${po.sourceRequest}-L${String(index + 1).padStart(3, "0")}` : "来源 PR Line 待补齐",
+      sourceRfqLine: po.sourceRfq ? `${po.sourceRfq}-L${String(index + 1).padStart(3, "0")}` : "来源 RFQ Line 待补齐",
+      sku: safeText(line.sku, po.sourceSku || "SKU 待补齐"),
+      itemName: safeText(line.itemName, po.sourceName || "物料名称待补齐"),
+      quantity: ordered,
+      unit: safeText(line.unit, po.unit || "件"),
+      unitPrice,
+      lineAmount: poLineAmount(line, po),
+      warehouse: safeText(line.warehouseId || po.warehouseId, "目标仓库待补齐"),
+      requiredDate: safeText(line.requiredDate || po.eta, "需求日期待补齐"),
+      promisedDate: safeText(line.promisedDate || po.eta, "预计到货待补齐"),
+      receivedQty: received,
+      remainingQty: remaining,
+      invoicedQty: invoiceQty,
+      uninvoicedQty: Math.max(0, ordered - invoiceQty),
+      status: lineStatusLabel(line.status),
+      risk: remaining > 0 && invoiceQty > received ? "已票未收风险" : remaining > 0 ? "未收货风险" : invoiceQty < received ? "已收未票风险" : "低风险",
+    };
+  });
+}
+
+function buildGrnRows(po: PurchaseOrder): GrnEvidenceRow[] {
+  const poLines = poLinesOf(po);
+  return grnsForPo(po.po).flatMap((grn) => {
+    const lines = grnLinesOf(grn);
+    return lines.map((line, index) => {
+      const poLine = poLines.find((item) => item.poLineId === line.poLineId) || poLines[index] || poLines[0];
+      const relatedInvoiceLine = SUPPLIER_INVOICES.flatMap((invoice) => invoice.lines.map((invoiceLine) => ({ invoice, invoiceLine })))
+        .find(({ invoice, invoiceLine }) => invoice.relatedPo === po.po && (invoiceLine.grnLine === line.grnLineId || invoiceLine.poLine === poLine?.poLineId));
+      const unitPrice = unitPriceForLine(poLine || {}, po);
+      const receivedQty = toNumber(line.receivedQty);
+      return {
+        grn: grn.grn,
+        grnLineId: safeText(line.grnLineId, `${grn.grn}-L${String(index + 1).padStart(3, "0")}`),
+        po: po.po,
+        poLineId: safeText(line.poLineId || poLine?.poLineId, "PO Line 待补齐"),
+        supplier: grn.supplier,
+        sku: safeText(line.sku || poLine?.sku, "SKU 待补齐"),
+        receivedQty,
+        unit: safeText(line.unit || poLine?.unit, "件"),
+        arrived: grn.arrived,
+        receiver: safeText(grn.receiver, "Receiver 待补齐"),
+        unitPrice,
+        lineAmount: Math.round(unitPrice * receivedQty),
+        status: grn.status,
+        qcStatus: toNumber(line.rejectedQty) > 0 || grn.failed > 0 ? "质检异常" : grn.status === "质检中" ? "质检中" : "通过",
+        invoiceImpact: relatedInvoiceLine ? "影响发票匹配" : "等待发票匹配",
+        invoiceLine: relatedInvoiceLine?.invoiceLine.lineId || "关联 Invoice Line 待补齐",
+        note: toNumber(line.rejectedQty) > 0 ? "拒收数量需要采购与财务协同复核" : "当前仅展示收货证据和匹配影响",
+      };
+    });
+  });
+}
+
+function buildInvoiceRows(po: PurchaseOrder): InvoiceEvidenceRow[] {
+  return invoicesForPo(po.po).flatMap((invoice) => invoice.lines.map((line) => ({
+    invoiceNumber: invoice.invoiceNumber,
+    invoiceLineId: line.lineId,
+    supplier: invoice.supplier,
+    po: invoice.relatedPo,
+    poLineId: safeText(line.poLine, "PO Line 待补齐"),
+    grnLineId: safeText(line.grnLine, "GRN / Receipt Line 待补齐"),
+    sku: safeText(line.sku, "SKU 待补齐"),
+    quantity: toNumber(line.quantity),
+    unit: safeText(line.unit, "件"),
+    unitPrice: toNumber(line.unitPrice),
+    invoiceAmount: toNumber(line.lineSubtotal),
+    taxAmount: toNumber(line.taxAmount),
+    totalAmount: toNumber(line.lineTotal),
+    invoiceDate: invoice.invoiceDate,
+    dueDate: invoice.dueDate,
+    matchStatus: invoice.matchStatus,
+    varianceType: line.varianceType || invoice.varianceType,
+    varianceAmount: toNumber(line.varianceAmount ?? invoice.varianceAmount),
+    risk: (line.varianceType || invoice.varianceType) === "无差异" ? "低风险" : "需人工复核",
+  })));
+}
+
+function matchStatusForLine(row: Omit<MatchEvidenceRow, "status" | "suggestedAction">) {
+  if (!row.grnLineId || row.grnLineId.includes("待补齐")) return "缺少收货";
+  if (!row.invoiceLineId || row.invoiceLineId.includes("待补齐")) return row.receivedQty > 0 ? "已收未票" : "缺少发票";
+  if (row.receivedQty < row.invoiceQty) return "已票未收";
+  if (row.poQty !== row.receivedQty || row.receivedQty !== row.invoiceQty) return "数量差异";
+  if (Math.abs(row.priceVariance) > 0.01) return "价格差异";
+  if (Math.abs(row.amountVariance) > 1) return "金额差异";
+  return "已匹配";
+}
+
+function suggestedActionForStatus(status: string) {
+  if (status === "缺少收货") return "等待收货";
+  if (status === "缺少发票" || status === "已收未票") return "等待发票";
+  if (status === "已票未收") return "复核收货记录";
+  if (status === "价格差异" || status === "金额差异") return "复核供应商发票";
+  if (status === "数量差异") return "生成内部差异说明草稿";
+  return "暂缓付款复核";
+}
+
+function buildMatchRows(po: PurchaseOrder): MatchEvidenceRow[] {
+  const grnRows = buildGrnRows(po);
+  const invoiceRows = buildInvoiceRows(po);
+  return buildPoLineRows(po).map((line) => {
+    const grn = grnRows.find((row) => row.poLineId === line.poLineId);
+    const invoice = invoiceRows.find((row) => row.poLineId === line.poLineId);
+    const base = {
+      poLineId: line.poLineId,
+      grnLineId: grn?.grnLineId || "GRN Line 待补齐",
+      invoiceLineId: invoice?.invoiceLineId || "Invoice Line 待补齐",
+      poQty: line.quantity,
+      receivedQty: grn?.receivedQty ?? line.receivedQty,
+      invoiceQty: invoice?.quantity ?? 0,
+      poUnitPrice: line.unitPrice,
+      invoiceUnitPrice: invoice?.unitPrice ?? 0,
+      poAmount: line.lineAmount,
+      invoiceAmount: invoice?.invoiceAmount ?? 0,
+      qtyVariance: (invoice?.quantity ?? 0) - (grn?.receivedQty ?? line.receivedQty),
+      priceVariance: (invoice?.unitPrice ?? 0) - line.unitPrice,
+      amountVariance: (invoice?.invoiceAmount ?? 0) - line.lineAmount,
+      receivingGap: Math.max(0, line.quantity - (grn?.receivedQty ?? line.receivedQty)),
+      invoiceGap: Math.max(0, (grn?.receivedQty ?? line.receivedQty) - (invoice?.quantity ?? 0)),
+    };
+    const status = matchStatusForLine(base);
+    return { ...base, status, suggestedAction: suggestedActionForStatus(status) };
+  });
+}
+
+function buildAccrualRows(po: PurchaseOrder): AccrualRow[] {
+  const invoiceRows = buildInvoiceRows(po);
+  const grnRows = buildGrnRows(po);
+  return buildPoLineRows(po).map((line) => {
+    const invoiced = invoiceRows.filter((row) => row.poLineId === line.poLineId);
+    const received = grnRows.filter((row) => row.poLineId === line.poLineId);
+    const approvedInvoicedQty = invoiced
+      .filter((row) => !["差异待处理", "未匹配"].includes(row.matchStatus))
+      .reduce((sum, row) => sum + row.quantity, 0);
+    const receivedQty = received.reduce((sum, row) => sum + row.receivedQty, 0) || line.receivedQty;
+    const approvedInvoicedAmount = approvedInvoicedQty * line.unitPrice;
+    const receivedAmount = receivedQty * line.unitPrice;
+    const openQty = Math.max(0, receivedQty - approvedInvoicedQty);
+    const uninvoicedQty = Math.max(0, line.quantity - invoiced.reduce((sum, row) => sum + row.quantity, 0));
+    return {
+      po: po.po,
+      poLineId: line.poLineId,
+      pr: safeText(po.sourceRequest, "来源 PR 待补齐"),
+      requestedBy: safeText(po.owner, "申请人待补齐"),
+      item: `${line.sku} · ${line.itemName}`,
+      supplier: po.supplier,
+      qty: line.quantity,
+      unit: line.unit,
+      unitPrice: line.unitPrice,
+      needBy: line.requiredDate,
+      uninvoicedQty,
+      uninvoicedTotal: Math.round(uninvoicedQty * line.unitPrice),
+      currency: po.currency || "CNY",
+      grnLine: received[0]?.grnLineId || "GRN Line 待补齐",
+      receivedQty,
+      approvedInvoicedQty,
+      openQty,
+      lineAmount: receivedAmount,
+      approvedInvoicedAmount,
+      accrualExposure: Math.round(Math.max(0, receivedAmount - approvedInvoicedAmount)),
+      risk: openQty > 0 ? "已收未票风险" : uninvoicedQty > 0 ? "未开票订单" : "低风险",
+      suggestedAction: openQty > 0 ? "等待供应商发票并保留应计可见性" : uninvoicedQty > 0 ? "等待发票" : "财务协同复核",
+    };
+  });
+}
+
+function dataLimitations() {
+  return [
+    "当前仅基于工作区内 PR、RFQ、PO、GRN 和发票记录判断。",
+    "部分收货记录或发票记录可能尚未完整读取。",
+    "当前不执行真实收货、库存过账、发票过账或付款。",
+    "三单匹配结论仅用于内部复核，需业务负责人确认。",
+    "应计和未开票金额仅为协同可见性，不形成会计分录。",
+  ];
+}
+
+function SectionTitle({ title, right }: { title: string; right?: React.ReactNode }) {
+  return <SectionHeader title={title} right={right} />;
 }
 
 export default function PurchasingOrdersPage({
@@ -118,7 +474,7 @@ export default function PurchasingOrdersPage({
   onActiveContextChange,
 }: {
   focus?: { entityType: string; entityId: string; at: number } | null;
-  onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; returnContext?: WorkflowContext | null; source?: string }) => void;
+  onNavigate?: NavigateFn;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
@@ -126,9 +482,6 @@ export default function PurchasingOrdersPage({
   const [filters, setFilters] = useState<PurchaseOrderWorkbenchFilters>(defaultPurchaseOrderWorkbenchFilters);
   const [selectedId, setSelectedId] = useState(purchaseOrders[0]?.po ?? "");
   const [viewMode, setViewMode] = useState<PurchaseOrderViewMode>("list");
-  const [newOpen, setNewOpen] = useState(false);
-  const [trackOpen, setTrackOpen] = useState(false);
-  const [poInsight, setPoInsight] = useState<ContextualAIInsight | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -136,9 +489,9 @@ export default function PurchasingOrdersPage({
       .then((data) => {
         if (!alive) return;
         setOrders(data);
-        setSelectedId((current) => data.some((o) => o.po === current) ? current : data[0]?.po ?? "");
+        setSelectedId((current) => data.some((order) => order.po === current) ? current : data[0]?.po ?? "");
       })
-      .catch(() => toast.error("采购订单 API 未连接", { description: "请先运行 npm run api，再运行 npm run dev" }))
+      .catch(() => toast.error("采购订单 API 未连接", { description: "当前页面保留本地工作区数据用于只读查看。" }))
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
@@ -151,11 +504,10 @@ export default function PurchasingOrdersPage({
   }, [focus?.at, focus?.entityType, focus?.entityId, orders]);
 
   const filtered = filterPurchaseOrdersForWorkbench(orders, filters);
+  const selectedPO = orders.find((order) => order.po === selectedId) ?? filtered[0] ?? orders[0] ?? null;
+  const selectedPOTotals = poTotals(selectedPO);
   const sourceOptions = Array.from(new Set(orders.map((order) => order.source || "manual"))).sort();
   const statusOptions = ["全部", "草稿", "待审批", "已审批", "已发出", "部分到货", "已完成", "已驳回", "已取消"] as const;
-  const selectedPO = orders.find((o) => o.po === selectedId) ?? filtered[0] ?? orders[0] ?? null;
-  const selectedPOLines = poLinesOf(selectedPO);
-  const selectedPOTotals = poTotals(selectedPO);
 
   useEffect(() => {
     if (!filtered.length) {
@@ -182,257 +534,458 @@ export default function PurchasingOrdersPage({
     return () => onActiveContextChange?.(null);
   }, [viewMode, selectedPO?.po, selectedPO?.supplier, onActiveContextChange]);
 
-  const totalAmount   = orders.reduce((s, o) => s + o.amount, 0);
-  const pendingApprov = orders.filter((o) => o.status === "待审批").length;
-  const inTransit     = orders.filter((o) => o.status === "已发出" || o.status === "部分到货").length;
+  const totalAmount = orders.reduce((sum, order) => sum + poAmount(order), 0);
+  const waitingReceipt = orders.filter((order) => receivedStatus(order) !== "已收货").length;
+  const invoiceExceptions = orders.filter((order) => invoiceStatus(order) === "发票差异").length;
+  const matchExceptions = orders.filter((order) => !["已匹配", "缺少发票"].includes(matchStatus(order))).length;
 
-  async function updatePOStatus(poId: string, status: POStatus) {
-    const updated = await apiJson<PurchaseOrder>(`/api/purchase-orders/${encodeURIComponent(poId)}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    });
-    setOrders((arr) => arr.map((o) => o.po === poId ? updated : o));
-    return updated;
-  }
-
-  async function approve(poId: string) {
-    try {
-      await updatePOStatus(poId, "已审批");
-      toast.success(`${poId} 已审批`, { description: "审批状态已更新" });
-    } catch (error) {
-      toast.error("采购订单审批失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
-    }
-  }
-  async function reject(poId: string) {
-    try {
-      await updatePOStatus(poId, "已驳回");
-      toast.error(`${poId} 已驳回`, { description: "状态已更新" });
-    } catch (error) {
-      toast.error("采购订单驳回失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
-    }
-  }
-  async function cancel(poId: string) {
-    if (!confirm(`确认取消 ${poId}？此操作不可撤销。`)) return;
-    try {
-      await updatePOStatus(poId, "已取消");
-      toast(`${poId} 已取消`);
-    } catch (error) {
-      toast.error("采购订单取消失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
-    }
-  }
-  async function send(poId: string) {
-    try {
-      await updatePOStatus(poId, "已发出");
-      toast.success(`${poId} 已下发至供应商`, { description: "状态变更已记录" });
-    } catch (error) {
-      toast.error("采购订单下发失败", { description: error instanceof Error ? error.message : "请检查服务连接状态" });
-    }
-  }
   function updateFilter<K extends keyof PurchaseOrderWorkbenchFilters>(key: K, value: PurchaseOrderWorkbenchFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
   }
+
   function resetFilters() {
     setFilters(defaultPurchaseOrderWorkbenchFilters);
   }
+
   function openDetail(poId: string) {
     setSelectedId(poId);
     setViewMode("detail");
   }
-  function returnToList() {
-    setViewMode("list");
-  }
+
   function exportCsv() {
     if (filtered.length === 0) {
       toast.warning("暂无可导出的数据");
       return;
     }
-    exportRowsToCsv("procurement-purchase-orders-export.csv", filtered.map((order) => {
-      const totals = poTotals(order);
-      const progress = totals.totalOrderedQty === 0 ? 0 : (totals.totalReceivedQty / totals.totalOrderedQty) * 100;
-      return {
-        PO编号: order.po,
-        供应商: order.supplier,
-        来源: order.source || "manual",
-        来源SKU: order.sourceSku || "",
-        来源名称: order.sourceName || "",
-        金额: order.amount,
-        明细行数: totals.lineCount,
-        优先级: order.priority,
-        负责人: order.owner,
-        ETA: order.eta,
-        状态: order.status,
-        总订购数量: totals.totalOrderedQty,
-        总收货数量: totals.totalReceivedQty,
-        收货进度百分比: Number(progress.toFixed(1)),
-      };
-    }));
-    toast.success("导出文件已生成");
+    exportRowsToCsv("purchase-order-evidence-export.csv", filtered.map((order) => ({
+      PO编号: order.po,
+      来源PR: order.sourceRequest || "",
+      来源RFQ: order.sourceRfq || "",
+      供应商: order.supplier,
+      状态: order.status,
+      采购负责人: order.owner,
+      行数: poTotals(order).lineCount,
+      订单金额: poAmount(order),
+      预计到货: order.eta,
+      收货状态: receivedStatus(order),
+      发票状态: invoiceStatus(order),
+      三单匹配状态: matchStatus(order),
+      下一步: nextStepForPo(order),
+    })));
+    toast.success("当前结果已导出");
   }
 
-  function buildSelectedPoInsight() {
-    if (!selectedPO) return null;
-    const totals = poTotals(selectedPO);
-    return makePoInsight({
-      po: selectedPO.po,
-      supplier: selectedPO.supplier,
-      status: selectedPO.status,
-      eta: selectedPO.eta,
-      orderedQty: totals.totalOrderedQty,
-      receivedQty: totals.totalReceivedQty,
-      sourceRequest: selectedPO.sourceRequest,
-      sourceRfq: selectedPO.sourceRfq,
-      grns: receivingDocs.filter((item) => item.po === selectedPO.po).map((item) => item.grn),
-      invoices: SUPPLIER_INVOICES.filter((item) => item.relatedPo === selectedPO.po).map((item) => item.invoiceNumber),
+  function navigateOrderWithReturn(order: PurchaseOrder, moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, label?: string) {
+    const returnContext: WorkflowContext = {
+      sourceModule: "procurement",
+      sourceEntityType: "purchase_order",
+      sourceEntityId: order.po,
+      sourceRoute: "procurement:orders",
+      sourceLabel: order.po,
+      returnLabel: `返回采购订单 ${order.po}`,
+    };
+    onNavigate?.(moduleId, focusTarget || null, {
+      returnTo: "procurement:orders",
+      entityLabel: label || order.po,
+      returnContext,
+      source: "purchaseOrderEvidence",
     });
   }
 
-  function openPoInsight(trigger: string) {
-    const insight = buildSelectedPoInsight();
-    if (!insight) return;
-    setPoInsight({ ...insight, trigger });
+  function navigateWithReturn(moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, label?: string) {
+    if (!selectedPO) return;
+    navigateOrderWithReturn(selectedPO, moduleId, focusTarget, label);
   }
 
-  function handlePoInsightAction(action: ContextualAiAction) {
-    if (action.intent === "preview_supplier_followup_draft" && selectedPO) {
-      toast("仅预览供应商跟进草稿", {
-        description: `${selectedPO.po} · 不自动发送、不修改 PO；记录前需在供应商流程中复核。`,
-      });
-      return;
-    }
-    toast(action.label, { description: "仅提供上下文洞察，需人工复核后处理。" });
+  function previewToast(title: string, description: string) {
+    toast(title, { description });
   }
 
-  const selectedPODelayRisk = selectedPO
-    ? poDelayedRisk(selectedPO.eta, selectedPO.status, selectedPOTotals.totalOrderedQty, selectedPOTotals.totalReceivedQty)
-    : null;
-  const selectedPoReturnContext: WorkflowContext | null = selectedPO ? {
-    sourceModule: "procurement",
-    sourceEntityType: "purchase_order",
-    sourceEntityId: selectedPO.po,
-    sourceRoute: "procurement:orders",
-    sourceLabel: selectedPO.po,
-    returnLabel: `返回采购订单 ${selectedPO.po}`,
-  } : null;
+  const detailContent = selectedPO && (() => {
+    const poLines = buildPoLineRows(selectedPO);
+    const grnRows = buildGrnRows(selectedPO);
+    const invoiceRows = buildInvoiceRows(selectedPO);
+    const matchRows = buildMatchRows(selectedPO);
+    const accrualRows = buildAccrualRows(selectedPO);
+    const invoices = invoicesForPo(selectedPO.po);
+    const grns = grnsForPo(selectedPO.po);
+    const delayRisk = poDelayedRisk(
+      selectedPO.eta,
+      selectedPO.status,
+      selectedPOTotals.totalOrderedQty,
+      selectedPOTotals.totalReceivedQty,
+    );
+    const selectedPoReturnContext: WorkflowContext = {
+      sourceModule: "procurement",
+      sourceEntityType: "purchase_order",
+      sourceEntityId: selectedPO.po,
+      sourceRoute: "procurement:orders",
+      sourceLabel: selectedPO.po,
+      returnLabel: `返回采购订单 ${selectedPO.po}`,
+    };
+    const firstGrn = grns[0];
+    const firstInvoice = invoices[0];
 
-  const detailContent = selectedPO && (
-    <DocumentShell
-      title="采购订单"
-      documentNo={selectedPO.po}
-      moduleLabel="采购"
-      status={selectedPO.status}
-      subtitle={`${selectedPO.supplier} · ETA ${selectedPO.eta}`}
-    >
-      <DocumentHeader
-        fields={[
-          { label: "PO编号", value: selectedPO.po },
-          { label: "供应商", value: selectedPO.supplier },
-          { label: "创建日期", value: selectedPO.created },
-          { label: "ETA", value: selectedPO.eta },
-          { label: "采购负责人", value: selectedPO.owner },
-          { label: "优先级", value: selectedPO.priority, tone: selectedPO.priority === "高" ? "danger" : selectedPO.priority === "中" ? "warning" : "success" },
-          { label: "状态", value: selectedPO.status, tone: statusTone(selectedPO.status) },
-          { label: "来源类型", value: selectedPO.source || "manual" },
-          { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
-          { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
-          { label: "来源 SKU", value: selectedPO.sourceSku || "—", helper: selectedPO.sourceName },
-          { label: "延迟风险", value: selectedPODelayRisk?.delayed ? "逾期/延迟" : "未触发", tone: selectedPODelayRisk?.delayed ? "danger" : "success", helper: selectedPODelayRisk?.reason },
-          { label: "金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
-        ]}
-      />
-      <ContextualAIInsightPanel insight={poInsight} onClose={() => setPoInsight(null)} onAction={handlePoInsightAction} returnContext={selectedPoReturnContext} onNavigateRecord={onNavigate} />
-      <DocumentStatusTimeline steps={poTimeline(selectedPO)} />
-      <DocumentLinesTable
-        rows={selectedPOLines.length ? selectedPOLines : [{
-          poLineId: `${selectedPO.po}-SUMMARY`,
-          sku: selectedPO.sourceSku || "SUMMARY",
-          itemName: selectedPO.sourceName || "采购订单汇总行",
-          quantityOrdered: selectedPO.recommendedQty || selectedPO.items || 0,
-          quantityReceived: selectedPO.received || 0,
-          quantityAccepted: selectedPO.received || 0,
-          quantityRejected: 0,
-          unit: selectedPO.unit || "行",
-          unitPrice: selectedPO.unitPrice || selectedPO.amount,
-          currency: selectedPO.currency || "CNY",
-        }]}
-        columns={[
-          { key: "poLineId", label: "行号", render: (line) => <span style={{ color: A.blue }}>{String(line.poLineId)}</span> },
-          { key: "sku", label: "SKU" },
-          { key: "itemName", label: "品名" },
-          { key: "quantityOrdered", label: "订单数量", align: "right", render: (line) => Number(line.quantityOrdered || 0).toLocaleString() },
-          { key: "unit", label: "单位" },
-          { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
-          { key: "quantityReceived", label: "已收货数量", align: "right", render: (line) => Number(line.quantityReceived || 0).toLocaleString() },
-          { key: "quantityRejected", label: "拒收数量", align: "right", render: (line) => Number(line.quantityRejected || 0).toLocaleString() },
-          { key: "warehouseId", label: "仓库", render: (line) => String(line.warehouseId || selectedPO.warehouseId || "MAIN") },
-          { key: "status", label: "状态", render: (line) => String(line.status || lineStatusLabel(line.status)) },
-        ]}
-      />
-      <DocumentTotals
-        totals={[
-          { label: "采购金额", value: fmt(selectedPOTotals.totalAmount || selectedPO.amount), tone: "info" },
-          { label: "订单数量", value: selectedPOTotals.totalOrderedQty.toLocaleString() },
-          { label: "已收货数量", value: selectedPOTotals.totalReceivedQty.toLocaleString(), tone: selectedPOTotals.totalReceivedQty ? "success" : "neutral" },
-          { label: "未收货数量", value: Math.max(0, selectedPOTotals.totalOrderedQty - selectedPOTotals.totalReceivedQty).toLocaleString(), tone: selectedPOTotals.totalOrderedQty > selectedPOTotals.totalReceivedQty ? "warning" : "success" },
-          { label: "收货进度", value: `${selectedPOTotals.totalOrderedQty ? Math.round((selectedPOTotals.totalReceivedQty / selectedPOTotals.totalOrderedQty) * 100) : 0}%` },
-        ]}
-        columns={5}
-      />
-      <DocumentEvidencePanel
-        linkedDocuments={getPoLinkedDocuments(selectedPO, SUPPLIER_INVOICES, receivingDocs)}
-        onNavigate={onNavigate}
-        returnContext={selectedPoReturnContext}
-        relatedRecords={relatedRecordsForEntity({ purchaseOrders: orders, receivingDocs, supplierInvoices: SUPPLIER_INVOICES }, "purchaseOrder", selectedPO.po)}
-        provenance={selectedPO.source || "manual"}
-        notes={selectedPO.reason || selectedPO.approvalSnapshot?.summary || "采购订单详情用于审批、收货和供应商协同复核。"}
-        evidence={[
-          { label: "来源 PR", value: selectedPO.sourceRequest || "—" },
-          { label: "来源 RFQ", value: selectedPO.sourceRfq || "—" },
-          { label: "关系缺口", value: selectedPO.sourceRfq ? "RFQ linked" : "No linked RFQ found in current data", tone: selectedPO.sourceRfq ? "success" : "warning" },
-          { label: "审批快照", value: selectedPO.approvalSnapshot?.createdAt ? new Date(selectedPO.approvalSnapshot.createdAt).toLocaleString("zh-CN") : "—" },
-          { label: "关联 GRN", value: receivingDocs.filter((item) => item.po === selectedPO.po).length },
-          { label: "关联发票", value: SUPPLIER_INVOICES.filter((item) => item.relatedPo === selectedPO.po).length },
-          { label: "付款状态", value: selectedPO.paid ? "已付款" : "未付款", tone: selectedPO.paid ? "success" : "warning" },
-        ]}
-      />
-      <DocumentHistoryPanel
-        entityType="purchaseOrder"
-        entityId={selectedPO.po}
-        title="订单状态历史"
-        refreshKey={selectedPO.lastAuditId || selectedPO.auditTrailIds?.join(",") || selectedPO.status}
-      />
-      <DocumentActionBar>
+    return (
+      <DocumentShell
+        title="采购订单 / PO"
+        documentNo={selectedPO.po}
+        moduleLabel="采购订单证据"
+        status={selectedPO.status}
+        subtitle={`${selectedPO.supplier} · ${receivedStatus(selectedPO)} · ${invoiceStatus(selectedPO)}`}
+      >
         <RecoveryActions
           actions={[
-            { key: "list", label: "返回列表", onClick: returnToList, kind: "list" },
+            {
+              key: "source-pr",
+              label: "返回来源 PR",
+              onClick: () => selectedPO.sourceRequest
+                ? navigateWithReturn("procurement:requests", { entityType: "purchase_request", entityId: selectedPO.sourceRequest }, selectedPO.sourceRequest)
+                : previewToast("来源 PR 待补齐", "当前 PO 未读取到来源 PR，只保留关联缺口。"),
+              kind: "previous",
+              tone: "primary",
+            },
+            {
+              key: "source-rfq",
+              label: "返回来源 RFQ",
+              onClick: () => selectedPO.sourceRfq
+                ? navigateWithReturn("procurement:rfq", { entityType: "rfq", entityId: selectedPO.sourceRfq }, selectedPO.sourceRfq)
+                : previewToast("来源 RFQ 待补齐", "当前 PO 未读取到来源 RFQ，只保留关联缺口。"),
+              kind: "previous",
+              tone: "primary",
+            },
+            { key: "list-short", label: "返回列表", onClick: () => setViewMode("list"), kind: "list" },
+            { key: "po-list", label: "返回 PO 列表", onClick: () => setViewMode("list"), kind: "list" },
+            {
+              key: "receiving",
+              label: "返回收货记录",
+              onClick: () => firstGrn
+                ? navigateWithReturn("procurement:receiving", { entityType: "receiving_doc", entityId: firstGrn.grn }, firstGrn.grn)
+                : previewToast("收货记录待补齐", "当前 PO 尚未读取到 GRN 记录。"),
+              kind: "module",
+              tone: "subtle",
+            },
+            {
+              key: "invoice",
+              label: "返回发票记录",
+              onClick: () => firstInvoice
+                ? navigateWithReturn("procurement:invoices", { entityType: "supplier_invoice", entityId: firstInvoice.invoiceNumber }, firstInvoice.invoiceNumber)
+                : previewToast("发票记录待补齐", "当前 PO 尚未读取到发票记录。"),
+              kind: "module",
+              tone: "subtle",
+            },
+            { key: "match", label: "返回三单匹配", onClick: () => navigateWithReturn("procurement:match"), kind: "module", tone: "subtle" },
             { key: "module", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
+            { key: "previous", label: "返回上一级", onClick: () => setViewMode("list"), kind: "previous" },
+            { key: "evidence", label: "返回证据链", onClick: () => onNavigate?.("sales:evidence"), kind: "module", tone: "subtle" },
           ]}
         />
-        {selectedPO.status === "待审批" && <button onClick={() => approve(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>审批订单</button>}
-        {selectedPO.status === "待审批" && <button onClick={() => reject(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>}
-        {selectedPO.status === "已审批" && <button onClick={() => send(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>下发至供应商</button>}
-        {(selectedPO.status === "已发出" || selectedPO.status === "部分到货" || selectedPO.status === "已完成") && <button onClick={() => setTrackOpen(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>跟踪发货</button>}
-        {!["已完成", "已取消"].includes(selectedPO.status) && <button onClick={() => cancel(selectedPO.po)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>取消订单</button>}
-        <button onClick={() => openPoInsight("Explain PO delay")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>Explain delay for {selectedPO.po}</button>
-        <button onClick={() => openPoInsight("Check affected inventory")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>Check affected inventory</button>
-        <button onClick={() => openPoInsight("Trace receiving status")} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>Trace receiving status</button>
-        <button onClick={() => handlePoInsightAction({
-          id: `preview_supplier_followup_draft:purchase_order:${selectedPO.po}`,
-          label: `Preview supplier follow-up draft for ${selectedPO.po}`,
-          intent: "preview_supplier_followup_draft",
-          sourceModule: "procurement",
-          sourceEntityType: "purchase_order",
-          sourceEntityId: selectedPO.po,
-          sourceRoute: "procurement:orders",
-          linkedRecords: [],
-          allowedOutputType: "draft_preview",
-          requiresReview: true,
-          mutationAllowed: false,
-        })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>Preview supplier follow-up draft</button>
-        <button onClick={() => toast("发票协同位于采购管理", { description: "请打开采购管理的发票协同视图查看关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票协同</button>
-        <button onClick={() => exportPoDetail(selectedPO)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
-      </DocumentActionBar>
-    </DocumentShell>
-  );
+
+        <div>
+          <SectionTitle title="概览" />
+          <DocumentHeader
+            fields={[
+              { label: "PO 编号", value: selectedPO.po, tone: "info" },
+              { label: "状态", value: selectedPO.status, tone: statusTone(selectedPO.status) },
+              { label: "来源 PR", value: selectedPO.sourceRequest || "来源 PR 待补齐", tone: selectedPO.sourceRequest ? "info" : "warning" },
+              { label: "来源 RFQ", value: selectedPO.sourceRfq || "来源 RFQ 待补齐", tone: selectedPO.sourceRfq ? "info" : "warning" },
+              { label: "供应商", value: selectedPO.supplier },
+              { label: "采购负责人", value: selectedPO.owner },
+              { label: "创建日期", value: selectedPO.created },
+              { label: "预计到货", value: selectedPO.eta },
+              { label: "目标仓库", value: poLines[0]?.warehouse || selectedPO.warehouseId || "目标仓库待补齐" },
+              { label: "订单金额", value: fmt(poAmount(selectedPO)), tone: "info" },
+              { label: "收货状态", value: receivedStatus(selectedPO), tone: statusTone(receivedStatus(selectedPO)) },
+              { label: "发票状态", value: invoiceStatus(selectedPO), tone: statusTone(invoiceStatus(selectedPO)) },
+              { label: "匹配状态", value: matchStatus(selectedPO), tone: statusTone(matchStatus(selectedPO)) },
+              { label: "当前下一步", value: nextStepForPo(selectedPO), tone: "warning" },
+              { label: "延迟 / 未收齐风险", value: delayRisk.delayed ? "需关注" : "未触发", tone: delayRisk.delayed ? "warning" : "success", helper: delayRisk.reason },
+            ]}
+          />
+        </div>
+
+        <DocumentStatusTimeline steps={poTimeline(selectedPO)} />
+
+        <div>
+          <SectionTitle title="PO 明细行" right={<Chip label={`${poLines.length} 行`} color={A.blue} bg="#f0f6ff" />} />
+          <DocumentLinesTable
+            rows={poLines}
+            columns={[
+              { key: "poLineId", label: "PO Line 编号", render: (line) => <span style={{ color: A.blue }}>{String(line.poLineId)}</span> },
+              { key: "sourcePrLine", label: "来源 PR Line" },
+              { key: "sourceRfqLine", label: "来源 RFQ Line" },
+              { key: "sku", label: "SKU" },
+              { key: "itemName", label: "物料名称" },
+              { key: "quantity", label: "数量", align: "right", render: (line) => Number(line.quantity).toLocaleString() },
+              { key: "unit", label: "单位" },
+              { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+              { key: "lineAmount", label: "行金额", align: "right", render: (line) => fmt(Number(line.lineAmount || 0)) },
+              { key: "warehouse", label: "目标仓库" },
+              { key: "requiredDate", label: "需求日期" },
+              { key: "promisedDate", label: "预计到货" },
+              { key: "receivedQty", label: "已收数量", align: "right", render: (line) => Number(line.receivedQty).toLocaleString() },
+              { key: "remainingQty", label: "未收数量", align: "right", render: (line) => Number(line.remainingQty).toLocaleString() },
+              { key: "invoicedQty", label: "已开票数量", align: "right", render: (line) => Number(line.invoicedQty).toLocaleString() },
+              { key: "uninvoicedQty", label: "未开票数量", align: "right", render: (line) => Number(line.uninvoicedQty).toLocaleString() },
+              { key: "status", label: "行状态" },
+              { key: "risk", label: "行级风险" },
+            ]}
+          />
+        </div>
+
+        <Card className="p-4">
+          <SectionTitle title="来源 PR / RFQ" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            {[
+              ["来源 PR", selectedPO.sourceRequest || "来源 PR 待补齐", selectedPO.sourceRequest ? A.blue : A.orange],
+              ["来源 RFQ", selectedPO.sourceRfq || "来源 RFQ 待补齐", selectedPO.sourceRfq ? A.blue : A.orange],
+              ["来源说明", selectedPO.reason || "当前 PO 来源关系用于解释从申请、寻源到订单的业务链路。", A.label],
+            ].map(([label, value, color]) => (
+              <div key={String(label)} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
+                <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                <div className="text-xs font-semibold mt-1 truncate" style={{ color: String(color) }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <div>
+          <SectionTitle title="收货 / GRN Line" right={<Chip label="只读收货证据" color={A.green} bg="#f0faf4" />} />
+          <DocumentLinesTable
+            rows={grnRows}
+            emptyText="当前 PO 尚未读取到 GRN Line。当前仅展示收货证据和匹配影响，不会提交收货、不会修改库存余额、不会产生库存过账。"
+            columns={[
+              { key: "grn", label: "GRN / Receipt 编号", render: (line) => <span style={{ color: A.blue }}>{String(line.grn)}</span> },
+              { key: "grnLineId", label: "GRN Line 编号" },
+              { key: "po", label: "PO 编号" },
+              { key: "poLineId", label: "PO Line 编号" },
+              { key: "supplier", label: "Supplier" },
+              { key: "sku", label: "SKU" },
+              { key: "receivedQty", label: "收货数量", align: "right", render: (line) => Number(line.receivedQty).toLocaleString() },
+              { key: "unit", label: "单位" },
+              { key: "arrived", label: "收货日期" },
+              { key: "receiver", label: "Receiver" },
+              { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+              { key: "lineAmount", label: "行金额", align: "right", render: (line) => fmt(Number(line.lineAmount || 0)) },
+              { key: "status", label: "收货状态" },
+              { key: "qcStatus", label: "质检 / 异常状态" },
+              { key: "invoiceImpact", label: "是否影响发票匹配" },
+              { key: "invoiceLine", label: "关联 Invoice Line" },
+              { key: "note", label: "行级备注" },
+            ]}
+          />
+          <Card className="p-3 mt-3 text-[11px] leading-5" style={{ color: A.sub, background: "#f8fafc" }}>
+            当前仅展示收货证据和匹配影响。不会提交收货，不会修改库存余额，不会产生库存过账。
+          </Card>
+        </div>
+
+        <div>
+          <SectionTitle title="发票 / Invoice Line" right={<Chip label="财务协同可见性" color={A.purple} bg="#faf3ff" />} />
+          <DocumentLinesTable
+            rows={invoiceRows}
+            emptyText="当前 PO 尚未读取到 Invoice Line。"
+            columns={[
+              { key: "invoiceNumber", label: "Invoice 编号", render: (line) => <span style={{ color: A.blue }}>{String(line.invoiceNumber)}</span> },
+              { key: "invoiceLineId", label: "Invoice Line 编号" },
+              { key: "supplier", label: "Supplier" },
+              { key: "po", label: "PO 编号" },
+              { key: "poLineId", label: "PO Line 编号" },
+              { key: "grnLineId", label: "GRN / Receipt Line" },
+              { key: "sku", label: "SKU" },
+              { key: "quantity", label: "开票数量", align: "right", render: (line) => Number(line.quantity).toLocaleString() },
+              { key: "unit", label: "单位" },
+              { key: "unitPrice", label: "发票单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+              { key: "invoiceAmount", label: "发票金额", align: "right", render: (line) => fmt(Number(line.invoiceAmount || 0)) },
+              { key: "taxAmount", label: "税额", align: "right", render: (line) => fmt(Number(line.taxAmount || 0)) },
+              { key: "totalAmount", label: "总额", align: "right", render: (line) => fmt(Number(line.totalAmount || 0)) },
+              { key: "invoiceDate", label: "发票日期" },
+              { key: "dueDate", label: "到期日" },
+              { key: "matchStatus", label: "匹配状态" },
+              { key: "varianceType", label: "差异类型" },
+              { key: "varianceAmount", label: "差异金额", align: "right", render: (line) => fmt(Number(line.varianceAmount || 0)) },
+              { key: "risk", label: "行级风险" },
+            ]}
+          />
+        </div>
+
+        <div>
+          <SectionTitle title="三单匹配" right={<Chip label="行级解释" color={A.orange} bg="#fff8f0" />} />
+          <DocumentLinesTable
+            rows={matchRows}
+            columns={[
+              { key: "poLineId", label: "PO Line" },
+              { key: "grnLineId", label: "GRN / Receipt Line" },
+              { key: "invoiceLineId", label: "Invoice Line" },
+              { key: "poQty", label: "PO 数量", align: "right", render: (line) => Number(line.poQty).toLocaleString() },
+              { key: "receivedQty", label: "已收数量", align: "right", render: (line) => Number(line.receivedQty).toLocaleString() },
+              { key: "invoiceQty", label: "开票数量", align: "right", render: (line) => Number(line.invoiceQty).toLocaleString() },
+              { key: "poUnitPrice", label: "PO 单价", align: "right", render: (line) => fmt(Number(line.poUnitPrice || 0)) },
+              { key: "invoiceUnitPrice", label: "发票单价", align: "right", render: (line) => fmt(Number(line.invoiceUnitPrice || 0)) },
+              { key: "poAmount", label: "PO 金额", align: "right", render: (line) => fmt(Number(line.poAmount || 0)) },
+              { key: "invoiceAmount", label: "发票金额", align: "right", render: (line) => fmt(Number(line.invoiceAmount || 0)) },
+              { key: "qtyVariance", label: "数量差异", align: "right", render: (line) => Number(line.qtyVariance).toLocaleString() },
+              { key: "priceVariance", label: "单价差异", align: "right", render: (line) => fmt(Number(line.priceVariance || 0)) },
+              { key: "amountVariance", label: "金额差异", align: "right", render: (line) => fmt(Number(line.amountVariance || 0)) },
+              { key: "receivingGap", label: "收货缺口", align: "right", render: (line) => Number(line.receivingGap).toLocaleString() },
+              { key: "invoiceGap", label: "发票缺口", align: "right", render: (line) => Number(line.invoiceGap).toLocaleString() },
+              { key: "status", label: "匹配状态" },
+              { key: "suggestedAction", label: "建议处理" },
+            ]}
+          />
+        </div>
+
+        <div>
+          <SectionTitle title="未开票 / 已收未票" right={<Chip label="应计可见性" color={A.blue} bg="#f0f6ff" />} />
+          <DocumentLinesTable
+            rows={accrualRows}
+            columns={[
+              { key: "po", label: "PO Number" },
+              { key: "poLineId", label: "PO Line" },
+              { key: "pr", label: "Req / PR" },
+              { key: "requestedBy", label: "Requested By" },
+              { key: "item", label: "Item / SKU" },
+              { key: "supplier", label: "Supplier" },
+              { key: "qty", label: "Qty", align: "right", render: (line) => Number(line.qty).toLocaleString() },
+              { key: "unit", label: "UOM" },
+              { key: "unitPrice", label: "Unit Price", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
+              { key: "needBy", label: "Need By" },
+              { key: "uninvoicedQty", label: "Uninvoiced Qty", align: "right", render: (line) => Number(line.uninvoicedQty).toLocaleString() },
+              { key: "uninvoicedTotal", label: "Uninvoiced Total", align: "right", render: (line) => fmt(Number(line.uninvoicedTotal || 0)) },
+              { key: "currency", label: "Currency" },
+              { key: "grnLine", label: "GRN Line" },
+              { key: "receivedQty", label: "Received Qty", align: "right", render: (line) => Number(line.receivedQty).toLocaleString() },
+              { key: "approvedInvoicedQty", label: "Approved Invoiced Qty", align: "right", render: (line) => Number(line.approvedInvoicedQty).toLocaleString() },
+              { key: "openQty", label: "Open Qty", align: "right", render: (line) => Number(line.openQty).toLocaleString() },
+              { key: "lineAmount", label: "Line Amount", align: "right", render: (line) => fmt(Number(line.lineAmount || 0)) },
+              { key: "approvedInvoicedAmount", label: "Approved Invoiced Amount", align: "right", render: (line) => fmt(Number(line.approvedInvoicedAmount || 0)) },
+              { key: "accrualExposure", label: "Accrual Exposure", align: "right", render: (line) => fmt(Number(line.accrualExposure || 0)) },
+              { key: "risk", label: "Risk" },
+              { key: "suggestedAction", label: "Suggested Action" },
+            ]}
+          />
+        </div>
+
+        <Card className="p-4">
+          <SectionTitle title="AI 协同解释" />
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+            {[
+              ["结论", `${selectedPO.po} 当前下一步：${nextStepForPo(selectedPO)}`],
+              ["关键证据", `${poLines.length} 条 PO Line · ${grnRows.length} 条 GRN Line · ${invoiceRows.length} 条 Invoice Line`],
+              ["业务影响", accrualRows.some((row) => row.accrualExposure > 0) ? "存在已收未票，应保持应计可见性" : "未识别重大已收未票风险"],
+              ["建议动作", matchRows.some((row) => row.status !== "已匹配") ? "生成内部复核备注草稿" : "保留人工复核记录"],
+              ["数据限制 / 不确定性", "结论基于当前工作区可见记录，需业务负责人确认"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
+                <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                <div className="text-[11px] leading-5 mt-1" style={{ color: A.label }}>{value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={() => firstGrn && navigateWithReturn("procurement:receiving", { entityType: "receiving_doc", entityId: firstGrn.grn }, firstGrn.grn)}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
+              可点击跳转：收货证据
+            </button>
+            <button onClick={() => firstInvoice && navigateWithReturn("procurement:invoices", { entityType: "supplier_invoice", entityId: firstInvoice.invoiceNumber }, firstInvoice.invoiceNumber)}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>
+              可点击跳转：发票证据
+            </button>
+          </div>
+        </Card>
+
+        <DocumentTotals
+          totals={[
+            { label: "订单金额", value: fmt(poAmount(selectedPO)), tone: "info" },
+            { label: "PO Line", value: poLines.length.toLocaleString() },
+            { label: "GRN Line", value: grnRows.length.toLocaleString(), tone: grnRows.length ? "success" : "warning" },
+            { label: "Invoice Line", value: invoiceRows.length.toLocaleString(), tone: invoiceRows.length ? "success" : "warning" },
+            { label: "已收未票风险", value: accrualRows.filter((row) => row.accrualExposure > 0).length.toLocaleString(), tone: accrualRows.some((row) => row.accrualExposure > 0) ? "warning" : "success" },
+          ]}
+          columns={5}
+        />
+
+        <Card className="p-4">
+          <SectionTitle title="复核动作" right={<Chip label="Review-first / Preview-only" color={A.blue} bg="#f0f6ff" />} />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
+            {[
+              ["生成收货异常说明草稿", "仅基于 GRN Line 拒收、质检状态和发票影响生成内部说明。"],
+              ["生成差异说明草稿", "仅解释 PO / GRN / Invoice 数量、价格和金额差异。"],
+              ["生成内部复核备注草稿", "仅生成采购与财务协同备注，不改变单据状态。"],
+              ["标记需人工复核预览", "仅在当前视图提示复核，不提交审批或外发。"],
+            ].map(([title, body]) => (
+              <button
+                key={title}
+                type="button"
+                onClick={() => previewToast(title, `${selectedPO.po} · ${body}`)}
+                className="rounded-lg p-3 text-left"
+                style={{ background: A.gray6, color: A.label }}
+              >
+                <div className="font-semibold">{title}</div>
+                <div className="mt-1" style={{ color: A.sub }}>{body}</div>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <SectionTitle title="评论与附件" />
+          <div className="text-[11px] leading-5" style={{ color: A.sub }}>
+            当前保留采购、仓库和财务协同评论入口。附件只作为证据引用展示，需人工确认后进入正式记录流程。
+          </div>
+        </Card>
+
+        <div>
+          <SectionTitle title="历史记录" />
+          <DocumentHistoryPanel
+            entityType="purchaseOrder"
+            entityId={selectedPO.po}
+            title="采购订单历史"
+            refreshKey={selectedPO.lastAuditId || selectedPO.auditTrailIds?.join(",") || selectedPO.status}
+          />
+        </div>
+
+        <div>
+          <SectionTitle title="证据链" />
+          <DocumentEvidencePanel
+            linkedDocuments={getPoLinkedDocuments(selectedPO, SUPPLIER_INVOICES, receivingDocs)}
+            onNavigate={onNavigate}
+            returnContext={selectedPoReturnContext}
+            relatedRecords={relatedRecordsForEntity({ purchaseOrders: orders, receivingDocs, supplierInvoices: SUPPLIER_INVOICES }, "purchaseOrder", selectedPO.po)}
+            provenance="工作区业务记录"
+            notes={`${selectedPO.po} 证据链覆盖来源 PR / RFQ、PO Line、GRN Line、Invoice Line、三单匹配和已收未票可见性。`}
+            evidence={[
+              { label: "来源 PR", value: selectedPO.sourceRequest || "待补齐", tone: selectedPO.sourceRequest ? "info" : "warning" },
+              { label: "来源 RFQ", value: selectedPO.sourceRfq || "待补齐", tone: selectedPO.sourceRfq ? "info" : "warning" },
+              { label: "关联 GRN", value: grns.map((item) => item.grn).join(", ") || "待补齐", tone: grns.length ? "success" : "warning" },
+              { label: "关联发票", value: invoices.map((item) => item.invoiceNumber).join(", ") || "待补齐", tone: invoices.length ? "success" : "warning" },
+              { label: "三单匹配", value: matchStatus(selectedPO), tone: statusTone(matchStatus(selectedPO)) },
+              { label: "已收未票", value: fmt(accrualRows.reduce((sum, row) => sum + row.accrualExposure, 0)), tone: accrualRows.some((row) => row.accrualExposure > 0) ? "warning" : "success" },
+            ]}
+          />
+        </div>
+
+        <Card className="p-4">
+          <SectionTitle title="数据限制" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] leading-5" style={{ color: A.sub }}>
+            {dataLimitations().map((item) => (
+              <div key={item} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>{item}</div>
+            ))}
+          </div>
+        </Card>
+
+        <DocumentActionBar>
+          <button onClick={() => previewToast("生成收货异常说明草稿", `${selectedPO.po} · 仅生成内部说明，不提交收货、不修改库存。`)}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>生成收货异常说明草稿</button>
+          <button onClick={() => previewToast("生成差异说明草稿", `${selectedPO.po} · 仅解释三单匹配差异，需人工复核。`)}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>生成差异说明草稿</button>
+          <button onClick={() => previewToast("生成内部复核备注草稿", `${selectedPO.po} · 不审批发票、不付款、不形成会计分录。`)}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>生成内部复核备注草稿</button>
+          <button onClick={() => previewToast("标记需人工复核预览", `${selectedPO.po} · 仅在当前视图提示复核，不改变单据状态。`)}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>标记需人工复核预览</button>
+        </DocumentActionBar>
+      </DocumentShell>
+    );
+  })();
 
   if (viewMode === "detail") {
     return (
@@ -440,99 +993,20 @@ export default function PurchasingOrdersPage({
         {selectedPO ? detailContent : (
           <Card className="p-8 text-center text-xs" style={{ color: A.gray2 }}>
             未找到采购订单。
-            <button onClick={returnToList} className="ml-3 px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.blue }}>返回列表</button>
+            <button onClick={() => setViewMode("list")} className="ml-3 px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.blue }}>返回 PO 列表</button>
           </Card>
         )}
-        <NewPOModal open={newOpen} onClose={() => setNewOpen(false)}
-          onCreate={async (po) => {
-            const created = await apiJson<PurchaseOrder>("/api/purchase-orders", {
-              method: "POST",
-              body: JSON.stringify(po),
-            });
-            setOrders((arr) => [created, ...arr]);
-            setSelectedId(created.po);
-            return created;
-          }} />
-        <TrackShipmentModal open={trackOpen} onClose={() => setTrackOpen(false)} po={selectedPO} />
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      {/* KPIs */}
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="本月 PO 总额" value={fmt(totalAmount)} sub={loading ? "加载中" : `${orders.length} 张订单`} delta="+12.4%" positive={false} icon={FileText}  color={A.blue}   />
-        <KpiCard label="待审批" value={String(pendingApprov)}  sub="平均等待 2.4 小时"   delta="较昨日 +1" positive={false} icon={AlertCircle} color={A.orange} />
-        <KpiCard label="在途订单" value={String(inTransit)}     sub="未来 7 天到货"        delta={fmt(6240000)} positive icon={Truck}        color={A.teal}   />
-        <KpiCard label="本月完成率" value="84.6%" sub="按时交付 / 已完成"     delta="+3.2pts"     positive icon={CheckCircle2} color={A.green}  />
-      </div>
-
-      {/* Approval queue + trend */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="p-5">
-          {(() => {
-            const pending = orders.filter((o) => o.status === "待审批");
-            return (
-              <>
-                <SectionHeader title="待审批队列"
-                  right={<span className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-                    style={{ background: "#fff8f0", color: A.orange }}>{pending.length} 待处理</span>} />
-                <div className="space-y-2.5">
-                  {pending.length === 0 ? (
-                    <div className="text-center py-10 text-xs" style={{ color: A.gray2 }}>
-                      <CheckCircle2 size={22} className="mx-auto mb-2" style={{ color: A.green }} />
-                      暂无待审批订单
-                    </div>
-                  ) : pending.map((q) => (
-                    <div key={q.po} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <button onClick={() => openDetail(q.po)}
-                          className="text-xs font-semibold hover:underline" style={{ color: A.blue }}>{q.po}</button>
-                        <span className="text-[10px] px-1.5 py-px rounded-full font-medium"
-                          style={{ background: "#fff8f0", color: A.orange }}>优先级 {q.priority}</span>
-                      </div>
-                      <div className="text-xs font-medium mb-1" style={{ color: A.label }}>{q.supplier}</div>
-                      <div className="text-[11px] mb-2.5" style={{ color: A.sub }}>
-                        {q.source === "forecast" ? `${q.sourceSku} · 预测补货` : `${q.items} 行`} · {q.owner} 提交
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold tracking-tight" style={{ color: A.label }}>{fmt(q.amount)}</span>
-                        <div className="flex gap-1.5">
-                          <button onClick={() => reject(q.po)}
-                            className="text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors hover:bg-red-50"
-                            style={{ background: A.white, color: A.gray1, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>驳回</button>
-                          <button onClick={() => approve(q.po)}
-                            className="text-[11px] px-2.5 py-1 rounded-md font-medium text-white transition-opacity hover:opacity-90"
-                            style={{ background: A.blue }}>批准</button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            );
-          })()}
-        </Card>
-
-        <Card className="col-span-2 p-5">
-          <SectionHeader title="本周下单趋势"
-            right={<div className="flex items-center gap-3 text-xs" style={{ color: A.sub }}>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: A.blue }} />订单数</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: A.purple }} />金额(万)</span>
-            </div>} />
-          <ResponsiveContainer width="100%" height={210}>
-            <ComposedChart data={procurementTrend} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="0" stroke="rgba(0,0,0,0.05)" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="l" tick={{ fontSize: 11, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} width={32} />
-              <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: A.gray2, fontFamily: "Inter" }} axisLine={false} tickLine={false} width={40} />
-              <Tooltip content={<AppleTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
-              <Bar yAxisId="l" dataKey="po" name="订单数" fill={A.blue} radius={[5, 5, 0, 0]} barSize={20} />
-              <Line yAxisId="r" type="monotone" dataKey="amount" name="金额(万)" stroke={A.purple} strokeWidth={2} dot={{ r: 3, fill: A.white, strokeWidth: 2, stroke: A.purple }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Card>
+        <KpiCard label="PO 总额" value={fmt(totalAmount)} sub={loading ? "加载中" : `${orders.length} 张订单`} icon={FileText} color={A.blue} />
+        <KpiCard label="待收货 / 未收齐" value={String(waitingReceipt)} sub="需要跟进 GRN Line" icon={Truck} color={A.orange} />
+        <KpiCard label="发票差异" value={String(invoiceExceptions)} sub="需采购与财务复核" icon={AlertCircle} color={A.red} />
+        <KpiCard label="匹配复核" value={String(matchExceptions)} sub="三单匹配需解释" icon={ShieldCheck} color={A.purple} />
       </div>
 
       <Card className="p-5">
@@ -540,7 +1014,7 @@ export default function PurchasingOrdersPage({
           <div>
             <SectionHeader title="采购订单查询" />
             <div className="text-xs mt-1" style={{ color: A.sub }}>
-              按 PO、供应商、物料、状态和 ETA 查询采购执行记录
+              查询 PO、来源 PR / RFQ、供应商、收货、发票和三单匹配状态
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -611,68 +1085,61 @@ export default function PurchasingOrdersPage({
             <div className="text-[11px] mt-0.5" style={{ color: A.sub }}>共 {orders.length} 条，当前筛选 {filtered.length} 条</div>
           </div>
           <span className="text-xs ml-auto flex items-center gap-1.5" style={{ color: A.gray2 }}>
-            <Filter size={13} /> 当前结果
+            <Filter size={13} /> PO / GRN / Invoice 证据
           </span>
-          <ContextualImportActions entityLabel="PO" compact />
-          <button onClick={() => setNewOpen(true)}
-            className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
-            style={{ background: A.blue }}>
-            <Plus size={11} /> 新建 PO
-          </button>
+          <Chip label="只读复核" color={A.blue} bg="#f0f6ff" />
         </div>
         <div className={tableScrollClass}>
-          <table className={tableMinLgClass}>
+          <table className={tableMinXlClass}>
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {["PO 编号", "供应商", "来源", "金额", "项目", "到货进度", "ETA", "状态", "操作"].map((h) => (
-                  <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
+                {["PO 编号", "来源 PR", "来源 RFQ", "供应商", "状态", "采购负责人", "行数", "订单金额", "需求日期 / 预计到货", "收货状态", "发票状态", "三单匹配状态", "下一步", "操作"].map((header) => (
+                  <th key={header} className={thClass} style={{ color: A.gray1 }}>{header}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((o, i) => {
-                const totals = poTotals(o);
-                const pct = totals.totalOrderedQty === 0 ? 0 : (totals.totalReceivedQty / totals.totalOrderedQty) * 100;
+              {filtered.map((order, index) => {
+                const totals = poTotals(order);
+                const firstGrn = grnsForPo(order.po)[0];
+                const firstInvoice = invoicesForPo(order.po)[0];
                 return (
-                  <tr key={o.po}
+                  <tr key={order.po}
                     className="transition-colors hover:bg-blue-50/40"
-                    style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
+                    style={{ borderBottom: index < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                     <td className={tdIdClass}>
-                      <button onClick={() => openDetail(o.po)} className={tableLinkClass} style={{ color: A.blue }}>{o.po}</button>
+                      <button onClick={() => openDetail(order.po)} className={tableLinkClass} style={{ color: A.blue }}>{order.po}</button>
                     </td>
-                    <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{o.supplier}</td>
-                    <td className={tdNowrapClass}>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
-                        style={{ background: o.source === "forecast" ? "#f0f6ff" : A.gray6, color: o.source === "forecast" ? A.blue : A.gray1 }}>
-                        {o.source === "forecast" ? <Sparkles size={10} /> : <FileText size={10} />}
-                        {o.source === "forecast" ? "预测" : "手工"}
-                      </span>
-                    </td>
-                    <td className={`${tdNumericClass} font-semibold`} style={{ color: A.label }}>{fmt(o.amount)}</td>
+                    <td className={tdNowrapClass} style={{ color: order.sourceRequest ? A.blue : A.orange }}>{order.sourceRequest || "待补齐"}</td>
+                    <td className={tdNowrapClass} style={{ color: order.sourceRfq ? A.blue : A.orange }}>{order.sourceRfq || "待补齐"}</td>
+                    <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{order.supplier}</td>
+                    <td className={tdNowrapClass}><POStatusPill status={order.status} /></td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{order.owner}</td>
                     <td className={tdNumericClass} style={{ color: A.sub }}>{totals.lineCount}</td>
-                    <td className={`${tdNowrapClass} w-36`}>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
-                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? A.green : pct > 0 ? A.teal : A.gray4 }} />
-                        </div>
-                        <span className="text-[10px] w-12 text-right" style={{ color: A.gray1 }}>{totals.totalReceivedQty}/{totals.totalOrderedQty}</span>
-                      </div>
-                    </td>
-                    <td className={tdNowrapClass} style={{ color: A.sub }}>{o.eta}</td>
-                    <td className={tdNowrapClass}><POStatusPill status={o.status} /></td>
+                    <td className={`${tdNumericClass} font-semibold`} style={{ color: A.label }}>{fmt(poAmount(order))}</td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{order.eta}</td>
+                    <td className={tdNowrapClass}>{statusChip(receivedStatus(order))}</td>
+                    <td className={tdNowrapClass}>{statusChip(invoiceStatus(order))}</td>
+                    <td className={tdNowrapClass}>{statusChip(matchStatus(order))}</td>
+                    <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{nextStepForPo(order)}</td>
                     <td className={tdActionClass}>
-                      <button onClick={() => openDetail(o.po)}
-                        className="px-2 py-1 text-[11px] font-medium rounded-md"
-                        style={{ background: "#f0f6ff", color: A.blue }}>
-                        查看详情
-                      </button>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button onClick={() => openDetail(order.po)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button>
+                        <button onClick={() => openDetail(order.po)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看 PO Line</button>
+                        <button onClick={() => firstGrn ? navigateOrderWithReturn(order, "procurement:receiving", { entityType: "receiving_doc", entityId: firstGrn.grn }, firstGrn.grn) : toast("收货记录待补齐")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看收货记录</button>
+                        <button onClick={() => firstInvoice ? navigateOrderWithReturn(order, "procurement:invoices", { entityType: "supplier_invoice", entityId: firstInvoice.invoiceNumber }, firstInvoice.invoiceNumber) : toast("发票记录待补齐")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看发票记录</button>
+                        <button onClick={() => navigateOrderWithReturn(order, "procurement:match")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看三单匹配</button>
+                        <button onClick={() => openDetail(order.po)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看证据链</button>
+                        <button onClick={() => order.sourceRequest ? navigateOrderWithReturn(order, "procurement:requests", { entityType: "purchase_request", entityId: order.sourceRequest }, order.sourceRequest) : toast("来源 PR 待补齐")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>返回来源 PR</button>
+                        <button onClick={() => order.sourceRfq ? navigateOrderWithReturn(order, "procurement:rfq", { entityType: "rfq", entityId: order.sourceRfq }, order.sourceRfq) : toast("来源 RFQ 待补齐")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>返回来源 RFQ</button>
+                      </div>
                     </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-xs" style={{ color: A.gray2 }}>
+                  <td colSpan={14} className="px-4 py-12 text-center text-xs" style={{ color: A.gray2 }}>
                     当前条件下暂无采购订单
                   </td>
                 </tr>
@@ -682,19 +1149,22 @@ export default function PurchasingOrdersPage({
         </div>
       </Card>
 
-      <NewPOModal open={newOpen} onClose={() => setNewOpen(false)}
-        onCreate={async (po) => {
-          const created = await apiJson<PurchaseOrder>("/api/purchase-orders", {
-            method: "POST",
-            body: JSON.stringify(po),
-          });
-          setOrders((arr) => [created, ...arr]);
-          setSelectedId(created.po);
-          return created;
-        }} />
-      <TrackShipmentModal open={trackOpen} onClose={() => setTrackOpen(false)} po={selectedPO} />
+      <Card className="p-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
+          <div className="rounded-lg p-3" style={{ background: A.gray6 }}>
+            <div className="font-semibold flex items-center gap-1.5" style={{ color: A.label }}><ClipboardCheck size={12} /> Review-first</div>
+            <div className="mt-1">页面只展示 PO、GRN、Invoice 和匹配证据，动作均需人工复核。</div>
+          </div>
+          <div className="rounded-lg p-3" style={{ background: A.gray6 }}>
+            <div className="font-semibold flex items-center gap-1.5" style={{ color: A.label }}><PackageCheck size={12} /> 收货边界</div>
+            <div className="mt-1">不会提交收货，不会修改库存余额，不会产生库存过账。</div>
+          </div>
+          <div className="rounded-lg p-3" style={{ background: A.gray6 }}>
+            <div className="font-semibold flex items-center gap-1.5" style={{ color: A.label }}><CheckCircle2 size={12} /> 财务边界</div>
+            <div className="mt-1">发票和应计金额仅作协同可见性，不形成会计分录或付款动作。</div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
-
-// ─── Scan Receive Modal ─────────────────────────────────────────────────────
