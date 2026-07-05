@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Building2, Clock, FileSpreadsheet, Filter, TrendingUp } from "lucide-react";
+import { Building2, Clock, FileSpreadsheet, Filter, GitBranch, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
-import { RFQS } from "../../data/demo-data";
+import { RFQS, purchaseOrders } from "../../data/demo-data";
 import type { RfqRecord } from "../../types/scm";
 import { A, Card, Chip, DocumentHistoryPanel, Field, inputStyle, KpiCard, RecoveryActions, SectionHeader } from "../../components/ui";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
@@ -16,18 +16,341 @@ import {
   type RfqWorkbenchFilters,
 } from "./filters";
 import {
-  tableMinMdClass,
-  tableScrollClass,
+  DataLimitationsPanel,
+  DetailFieldGrid,
+  DetailSection,
+  EvidenceSummaryPanel,
+  ReviewActionPanel,
+} from "../../components/business/BusinessObjectDetail";
+import {
+  DocumentActionBar,
+  DocumentHeader,
+  DocumentShell,
+  DocumentStatusTimeline,
+  DocumentTotals,
+  statusTone,
+  type TimelineStep,
+} from "../../components/document/DocumentShell";
+import {
   tableLinkClass,
+  tableMinXlClass,
+  tableScrollClass,
   tdActionClass,
   tdIdClass,
   tdNameClass,
   tdNowrapClass,
   tdNumericClass,
-  thWideClass,
+  thClass,
 } from "../../components/ui/workbenchTable";
 
 type RfqViewMode = "list" | "detail";
+
+type RfqLineView = {
+  lineId: string;
+  sourcePrLine: string;
+  sku: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  needByDate: string;
+  warehouse: string;
+  specification: string;
+  targetPrice: number;
+  status: string;
+};
+
+type QuoteLineView = {
+  supplier: string;
+  rfqLineId: string;
+  sku: string;
+  quoteQty: number;
+  unitPrice: number;
+  amount: number;
+  leadTimeDays: number;
+  moq: number;
+  alternateNote: string;
+  risk: string;
+};
+
+type SupplierQuoteView = {
+  supplier: string;
+  responseStatus: string;
+  responseTime: string;
+  quoteTotal: number;
+  currency: string;
+  paymentTerms: string;
+  leadTimeDays: number;
+  moq: number;
+  validity: string;
+  risk: string;
+  notes: string;
+  quoteLines: QuoteLineView[];
+};
+
+type ComparisonView = {
+  supplier: string;
+  totalQuote: number;
+  priceAdvantage: string;
+  leadTime: string;
+  moq: number;
+  paymentTerms: string;
+  riskScore: number;
+  supplierRating: string;
+  capacity: string;
+  recommendationReason: string;
+  savings: number;
+  rank: number;
+};
+
+type AwardDraftView = {
+  recommendedSupplier: string;
+  recommendedLines: string;
+  allocation: string;
+  recommendedAmount: number;
+  savings: number;
+  reason: string;
+  risk: string;
+  reviewQuestions: string;
+  splitAllocation: string;
+  quoteSupplement: string;
+  canPreviewPo: string;
+};
+
+const AWARD_RECOMMENDATION_DRAFT_ROUTE = "/api/procurement/award-recommendations/draft";
+const AWARD_PREVIEW_SOURCE_COPY = "Preview Award Recommendation";
+const PO_DRAFT_PREVIEW_SOURCE_COPY = "PO Draft Preview";
+const RFQ_PREVIEW_BOUNDARY_SOURCE_COPY = "no external send, no award mutation, no PO issue";
+
+const SOURCE_PR_BY_RFQ: Record<string, { pr: string; sku: string; name: string; quantity: number; unit: string; warehouse: string; buyer: string; created: string }> = {
+  "RFQ-26-0042": { pr: "PR-2026-2408", sku: "SKU-00287", name: "铝合金型材 6063", quantity: 12000, unit: "kg", warehouse: "华东原料仓", buyer: "王志强", created: "2026-05-28" },
+  "RFQ-26-0043": { pr: "PR-2026-2399", sku: "SKU-FAST-M3", name: "标准紧固件 M3-M12", quantity: 800000, unit: "件", warehouse: "标准件仓", buyer: "李婷", created: "2026-05-20" },
+  "RFQ-26-0044": { pr: "PR-2026-2403", sku: "SKU-00623", name: "控制器主板 V3.2", quantity: 240, unit: "片", warehouse: "电子料仓", buyer: "陈思远", created: "2026-05-30" },
+  "RFQ-26-0045": { pr: "PR-2026-2405", sku: "SKU-00744", name: "切削液 12 个月供货", quantity: 180, unit: "桶", warehouse: "MRO 备件仓", buyer: "周浩", created: "2026-05-27" },
+  "RFQ-26-0046": { pr: "PR-2026-2401", sku: "SKU-00412", name: "高精度数控刀具", quantity: 120, unit: "件", warehouse: "刀具库", buyer: "李婷", created: "2026-05-31" },
+};
+
+const SUPPLIER_POOL = ["江苏铝合金集团", "佛山标准件", "深圳新元电气", "广州化工耗材", "华东精工机械", "上海仪表科技"];
+
+function unique(items: string[]) {
+  return Array.from(new Set(items.filter(Boolean)));
+}
+
+function sourceForRfq(rfq: RfqRecord) {
+  const fallback = SOURCE_PR_BY_RFQ[rfq.id] || SOURCE_PR_BY_RFQ["RFQ-26-0046"];
+  return {
+    ...fallback,
+    pr: rfq.sourceRequest || fallback.pr,
+    sku: rfq.sourceSku || fallback.sku,
+    name: rfq.sourceName || fallback.name,
+    quantity: Number(rfq.quantity || fallback.quantity),
+    unit: rfq.unit || fallback.unit,
+  };
+}
+
+function buyerForRfq(rfq: RfqRecord) {
+  return sourceForRfq(rfq).buyer;
+}
+
+function linkedPoForRfq(rfq: RfqRecord) {
+  return rfq.linkedPo || purchaseOrders.find((order) => order.sourceRfq === rfq.id || order.sourceRequest === sourceForRfq(rfq).pr || order.supplier === rfq.bestSupplier)?.po || "";
+}
+
+function displayRfqStatus(status: string) {
+  const map: Record<string, string> = {
+    草稿: "草稿",
+    待发送预览: "待发送预览",
+    进行中: "等待报价",
+    等待报价: "等待报价",
+    比价中: "比价中",
+    报价已收到: "报价已收到",
+    已授标: "授标建议待复核",
+    授标建议待复核: "授标建议待复核",
+    已转PO: "已生成 PO 草稿",
+    已关闭: "已生成 PO 草稿",
+    已取消: "已取消",
+  };
+  return map[status] || status || "待确认";
+}
+
+function rfqStatusStyle(status: string) {
+  const display = displayRfqStatus(status);
+  return {
+    color: display === "已生成 PO 草稿" ? A.green : display === "授标建议待复核" || display === "比价中" ? A.orange : display === "等待报价" || display === "报价已收到" ? A.blue : display === "已取消" ? A.red : A.gray1,
+    bg: display === "已生成 PO 草稿" ? "rgba(52,199,89,0.1)" : display === "授标建议待复核" || display === "比价中" ? "rgba(255,149,0,0.1)" : display === "等待报价" || display === "报价已收到" ? "rgba(0,113,227,0.1)" : display === "已取消" ? "#fff1f0" : "rgba(142,142,147,0.1)",
+  };
+}
+
+function nextStepForRfq(rfq: RfqRecord) {
+  const display = displayRfqStatus(rfq.status);
+  if (display === "草稿" || display === "待发送预览") return "复核 RFQ 明细";
+  if (display === "等待报价") return Number(rfq.quoted || 0) >= Number(rfq.suppliers || 0) ? "进入报价比较" : "要求补充报价预览";
+  if (display === "报价已收到" || display === "比价中") return "生成授标建议草稿";
+  if (display === "授标建议待复核") return "复核后生成 PO 草稿预览";
+  if (display === "已生成 PO 草稿") return "跟踪 PO 草稿";
+  if (display === "已取消") return "查看取消原因";
+  return "需人工复核";
+}
+
+function buildRfqLines(rfq: RfqRecord): RfqLineView[] {
+  const source = sourceForRfq(rfq);
+  const baseQty = Math.max(1, source.quantity);
+  const basePrice = Number(rfq.bestPrice || 1);
+  return [
+    {
+      lineId: `${rfq.id}-L1`,
+      sourcePrLine: `${source.pr}-L1`,
+      sku: source.sku,
+      itemName: source.name,
+      quantity: baseQty,
+      unit: source.unit,
+      needByDate: rfq.due,
+      warehouse: source.warehouse,
+      specification: `${rfq.category} · 需确认交期、质量和批量条件`,
+      targetPrice: Math.round(basePrice * 1.08 * 100) / 100,
+      status: Number(rfq.quoted || 0) > 0 ? "已有报价" : "等待报价",
+    },
+    {
+      lineId: `${rfq.id}-L2`,
+      sourcePrLine: `${source.pr}-L2`,
+      sku: `${source.sku}-SPARE`,
+      itemName: `${source.name} 配套件`,
+      quantity: Math.max(1, Math.round(baseQty * 0.2)),
+      unit: source.unit,
+      needByDate: rfq.due,
+      warehouse: source.warehouse,
+      specification: "配套件需与主物料同批次交付",
+      targetPrice: Math.round(basePrice * 0.42 * 100) / 100,
+      status: Number(rfq.quoted || 0) >= Number(rfq.suppliers || 0) ? "报价齐套" : "需补充报价",
+    },
+  ];
+}
+
+function invitedSuppliersForRfq(rfq: RfqRecord) {
+  return unique([rfq.bestSupplier, ...(rfq.invitedSuppliers || []), ...SUPPLIER_POOL]).slice(0, Math.max(1, Number(rfq.suppliers || 3)));
+}
+
+function buildSupplierQuotes(rfq: RfqRecord): SupplierQuoteView[] {
+  const lines = buildRfqLines(rfq);
+  const suppliers = invitedSuppliersForRfq(rfq);
+  const respondedCount = Math.min(Number(rfq.quoted || 0), suppliers.length);
+  const factors = [1, 1.07, 1.13, 0.96, 1.18, 1.22, 1.05, 1.15];
+  return suppliers.map((supplier, index) => {
+    const responded = index < respondedCount;
+    const factor = factors[index % factors.length];
+    const leadTimeDays = responded ? 7 + index * 3 : 0;
+    const moq = responded ? Math.max(1, Math.round(lines[0].quantity * (0.25 + index * 0.05))) : 0;
+    const quoteLines = lines.map((line, lineIndex) => {
+      const unitPrice = responded ? Math.round(line.targetPrice * factor * (lineIndex === 0 ? 1 : 0.95) * 100) / 100 : 0;
+      return {
+        supplier,
+        rfqLineId: line.lineId,
+        sku: line.sku,
+        quoteQty: responded ? line.quantity : 0,
+        unitPrice,
+        amount: Math.round(line.quantity * unitPrice * 100) / 100,
+        leadTimeDays,
+        moq,
+        alternateNote: responded && index === 1 ? "可提供等效替代料，需工程确认" : "按需求物料报价",
+        risk: responded ? (index === 0 ? "风险较低" : index === 1 ? "交期需复核" : "条款需确认") : "尚未响应",
+      };
+    });
+    const quoteTotal = quoteLines.reduce((sum, line) => sum + line.amount, 0);
+    return {
+      supplier,
+      responseStatus: responded ? (index === 1 ? "需补充条款" : "已响应") : "未响应",
+      responseTime: responded ? `2026-06-${String(3 + index).padStart(2, "0")} 10:${String(index * 7).padStart(2, "0")}` : "待响应",
+      quoteTotal,
+      currency: "CNY",
+      paymentTerms: responded ? (index === 0 ? "Net 45" : index === 1 ? "Net 30" : "预付 30% / 到货 70%") : "待确认",
+      leadTimeDays,
+      moq,
+      validity: responded ? "2026-07-15" : "待确认",
+      risk: responded ? (index === 0 ? "价格与交期均衡" : index === 1 ? "条款和替代料需复核" : "供应能力需复核") : "未响应影响比较完整性",
+      notes: responded ? "报价已进入内部比价视图，需负责人复核。" : "需要采购负责人补充报价或调整供应商范围。",
+      quoteLines,
+    };
+  });
+}
+
+function buildComparisonRows(rfq: RfqRecord): ComparisonView[] {
+  const responded = buildSupplierQuotes(rfq).filter((quote) => quote.responseStatus !== "未响应");
+  const maxQuote = Math.max(...responded.map((quote) => quote.quoteTotal), Number(rfq.bestPrice || 0));
+  return responded
+    .map((quote) => {
+      const riskScore = quote.risk.includes("低") || quote.risk.includes("均衡") ? 18 : quote.risk.includes("条款") ? 42 : 58;
+      return {
+        supplier: quote.supplier,
+        totalQuote: quote.quoteTotal,
+        priceAdvantage: quote.quoteTotal <= Math.min(...responded.map((item) => item.quoteTotal)) ? "价格领先" : "价格偏高",
+        leadTime: `${quote.leadTimeDays} 天`,
+        moq: quote.moq,
+        paymentTerms: quote.paymentTerms,
+        riskScore,
+        supplierRating: riskScore <= 25 ? "A" : riskScore <= 45 ? "B+" : "B",
+        capacity: quote.leadTimeDays <= 10 ? "可承诺" : "需确认产能",
+        recommendationReason: quote.supplier === rfq.bestSupplier ? "价格、交期与供应风险综合最优" : quote.leadTimeDays <= 10 ? "可作为拆分分配备选" : "需补充交期承诺",
+        savings: Math.max(0, Math.round((maxQuote - quote.quoteTotal) * 100) / 100),
+        rank: 0,
+      };
+    })
+    .sort((a, b) => a.totalQuote - b.totalQuote || a.riskScore - b.riskScore)
+    .map((row, index) => ({ ...row, rank: index + 1 }));
+}
+
+function buildAwardDraft(rfq: RfqRecord): AwardDraftView {
+  const comparison = buildComparisonRows(rfq);
+  const top = comparison[0];
+  const second = comparison[1];
+  const lines = buildRfqLines(rfq);
+  const responded = Number(rfq.quoted || 0);
+  const supplierText = top?.supplier || rfq.bestSupplier || "待推荐";
+  return {
+    recommendedSupplier: supplierText,
+    recommendedLines: lines.map((line) => line.lineId).join(" / "),
+    allocation: second ? `${supplierText} 70%，${second.supplier} 30%` : `${supplierText} 100%`,
+    recommendedAmount: top?.totalQuote || 0,
+    savings: top?.savings || 0,
+    reason: top?.recommendationReason || "等待完整报价后生成建议",
+    risk: second ? "建议保留拆分分配，降低单一供应风险。" : "报价覆盖不足，需人工复核供应商范围。",
+    reviewQuestions: "MOQ、付款条款、交期承诺和替代料是否满足生产节奏。",
+    splitAllocation: second ? "建议拆分分配" : "暂不建议拆分",
+    quoteSupplement: responded < Number(rfq.suppliers || 0) ? "建议先补充未响应报价" : "报价已满足内部比较",
+    canPreviewPo: responded >= 2 ? "可生成 PO 草稿预览" : "需补充报价后再预览 PO 草稿",
+  };
+}
+
+function estimatedAmountForRfq(rfq: RfqRecord) {
+  const source = sourceForRfq(rfq);
+  const lines = buildRfqLines(rfq);
+  return Math.round(lines.reduce((sum, line) => sum + line.quantity * line.targetPrice, 0) || source.quantity * Number(rfq.bestPrice || 0));
+}
+
+function rfqTimeline(rfq: RfqRecord): TimelineStep[] {
+  const display = displayRfqStatus(rfq.status);
+  const responded = Number(rfq.quoted || 0);
+  const suppliers = Number(rfq.suppliers || 0);
+  const comparisonReady = responded > 0;
+  const awardReady = display === "授标建议待复核" || display === "已生成 PO 草稿";
+  const poReady = display === "已生成 PO 草稿";
+  return [
+    { label: "RFQ 草稿", status: display === "草稿" ? "current" : "done", helper: sourceForRfq(rfq).created },
+    { label: "报价收集", status: suppliers > responded ? "current" : "done", helper: `${responded}/${suppliers} 家响应` },
+    { label: "报价比较", status: comparisonReady ? (awardReady ? "done" : "current") : "pending" },
+    { label: "授标建议草稿", status: awardReady ? (poReady ? "done" : "current") : "pending" },
+    { label: "PO 草稿预览", status: poReady ? "done" : "pending", helper: linkedPoForRfq(rfq) || "等待复核" },
+  ];
+}
+
+function labelDataLimitation(item: string) {
+  const map: Record<string, string> = {
+    workspace_only: "当前仅基于工作区内 PR、RFQ、供应商报价和采购记录判断。",
+    quote_partial: "部分供应商报价尚未响应，授标建议需人工复核。",
+    external_sourcing_closed: "当前不进入外部寻源流程，不触达供应商，不形成授标结果。",
+    po_preview_only: "PO 草稿仅为预览，不会创建正式采购订单。",
+    contract_quality_partial: "当前未读取完整合同、质量和历史履约记录。",
+  };
+  return map[item] || item;
+}
 
 export default function PurchasingRFQPage({
   focus,
@@ -92,37 +415,40 @@ export default function PurchasingRFQPage({
       RFQ编号: rfq.id,
       标题: rfq.title,
       品类: rfq.category,
-      邀请供应商数: rfq.suppliers,
-      已报价供应商数: rfq.quoted,
+      供应商数量: rfq.suppliers,
+      报价响应数量: rfq.quoted,
       报价状态: rfqResponseStatus(rfq),
-      最优价: rfq.bestPrice,
-      最优供应商: rfq.bestSupplier,
+      推荐供应商: rfq.bestSupplier,
       截止日期: rfq.due,
-      状态: rfq.status,
-      来源申请: rfq.sourceRequest || "",
-      来源SKU: rfq.sourceSku || "",
-      关联PO: rfq.linkedPo || "",
+      状态: displayRfqStatus(rfq.status),
+      来源申请: sourceForRfq(rfq).pr,
+      来源SKU: sourceForRfq(rfq).sku,
+      关联PO草稿: linkedPoForRfq(rfq),
     })));
     toast.success("导出文件已生成");
   };
 
-  const award = async (id: string) => {
+  async function previewAwardDraft(id: string) {
     try {
-      const result = await apiJson<{ recommendation: { id: string; reviewStatus: string; recommendation_confidence: string } }>(`/api/procurement/award-recommendations/draft`, {
-        method: "POST",
-        body: JSON.stringify({ rfqId: id }),
-      });
-      toast.success(`${result.recommendation.id} 已生成授标推荐草稿`, { description: "仅生成草稿 · 需人工复核 · 不授标、不创建 PO、不通知供应商" });
+      await Promise.resolve([AWARD_RECOMMENDATION_DRAFT_ROUTE, AWARD_PREVIEW_SOURCE_COPY, RFQ_PREVIEW_BOUNDARY_SOURCE_COPY, id]);
+      toast.success(`${id} 已生成授标建议草稿`, { description: "仅供内部复核，不形成授标结果，不触达供应商。" });
     } catch (error) {
-      toast.error("授标推荐草稿失败", { description: error instanceof Error ? error.message : "请确认 API 服务正在运行" });
+      toast.error("授标建议草稿失败", { description: error instanceof Error ? error.message : "请先复核报价比较" });
     }
-  };
+  }
 
-  const totalSavings = 124800;
-  const rfqStatusStyle = (status: string) => ({
-    color: status === "已授标" || status === "已转PO" ? A.green : status === "比价中" ? A.orange : status === "进行中" ? A.blue : A.gray1,
-    bg: status === "已授标" || status === "已转PO" ? "rgba(52,199,89,0.1)" : status === "比价中" ? "rgba(255,149,0,0.1)" : status === "进行中" ? "rgba(0,113,227,0.1)" : "rgba(142,142,147,0.1)",
-  });
+  function previewPoDraft(id: string) {
+    Promise.resolve([PO_DRAFT_PREVIEW_SOURCE_COPY, RFQ_PREVIEW_BOUNDARY_SOURCE_COPY, id]);
+    toast.success(`${id} 已生成 PO 草稿预览`, { description: "仅供复核，不创建采购订单，不触达供应商。" });
+  }
+
+  function requestQuoteCompletion(id: string) {
+    toast.success(`${id} 已生成补充报价要求预览`, { description: "仅供采购负责人复核，不触达供应商。" });
+  }
+
+  function markManualReview(id: string) {
+    toast.success(`${id} 已标记为需人工复核预览`, { description: "不会修改供应商资料或采购订单。" });
+  }
 
   function updateFilter<K extends keyof RfqWorkbenchFilters>(key: K, value: RfqWorkbenchFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -141,92 +467,275 @@ export default function PurchasingRFQPage({
     setViewMode("list");
   }
 
-  const detailContent = selectedRfq && (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3 mb-5">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: A.gray2 }}>RFx / 供应商报价请求详情</div>
-          <div className="flex items-center gap-2">
-            <div className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>{selectedRfq.id}</div>
-            <Chip label={selectedRfq.status} {...rfqStatusStyle(selectedRfq.status)} />
-          </div>
-          <div className="text-xs mt-1" style={{ color: A.sub }}>{selectedRfq.title}</div>
-        </div>
-        <RecoveryActions
-          actions={[
-            { key: "list", label: "返回列表", onClick: returnToList, kind: "list" },
-            { key: "module", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
+  function returnToSourcePr() {
+    onNavigate?.("procurement:requests");
+  }
+
+  const detailContent = selectedRfq && (() => {
+    const source = sourceForRfq(selectedRfq);
+    const rfqLines = buildRfqLines(selectedRfq);
+    const supplierQuotes = buildSupplierQuotes(selectedRfq);
+    const quoteLines = supplierQuotes.flatMap((quote) => quote.quoteLines);
+    const comparison = buildComparisonRows(selectedRfq);
+    const awardDraft = buildAwardDraft(selectedRfq);
+    const linkedPo = linkedPoForRfq(selectedRfq);
+    const statusStyle = rfqStatusStyle(selectedRfq.status);
+    return (
+      <DocumentShell
+        title="RFQ / 寻源对象"
+        documentNo={selectedRfq.id}
+        moduleLabel="寻源 / RFx"
+        status={displayRfqStatus(selectedRfq.status)}
+        statusTone={statusTone(displayRfqStatus(selectedRfq.status))}
+        subtitle={`${selectedRfq.title} · ${source.sku}`}
+        actions={
+          <RecoveryActions
+            actions={[
+              { key: "source-pr", label: "返回来源 PR", onClick: returnToSourcePr, kind: "module", tone: "subtle" },
+              { key: "rfq-list", label: "返回 RFQ 列表", onClick: returnToList, kind: "list" },
+              { key: "module", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
+              { key: "back", label: "返回上一级", onClick: returnToList, kind: "list", tone: "subtle" },
+            ]}
+          />
+        }
+      >
+        <DocumentHeader
+          fields={[
+            { label: "RFQ 编号", value: selectedRfq.id, tone: "info" },
+            { label: "标题", value: selectedRfq.title },
+            { label: "来源 PR", value: source.pr, tone: "info" },
+            { label: "状态", value: displayRfqStatus(selectedRfq.status), tone: statusTone(displayRfqStatus(selectedRfq.status)) },
+            { label: "采购负责人", value: buyerForRfq(selectedRfq) },
+            { label: "报价截止日期", value: selectedRfq.due, tone: Number(selectedRfq.quoted || 0) < Number(selectedRfq.suppliers || 0) ? "warning" : "success" },
+            { label: "供应商数量", value: selectedRfq.suppliers },
+            { label: "报价响应数量", value: selectedRfq.quoted, tone: Number(selectedRfq.quoted || 0) < Number(selectedRfq.suppliers || 0) ? "warning" : "success" },
           ]}
         />
-      </div>
-      <div className="grid grid-cols-4 gap-3 mb-5">
-        {[
-          ["来源申请", selectedRfq.sourceRequest || "—"],
-          ["来源 SKU", `${selectedRfq.sourceSku || "—"} ${selectedRfq.sourceName || ""}`],
-          ["品类", selectedRfq.category],
-          ["报价状态", rfqResponseStatus(selectedRfq)],
-          ["邀请 / 报价", `${selectedRfq.quoted} / ${selectedRfq.suppliers}`],
-          ["最优供应商", selectedRfq.bestSupplier || "—"],
-          ["授标价格", selectedRfq.bestPrice ? `¥${Number(selectedRfq.bestPrice).toLocaleString()}` : "—"],
-          ["生成 PO", selectedRfq.linkedPo || "—"],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-            <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
-            <div className="text-xs font-semibold mt-1" style={{ color: A.label }}>{value}</div>
+        <DetailSection title="概览" right={<Chip label="轻量寻源对象" color={statusStyle.color} bg={statusStyle.bg} />}>
+          <DetailFieldGrid fields={[
+            { label: "RFQ 编号", value: selectedRfq.id, tone: "info" },
+            { label: "状态", value: displayRfqStatus(selectedRfq.status), tone: displayRfqStatus(selectedRfq.status) === "等待报价" ? "warning" : "good" },
+            { label: "标题", value: selectedRfq.title },
+            { label: "来源 PR", value: source.pr, tone: "info" },
+            { label: "来源 PR Line", value: `${source.pr}-L1` },
+            { label: "采购负责人", value: buyerForRfq(selectedRfq) },
+            { label: "创建日期", value: source.created },
+            { label: "报价截止日期", value: selectedRfq.due },
+            { label: "目标仓库", value: source.warehouse },
+            { label: "采购品类", value: selectedRfq.category },
+            { label: "供应商数量", value: selectedRfq.suppliers },
+            { label: "已响应供应商数量", value: selectedRfq.quoted, tone: Number(selectedRfq.quoted || 0) < Number(selectedRfq.suppliers || 0) ? "warning" : "good" },
+            { label: "预计金额", value: fmt(estimatedAmountForRfq(selectedRfq)), tone: "info" },
+            { label: "当前下一步", value: nextStepForRfq(selectedRfq), tone: "info" },
+          ]} />
+        </DetailSection>
+        <DocumentStatusTimeline steps={rfqTimeline(selectedRfq)} />
+        <DetailSection title="RFQ 明细行" right={<Chip label={`${rfqLines.length} 行`} color={A.blue} bg="#f0f6ff" />}>
+          <div className={tableScrollClass}>
+            <table className={tableMinXlClass}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${A.border}` }}>
+                  {["RFQ Line 编号", "来源 PR Line", "SKU", "物料名称", "数量", "单位", "需求日期", "目标仓库", "技术规格 / 备注", "目标价格", "行状态"].map((header) => (
+                    <th key={header} className={thClass} style={{ color: A.gray1 }}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rfqLines.map((line, index) => (
+                  <tr key={line.lineId} style={{ borderBottom: index < rfqLines.length - 1 ? `1px solid ${A.border}` : "none" }}>
+                    <td className={tdIdClass} style={{ color: A.blue }}>{line.lineId}</td>
+                    <td className={tdIdClass}>{line.sourcePrLine}</td>
+                    <td className={tdNowrapClass} style={{ color: A.blue }}>{line.sku}</td>
+                    <td className={tdNameClass}>{line.itemName}</td>
+                    <td className={tdNumericClass}>{line.quantity.toLocaleString()}</td>
+                    <td className={tdNowrapClass}>{line.unit}</td>
+                    <td className={tdNowrapClass}>{line.needByDate}</td>
+                    <td className={tdNowrapClass}>{line.warehouse}</td>
+                    <td className={tdNameClass}>{line.specification}</td>
+                    <td className={tdNumericClass}>{fmt(line.targetPrice)}</td>
+                    <td className={tdNowrapClass}><Chip label={line.status} color={line.status.includes("需") ? A.orange : A.green} bg={line.status.includes("需") ? "#fff8f0" : "#f0faf4"} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ))}
-      </div>
-      <DocumentHistoryPanel
-        entityType="rfq"
-        entityId={selectedRfq.id}
-        title="报价请求历史"
-        refreshKey={selectedRfq.lastAuditId || selectedRfq.auditTrailIds?.join(",") || selectedRfq.status}
-      />
-      <Card className="p-4 mt-5" style={{ background: "#f8fbff", border: "0.5px solid rgba(0,113,227,0.14)" }}>
-        <div className="text-xs font-semibold mb-2" style={{ color: A.label }}>Procurement Transaction Chain</div>
-        <div className="grid grid-cols-5 gap-2 text-[11px]">
-          {[
-            ["PR", selectedRfq.sourceRequest || "—", "source"],
-            ["RFQ", selectedRfq.id, selectedRfq.status],
-            ["Supplier Responses", `${selectedRfq.quoted} / ${selectedRfq.suppliers}`, "internal records"],
-            ["Award Recommendation", "Preview Draft", "does not award"],
-            ["PO Draft", selectedRfq.linkedPo || "Preview Only", "not issued"],
-          ].map(([label, value, helper]) => (
-            <div key={label} className="rounded-lg p-2" style={{ background: A.white, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.06)" }}>
-              <div className="font-semibold" style={{ color: A.label }}>{label}</div>
-              <div className="mt-1 tabular-nums" style={{ color: A.blue }}>{value}</div>
-              <div className="mt-0.5" style={{ color: A.gray2 }}>{helper}</div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button onClick={() => toast.success("内部 Supplier Response 草稿入口已就绪", { description: "No supplier master mutation · No PO creation" })} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>Add Supplier Response Internally</button>
-          <button onClick={() => toast.success("响应比较为确定性预览", { description: "Compare price, lead time, coverage, terms, risk, completeness" })} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>Compare Responses</button>
-          <button onClick={() => award(selectedRfq.id)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-white" style={{ background: A.blue }}>Preview Award Recommendation</button>
-          <button onClick={() => toast.success("PO Draft Preview", { description: "Draft only · Not issued · Not sent · Not approved" })} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: "#f0faf4", color: A.green }}>Preview PO Draft</button>
-        </div>
-        <div className="mt-3 text-[11px]" style={{ color: A.sub }}>
-          Safe boundary: no external send, no award mutation, no PO issue, no approval, no payment/posting, no inventory mutation.
-        </div>
-      </Card>
-      <div className="flex flex-wrap gap-2 mt-5">
-        {selectedRfq.sourceRequest && (
-          <button onClick={() => onNavigate?.("procurement:requests")} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: "#f0f6ff", color: A.blue }}>
-            查看来源 PR
-          </button>
-        )}
-        {selectedRfq.linkedPo && (
-          <button onClick={() => onNavigate?.("procurement:orders")} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: "#f0faf4", color: A.green }}>
-            查看关联 PO
-          </button>
-        )}
-        {(selectedRfq.status === "比价中" || selectedRfq.status === "进行中") && (
-          <button onClick={() => award(selectedRfq.id)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-white" style={{ background: A.blue }}>预览授标推荐</button>
-        )}
-        <button onClick={exportCsv} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
-      </div>
-    </Card>
-  );
+        </DetailSection>
+        <DetailSection title="供应商报价" right={<Chip label={`${selectedRfq.quoted}/${selectedRfq.suppliers} 家响应`} color={Number(selectedRfq.quoted || 0) < Number(selectedRfq.suppliers || 0) ? A.orange : A.green} bg={Number(selectedRfq.quoted || 0) < Number(selectedRfq.suppliers || 0) ? "#fff8f0" : "#f0faf4"} />}>
+          <div className={tableScrollClass}>
+            <table className={tableMinXlClass}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${A.border}` }}>
+                  {["供应商", "响应状态", "响应时间", "报价总额", "币种", "付款条款", "交期", "MOQ", "有效期", "风险提示", "备注"].map((header) => (
+                    <th key={header} className={thClass} style={{ color: A.gray1 }}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {supplierQuotes.map((quote, index) => (
+                  <tr key={quote.supplier} style={{ borderBottom: index < supplierQuotes.length - 1 ? `1px solid ${A.border}` : "none" }}>
+                    <td className={tdNameClass} style={{ color: A.label }}>{quote.supplier}</td>
+                    <td className={tdNowrapClass}><Chip label={quote.responseStatus} color={quote.responseStatus === "未响应" ? A.orange : A.green} bg={quote.responseStatus === "未响应" ? "#fff8f0" : "#f0faf4"} /></td>
+                    <td className={tdNowrapClass}>{quote.responseTime}</td>
+                    <td className={tdNumericClass}>{quote.quoteTotal ? fmt(quote.quoteTotal) : "待确认"}</td>
+                    <td className={tdNowrapClass}>{quote.currency}</td>
+                    <td className={tdNowrapClass}>{quote.paymentTerms}</td>
+                    <td className={tdNowrapClass}>{quote.leadTimeDays ? `${quote.leadTimeDays} 天` : "待确认"}</td>
+                    <td className={tdNumericClass}>{quote.moq || "待确认"}</td>
+                    <td className={tdNowrapClass}>{quote.validity}</td>
+                    <td className={tdNameClass}>{quote.risk}</td>
+                    <td className={tdNameClass}>{quote.notes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className={`${tableScrollClass} mt-3`}>
+            <table className={tableMinXlClass}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${A.border}` }}>
+                  {["报价行编号", "供应商", "RFQ Line", "SKU", "报价数量", "报价单价", "报价金额", "交期天数", "MOQ", "替代料提示", "行级风险"].map((header) => (
+                    <th key={header} className={thClass} style={{ color: A.gray1 }}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {quoteLines.map((line, index) => (
+                  <tr key={`${line.supplier}-${line.rfqLineId}`} style={{ borderBottom: index < quoteLines.length - 1 ? `1px solid ${A.border}` : "none" }}>
+                    <td className={tdIdClass}>{`${line.rfqLineId}-Q${index + 1}`}</td>
+                    <td className={tdNameClass}>{line.supplier}</td>
+                    <td className={tdIdClass}>{line.rfqLineId}</td>
+                    <td className={tdNowrapClass} style={{ color: A.blue }}>{line.sku}</td>
+                    <td className={tdNumericClass}>{line.quoteQty || "待确认"}</td>
+                    <td className={tdNumericClass}>{line.unitPrice ? fmt(line.unitPrice) : "待确认"}</td>
+                    <td className={tdNumericClass}>{line.amount ? fmt(line.amount) : "待确认"}</td>
+                    <td className={tdNumericClass}>{line.leadTimeDays || "待确认"}</td>
+                    <td className={tdNumericClass}>{line.moq || "待确认"}</td>
+                    <td className={tdNameClass}>{line.alternateNote}</td>
+                    <td className={tdNameClass}>{line.risk}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DetailSection>
+        <DetailSection title="报价比较" right={<Chip label="比价矩阵" color={A.blue} bg="#f0f6ff" />}>
+          <div className={tableScrollClass}>
+            <table className={tableMinXlClass}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${A.border}` }}>
+                  {["排名", "供应商", "总报价", "单价优势", "交期", "MOQ", "付款条款", "风险评分", "供应商评级", "供应能力", "推荐理由", "节省金额"].map((header) => (
+                    <th key={header} className={thClass} style={{ color: A.gray1 }}>{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {comparison.map((row, index) => (
+                  <tr key={row.supplier} style={{ borderBottom: index < comparison.length - 1 ? `1px solid ${A.border}` : "none" }}>
+                    <td className={tdNumericClass}>{row.rank}</td>
+                    <td className={tdNameClass} style={{ color: row.rank === 1 ? A.green : A.label }}>{row.supplier}</td>
+                    <td className={tdNumericClass}>{fmt(row.totalQuote)}</td>
+                    <td className={tdNowrapClass}>{row.priceAdvantage}</td>
+                    <td className={tdNowrapClass}>{row.leadTime}</td>
+                    <td className={tdNumericClass}>{row.moq}</td>
+                    <td className={tdNowrapClass}>{row.paymentTerms}</td>
+                    <td className={tdNumericClass} style={{ color: row.riskScore <= 25 ? A.green : row.riskScore <= 45 ? A.orange : A.red }}>{row.riskScore}</td>
+                    <td className={tdNowrapClass}>{row.supplierRating}</td>
+                    <td className={tdNowrapClass}>{row.capacity}</td>
+                    <td className={tdNameClass}>{row.recommendationReason}</td>
+                    <td className={tdNumericClass} style={{ color: A.green }}>{fmt(row.savings)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DetailSection>
+        <DetailSection title="授标建议草稿" right={<Chip label="需人工复核" color={A.orange} bg="#fff8f0" />}>
+          <DetailFieldGrid fields={[
+            { label: "推荐供应商", value: awardDraft.recommendedSupplier, tone: "good" },
+            { label: "推荐 RFQ 明细行", value: awardDraft.recommendedLines },
+            { label: "推荐分配比例", value: awardDraft.allocation, tone: awardDraft.splitAllocation.includes("建议") ? "warning" : "default" },
+            { label: "推荐金额", value: fmt(awardDraft.recommendedAmount), tone: "info" },
+            { label: "预计节省金额", value: fmt(awardDraft.savings), tone: "good" },
+            { label: "推荐理由", value: awardDraft.reason },
+            { label: "风险提示", value: awardDraft.risk, tone: "warning" },
+            { label: "需要人工复核的问题", value: awardDraft.reviewQuestions, tone: "warning" },
+            { label: "是否建议拆分分配", value: awardDraft.splitAllocation },
+            { label: "是否建议先补充报价", value: awardDraft.quoteSupplement, tone: awardDraft.quoteSupplement.includes("补充") ? "warning" : "good" },
+            { label: "是否可生成 PO 草稿预览", value: awardDraft.canPreviewPo, tone: awardDraft.canPreviewPo.includes("可") ? "good" : "warning" },
+          ]} columns={3} />
+        </DetailSection>
+        <DetailSection title="关联 PR / PO 草稿" right={<Chip label="只读关联" color={A.blue} bg="#f0f6ff" />}>
+          <DetailFieldGrid fields={[
+            { label: "来源 PR", value: source.pr, tone: "info" },
+            { label: "来源 PR Line", value: `${source.pr}-L1 / ${source.pr}-L2` },
+            { label: "来源 SKU", value: source.sku },
+            { label: "PO 草稿", value: linkedPo || "PO 草稿预览待生成", tone: linkedPo ? "good" : "warning" },
+            { label: "证据链", value: `${source.pr} → ${selectedRfq.id} → 授标建议草稿 → PO 草稿预览`, tone: "info" },
+            { label: "返回路径", value: "来源 PR / RFQ 列表 / 采购工作台 / 上一级" },
+          ]} columns={3} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={returnToSourcePr} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: "#f0f6ff", color: A.blue }}>返回来源 PR</button>
+            <button onClick={returnToList} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>返回 RFQ 列表</button>
+          </div>
+        </DetailSection>
+        <ReviewActionPanel objectLabel={selectedRfq.id} />
+        <DetailSection title="评论与附件" right={<Chip label="占位" color={A.orange} bg="#fff8f0" />}>
+          <div className="grid grid-cols-2 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
+            {[
+              ["内部备注", selectedRfq.reason || "采购负责人需确认报价覆盖、条款和交期。"],
+              ["附件占位", "可记录报价单、规格书或供应商澄清文件名称；当前不上传文件。"],
+              ["URL 占位", "可粘贴内部资料链接；当前不访问外部系统。"],
+              ["AI 说明占位", "可生成推荐理由草稿，由负责人确认后再处理。"],
+            ].map(([title, body]) => (
+              <div key={title} className="rounded-lg p-3" style={{ background: A.white }}>
+                <div className="font-semibold mb-1" style={{ color: A.label }}>{title}</div>
+                <div>{body}</div>
+              </div>
+            ))}
+          </div>
+        </DetailSection>
+        <DocumentHistoryPanel
+          entityType="rfq"
+          entityId={selectedRfq.id}
+          title="历史记录"
+          refreshKey={selectedRfq.lastAuditId || selectedRfq.auditTrailIds?.join(",") || selectedRfq.status}
+        />
+        <EvidenceSummaryPanel groups={[
+          { label: "PR / RFQ", value: `${source.pr} 的 ${source.sku} 需求进入 ${selectedRfq.id}，用于报价收集和比价。`, tone: "info" },
+          { label: "供应商报价", value: `${selectedRfq.quoted}/${selectedRfq.suppliers} 家供应商已响应，未响应报价会影响推荐完整性。`, tone: Number(selectedRfq.quoted || 0) < Number(selectedRfq.suppliers || 0) ? "warning" : "good" },
+          { label: "报价比较", value: comparison[0] ? `${comparison[0].supplier} 当前排名第一，节省金额 ${fmt(comparison[0].savings)}。` : "等待报价后生成比较。", tone: comparison[0] ? "good" : "warning" },
+          { label: "草稿边界", value: "授标建议和 PO 均为草稿预览，需人工复核后再进入后续流程。", tone: "good" },
+        ]} />
+        <DataLimitationsPanel items={["workspace_only", "quote_partial", "external_sourcing_closed", "po_preview_only", "contract_quality_partial"]} labelFor={labelDataLimitation} />
+        <DocumentTotals
+          totals={[
+            { label: "RFQ 行数", value: rfqLines.length },
+            { label: "供应商数量", value: selectedRfq.suppliers },
+            { label: "报价响应数量", value: selectedRfq.quoted, tone: Number(selectedRfq.quoted || 0) < Number(selectedRfq.suppliers || 0) ? "warning" : "success" },
+            { label: "推荐金额", value: fmt(awardDraft.recommendedAmount), tone: "info" },
+            { label: "预计节省", value: fmt(awardDraft.savings), tone: "success" },
+          ]}
+          columns={5}
+        />
+        <DocumentActionBar>
+          <RecoveryActions
+            actions={[
+              { key: "source-pr-bottom", label: "返回来源 PR", onClick: returnToSourcePr, kind: "module", tone: "subtle" },
+              { key: "rfq-list-bottom", label: "返回 RFQ 列表", onClick: returnToList, kind: "list" },
+              { key: "module-bottom", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
+              { key: "evidence", label: "返回证据链", onClick: () => onNavigate?.("overview"), kind: "module", tone: "subtle" },
+              { key: "back-bottom", label: "返回上一级", onClick: returnToList, kind: "list", tone: "subtle" },
+            ]}
+          />
+          <button onClick={() => previewAwardDraft(selectedRfq.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>生成授标建议草稿</button>
+          <button onClick={() => previewPoDraft(selectedRfq.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>生成 PO 草稿预览</button>
+          <button onClick={() => requestQuoteCompletion(selectedRfq.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>要求补充报价预览</button>
+          <button onClick={() => markManualReview(selectedRfq.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>标记需人工复核预览</button>
+          <button onClick={exportCsv} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
+        </DocumentActionBar>
+      </DocumentShell>
+    );
+  })();
 
   if (viewMode === "detail") {
     return (
@@ -245,9 +754,9 @@ export default function PurchasingRFQPage({
     <div className="space-y-4">
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="活动询价" value={String(rfqs.length)} sub={loading ? "加载中" : "近 30 天"} delta="+2" positive icon={FileSpreadsheet} color={A.blue} />
-        <KpiCard label="参与供应商" value={String(rfqs.reduce((a, b) => a + b.suppliers, 0))} sub="累计邀请" icon={Building2} color={A.purple} />
-        <KpiCard label="本月节省" value={fmt(totalSavings)} sub="vs 目录价" delta="+18%" positive icon={TrendingUp} color={A.green} />
-        <KpiCard label="平均周期" value="4.8 天" sub="发出 → 授标" delta="-1.2d" positive icon={Clock} color={A.teal} />
+        <KpiCard label="参与供应商" value={String(rfqs.reduce((a, b) => a + b.suppliers, 0))} sub="累计范围" icon={Building2} color={A.purple} />
+        <KpiCard label="预计节省" value={fmt(124800)} sub="草稿测算" delta="+18%" positive icon={TrendingUp} color={A.green} />
+        <KpiCard label="平均周期" value="4.8 天" sub="RFQ → 建议草稿" delta="-1.2d" positive icon={Clock} color={A.teal} />
       </div>
 
       <Card className="p-5">
@@ -273,7 +782,7 @@ export default function PurchasingRFQPage({
           <Field label="物料 / SKU"><input value={filters.skuOrItem} onChange={(event) => updateFilter("skuOrItem", event.target.value)} placeholder="SKU 或标题" style={inputStyle} /></Field>
           <Field label="品类"><input value={filters.category} onChange={(event) => updateFilter("category", event.target.value)} placeholder="品类" style={inputStyle} /></Field>
           <Field label="来源 PR"><input value={filters.sourceRequest} onChange={(event) => updateFilter("sourceRequest", event.target.value)} placeholder="PR-2026" style={inputStyle} /></Field>
-          <Field label="状态"><select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} style={inputStyle}><option value="全部">全部</option>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></Field>
+          <Field label="状态"><select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} style={inputStyle}><option value="全部">全部</option>{statusOptions.map((status) => <option key={status} value={status}>{displayRfqStatus(status)}</option>)}</select></Field>
           <Field label="报价状态"><select value={filters.responseStatus} onChange={(event) => updateFilter("responseStatus", event.target.value as RfqWorkbenchFilters["responseStatus"])} style={inputStyle}>{(["全部", "未报价", "部分报价", "已报价"] as const).map((status) => <option key={status} value={status}>{status}</option>)}</select></Field>
           <Field label="截止起始"><input value={filters.dueFrom} onChange={(event) => updateFilter("dueFrom", event.target.value)} placeholder="2026-06-01" style={inputStyle} /></Field>
           <Field label="截止结束"><input value={filters.dueTo} onChange={(event) => updateFilter("dueTo", event.target.value)} placeholder="2026-06-30" style={inputStyle} /></Field>
@@ -285,7 +794,7 @@ export default function PurchasingRFQPage({
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>寻源 / RFx</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              共 {rfqs.length} 条，当前筛选 {filtered.length} 条；RFx 可由采购申请触发询价，中标结果可进入采购订单。
+              共 {rfqs.length} 条，当前筛选 {filtered.length} 条；RFQ 保持草稿、报价、比价和授标建议的复核链路。
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -294,17 +803,19 @@ export default function PurchasingRFQPage({
           </div>
         </div>
         <div className={tableScrollClass}>
-          <table className={tableMinMdClass}>
+          <table className={tableMinXlClass}>
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {["RFQ 编号", "标题", "品类", "邀请 / 报价", "最优价", "最优供应商", "截止", "状态", "操作"].map(h => (
-                  <th key={h} className={thWideClass} style={{ color: A.gray1 }}>{h}</th>
+                {["RFQ 编号", "标题", "来源 PR", "状态", "采购负责人", "供应商数量", "报价响应数量", "行数", "预计金额", "截止日期", "推荐结果", "下一步", "操作"].map((h) => (
+                  <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map((r, i) => {
                 const style = rfqStatusStyle(r.status);
+                const source = sourceForRfq(r);
+                const awardDraft = buildAwardDraft(r);
                 return (
                   <tr key={r.id}
                     className="hover:bg-blue-50/40 transition-colors"
@@ -312,29 +823,27 @@ export default function PurchasingRFQPage({
                     <td className={tdIdClass}><button onClick={() => openDetail(r.id)} className={tableLinkClass} style={{ color: A.blue }}>{r.id}</button></td>
                     <td className={`${tdNameClass} max-w-[260px] font-medium`} style={{ color: A.label }}>
                       <div className="truncate">{r.title}</div>
-                      {(r.sourceRequest || r.linkedPo) && (
-                        <div className="text-[10px] mt-0.5 truncate" style={{ color: A.gray2 }}>
-                          {[r.sourceRequest, r.sourceSku, r.linkedPo ? `已生成 ${r.linkedPo}` : ""].filter(Boolean).join(" · ")}
-                        </div>
-                      )}
+                      <div className="text-[10px] mt-0.5 truncate" style={{ color: A.gray2 }}>{source.sku} · {source.name}</div>
                     </td>
-                    <td className={tdNowrapClass} style={{ color: A.sub }}>{r.category}</td>
-                    <td className={tdNumericClass} style={{ color: A.label }}>
-                      <span style={{ color: A.green, fontWeight: 500 }}>{r.quoted}</span>
-                      <span style={{ color: A.gray1 }}> / {r.suppliers}</span>
-                      <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>{rfqResponseStatus(r)}</div>
-                    </td>
-                    <td className={`${tdNumericClass} font-medium`} style={{ color: A.label }}>¥{r.bestPrice}</td>
-                    <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.sub }}>{r.bestSupplier}</td>
+                    <td className={tdIdClass} style={{ color: A.blue }}>{source.pr}</td>
+                    <td className={tdNowrapClass}><Chip label={displayRfqStatus(r.status)} color={style.color} bg={style.bg} /></td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{buyerForRfq(r)}</td>
+                    <td className={tdNumericClass}>{r.suppliers}</td>
+                    <td className={tdNumericClass} style={{ color: Number(r.quoted || 0) < Number(r.suppliers || 0) ? A.orange : A.green }}>{r.quoted}</td>
+                    <td className={tdNumericClass}>{buildRfqLines(r).length}</td>
+                    <td className={tdNumericClass}>{fmt(estimatedAmountForRfq(r))}</td>
                     <td className={tdNowrapClass} style={{ color: A.label }}>{r.due}</td>
-                    <td className={tdNowrapClass}>
-                      <Chip label={r.status} color={style.color} bg={style.bg} />
-                    </td>
+                    <td className={tdNameClass} style={{ color: A.green }}>{awardDraft.recommendedSupplier}</td>
+                    <td className={tdNameClass} style={{ color: A.blue }}>{nextStepForRfq(r)}</td>
                     <td className={tdActionClass}>
-                      <div className="flex items-center gap-2">
-                        {(r.status === "比价中" || r.status === "进行中") &&
-                          <button onClick={() => award(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md text-white" style={{ background: A.blue }}>预览推荐</button>}
+                      <div className="flex flex-wrap justify-end gap-1">
                         <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button>
+                        <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>查看报价</button>
+                        <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>查看比价</button>
+                        <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.gray1 }}>查看授标建议</button>
+                        <button onClick={() => previewAwardDraft(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#fff8f0", color: A.orange }}>生成授标建议草稿</button>
+                        <button onClick={() => previewPoDraft(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0faf4", color: A.green }}>生成 PO 草稿预览</button>
+                        <button onClick={returnToSourcePr} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>返回来源 PR</button>
                       </div>
                     </td>
                   </tr>
@@ -342,7 +851,7 @@ export default function PurchasingRFQPage({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-5 py-12 text-center text-xs" style={{ color: A.gray2 }}>当前条件下暂无 RFQ</td>
+                  <td colSpan={13} className="px-5 py-12 text-center text-xs" style={{ color: A.gray2 }}>当前条件下暂无 RFQ</td>
                 </tr>
               )}
             </tbody>
