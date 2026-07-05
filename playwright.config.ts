@@ -2,11 +2,13 @@ import { defineConfig, devices } from "@playwright/test";
 
 const appPort = Number(process.env.PLAYWRIGHT_APP_PORT || 15173);
 const apiPort = Number(process.env.PLAYWRIGHT_API_PORT || 18787);
+const workers = Number(process.env.PLAYWRIGHT_WORKERS || 1);
 
 export default defineConfig({
   testDir: "./tests/browser",
   timeout: 45_000,
   expect: { timeout: 10_000 },
+  workers,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

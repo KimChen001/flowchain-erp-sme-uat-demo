@@ -8,13 +8,42 @@ const demoUser = {
   role: "供应链经理",
 };
 
+function installPageDiagnostics(page: Page) {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => {
+    pageErrors.push(error.stack || error.message);
+  });
+  return async (label: string) => {
+    const title = await page.title().catch((error) => `title unavailable: ${String(error)}`);
+    const body = await page.locator("body").innerText({ timeout: 1000 }).catch((error) => `body unavailable: ${String(error)}`);
+    return [
+      `${label} did not reach app-main`,
+      `url=${page.url()}`,
+      `title=${title}`,
+      `body=${body.slice(0, 1000)}`,
+      `consoleErrors=${consoleErrors.slice(-10).join("\n") || "none"}`,
+      `pageErrors=${pageErrors.slice(-10).join("\n") || "none"}`,
+    ].join("\n");
+  };
+}
+
 async function openLoggedInApp(page: Page) {
+  const describeFailure = installPageDiagnostics(page);
   await page.addInitScript((user) => {
     window.localStorage.setItem("scm-demo-token", "browser-uat-token");
     window.localStorage.setItem("scm-demo-user", JSON.stringify(user));
   }, demoUser);
   await page.goto("/");
-  await expect(page.getByTestId("app-main")).toBeVisible();
+  await page.waitForLoadState("domcontentloaded");
+  try {
+    await expect(page.getByTestId("app-main")).toBeVisible({ timeout: 15000 });
+  } catch (error) {
+    throw new Error(`${await describeFailure("AI Copilot app startup")}\n\n${error instanceof Error ? error.message : String(error)}`);
+  }
   await expect(page.getByText("每日工作台").first()).toBeVisible();
 }
 

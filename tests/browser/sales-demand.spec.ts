@@ -8,13 +8,42 @@ const user = {
   role: "供应链经理",
 };
 
+function installPageDiagnostics(page: Page) {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => {
+    pageErrors.push(error.stack || error.message);
+  });
+  return async (label: string) => {
+    const title = await page.title().catch((error) => `title unavailable: ${String(error)}`);
+    const body = await page.locator("body").innerText({ timeout: 1000 }).catch((error) => `body unavailable: ${String(error)}`);
+    return [
+      `${label} did not reach app-main`,
+      `url=${page.url()}`,
+      `title=${title}`,
+      `body=${body.slice(0, 1000)}`,
+      `consoleErrors=${consoleErrors.slice(-10).join("\n") || "none"}`,
+      `pageErrors=${pageErrors.slice(-10).join("\n") || "none"}`,
+    ].join("\n");
+  };
+}
+
 async function openLoggedInApp(page: Page) {
+  const describeFailure = installPageDiagnostics(page);
   await page.addInitScript((profile) => {
     window.localStorage.setItem("scm-demo-token", "browser-sales-token");
     window.localStorage.setItem("scm-demo-user", JSON.stringify(profile));
   }, user);
   await page.goto("/");
-  await expect(page.getByTestId("app-main")).toBeVisible();
+  await page.waitForLoadState("domcontentloaded");
+  try {
+    await expect(page.getByTestId("app-main")).toBeVisible({ timeout: 15000 });
+  } catch (error) {
+    throw new Error(`${await describeFailure("Sales Demand app startup")}\n\n${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function openAssistant(page: Page) {
@@ -36,6 +65,14 @@ async function expectNoVisibleInternalTerms(target: Locator) {
   await expect(target).not.toContainText(/Demo|UAT|演示数据|示例数据|样例数据|mock|fake|sample data|demo data|UAT data/i);
   await expect(target).not.toContainText(/provider fallback|tool_result|response_card|entityType|documentType|raw JSON/i);
   await expect(target).not.toContainText(/Not found/i);
+}
+
+async function clickReviewPreview(page: Page) {
+  const button = page.getByRole("button", { name: "生成复核预览", exact: true });
+  await button.scrollIntoViewIfNeeded();
+  await expect(button).toBeVisible({ timeout: 15000 });
+  await expect(button).toBeEnabled();
+  await button.click();
 }
 
 test.describe("Sales Demand Lite browser flow", () => {
@@ -74,10 +111,10 @@ test.describe("Sales Demand Lite browser flow", () => {
     await expect(page.getByRole("heading", { name: "复核动作" })).toBeVisible();
     await expect(page.getByRole("button", { name: "拒绝" })).toBeVisible();
     await page.getByRole("button", { name: "拒绝" }).click();
-    await page.getByRole("button", { name: "生成复核预览" }).click();
+    await clickReviewPreview(page);
     await expect(page.getByText("拒绝需要填写原因")).toBeVisible();
     await page.getByPlaceholder("填写复核原因、补充资料要求或暂缓说明").fill("库存缺口需销售确认");
-    await page.getByRole("button", { name: "生成复核预览" }).click();
+    await clickReviewPreview(page);
     await expect(page.getByText("已生成拒绝复核记录预览")).toBeVisible();
     await page.keyboard.press("Escape");
 
