@@ -24,6 +24,8 @@ import {
   type CsvRow,
 } from "../../lib/csv-import";
 import { A, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
+import { DataAccessQualityV2 } from "../../components/data-access/DataAccessQualityV2";
+import { fetchDataAccessQualityV2, type DataAccessQualityV2 as DataAccessQualityV2Payload } from "./dataAccessQuality";
 
 type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "supplierPerformance" | "supplierCertification" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "contractPrices" | "forecastDemand" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
@@ -60,7 +62,7 @@ type ImportConfig = {
   validateRow: (row: CsvRow, allRows: CsvRow[]) => Omit<ValidationResult, "rowNumber" | "original">;
 };
 type ImportsPanelProps = {
-  onNavigate?: (moduleId: string) => void;
+  onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
   initialView?: "templates" | "validation" | "failed" | "user-data";
 };
 
@@ -239,15 +241,49 @@ function DisabledActionButton({ children }: { children: ReactNode }) {
 
 function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProps) {
   const [view, setView] = useState<BusinessImportView>(() => initialBusinessView(initialView));
+  const [qualityV2, setQualityV2] = useState<DataAccessQualityV2Payload | null>(null);
+  const [qualityV2Loading, setQualityV2Loading] = useState(true);
+  const [qualityV2Error, setQualityV2Error] = useState(false);
 
   useEffect(() => {
     setView(initialBusinessView(initialView));
   }, [initialView]);
 
+  useEffect(() => {
+    let alive = true;
+    setQualityV2Loading(true);
+    fetchDataAccessQualityV2()
+      .then((data) => {
+        if (alive) {
+          setQualityV2(data);
+          setQualityV2Error(false);
+        }
+      })
+      .catch(() => {
+        if (alive) {
+          setQualityV2(null);
+          setQualityV2Error(true);
+        }
+      })
+      .finally(() => {
+        if (alive) setQualityV2Loading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const currentViewLabel = BUSINESS_VIEW_OPTIONS.find((item) => item.id === view)?.label || "导入任务";
 
   return (
     <div className="space-y-5" data-testid="data-access-business-page">
+      <DataAccessQualityV2
+        quality={qualityV2}
+        loading={qualityV2Loading}
+        error={qualityV2Error}
+        onNavigate={onNavigate}
+      />
+
       <Card className="p-5">
         <div className="flex items-start justify-between gap-5">
           <div className="min-w-0">
