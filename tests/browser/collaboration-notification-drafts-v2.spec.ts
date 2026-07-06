@@ -27,7 +27,6 @@ async function openCollaborationDrafts(page: Page) {
   await page.getByRole("button", { name: "协同通知草稿", exact: true }).click();
   const pageRoot = page.getByTestId("collaboration-notification-drafts");
   await expect(pageRoot).toBeVisible({ timeout: 15000 });
-  await expect(pageRoot).toContainText("Collaboration Notification Drafts");
   await expect(pageRoot).toContainText("协同通知草稿");
   return pageRoot;
 }
@@ -49,6 +48,12 @@ test("Collaboration Notification Drafts v2 renders draft adapters policies filte
   for (const label of ["当前工作区数据", "草稿预览", "人工复核", "不形成正式业务处理", "不外发"]) {
     await expect(root).toContainText(label);
   }
+  for (const label of ["通知草稿边界", "协同对象与来源汇总", "通知草稿列表", "消息草稿预览", "需人工复核", "协同对象"]) {
+    await expect(root).toContainText(label);
+  }
+  for (const label of ["Collaboration Notification Drafts", "Channel Policies", "Audience & Source Summary", "Draft Inbox", "Message Preview", "preview-only", "review required", "audience"]) {
+    await expect(root).not.toContainText(label);
+  }
 
   for (const label of ["草稿总数", "内部协同", "供应商沟通", "财务复核", "数据补齐", "收货异常", "库存复核", "报表复核", "高优先级", "数据限制"]) {
     await expect(root).toContainText(label);
@@ -58,7 +63,7 @@ test("Collaboration Notification Drafts v2 renders draft adapters policies filte
     await expect(root).toContainText(label);
   }
 
-  for (const label of ["优先级", "草稿编号", "草稿标题", "类型", "协同对象", "来源对象", "状态", "audience", "关键证据", "请求回复"]) {
+  for (const label of ["优先级", "草稿编号", "草稿标题", "类型", "协同对象", "来源对象", "状态", "关键证据", "请求回复"]) {
     await expect(root.getByTestId("collaboration-draft-table")).toContainText(label);
   }
 

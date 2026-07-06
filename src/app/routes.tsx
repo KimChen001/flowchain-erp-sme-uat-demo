@@ -12,6 +12,7 @@ import {
   Upload,
   ClipboardList,
   FileCheck2,
+  Settings,
 } from "lucide-react";
 
 export const navItems = [
@@ -130,9 +131,21 @@ export const navItems = [
   {
     icon: FileCheck2, label: "行动草稿与人工复核", id: "review-actions",
     children: [
-      { id: "review-actions", label: "Action Draft Workspace" },
+      { id: "review-actions", label: "行动草稿工作台" },
       { id: "review-actions:waiting", label: "等待人工复核" },
       { id: "review-actions:data-limited", label: "数据限制草稿" },
+    ],
+  },
+  {
+    icon: Settings, label: "系统设置", id: "settings",
+    children: [
+      { id: "settings", label: "工作区配置" },
+      { id: "settings:modules", label: "模块启用状态" },
+      { id: "settings:review", label: "复核策略" },
+      { id: "settings:numbering", label: "编号规则" },
+      { id: "settings:ai", label: "AI 边界" },
+      { id: "settings:collaboration", label: "协同草稿策略" },
+      { id: "settings:data-quality", label: "数据质量设置" },
     ],
   },
   {
@@ -150,4 +163,5 @@ export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
   { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast", "exception-cases", "collaboration-drafts", "review-actions"] },
   { label: "数据", itemIds: ["master-data", "reports", "imports"] },
+  { label: "设置", itemIds: ["settings"] },
 ] as const;

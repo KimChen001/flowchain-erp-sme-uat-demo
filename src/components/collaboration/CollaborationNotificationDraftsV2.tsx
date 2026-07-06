@@ -134,7 +134,7 @@ function Detail({ draft, onNavigate }: { draft: CollaborationNotificationDraft |
 
       <div className="mt-4 rounded-xl border p-4" style={{ borderColor: A.border, background: "#fbfdff" }}>
         <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold" style={{ color: A.label }}>
-          <BellRing size={15} /> Message Preview
+          <BellRing size={15} /> 消息草稿预览
         </div>
         <div className="text-[13px] leading-6" style={{ color: A.sub }}>
           <div className="font-semibold" style={{ color: A.label }}>{draft.subject}</div>
@@ -216,7 +216,7 @@ export function CollaborationNotificationDraftsV2({ payload, onNavigate }: { pay
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>Collaboration Notification Drafts</h1>
+            <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>协同通知草稿</h1>
             <Chip label="协同通知草稿" color={A.blue} bg="#eef4ff" />
             <Chip label={payload.dataScopeLabel} color={A.green} bg="#ecfdf5" />
           </div>
@@ -230,7 +230,7 @@ export function CollaborationNotificationDraftsV2({ payload, onNavigate }: { pay
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr]">
         <Card className="rounded-[20px] p-4">
-          <h2 className={typography.sectionTitle} style={{ color: A.label }}>Channel Policies</h2>
+          <h2 className={typography.sectionTitle} style={{ color: A.label }}>通知草稿边界</h2>
           <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
             {payload.channelPolicies.map((policy) => (
               <div key={policy.channelType} className="rounded-xl border p-3" style={{ borderColor: A.border, background: A.white }}>
@@ -238,8 +238,8 @@ export function CollaborationNotificationDraftsV2({ payload, onNavigate }: { pay
                 <div className="mt-2 text-[12px] leading-5" style={{ color: A.sub }}>{policy.allowedUse.join("；")}</div>
                 <div className="mt-2 text-[12px] leading-5" style={{ color: A.blue }}>{policy.boundarySummary}</div>
                 <div className="mt-2 flex gap-2">
-                  <Chip label="preview-only" color={A.green} bg="#ecfdf5" />
-                  <Chip label="review required" color={A.blue} bg="#eef4ff" />
+                  <Chip label="草稿预览" color={A.green} bg="#ecfdf5" />
+                  <Chip label="需人工复核" color={A.blue} bg="#eef4ff" />
                 </div>
               </div>
             ))}
@@ -247,7 +247,7 @@ export function CollaborationNotificationDraftsV2({ payload, onNavigate }: { pay
         </Card>
 
         <Card className="rounded-[20px] p-4">
-          <h2 className={typography.sectionTitle} style={{ color: A.label }}>Audience & Source Summary</h2>
+          <h2 className={typography.sectionTitle} style={{ color: A.label }}>协同对象与来源汇总</h2>
           <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
             {payload.audienceGroups.map((group) => (
               <div key={group.audienceType} className="rounded-xl border p-3" style={{ borderColor: A.border }}>
@@ -271,7 +271,7 @@ export function CollaborationNotificationDraftsV2({ payload, onNavigate }: { pay
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(560px,0.95fr)_minmax(620px,1.05fr)]">
         <Card className="rounded-[20px] p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className={typography.sectionTitle} style={{ color: A.label }}>Draft Inbox</h2>
+            <h2 className={typography.sectionTitle} style={{ color: A.label }}>通知草稿列表</h2>
             <div className="flex flex-wrap gap-2" data-testid="collaboration-draft-filters">
               {filterOrder.map((key) => {
                 const active = activeFilter === key;
@@ -289,8 +289,8 @@ export function CollaborationNotificationDraftsV2({ payload, onNavigate }: { pay
             <table className="w-full min-w-[920px] text-left" data-testid="collaboration-draft-table">
               <thead style={{ background: "#fbfdff" }}>
                 <tr>
-                  {["优先级", "草稿编号", "草稿标题", "类型", "协同对象", "来源对象", "状态", "audience", "关键证据", "请求回复", "操作"].map((header) => (
-                    <th key={header} className="px-3 py-3 text-[12px] font-semibold" style={{ color: A.gray1 }}>{header}</th>
+                  {["优先级", "草稿编号", "草稿标题", "类型", "协同对象", "来源对象", "状态", "协同对象", "关键证据", "请求回复", "操作"].map((header, index) => (
+                    <th key={`${header}-${index}`} className="px-3 py-3 text-[12px] font-semibold" style={{ color: A.gray1 }}>{header}</th>
                   ))}
                 </tr>
               </thead>
