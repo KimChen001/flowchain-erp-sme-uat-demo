@@ -12,6 +12,7 @@ import {
   Upload,
   ClipboardList,
   FileCheck2,
+  History,
   Settings,
 } from "lucide-react";
 
@@ -137,6 +138,17 @@ export const navItems = [
     ],
   },
   {
+    icon: History, label: "业务审计与历史", id: "audit-history",
+    children: [
+      { id: "audit-history", label: "历史总览" },
+      { id: "audit-history:ai", label: "AI 建议历史" },
+      { id: "audit-history:drafts", label: "草稿复核历史" },
+      { id: "audit-history:data", label: "数据接入历史" },
+      { id: "audit-history:settings", label: "设置与权限历史" },
+      { id: "audit-history:objects", label: "业务对象历史" },
+    ],
+  },
+  {
     icon: Settings, label: "系统设置", id: "settings",
     children: [
       { id: "settings", label: "工作区配置" },
@@ -165,5 +177,5 @@ export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
   { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast", "exception-cases", "collaboration-drafts", "review-actions"] },
   { label: "数据", itemIds: ["master-data", "reports", "imports"] },
-  { label: "设置", itemIds: ["settings"] },
+  { label: "治理", itemIds: ["audit-history", "settings"] },
 ] as const;
