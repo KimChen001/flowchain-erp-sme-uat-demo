@@ -12,6 +12,7 @@ import {
   Upload,
   ClipboardList,
   FileCheck2,
+  Gauge,
   History,
   Settings,
 } from "lucide-react";
@@ -149,6 +150,17 @@ export const navItems = [
     ],
   },
   {
+    icon: Gauge, label: "试点准备度", id: "pilot-readiness",
+    children: [
+      { id: "pilot-readiness", label: "准备度总览" },
+      { id: "pilot-readiness:modules", label: "模块准备度" },
+      { id: "pilot-readiness:data", label: "数据准备度" },
+      { id: "pilot-readiness:ai", label: "AI 与复核准备度" },
+      { id: "pilot-readiness:governance", label: "治理准备度" },
+      { id: "pilot-readiness:checklist", label: "试点复核清单" },
+    ],
+  },
+  {
     icon: Settings, label: "系统设置", id: "settings",
     children: [
       { id: "settings", label: "工作区配置" },
@@ -177,5 +189,5 @@ export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
   { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast", "exception-cases", "collaboration-drafts", "review-actions"] },
   { label: "数据", itemIds: ["master-data", "reports", "imports"] },
-  { label: "治理", itemIds: ["audit-history", "settings"] },
+  { label: "治理", itemIds: ["audit-history", "pilot-readiness", "settings"] },
 ] as const;

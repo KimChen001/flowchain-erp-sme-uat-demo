@@ -51,6 +51,7 @@ import SalesDemandPage from "../modules/sales/Page";
 import CollaborationDraftsPage from "../modules/collaboration-drafts/Page";
 import SettingsPage from "../modules/settings/Page";
 import AuditHistoryPage from "../modules/audit-history/Page";
+import PilotReadinessPage from "../modules/pilot-readiness/Page";
 import { ReviewFirstActionWorkflowV2 } from "../components/actions/ReviewFirstActionWorkflowV2";
 
 function supplierRecommendation(name: string) {
@@ -221,7 +222,7 @@ const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台", sales: "销售需求", inventory: "库存管理",
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购管理", finance: "财务协同", "master-data": "基础资料", srm: "供应商管理", reports: "报表与分析", imports: "数据接入与质量", "exception-cases": "异常处理工单", "collaboration-drafts": "协同通知草稿", "review-actions": "行动草稿与人工复核", "audit-history": "业务审计与历史", settings: "系统设置",
+  procurement: "采购管理", finance: "财务协同", "master-data": "基础资料", srm: "供应商管理", reports: "报表与分析", imports: "数据接入与质量", "exception-cases": "异常处理工单", "collaboration-drafts": "协同通知草稿", "review-actions": "行动草稿与人工复核", "audit-history": "业务审计与历史", "pilot-readiness": "试点准备度", settings: "系统设置",
 };
 
 type GlobalSearchResult = {
@@ -526,7 +527,7 @@ export default function FlowChainApp() {
   const activeChildLabel = activeNavItem?.children?.find((item) => item.id === active)?.label;
   const contentMaxWidthClass = activeModule === "srm"
     ? "max-w-[1440px]"
-    : ["overview", "reports", "imports", "review-actions", "collaboration-drafts", "audit-history", "settings"].includes(activeModule)
+    : ["overview", "reports", "imports", "review-actions", "collaboration-drafts", "audit-history", "pilot-readiness", "settings"].includes(activeModule)
       ? "max-w-[1360px]"
       : "max-w-[1320px]";
   const searchGroups = useMemo(() => {
@@ -771,6 +772,7 @@ export default function FlowChainApp() {
     "collaboration-drafts": <CollaborationDraftsPage onNavigate={navigateTo} />,
     "review-actions": <ReviewFirstActionWorkflowV2 onNavigate={navigateTo} />,
     "audit-history": <AuditHistoryPage onNavigate={navigateTo} />,
+    "pilot-readiness": <PilotReadinessPage onNavigate={navigateTo} />,
     settings: <SettingsPage initialView={activeView as any} onNavigate={navigateTo} />,
   };
 
