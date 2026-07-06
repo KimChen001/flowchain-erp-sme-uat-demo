@@ -9,10 +9,10 @@ const user = {
 };
 
 const forbiddenExecutionText =
-  /自动批准|自动下单|正式创建 PO|下发 PO|发送 PO|发布 RFQ|邀请供应商|发送邮件|提交收货|Receive Submit|Submit Receipt|库存过账|Post Invoice|Approve Invoice|Mark as Paid|Payment execution|Export to Accounting|付款|会计过账|修改供应商主数据|更新银行账户|发布风险评级|自动黑名单|自动暂停供应商|自动修复|自动提交导入|自动覆盖数据|自动写入数据库|批量删除|清空数据/i;
+  /自动批准|自动下单|正式创建 PO|下发 PO|发送 PO|发布 RFQ|邀请供应商|发送邮件|发送|推送|已发送|提交收货|Receive Submit|Submit Receipt|库存过账|Post Invoice|Approve Invoice|Mark as Paid|Payment execution|Export to Accounting|付款|会计过账|修改供应商主数据|更新银行账户|发布风险评级|自动黑名单|自动暂停供应商|自动修复|自动提交导入|自动覆盖数据|自动写入数据库|批量删除|清空数据|sent|delivered|dispatched|webhook/i;
 
 const forbiddenTechnicalText =
-  /JSON|dry-run|tenantId|userId|datasetId|writesDb|writesFiles|DB|database|tool_result|provider|fallback|deterministic|mock|fake|demo|UAT|sample data|demo data|response_card|entityType|documentType|raw enum|payload/i;
+  /JSON|dry-run|tenantId|userId|datasetId|writesDb|writesFiles|DB|database|tool_result|provider|fallback|deterministic|mock|fake|demo|UAT|sample data|demo data|response_card|entityType|documentType|raw enum|payload|webhook/i;
 
 async function openLoggedInApp(page: Page) {
   await page.addInitScript((profile) => {
@@ -36,7 +36,20 @@ async function expectCleanText(target: Locator) {
   await expect(target).not.toContainText(forbiddenTechnicalText);
 }
 
-test("AI Suggestions Workbench v2 renders dynamic evidence suggestions drafts audit and navigation", async ({ page }) => {
+async function clickFilter(page: Page, label: string) {
+  await page.getByTestId("ai-suggestion-filter").filter({ hasText: label }).click();
+  await expect(page.getByTestId("ai-suggestion-filter").filter({ hasText: label })).toBeVisible();
+}
+
+async function expectRowsContain(page: Page, pattern: RegExp) {
+  const rows = page.getByTestId("ai-suggestion-row");
+  const count = await rows.count();
+  expect(count).toBeGreaterThan(0);
+  const texts = await rows.allTextContents();
+  expect(texts.every((row) => pattern.test(row))).toBeTruthy();
+}
+
+test("AI Suggestions Workbench v2 renders dynamic evidence suggestions drafts filters and navigation", async ({ page }) => {
   await openLoggedInApp(page);
   const workbench = await openAiSuggestions(page);
 
@@ -46,10 +59,25 @@ test("AI Suggestions Workbench v2 renders dynamic evidence suggestions drafts au
 
   const rows = page.getByTestId("ai-suggestion-row");
   await expect(rows.first()).toBeVisible();
-  await expect(rows).toHaveCount(await rows.count());
   await expect(workbench).toContainText("AI 建议列表");
   await expect(workbench).toContainText("建议详情");
+  await expect(workbench).not.toContainText("AI 审计记录");
+  await expect(workbench).not.toContainText("人工复核要求");
 
+  for (const label of ["全部", "采购", "库存", "供应商", "财务", "数据质量", "高优先级", "可生成草稿", "数据限制"]) {
+    await expect(workbench.getByTestId("ai-suggestion-filter").filter({ hasText: label })).toBeVisible();
+  }
+
+  await clickFilter(page, "采购");
+  await expectRowsContain(page, /PO 建议|采购|PO/);
+  await clickFilter(page, "库存");
+  await expectRowsContain(page, /库存建议|库存|SKU/);
+  await clickFilter(page, "供应商");
+  await expectRowsContain(page, /供应商建议|供应商/);
+  await clickFilter(page, "数据限制");
+  await expectRowsContain(page, /数据限制/);
+
+  await clickFilter(page, "全部");
   await rows.filter({ hasText: /库存建议/ }).first().click();
   const detail = page.getByTestId("ai-suggestion-detail");
   for (const label of ["结论", "为什么建议优先处理", "关键证据", "业务影响", "建议动作", "可点击跳转", "数据限制", "内部复核", "草稿预览", "边界说明"]) {
@@ -74,16 +102,22 @@ test("AI Suggestions Workbench v2 renders dynamic evidence suggestions drafts au
   await page.goto("/");
   await openAiSuggestions(page);
   await page.getByTestId("ai-suggestion-row").filter({ hasText: /数据质量建议/ }).first().click();
-  await page.getByTestId("ai-suggestion-detail").getByTestId("ai-suggestion-nav-link").filter({ hasText: /数据|质量|风险与异常/ }).first().click();
-  await expect(page.getByTestId("module-export-scope")).toContainText(/数据接入与质量|风险与异常/);
+  await expect(page.getByTestId("ai-suggestion-detail")).toContainText(/数据限制|边界说明/);
+  await page.getByTestId("ai-suggestion-detail").getByTestId("ai-suggestion-nav-link").filter({ hasText: /行动草稿与人工复核/ }).first().click();
+  await expect(page.getByTestId("module-export-scope")).toContainText(/行动草稿与人工复核|等待人工复核/);
 
   await page.goto("/");
   const reopened = await openAiSuggestions(page);
   await expect(reopened.getByTestId("ai-draft-preview-card").first()).toBeVisible();
   await expect(reopened).toContainText("预览草稿");
-  await expect(reopened).toContainText("进入工作台");
+  await expect(reopened).toContainText("进入人工复核");
+  await expect(reopened).toContainText("打开行动草稿");
   await expect(reopened).toContainText("标记仅内部留存");
-  await expect(reopened).toContainText("AI 审计记录");
-  await expect(reopened).toContainText("人工复核要求");
+  await expect(reopened).toContainText("不形成正式业务处理");
+  await reopened.getByRole("button", { name: "进入人工复核" }).first().click();
+  await expect(page.getByTestId("module-export-scope")).toContainText(/行动草稿与人工复核|等待人工复核/);
+  await page.goto("/");
+  await openAiSuggestions(page);
+  await expect(page.getByTestId("ai-suggestions-workbench")).not.toContainText("AI 审计记录");
   await expectCleanText(reopened);
 });

@@ -18,9 +18,13 @@ async function openLoggedInApp(page: Page) {
   await expect(page.getByTestId("app-main")).toBeVisible({ timeout: 15000 });
 }
 
-test("daily workbench separates today actions risks and AI suggestions", async ({ page }) => {
+test("daily workbench keeps today actions and AI suggestions separated", async ({ page }) => {
   await openLoggedInApp(page);
   const scope = page.getByTestId("module-export-scope");
+
+  await expect(page.getByRole("button", { name: "今日行动", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "AI 建议", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "风险与异常", exact: true })).toHaveCount(0);
 
   await expect(scope).toContainText("今日行动");
   for (const label of ["PO 看板", "库存管理", "供应商状态", "财务协同", "今日优先处理队列", "进入工作台", "最近单据"]) {
@@ -34,9 +38,10 @@ test("daily workbench separates today actions risks and AI suggestions", async (
 
   await page.getByRole("button", { name: "AI 建议", exact: true }).click();
   await expect(scope).toContainText("AI 仅生成解释、证据整理与行动草稿");
-  for (const label of ["PO 建议", "库存建议", "供应商建议", "财务建议", "AI 建议列表", "建议详情", "待人工复核草稿", "AI 审计记录"]) {
+  for (const label of ["PO 建议", "库存建议", "供应商建议", "财务建议", "AI 建议列表", "建议详情", "待人工复核草稿"]) {
     await expect(scope).toContainText(label);
   }
+  await expect(scope).not.toContainText("AI 审计记录");
   await expect(scope.getByTestId("ai-suggestion-row").first()).toBeVisible();
   await expect(scope).toContainText("当前工作区数据");
   await expect(scope).toContainText("可点击跳转");
@@ -45,12 +50,4 @@ test("daily workbench separates today actions risks and AI suggestions", async (
 
   await scope.getByTestId("ai-suggestion-row").filter({ hasText: /库存建议/ }).first().click();
   await expect(scope).toContainText(/库存|SKU|可承诺|安全库存/);
-
-  await page.getByRole("button", { name: "风险与异常", exact: true }).click();
-  for (const label of ["采购风险", "库存风险", "供应商风险", "财务异常", "风险分类", "异常清单", "证据入口"]) {
-    await expect(scope).toContainText(label);
-  }
-  await expect(scope).not.toContainText("AI 建议列表");
-  await expect(scope).not.toContainText("待人工复核草稿");
-  await expect(scope).not.toContainText("AI 审计记录");
 });

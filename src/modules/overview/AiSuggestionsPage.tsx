@@ -24,6 +24,7 @@ import {
 } from "./aiSuggestionsWorkbench";
 
 type NavigateFn = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
+type SuggestionFilterKey = "all" | "po" | "inventory" | "supplier" | "finance" | "data_quality" | "high" | "draft" | "limited";
 
 const priorityStyles: Record<string, { label: string; color: string; bg: string; dot: string }> = {
   high: { label: "高优先级", color: A.red, bg: "#fff1f0", dot: A.blue },
@@ -38,6 +39,20 @@ const categoryStyles: Record<string, { icon: typeof ShoppingCart; color: string;
   finance: { icon: CircleDollarSign, color: A.orange, bg: "#fff7ed" },
   data_quality: { icon: ShieldCheck, color: A.gray1, bg: A.gray6 },
 };
+
+const filterLabels: Record<SuggestionFilterKey, string> = {
+  all: "全部",
+  po: "采购",
+  inventory: "库存",
+  supplier: "供应商",
+  finance: "财务",
+  data_quality: "数据质量",
+  high: "高优先级",
+  draft: "可生成草稿",
+  limited: "数据限制",
+};
+
+const filterOrder: SuggestionFilterKey[] = ["all", "po", "inventory", "supplier", "finance", "data_quality", "high", "draft", "limited"];
 
 function priorityStyle(priority = "") {
   return priorityStyles[priority] || priorityStyles.medium;
@@ -180,6 +195,7 @@ export default function AiSuggestionsPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [selectedId, setSelectedId] = useState("");
+  const [activeFilter, setActiveFilter] = useState<SuggestionFilterKey>("all");
 
   useEffect(() => {
     let alive = true;
@@ -202,10 +218,40 @@ export default function AiSuggestionsPage({
     return () => { alive = false; };
   }, []);
 
+  const filterCounts = useMemo(() => {
+    const suggestions = workbench?.suggestions || [];
+    const counts = Object.fromEntries(filterOrder.map((key) => [key, 0])) as Record<SuggestionFilterKey, number>;
+    counts.all = suggestions.length;
+    suggestions.forEach((item) => {
+      if (item.category in counts) counts[item.category as SuggestionFilterKey] += 1;
+      if (item.priority === "high") counts.high += 1;
+      if (item.draftPreview) counts.draft += 1;
+      if (item.dataLimitations.length > 0) counts.limited += 1;
+    });
+    return counts;
+  }, [workbench]);
+
+  const filteredSuggestions = useMemo(() => {
+    const suggestions = workbench?.suggestions || [];
+    if (activeFilter === "all") return suggestions;
+    if (activeFilter === "high") return suggestions.filter((item) => item.priority === "high");
+    if (activeFilter === "draft") return suggestions.filter((item) => Boolean(item.draftPreview));
+    if (activeFilter === "limited") return suggestions.filter((item) => item.dataLimitations.length > 0);
+    return suggestions.filter((item) => item.category === activeFilter);
+  }, [activeFilter, workbench]);
+
+  useEffect(() => {
+    if (!filteredSuggestions.length) {
+      setSelectedId("");
+      return;
+    }
+    setSelectedId((current) => filteredSuggestions.some((item) => item.id === current) ? current : filteredSuggestions[0].id);
+  }, [filteredSuggestions]);
+
   const selected = useMemo(() => {
     if (!workbench?.suggestions.length) return null;
-    return workbench.suggestions.find((item) => item.id === selectedId) || workbench.suggestions[0];
-  }, [selectedId, workbench]);
+    return filteredSuggestions.find((item) => item.id === selectedId) || filteredSuggestions[0] || null;
+  }, [filteredSuggestions, selectedId, workbench]);
 
   function previewDraft(request: ActionDraftPreviewRequest) {
     onReviewActionDraft?.(request);
@@ -255,7 +301,6 @@ export default function AiSuggestionsPage({
         <div className="flex flex-wrap items-center gap-3">
           <a href="#ai-suggestions-list" className={scrollButtonClass(true)} style={{ background: A.blue }}>查看今日建议</a>
           <a href="#ai-draft-review" className={scrollButtonClass()} style={{ borderColor: A.border, color: A.label, background: A.white }}>查看待复核草稿</a>
-          <a href="#ai-audit-log" className={scrollButtonClass()} style={{ borderColor: A.border, color: A.label, background: A.white }}>查看审计记录</a>
         </div>
       </section>
 
@@ -264,8 +309,26 @@ export default function AiSuggestionsPage({
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(460px,0.92fr)_minmax(620px,1.08fr)]" id="ai-suggestions-list">
         <Card className="rounded-[20px] p-4">
           <h2 className={typography.sectionTitle} style={{ color: A.label }}>AI 建议列表</h2>
+          <div className="mt-3 flex flex-wrap gap-2" data-testid="ai-suggestion-filters">
+            {filterOrder.map((key) => {
+              const active = activeFilter === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  data-testid="ai-suggestion-filter"
+                  onClick={() => setActiveFilter(key)}
+                  className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-[12px] font-semibold transition-colors"
+                  style={{ borderColor: active ? A.blue : A.border, background: active ? "#eef4ff" : A.white, color: active ? A.blue : A.label }}
+                >
+                  <span>{filterLabels[key]}</span>
+                  <span className="tabular-nums" style={{ color: active ? A.blue : A.sub }}>{filterCounts[key]}</span>
+                </button>
+              );
+            })}
+          </div>
           <div className="mt-3 space-y-3">
-            {workbench.suggestions.map((item) => {
+            {filteredSuggestions.map((item) => {
               const style = priorityStyle(item.priority);
               const category = categoryStyle(item.category);
               const active = item.id === selected?.id;
@@ -301,6 +364,16 @@ export default function AiSuggestionsPage({
                 </button>
               );
             })}
+            {!filteredSuggestions.length && (
+              <div className="rounded-xl border px-4 py-8 text-center" style={{ borderColor: A.border, background: "#fbfdff" }}>
+                <div className="text-[14px] font-semibold" style={{ color: A.label }}>当前分类暂无 AI 建议</div>
+                <div className="mt-1 text-[12px]" style={{ color: A.sub }}>可切换全部或查看今日行动。</div>
+                <div className="mt-4 flex justify-center gap-2">
+                  <button type="button" onClick={() => setActiveFilter("all")} className="h-8 rounded-md px-3 text-[12px] font-semibold text-white" style={{ background: A.blue }}>查看全部</button>
+                  <button type="button" onClick={() => onNavigate("overview")} className="h-8 rounded-md border px-3 text-[12px] font-semibold" style={{ borderColor: A.border, color: A.label, background: A.white }}>查看今日行动</button>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -363,7 +436,7 @@ export default function AiSuggestionsPage({
                   className="inline-flex h-9 items-center justify-center rounded-md px-4 text-[13px] font-semibold text-white"
                   style={{ background: A.blue }}
                 >
-                  生成跟进草稿
+                  预览草稿
                 </button>
               </div>
             </>
@@ -393,11 +466,14 @@ export default function AiSuggestionsPage({
                   </div>
                   <Chip label="待复核" color={A.blue} bg="#eef4ff" />
                 </div>
-                <div className="mt-4 grid grid-cols-[1fr_1fr_1.35fr] gap-2">
+                <div className="mt-4 rounded-lg px-3 py-2 text-[11px] leading-5" style={{ background: A.gray6, color: A.sub }}>
+                  草稿预览需人工复核，不形成正式业务处理，不外发。
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => previewDraft(draftRequestFromPreview(draft))} className="h-8 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold" style={{ borderColor: A.border, color: A.label, background: A.white }}>预览草稿</button>
                   <button
                     type="button"
-                    onClick={() => onNavigate(draft.targetModule, focusFrom({ entityType: draft.targetEntityType, entityId: draft.targetEntityId }), {
+                    onClick={() => onNavigate("review-actions", focusFrom({ entityType: draft.targetEntityType, entityId: draft.targetEntityId }), {
                       returnTo: "overview:ai",
                       entityLabel: draft.targetEntityLabel,
                       source: "aiSuggestionsWorkbench",
@@ -406,7 +482,20 @@ export default function AiSuggestionsPage({
                     className="h-8 whitespace-nowrap rounded-md px-1.5 text-[11px] font-semibold text-white"
                     style={{ background: A.blue }}
                   >
-                    进入工作台
+                    进入人工复核
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("review-actions", focusFrom({ entityType: draft.targetEntityType, entityId: draft.targetEntityId }), {
+                      returnTo: "overview:ai",
+                      entityLabel: draft.targetEntityLabel,
+                      source: "aiSuggestionsWorkbench",
+                      returnContext: { sourceModule: "overview", sourceRoute: "overview:ai", sourceLabel: "AI 建议", returnLabel: "返回 AI 建议" },
+                    })}
+                    className="h-8 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold"
+                    style={{ borderColor: A.border, color: A.label, background: A.white }}
+                  >
+                    打开行动草稿
                   </button>
                   <button type="button" className="h-8 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold" style={{ borderColor: A.border, color: A.label, background: A.white }}>标记仅内部留存</button>
                 </div>
@@ -414,38 +503,6 @@ export default function AiSuggestionsPage({
             );
           })}
         </div>
-      </section>
-
-      <section id="ai-audit-log">
-        <h2 className={`${typography.sectionTitle} mb-3`} style={{ color: A.label }}>AI 审计记录</h2>
-        <Card className="overflow-hidden rounded-[20px]">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1040px] text-left">
-              <thead style={{ background: "#fbfdff" }}>
-                <tr>
-                  {["时间", "AI 建议", "来源对象", "证据来源", "输出类型", "人工复核要求", "数据限制"].map((header) => (
-                    <th key={header} className="px-4 py-3 text-[12px] font-semibold" style={{ color: A.gray1 }}>{header}</th>
-                  ))}
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {workbench.auditTrail.map((row, index) => (
-                  <tr key={row.id} style={{ borderTop: index ? `1px solid ${A.border}` : "none" }}>
-                    <td className="px-4 py-2.5 text-[13px]" style={{ color: A.sub }}>{row.generatedAtLabel}</td>
-                    <td className="px-4 py-2.5 text-[13px]" style={{ color: A.label }}>{row.suggestionTitle}</td>
-                    <td className="px-4 py-2.5 text-[13px] tabular-nums" style={{ color: A.blue }}>{row.sourceObjectLabel}</td>
-                    <td className="px-4 py-2.5 text-[13px]" style={{ color: A.sub }}>{row.evidenceSourceLabel}</td>
-                    <td className="px-4 py-2.5 text-[13px]" style={{ color: A.sub }}>{row.outputType}</td>
-                    <td className="px-4 py-2.5 text-[13px]" style={{ color: A.sub }}>{row.reviewRequirement}</td>
-                    <td className="px-4 py-2.5 text-[13px]" style={{ color: A.sub }}>{row.dataLimitationSummary}</td>
-                    <td className="px-4 py-2.5 text-right">{row.navigationLinks[0] ? <NavButton link={row.navigationLinks[0]} onNavigate={onNavigate} /> : <ArrowRight size={15} style={{ color: A.gray2 }} />}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
       </section>
     </div>
   );

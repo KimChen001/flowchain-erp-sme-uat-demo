@@ -18,7 +18,6 @@ export const navItems = [
     icon: BarChart2, label: "每日工作台", id: "overview",
     children: [
       { id: "overview", label: "今日行动" },
-      { id: "overview:risks", label: "风险与异常" },
       { id: "overview:ai", label: "AI 建议" },
     ],
   },
