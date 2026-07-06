@@ -43,6 +43,7 @@ import { handleReviewFirstActionWorkflowRoute } from './review-first-action-work
 import { handleAiSuggestionsWorkbenchRoute } from './ai-suggestions-workbench.routes.mjs'
 import { handleCollaborationNotificationDraftsRoute } from './collaboration-notification-drafts.routes.mjs'
 import { handleWorkspaceSetupConfigRoute } from './workspace-setup-config.routes.mjs'
+import { handleUserRolePermissionVisibilityRoute } from './user-role-permission-visibility.routes.mjs'
 import { handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import { handleActionDraftsRoute } from './action-drafts.routes.mjs'
@@ -1033,6 +1034,7 @@ export function createScmServer() {
     if (await handleAiSuggestionsWorkbenchRoute(routeContext)) return
     if (await handleCollaborationNotificationDraftsRoute(routeContext)) return
     if (await handleWorkspaceSetupConfigRoute(routeContext)) return
+    if (await handleUserRolePermissionVisibilityRoute(routeContext)) return
     if (await handleTodayCockpitRoute(routeContext)) return
     if (await handleInventoryRoute(routeContext)) return
     if (await handleProcurementReadRoute(routeContext)) return
