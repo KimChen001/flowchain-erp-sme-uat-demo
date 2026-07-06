@@ -41,6 +41,7 @@ import { handleDataAccessQualityRoute } from './data-access-quality.routes.mjs'
 import { handleReportsAnalyticsRoute } from './reports-analytics.routes.mjs'
 import { handleReviewFirstActionWorkflowRoute } from './review-first-action-workflow.routes.mjs'
 import { handleAiSuggestionsWorkbenchRoute } from './ai-suggestions-workbench.routes.mjs'
+import { handleCollaborationNotificationDraftsRoute } from './collaboration-notification-drafts.routes.mjs'
 import { handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import { handleActionDraftsRoute } from './action-drafts.routes.mjs'
@@ -1029,6 +1030,7 @@ export function createScmServer() {
     if (await handleReportsAnalyticsRoute(routeContext)) return
     if (await handleReviewFirstActionWorkflowRoute(routeContext)) return
     if (await handleAiSuggestionsWorkbenchRoute(routeContext)) return
+    if (await handleCollaborationNotificationDraftsRoute(routeContext)) return
     if (await handleTodayCockpitRoute(routeContext)) return
     if (await handleInventoryRoute(routeContext)) return
     if (await handleProcurementReadRoute(routeContext)) return

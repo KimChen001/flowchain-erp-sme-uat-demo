@@ -5,6 +5,7 @@ import {
   Handshake,
   Database,
   AlertTriangle,
+  MessageSquareText,
   Package,
   Users,
   TrendingUp,
@@ -119,6 +120,14 @@ export const navItems = [
     ],
   },
   {
+    icon: MessageSquareText, label: "协同通知草稿", id: "collaboration-drafts",
+    children: [
+      { id: "collaboration-drafts", label: "通知草稿列表" },
+      { id: "collaboration-drafts:review", label: "人工复核视图" },
+      { id: "collaboration-drafts:limited", label: "数据限制草稿" },
+    ],
+  },
+  {
     icon: FileCheck2, label: "行动草稿与人工复核", id: "review-actions",
     children: [
       { id: "review-actions", label: "Action Draft Workspace" },
@@ -139,6 +148,6 @@ export const navItems = [
 
 export const navGroups = [
   { label: "运营", itemIds: ["overview"] },
-  { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast", "exception-cases", "review-actions"] },
+  { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast", "exception-cases", "collaboration-drafts", "review-actions"] },
   { label: "数据", itemIds: ["master-data", "reports", "imports"] },
 ] as const;
