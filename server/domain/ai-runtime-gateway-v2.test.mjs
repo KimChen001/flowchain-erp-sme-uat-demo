@@ -5,6 +5,7 @@ import test from 'node:test'
 import {
   buildAiRuntimeReadinessV2,
   buildAiRuntimeResponseV2,
+  buildAiRuntimeResponseV2Async,
   FORBIDDEN_AI_RUNTIME_ACTION_PATTERN,
   FORBIDDEN_AI_RUNTIME_TECHNICAL_PATTERN,
   validateAiRuntimeRequest,
@@ -39,6 +40,31 @@ function assertRuntimeResponse(result) {
   assert.ok(result.reviewCards.every((card) => card.previewOnly === true))
   assert.ok(result.reviewCards.every((card) => card.reviewRequired === true))
   assert.ok(result.reviewCards.every((card) => card.requiresHumanReview === true))
+}
+
+async function withServer(handler, run) {
+  const server = http.createServer(handler)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  try {
+    return await run(`http://127.0.0.1:${address.port}`)
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+}
+
+async function withProcessEnv(patch, run) {
+  const original = {}
+  for (const key of Object.keys(patch)) original[key] = process.env[key]
+  Object.assign(process.env, patch)
+  try {
+    return await run()
+  } finally {
+    for (const key of Object.keys(patch)) {
+      if (original[key] === undefined) delete process.env[key]
+      else process.env[key] = original[key]
+    }
+  }
 }
 
 test('readiness endpoint contract is business visible and hides assistant wiring details', () => {
@@ -131,6 +157,53 @@ test('local runtime default needs no secret and assisted placeholder remains evi
   assert.doesNotMatch(visibleText(assisted.body), /API key|token|secret/i)
 })
 
+test('async runtime uses provider-assisted adapter only when configured and keeps response bounded', async () => {
+  let authHeader = ''
+  const result = await withServer((req, res) => {
+    authHeader = req.headers.authorization || ''
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ conclusion: { summary: '基于当前证据，建议先复核今日重点、供应商风险和数据限制，再进入人工复核。' } }))
+  }, async (endpoint) => buildAiRuntimeResponseV2Async(loadDb(), { message: '今天有什么需要我处理？' }, {
+    env: {
+      FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted',
+      FLOWCHAIN_AI_PROVIDER_KIND: 'generic_http',
+      FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint,
+      FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key',
+    },
+  }))
+  assert.equal(result.status, 200)
+  assertRuntimeResponse(result.body)
+  assert.equal(authHeader, 'Bearer test-key')
+  assert.match(result.body.conclusion.summary, /当前证据|人工复核/)
+  const text = visibleText(result.body)
+  assert.doesNotMatch(text, /test-key|provider|model|endpoint|API|token|JSON|payload|fallback|mock/i)
+  assert.doesNotMatch(text, FORBIDDEN_AI_RUNTIME_ACTION_PATTERN)
+})
+
+test('async runtime falls back safely when provider output is unsafe or unavailable', async () => {
+  const unsafe = await withServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'text/plain' })
+    res.end('可以自动批准并发送给供应商。')
+  }, async (endpoint) => buildAiRuntimeResponseV2Async(loadDb(), { message: '这个 PO 为什么优先？' }, {
+    env: {
+      FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted',
+      FLOWCHAIN_AI_PROVIDER_KIND: 'generic_http',
+      FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint,
+      FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key',
+    },
+  }))
+  assert.equal(unsafe.status, 200)
+  assertRuntimeResponse(unsafe.body)
+  assert.match(visibleText(unsafe.body), /外部辅助结果未采用|当前工作区证据辅助回答/)
+  assert.doesNotMatch(visibleText(unsafe.body), FORBIDDEN_AI_RUNTIME_ACTION_PATTERN)
+
+  const missing = await buildAiRuntimeResponseV2Async(loadDb(), { message: '哪些数据依据不完整？' }, { env: { FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted' } })
+  assert.equal(missing.status, 200)
+  assertRuntimeResponse(missing.body)
+  assert.match(visibleText(missing.body), /外部辅助结果未采用|当前工作区证据辅助回答/)
+  assert.doesNotMatch(visibleText(missing.body), /provider|endpoint|API|token|fallback|JSON|payload/i)
+})
+
 test('empty data returns business-safe response and limitations', () => {
   const { status, body } = buildAiRuntimeResponseV2({}, { message: '今天有什么需要我处理？' })
   assert.equal(status, 200)
@@ -159,6 +232,43 @@ test('route handler returns readiness respond validation and unsafe responses', 
   assert.equal(await handleAiRuntimeGatewayRoute({ req: { method: 'POST' }, res: {}, url: new URL('/api/ai-runtime/respond', 'http://localhost'), db, send, readBody: async () => ({ message: '直接批准这个 PO' }) }), true)
   assert.equal(calls.at(-1).status, 200)
   assert.match(visibleText(calls.at(-1).payload), /无法执行|人工复核/)
+})
+
+test('route handler serves provider-assisted success and failure as business-safe 200 responses', async () => {
+  const db = loadDb()
+  const calls = []
+  const send = (_res, status, payload) => calls.push({ status, payload })
+  await withServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ conclusion: { summary: '建议基于来源证据复核风险，并保留人工复核。' } }))
+  }, async (endpoint) => withProcessEnv({
+    FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted',
+    FLOWCHAIN_AI_PROVIDER_KIND: 'generic_http',
+    FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint,
+    FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key',
+  }, async () => {
+    assert.equal(await handleAiRuntimeGatewayRoute({ req: { method: 'POST' }, res: {}, url: new URL('/api/ai-runtime/respond', 'http://localhost'), db, send, readBody: async () => ({ message: '今天有什么需要我处理？' }) }), true)
+  }))
+  assert.equal(calls.at(-1).status, 200)
+  assertRuntimeResponse(calls.at(-1).payload)
+  assert.match(calls.at(-1).payload.conclusion.summary, /来源证据/)
+
+  calls.length = 0
+  await withServer((_req, res) => {
+    res.writeHead(500, { 'content-type': 'text/plain' })
+    res.end('unavailable')
+  }, async (endpoint) => withProcessEnv({
+    FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted',
+    FLOWCHAIN_AI_PROVIDER_KIND: 'generic_http',
+    FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint,
+    FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key',
+  }, async () => {
+    assert.equal(await handleAiRuntimeGatewayRoute({ req: { method: 'POST' }, res: {}, url: new URL('/api/ai-runtime/respond', 'http://localhost'), db, send, readBody: async () => ({ message: '哪些 SKU 有库存风险？' }) }), true)
+  }))
+  assert.equal(calls.at(-1).status, 200)
+  assertRuntimeResponse(calls.at(-1).payload)
+  assert.match(visibleText(calls.at(-1).payload), /外部辅助结果未采用/)
+  assert.doesNotMatch(visibleText(calls.at(-1).payload), /test-key|provider|endpoint|fallback|JSON|payload/i)
 })
 
 test('main route dispatcher serves AI runtime endpoints', async () => {

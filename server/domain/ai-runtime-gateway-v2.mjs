@@ -11,6 +11,14 @@ import { buildSalesDemandReadModel } from './sales-demand-read-model.mjs'
 import { buildUserRolePermissionVisibilityV2 } from './user-role-permission-visibility-v2.mjs'
 import { buildWorkspaceBoundaryVisibilityV2 } from './workspace-boundary-visibility-v2.mjs'
 import { buildWorkspaceSetupConfigV2 } from './workspace-setup-config-v2.mjs'
+import {
+  canCallGenericHttpProvider,
+  fallbackResponse,
+  genericHttpProviderAdapter,
+  isProviderAssistedRequested,
+  providerRuntimeConfig,
+  validateAiRuntimeResponseV2,
+} from './ai-runtime-provider-adapter-v2.mjs'
 
 export const FORBIDDEN_AI_RUNTIME_ACTION_PATTERN = /自动批准|自动下单|正式创建\s*PO|下发\s*PO|发送\s*PO|发布\s*RFQ|邀请供应商|发送邮件|发送|推送|已发送|提交收货|Receive Submit|Submit Receipt|库存过账|Post Invoice|Approve Invoice|Mark as Paid|Payment execution|Export to Accounting|付款|会计过账|修改供应商主数据|更新银行账户|发布风险评级|自动黑名单|自动暂停供应商|自动修复|自动提交导入|自动覆盖数据|自动写入数据库|批量删除|清空数据|sent|delivered|dispatched|webhook|portal invite|保存配置|保存权限|保存边界|保存历史|保存准备度|修改权限|修改历史|修改准备度|删除历史|立即生效|自动应用|分配角色|创建用户|删除用户|禁用用户|创建租户|切换租户|合并租户|迁移数据|同步数据|跨租户查询|写入配置|写入日志|推送日志|导出审计报告|生成正式审计报告|发送审计报告|启用试点|开启试点|上线|部署|生成正式报告|导出正式报告|发送报告/i
 export const FORBIDDEN_AI_RUNTIME_TECHNICAL_PATTERN = /JSON|dry-run|tenantId|userId|datasetId|writesDb|writesFiles|DB|database|schema|environment|tool_result|provider|model|endpoint|token|API key|API|fallback|deterministic|mock|fake|demo|UAT|sample data|demo data|response_card|entityType|documentType|raw enum|payload|webhook|Coupa|RBAC|production|deploy|go-live|system prompt|prompt package/i
@@ -718,10 +726,22 @@ function buildContextBundle(request, ctx, intent) {
 function activeAdapter(env = {}) {
   return providerAssistedPlaceholder.isEnabled(env) ? providerAssistedPlaceholder : localEvidenceResponder
 }
+function localRuntimeDraft(contextBundle, request) {
+  const promptPackage = localEvidenceResponder.buildPromptPackage(contextBundle, request)
+  return localEvidenceResponder.normalizeResponse(localEvidenceResponder.generateResponse(promptPackage), contextBundle)
+}
+function providerModeLimitation(env = {}) {
+  if (!isProviderAssistedRequested(env)) return []
+  if (canCallGenericHttpProvider(env)) return []
+  return [{ label: '外部辅助模式未启用', description: '当前默认使用证据辅助回答。', severity: 'warning', consequence: '已使用当前工作区证据辅助回答。' }]
+}
 
 export function buildAiRuntimeReadinessV2(db = {}, env = {}) {
   const ctx = buildContexts(db, { message: 'readiness' })
-  const dataLimitations = collectLimitations(ctx, providerAssistedPlaceholder.isEnabled(env) ? [{ label: '外部辅助模式未启用', description: '当前默认使用证据辅助回答。', severity: 'warning' }] : [])
+  const config = providerRuntimeConfig(env)
+  const requested = isProviderAssistedRequested(env)
+  const callable = canCallGenericHttpProvider(env)
+  const dataLimitations = collectLimitations(ctx, providerModeLimitation(env))
   return {
     summary: {
       availableSourceCount: sourceSummary(ctx).length,
@@ -729,17 +749,21 @@ export function buildAiRuntimeReadinessV2(db = {}, env = {}) {
       reviewBoundaryCount: SAFETY_BOUNDARIES.length,
       supportedIntentCount: SUPPORTED_INTENTS.length,
       runtimeReadyLabel: '证据辅助回答可用',
-      providerModeLabel: '外部辅助模式未启用',
+      providerModeLabel: requested && callable ? '外部辅助模式已启用' : '外部辅助模式未启用',
       dataLimitedCount: dataLimitations.length,
     },
     supportedIntents: SUPPORTED_INTENTS.map(([id, label]) => ({ id, intentLabel: text(label), supportedLabel: '可基于当前工作区证据回答' })),
     evidenceSources: sourceSummary(ctx),
     reviewBoundaries: SAFETY_BOUNDARIES.map((label, index) => ({ id: `review-boundary-${index + 1}`, boundaryLabel: label, visibilityLabel: '复核优先' })),
     providerContract: {
-      modeLabel: '当前默认使用证据辅助回答',
-      externalAssistanceLabel: '外部辅助模式未启用',
+      modeLabel: requested && callable ? '外部辅助模式可用，但回答仍受当前工作区证据约束' : '当前默认使用证据辅助回答',
+      externalAssistanceLabel: requested && callable ? '外部辅助模式已启用' : '外部辅助模式未启用',
       responseBoundaryLabel: '外部辅助模式即使启用，也只能生成回复和草稿预览',
       executionBoundaryLabel: '不会执行正式业务动作',
+    },
+    runtimeHealth: {
+      adapterLabel: config.mode === 'provider_assisted' && callable ? '已使用当前工作区证据辅助回答' : '当前工作区数据',
+      configHealthLabel: callable || !requested ? '证据辅助回答可用' : '外部辅助模式未启用',
     },
     dataLimitations,
     generatedAt: GENERATED_AT,
@@ -758,4 +782,34 @@ export function buildAiRuntimeResponseV2(db = {}, body = {}, options = {}) {
   const promptPackage = adapter.buildPromptPackage(contextBundle, request)
   const raw = adapter.generateResponse(promptPackage)
   return { status: 200, body: adapter.normalizeResponse(raw, contextBundle) }
+}
+
+export async function buildAiRuntimeResponseV2Async(db = {}, body = {}, options = {}) {
+  const validation = validateAiRuntimeRequest(body)
+  if (!validation.ok) return { status: validation.status, body: { error: validation.error, dataScopeLabel: DATA_SCOPE } }
+  const request = validation.request
+  const ctx = buildContexts(db, request)
+  const intent = detectIntent(request)
+  const contextBundle = buildContextBundle(request, ctx, intent)
+  const env = options.env || process.env || {}
+  const localDraft = localRuntimeDraft(contextBundle, request)
+  const localValidation = validateAiRuntimeResponseV2(localDraft, contextBundle, localDraft)
+  const safeLocalDraft = localValidation.ok ? localDraft : buildResponse({ request, intent, ctx })
+
+  if (!isProviderAssistedRequested(env)) return { status: 200, body: safeLocalDraft }
+  if (!genericHttpProviderAdapter.canCall(env)) {
+    return { status: 200, body: fallbackResponse(safeLocalDraft, 'not_configured') }
+  }
+
+  const providerInput = genericHttpProviderAdapter.buildProviderInput(contextBundle, request, safeLocalDraft)
+  const providerResult = await genericHttpProviderAdapter.callProvider(providerInput, env, options.fetchImpl || globalThis.fetch)
+  if (!providerResult.ok) {
+    return { status: 200, body: fallbackResponse(safeLocalDraft, providerResult.reason) }
+  }
+  const normalized = genericHttpProviderAdapter.normalizeProviderOutput(providerResult.rawOutput, contextBundle, safeLocalDraft)
+  const validationResult = genericHttpProviderAdapter.validateProviderOutput(normalized, contextBundle, safeLocalDraft)
+  if (!validationResult.ok) {
+    return { status: 200, body: fallbackResponse(safeLocalDraft, validationResult.reason) }
+  }
+  return { status: 200, body: normalized }
 }

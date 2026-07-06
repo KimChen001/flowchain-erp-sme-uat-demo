@@ -1,4 +1,4 @@
-import { buildAiRuntimeReadinessV2, buildAiRuntimeResponseV2 } from '../domain/ai-runtime-gateway-v2.mjs'
+import { buildAiRuntimeReadinessV2, buildAiRuntimeResponseV2Async } from '../domain/ai-runtime-gateway-v2.mjs'
 
 export async function handleAiRuntimeGatewayRoute(ctx) {
   const { req, res, url, db, send, readBody } = ctx
@@ -16,7 +16,7 @@ export async function handleAiRuntimeGatewayRoute(ctx) {
       send(res, 400, { error: '问题内容无法读取，请重新输入。', dataScopeLabel: '当前工作区数据' })
       return true
     }
-    const result = buildAiRuntimeResponseV2(db, body, { env: process.env })
+    const result = await buildAiRuntimeResponseV2Async(db, body, { env: process.env })
     send(res, result.status, result.body)
     return true
   }
