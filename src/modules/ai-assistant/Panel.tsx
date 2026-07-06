@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, MessageCircle, RotateCcw, Send, Sparkles, X } from "lucide-react";
-import { apiJson } from "../../lib/api-client";
 import {
   navigationIntentFromInternalTarget,
   navigationIntentFromEvidenceLink,
@@ -14,6 +13,7 @@ import { typography } from "../../components/ui/typography";
 import { AiResponseV2Renderer } from "../../components/ai/AiResponseV2Renderer";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import type { AiResponseV2 } from "../../domain/ai/response-contract";
+import { focusTargetFromActiveContext, postAiRuntimeResponse } from "./aiRuntimeGateway";
 import { aiDisplayMessage, looksLikeRawJson, normalizeAiCardValue, safeUnknownCardMessage, sanitizeAiMessage } from "./presentation";
 import { getContextualQuickPrompts } from "./prompts";
 
@@ -51,19 +51,11 @@ type AiChatCard = {
   matches?: Record<string, unknown>[];
 };
 
-type AiChatResponse = {
-  message?: string;
-  content?: string;
-  cards?: AiChatCard[];
-  timingMs?: number;
-  modelMs?: number;
-  externalMs?: number;
-};
-
 type AiNavigateOptions = {
   returnTo?: string;
   entityLabel?: string;
   source?: string;
+  returnContext?: unknown;
 };
 
 type AiNavigate = (moduleId: string, focusTarget?: CanonicalFocusTarget | null, options?: AiNavigateOptions) => void;
@@ -1503,33 +1495,32 @@ export default function FloatingAiAssistant({
     }, 12000);
 
     try {
-      const response = await apiJson<AiChatResponse>("/api/ai/chat", {
-        method: "POST",
-        signal: controller.signal,
-        body: JSON.stringify({
-          moduleId,
-          question: message,
-          message,
-          sessionGrounding,
-          ...(context ? { activeContext: context } : {}),
-        }),
-      });
-      const rawContent = response.message || response.content || "";
-      const content = aiDisplayMessage(rawContent, Boolean(response.cards?.length));
+      const response = await postAiRuntimeResponse({
+        message,
+        activeModuleId: moduleId,
+        activeViewId: context?.view,
+        focusTarget: focusTargetFromActiveContext(context),
+        conversationContext: {
+          previousQuestion: sessionGrounding.lastIntent,
+          previousAnswerSummary: sessionGrounding.lastPrimaryEntity?.label,
+          userIntentLabel: context?.entityLabel || contextLabel,
+        },
+        sessionGrounding,
+        returnTo: "ai-assistant",
+      }, controller.signal);
+      const rawContent = response.runtimeModeLabel || "证据辅助回答 · 当前工作区数据 · 复核优先";
+      const content = aiDisplayMessage(rawContent, true);
       if (looksLikeRawJson(rawContent)) console.debug("AI assistant raw content suppressed", rawContent);
       if (import.meta.env.DEV) {
         console.debug("AI assistant request completed", {
           elapsedMs: Math.round(performance.now() - requestStartedAt),
-          timingMs: response.timingMs,
-          modelMs: response.modelMs,
-          externalMs: response.externalMs,
-          cards: response.cards?.length || 0,
+          cards: 1,
         });
       }
       if (requestSeqRef.current !== requestId) return;
       setMessages((current) => [
         ...current,
-        { role: "assistant", content, cards: response.cards },
+        { role: "assistant", content, cards: [{ type: "ai_response_v2", data: response as unknown as Record<string, unknown> }] },
       ]);
     } catch (error) {
       if (requestSeqRef.current !== requestId || abortReasonRef.current === "unmount" || abortReasonRef.current === "superseded") return;
@@ -1547,8 +1538,8 @@ export default function FloatingAiAssistant({
         {
           role: "assistant",
           content: timeoutHit || abortReasonRef.current === "timeout"
-            ? "AI 助手响应超时，可能是本地 API 服务未响应。可以重试，或先查看 Today Cockpit。"
-            : "AI 助手暂时无法连接，请稍后再试。",
+            ? "AI 助手响应超时，当前未能读取工作区证据。可以重新生成，或先查看当前页面证据。"
+            : "AI 助手暂不可用，请稍后重试。当前未能读取工作区证据。",
           retryPrompt: timeoutHit || abortReasonRef.current === "timeout" ? message : undefined,
         },
       ]);
@@ -1597,6 +1588,13 @@ export default function FloatingAiAssistant({
               <div className="rounded-xl px-3 py-3 space-y-3" style={{ background: A.gray6, color: A.sub }}>
                 <div data-testid="ai-empty-context-chip" className={`${typography.compactMetadata} inline-flex rounded-full px-2 py-1`} style={{ background: A.white, color: A.gray1, border: `1px solid ${A.border}` }}>
                   当前上下文：{contextLabel}
+                </div>
+                <div data-testid="ai-runtime-boundary" className="grid grid-cols-3 gap-1.5 text-[10px]">
+                  {["当前工作区数据", "证据辅助回答", "复核优先", "草稿预览", "人工复核", "不形成正式业务处理", "不外发", "不写库存", "不写财务凭证", "不处理资金", "不改主数据", "不覆盖当前工作区数据"].map((label) => (
+                    <span key={label} className="rounded-full px-2 py-1 text-center" style={{ background: A.white, color: A.gray1, border: `1px solid ${A.border}` }}>
+                      {label}
+                    </span>
+                  ))}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {AI_EMPTY_STATE_PROMPT_CHIPS.map((chip) => (

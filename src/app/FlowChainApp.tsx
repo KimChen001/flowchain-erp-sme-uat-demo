@@ -632,7 +632,7 @@ export default function FlowChainApp() {
           originIntent: options.source || "businessNavigation",
           returnLabel: searchFocus?.entityId
             ? `返回 ${FOCUS_ENTITY_LABELS[searchFocus.entityType] || "业务对象"} ${searchFocus.entityId}`
-            : options.source === "ai"
+            : options.source === "ai" || options.source === "aiRuntimeGateway"
               ? "返回 AI 结果"
               : options.source === "globalSearch"
                 ? "返回全局搜索"
@@ -744,13 +744,16 @@ export default function FlowChainApp() {
   const focusEntityLabel = searchFocus
     ? `${SEARCH_TYPE_LABELS[searchFocus.entityType] || searchFocus.entityType} · ${searchFocus.entityLabel || searchFocus.entityId}`
     : "";
-  const focusSourceLabel = searchFocus?.source === "ai"
+  const focusSourceLabel = searchFocus?.source === "ai" || searchFocus?.source === "aiRuntimeGateway"
     ? "AI 助手"
     : searchFocus?.source === "globalSearch"
       ? "全局搜索"
       : searchFocus?.source === "evidenceGraph" || searchFocus?.source === "evidence"
         ? "证据链"
         : "业务跳转";
+  const focusReturnHint = searchFocus?.source === "ai" || searchFocus?.source === "aiRuntimeGateway"
+    ? "返回 AI 结果"
+    : "可返回来源对象或返回列表";
 
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel initialView={activeView} onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
@@ -1085,7 +1088,7 @@ export default function FlowChainApp() {
                   <div className="min-w-0">
                     <div className="text-[11px] font-semibold" style={{ color: A.blue }}>当前聚焦</div>
                     <div className="mt-1 truncate text-sm font-semibold tabular-nums" style={{ color: A.label }}>{focusEntityLabel}</div>
-                    <div className="mt-1 text-[11px]" style={{ color: A.sub }}>来源：{focusSourceLabel}，可返回来源对象或返回列表。</div>
+                    <div className="mt-1 text-[11px]" style={{ color: A.sub }}>来源：{focusSourceLabel}，{focusReturnHint}。</div>
                   </div>
                   <RecoveryActions
                     className="shrink-0"

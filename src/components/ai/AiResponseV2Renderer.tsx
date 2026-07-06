@@ -14,6 +14,7 @@ type NavigateOptions = {
   returnTo?: string;
   entityLabel?: string;
   source?: string;
+  returnContext?: unknown;
 };
 
 type Navigate = (moduleId: string, focusTarget?: CanonicalFocusTarget | null, options?: NavigateOptions) => void;
@@ -79,9 +80,16 @@ function navigateLink(onNavigate: Navigate | undefined, link: AiResponseV2Naviga
   const moduleId = target?.moduleId || ("moduleId" in link ? link.moduleId : "");
   if (!moduleId) return undefined;
   return () => onNavigate(moduleId, focusTarget(target.entityType, target.entityId), {
-    returnTo: "ai",
+    returnTo: "returnTo" in link && link.returnTo ? link.returnTo : "ai-assistant",
     entityLabel: label,
-    source: "ai",
+    source: "source" in link && link.source ? link.source : "aiRuntimeGateway",
+    returnContext: "returnContext" in link ? link.returnContext : {
+      sourceModule: "ai-assistant",
+      sourceRoute: "ai-assistant",
+      sourceLabel: "AI 助手",
+      returnLabel: "返回 AI 助手",
+      originIntent: "aiRuntimeGateway",
+    },
   });
 }
 

@@ -47,6 +47,7 @@ import { handleUserRolePermissionVisibilityRoute } from './user-role-permission-
 import { handleWorkspaceBoundaryVisibilityRoute } from './workspace-boundary-visibility.routes.mjs'
 import { handleAuditIntegrationHistoryRoute } from './audit-integration-history.routes.mjs'
 import { handlePilotReadinessGovernanceRoute } from './pilot-readiness-governance.routes.mjs'
+import { handleAiRuntimeGatewayRoute } from './ai-runtime-gateway.routes.mjs'
 import { handleMrpRoute } from './mrp.routes.mjs'
 import { handleSopRoute } from './sop.routes.mjs'
 import { handleActionDraftsRoute } from './action-drafts.routes.mjs'
@@ -1041,6 +1042,7 @@ export function createScmServer() {
     if (await handleWorkspaceBoundaryVisibilityRoute(routeContext)) return
     if (await handleAuditIntegrationHistoryRoute(routeContext)) return
     if (await handlePilotReadinessGovernanceRoute(routeContext)) return
+    if (await handleAiRuntimeGatewayRoute(routeContext)) return
     if (await handleTodayCockpitRoute(routeContext)) return
     if (await handleInventoryRoute(routeContext)) return
     if (await handleProcurementReadRoute(routeContext)) return

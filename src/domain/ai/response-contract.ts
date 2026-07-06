@@ -65,7 +65,10 @@ export type AiResponseV2NavigationLink = {
   entityType?: string;
   entityId?: string;
   returnLabel?: string;
+  returnTo?: string;
+  source?: string;
   reason?: string;
+  returnContext?: unknown;
 };
 
 export type AiResponseV2DataLimitation = {
