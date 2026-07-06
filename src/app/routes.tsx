@@ -141,6 +141,7 @@ export const navItems = [
     children: [
       { id: "settings", label: "工作区配置" },
       { id: "settings:roles", label: "角色权限可见性" },
+      { id: "settings:boundaries", label: "工作区边界" },
       { id: "settings:modules", label: "模块启用状态" },
       { id: "settings:review", label: "复核策略" },
       { id: "settings:numbering", label: "编号规则" },

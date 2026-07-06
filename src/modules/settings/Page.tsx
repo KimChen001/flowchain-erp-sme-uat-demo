@@ -4,29 +4,39 @@ import { WorkspaceSetupConfigV2 } from "../../components/settings/WorkspaceSetup
 import { fetchWorkspaceSetupConfig, type WorkspaceSetupConfigV2 as WorkspaceSetupConfigPayload } from "./workspaceSetupConfig";
 import { UserRolePermissionVisibilityV2 } from "../../components/settings/UserRolePermissionVisibilityV2";
 import { fetchUserRolePermissionVisibility, type UserRolePermissionVisibilityV2 as RolePermissionPayload } from "./rolePermissionVisibility";
+import { WorkspaceBoundaryVisibilityV2 } from "../../components/settings/WorkspaceBoundaryVisibilityV2";
+import { fetchWorkspaceBoundaryVisibility, type WorkspaceBoundaryVisibilityV2 as BoundaryPayload } from "./workspaceBoundaryVisibility";
 
 type NavigateFn = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
 
 export default function SettingsPage({ initialView, onNavigate }: { initialView?: string; onNavigate: NavigateFn }) {
   const isRoleView = initialView === "roles";
+  const isBoundaryView = initialView === "boundaries";
   const [workspacePayload, setWorkspacePayload] = useState<WorkspaceSetupConfigPayload | null>(null);
   const [rolePayload, setRolePayload] = useState<RolePermissionPayload | null>(null);
+  const [boundaryPayload, setBoundaryPayload] = useState<BoundaryPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    const request = isRoleView ? fetchUserRolePermissionVisibility() : fetchWorkspaceSetupConfig();
+    const request = isBoundaryView ? fetchWorkspaceBoundaryVisibility() : isRoleView ? fetchUserRolePermissionVisibility() : fetchWorkspaceSetupConfig();
     request
       .then((next) => {
         if (!alive) return;
-        if (isRoleView) {
+        if (isBoundaryView) {
+          setBoundaryPayload(next as BoundaryPayload);
+          setRolePayload(null);
+          setWorkspacePayload(null);
+        } else if (isRoleView) {
           setRolePayload(next as RolePermissionPayload);
           setWorkspacePayload(null);
+          setBoundaryPayload(null);
         } else {
           setWorkspacePayload(next as WorkspaceSetupConfigPayload);
           setRolePayload(null);
+          setBoundaryPayload(null);
         }
         setError(false);
       })
@@ -34,13 +44,14 @@ export default function SettingsPage({ initialView, onNavigate }: { initialView?
         if (!alive) return;
         setWorkspacePayload(null);
         setRolePayload(null);
+        setBoundaryPayload(null);
         setError(true);
       })
       .finally(() => {
         if (alive) setLoading(false);
       });
     return () => { alive = false; };
-  }, [isRoleView]);
+  }, [isRoleView, isBoundaryView]);
 
   if (loading) {
     return (
@@ -56,12 +67,12 @@ export default function SettingsPage({ initialView, onNavigate }: { initialView?
     );
   }
 
-  const payloadReady = isRoleView ? rolePayload : workspacePayload;
+  const payloadReady = isBoundaryView ? boundaryPayload : isRoleView ? rolePayload : workspacePayload;
   if (error || !payloadReady) {
     return (
-      <Card className="p-6" data-testid={isRoleView ? "user-role-permission-visibility" : "workspace-setup-config"}>
+      <Card className="p-6" data-testid={isBoundaryView ? "workspace-boundary-visibility" : isRoleView ? "user-role-permission-visibility" : "workspace-setup-config"}>
         <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>系统设置</h1>
-        <div className="mt-3 text-sm" style={{ color: A.red }}>{isRoleView ? "角色权限可见性" : "工作区配置"}暂不可用，请稍后重试。</div>
+        <div className="mt-3 text-sm" style={{ color: A.red }}>{isBoundaryView ? "工作区边界" : isRoleView ? "角色权限可见性" : "工作区配置"}暂不可用，请稍后重试。</div>
         <div className="mt-4">
           <RecoveryActions actions={[{ key: "reload", label: "重新加载", onClick: () => window.location.reload(), kind: "list" }]} />
         </div>
@@ -69,6 +80,7 @@ export default function SettingsPage({ initialView, onNavigate }: { initialView?
     );
   }
 
+  if (isBoundaryView && boundaryPayload) return <WorkspaceBoundaryVisibilityV2 payload={boundaryPayload} onNavigate={onNavigate} />;
   if (isRoleView && rolePayload) return <UserRolePermissionVisibilityV2 payload={rolePayload} onNavigate={onNavigate} />;
   return <WorkspaceSetupConfigV2 payload={workspacePayload as WorkspaceSetupConfigPayload} onNavigate={onNavigate} />;
 }
