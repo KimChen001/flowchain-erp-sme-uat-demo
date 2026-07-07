@@ -88,7 +88,7 @@ test('action draft preview route remains non-mutating and never calls persistDra
   assert.deepEqual(db, before)
 })
 
-test('JSON mode save route returns demo-safe not implemented without mutating business data', async () => {
+test('JSON mode save route returns safe not implemented without mutating business data', async () => {
   const db = createDb()
   const before = clone(db)
   const route = createRouteContext({

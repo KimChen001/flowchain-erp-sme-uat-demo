@@ -118,7 +118,7 @@ function assertCleanRuntimeOutput(payload, label) {
   assert.doesNotMatch(text, /打开采购单据并确认责任人与截止日期|复核库存覆盖与再订货点|确认待回复供应商、最佳报价和授标依据/, label)
 }
 
-test('R121-HF runtime Today priority uses demo data counts, evidence, and object-specific actions', async () => {
+test('R121-HF runtime Today priority uses workspace data counts, evidence, and object-specific actions', async () => {
   const payload = await ask('今天最需要处理什么？')
   assert.equal(payload.intent.name, 'today_cockpit_priority_query')
   assertCleanRuntimeOutput(payload, 'today priority')

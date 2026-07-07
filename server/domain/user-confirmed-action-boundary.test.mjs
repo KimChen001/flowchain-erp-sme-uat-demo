@@ -119,7 +119,7 @@ test('R253 repository creates scoped non-destructive records without business si
   assert.equal(otherScope.length, 0)
 })
 
-test('R254-R257 route creates safe records and records audit without demo data mutation', async () => {
+test('R254-R257 route creates safe records and records audit without protected fixture data mutation', async () => {
   const db = createEmptyDataset({ mode: 'test' })
   const before = JSON.stringify(db)
   const route = routeHarness({ db })

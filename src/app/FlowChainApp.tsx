@@ -26,7 +26,7 @@ import type { WorkflowContext } from "../lib/workflowContext";
 import { buildReturnContext } from "../lib/workflowContext";
 import { typography } from "../components/ui/typography";
 import type {
-  DemoUser,
+  WorkspaceUser,
   PurchaseIntent,
 } from "../types/scm";
 import {
@@ -309,7 +309,7 @@ function searchGroupKey(type: string) {
   return type === "bin" ? "warehouse" : type;
 }
 
-function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => void }) {
+function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string) => void }) {
   const [form, setForm] = useState({
     company: "新辰智能制造",
     name: "张磊",
@@ -322,7 +322,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: DemoUser, token: string) => 
     event.preventDefault();
     setLoading(true);
     try {
-      const result = await apiJson<{ token: string; user: DemoUser }>("/api/auth/login", {
+      const result = await apiJson<{ token: string; user: WorkspaceUser }>("/api/auth/login", {
         method: "POST",
         body: JSON.stringify(form),
       });
@@ -495,7 +495,7 @@ export default function FlowChainApp() {
   const searchRef = useRef<HTMLFormElement | null>(null);
   const [unreadCount] = useState(3);
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
-  const [user, setUser] = useState<DemoUser | null>(() => {
+  const [user, setUser] = useState<WorkspaceUser | null>(() => {
     try {
       const raw = localStorage.getItem("scm-demo-user");
       return raw ? JSON.parse(raw) : null;
@@ -779,7 +779,7 @@ export default function FlowChainApp() {
     settings: <SettingsPage initialView={activeView as any} onNavigate={navigateTo} />,
   };
 
-  function handleLogin(nextUser: DemoUser, token: string) {
+  function handleLogin(nextUser: WorkspaceUser, token: string) {
     setUser(nextUser);
     setAuthToken(token);
   }

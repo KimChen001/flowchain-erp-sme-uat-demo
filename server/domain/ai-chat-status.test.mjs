@@ -335,7 +335,7 @@ test('general inventory risk query returns inventory risk summary', () => {
   assert.ok(response.cards.some((card) => card.type === 'evidence'))
 })
 
-test('inventory AI UAT prompts return localized deterministic evidence actions and stay read-only', async () => {
+test('inventory AI controlled-review prompts return localized deterministic evidence actions and stay read-only', async () => {
   const db = createDb()
   const before = businessSnapshot(db)
   const prompts = [
@@ -481,7 +481,7 @@ test('procurement exception query returns empty state when no issues are availab
   assert.ok(response.evidence.some((item) => item.type === 'empty_state'))
 })
 
-test('planning AI UAT prompts return deterministic Forecast/MRP evidence and stay read-only', async () => {
+test('planning AI controlled-review prompts return deterministic Forecast/MRP evidence and stay read-only', async () => {
   const db = createDb({
     products: [
       { sku: 'SKU-FG', name: 'Finished Good', category: 'FG', currentStock: 0, allocated: 0, safetyStock: 10, moq: 50, batchMultiple: 10, leadTimePeriods: 2, unit: 'pcs', supplier: 'ABC Components', unitPrice: 10 },

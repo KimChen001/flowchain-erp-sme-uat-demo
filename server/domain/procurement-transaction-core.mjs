@@ -62,7 +62,7 @@ export const PROCUREMENT_TRANSACTION_BASELINE = Object.freeze({
     poDraft: 'business draft only; never issue, send, approve, post, or reserve inventory',
   },
   currentGaps: [
-    'Legacy PR/RFQ pages still contain direct mutation routes for manual demo workflows.',
+    'Legacy PR/RFQ pages still contain direct mutation routes for manual workspace workflows.',
     'Supplier responses and award recommendations are not first-class read records.',
     'PO preparation from award context needs a draft-only model with explicit side-effect guardrails.',
   ],

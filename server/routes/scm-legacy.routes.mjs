@@ -959,7 +959,7 @@ export function createScmServer() {
     if (req.method === 'GET' && url.pathname === '/api/auth/me') {
       const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
       const user = ensureUsers(db).find((item) => item.token === token)
-      if (!user) return send(res, 401, { error: 'invalid demo token' })
+      if (!user) return send(res, 401, { error: 'invalid workspace session token' })
       return send(res, 200, publicUser(user))
     }
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This round adds a repeatable lightweight system harness for FlowChain after Rounds 1-11. The harness is not a full browser E2E suite. It is a product-path and contract-level safety net that exercises the JSON/demo-data-backed read models, route handlers, AI safety boundaries, draft-first flows, evidence navigation shape, typography guardrails, and documentation consistency.
+This round adds a repeatable lightweight system harness for FlowChain after Rounds 1-11. The harness is not a full browser E2E suite. It is a product-path and contract-level safety net that exercises the current workspace read models, route handlers, AI safety boundaries, draft-first flows, evidence navigation shape, typography guardrails, and documentation consistency.
 
 Primary test file:
 
@@ -42,10 +42,10 @@ Covered by the system harness and existing draft tests:
 Covered by the system harness and AI-specific tests:
 
 - External providers are disabled unless explicitly opted in.
-- Fake `OPENAI_API_KEY`, `ARK_API_KEY`, and `DOUBAO_API_KEY` do not enable provider calls.
+- Placeholder provider keys do not enable provider calls.
 - Cockpit prompt `今天最需要处理什么？` uses deterministic local fast path.
 - Provider-disabled fallback is sanitized.
-- Payloads do not expose fake keys, bearer tokens, stack traces, or raw provider errors.
+- Payloads do not expose placeholder keys, bearer tokens, stack traces, or raw provider errors.
 - Cockpit fast path does not wait for audit persistence.
 - Read-only AI answers stay successful when DB audit persistence fails.
 
@@ -135,9 +135,9 @@ Docs reviewed for consistency with:
 
 No broad doc rewrite is included in this round.
 
-### Demo / UAT Scenario Harness
+### Controlled Review Scenario Harness
 
-The harness locks the backend/helper-level readiness for a manual UAT flow:
+The harness locks the backend/helper-level readiness for a controlled review flow:
 
 - open Today Cockpit;
 - inspect inventory risk;

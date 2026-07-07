@@ -176,7 +176,7 @@ export function buildMasterDataSeedRows(db = {}, options = {}) {
   return {
     tenant: {
       id: tenantId,
-      name: text(options.tenantName, 'FlowChain SME Demo Tenant'),
+      name: text(options.tenantName, 'FlowChain SME Workspace Tenant'),
       locale: text(options.locale, 'zh-CN'),
       currency: text(options.currency, 'CNY'),
     },

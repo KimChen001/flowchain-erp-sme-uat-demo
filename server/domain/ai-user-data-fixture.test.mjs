@@ -91,7 +91,7 @@ test('R154 user-like fixture contains only user scenario ids for business record
   assert.doesNotMatch(serialized, DEMO_ID_PATTERN)
 })
 
-test('R155 AI routes use user-like data ids and never leak demo ids', async () => {
+test('R155 AI routes use user-like data ids and never leak protected fixture ids', async () => {
   const cases = [
     { question: '今天最需要处理什么？', mustInclude: /PO-USER-0001|SKU-USER-0001|RFQ-USER-0001/ },
     { question: 'PO-USER-0001 为什么优先？', mustInclude: /PO-USER-0001/ },
@@ -126,7 +126,7 @@ test('R155 receiving gap computes user-like remaining quantity', async () => {
   assert.doesNotMatch(text, DEMO_ID_PATTERN)
 })
 
-test('R156 core runtime AI modules do not hardcode demo scenario ids', () => {
+test('R156 core runtime AI modules do not hardcode protected fixture scenario ids', () => {
   const runtimeFiles = [
     'server/routes/ai.routes.mjs',
     'server/domain/ai-business-intent-router.mjs',

@@ -81,7 +81,7 @@ export function makePoInsight(input: {
     recommendedActions: actions,
     linkedRecords: records,
     limitations: limitationMessages(evidenceBundle, records.length ? ["Relationship depth depends on current PR/RFQ/GRN/invoice links."] : ["No linked RFQ, GRN, or invoice found in current data."]),
-    provenance: "PO detail read model and linked demo/user records.",
+    provenance: "PO detail read model and linked workspace records.",
     auditPreview: "ai_contextual_po_insight_previewed",
   };
 }

@@ -100,7 +100,7 @@ test('missing quantity becomes manual-review warning when no safe suggestion exi
   assert.match(result.draft.validation.warnings[0], /manual review/i)
 })
 
-test('PR draft preview route is preview-only and does not mutate demo db', async () => {
+test('PR draft preview route is preview-only and does not mutate workspace db', async () => {
   const db = createDb()
   const before = JSON.stringify(db)
   const route = createRouteContext({

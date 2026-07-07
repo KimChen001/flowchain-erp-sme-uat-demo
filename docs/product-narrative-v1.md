@@ -2,9 +2,9 @@
 
 ## Positioning
 
-FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier operations platform for SMEs.
+FlowChain is a lightweight inventory, purchasing, and supplier collaboration system for SMEs.
 
-FlowChain 是面向中小企业的 AI 进销存与供应链协同工作台，帮助团队围绕销售需求、库存、采购、收货、供应商和发票协同异常，识别交付风险、解释供需缺口、生成可复核动作，并形成可追踪的异常处理闭环。
+FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统。系统以当前工作区数据为基础，帮助运营团队查看今日行动、追踪 PO/SKU/供应商证据链、识别数据限制，并在人工复核前预览业务草稿。
 
 FlowChain is not a full ERP replacement, not a full finance/GL system, not an HR/payroll system, not a CRM/customer lifecycle suite, not a bank/payment execution system, not a tax filing system, and not an autonomous AI execution platform.
 

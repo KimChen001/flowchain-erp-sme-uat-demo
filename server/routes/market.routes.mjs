@@ -1,39 +1,41 @@
 let externalCache = { at: 0, data: null }
 
 const marketPriceProvenance = {
-  sourceType: 'demo',
-  provider: 'demo-market-signal',
-  isDemo: true,
+  sourceType: 'workspace_snapshot',
+  provider: 'workspace-market-signal',
+  isDemo: false,
   isRealtime: false,
-  confidence: 'demo',
-  provenanceNote: 'UAT demo signal; not real-time market data',
+  confidence: 'workspace_snapshot',
+  provenanceNote: 'Workspace market signal snapshot; not real-time market data',
 }
 
 const externalSignalProvenance = {
-  sourceType: 'demo',
-  provider: 'demo-external-signal',
-  isDemo: true,
+  sourceType: 'workspace_snapshot',
+  provider: 'workspace-external-signal',
+  isDemo: false,
   isRealtime: false,
-  confidence: 'demo',
-  provenanceNote: 'UAT demo signal; not real-time external intelligence',
+  confidence: 'workspace_snapshot',
+  provenanceNote: 'Workspace external signal snapshot; not real-time external intelligence',
 }
 
-export function buildDemoMarketMeta(extra = {}) {
+export function buildWorkspaceMarketMeta(extra = {}) {
   return {
-    provider: 'demo-market-signal',
-    isDemo: true,
+    provider: 'workspace-market-signal',
+    isDemo: false,
     isRealtime: false,
-    note: 'Demo refresh only; no real external API was called.',
+    note: 'Workspace signal refresh only; no real external API was called.',
     ...extra,
   }
 }
 
 export function normalizeMarketPrice(item) {
-  const asOfDate = item.asOfDate || item.asOf || 'demo'
+  const asOfDate = item.asOfDate || item.asOf || 'workspace-snapshot'
+  const source = String(item.source || '').replace(/UAT\s*行情数据|UAT行情样本|UAT行情刷新/g, '工作区行情快照')
   return {
     ...item,
     ...marketPriceProvenance,
     asOfDate,
+    source,
   }
 }
 
@@ -44,7 +46,7 @@ export function normalizeMarketSignal(item) {
   }
 }
 
-function demoMarketPrices() {
+function workspaceMarketPrices() {
   const asOf = new Date().toISOString().slice(0, 16).replace('T', ' ')
   return [
     {
@@ -56,7 +58,7 @@ function demoMarketPrices() {
       changePct: 1.18,
       direction: 'up',
       asOf,
-      source: 'UAT行情样本',
+      source: '工作区行情快照',
       procurementImpact: '影响钢结构件、铝型材替代方案和华东精工机械报价复核。',
     },
     {
@@ -68,7 +70,7 @@ function demoMarketPrices() {
       changePct: 0.64,
       direction: 'up',
       asOf,
-      source: 'UAT行情样本',
+      source: '工作区行情快照',
       procurementImpact: '若连续上涨，建议锁定本周钢材采购报价并复核安全库存。',
     },
     {
@@ -80,7 +82,7 @@ function demoMarketPrices() {
       changePct: -0.22,
       direction: 'down',
       asOf,
-      source: 'UAT行情样本',
+      source: '工作区行情快照',
       procurementImpact: '价格回落时可暂缓低优先级补采，优先处理高风险缺料订单。',
     },
     {
@@ -92,7 +94,7 @@ function demoMarketPrices() {
       changePct: 0.35,
       direction: 'up',
       asOf,
-      source: 'UAT行情样本',
+      source: '工作区行情快照',
       procurementImpact: '关联 SKU-00287 铝合金型材，当前库存低于安全线，应优先补采。',
     },
     {
@@ -104,7 +106,7 @@ function demoMarketPrices() {
       changePct: -0.48,
       direction: 'down',
       asOf,
-      source: 'UAT行情样本',
+      source: '工作区行情快照',
       procurementImpact: '可复核电气元件供应商报价，争取铜价回落带来的成本让利。',
     },
     {
@@ -124,17 +126,16 @@ function demoMarketPrices() {
 
 export function ensureMarketPrices(db) {
   if (!Array.isArray(db.marketPrices) || db.marketPrices.length === 0) {
-    db.marketPrices = demoMarketPrices()
-  } else {
-    db.marketPrices = db.marketPrices.map(normalizeMarketPrice)
+    const prices = workspaceMarketPrices()
+    db.marketPrices = prices
+    return prices
   }
-  return db.marketPrices
+  return db.marketPrices.map(normalizeMarketPrice)
 }
 
 export function ensureMarketSignals(db) {
   if (!Array.isArray(db.marketSignals)) db.marketSignals = []
-  db.marketSignals = db.marketSignals.map(normalizeMarketSignal)
-  return db.marketSignals
+  return db.marketSignals.map(normalizeMarketSignal)
 }
 
 function findMarketPrices(question = '', db) {
@@ -165,25 +166,25 @@ export function marketPriceReply(question, db) {
     '采购影响建议:',
     impacts,
     '',
-    '说明: 这是 UAT 行情样本/缓存数据，用于功能测试和业务链路验证；正式版应接入交易所、钢联、卓创、Wind 或企业采购行情源。',
+    '说明: 这是当前工作区行情快照，用于辅助采购复核；接入正式行情源前，应由人工结合交易所、钢联、卓创、Wind 或企业采购行情源复核。',
   ].join('\n')
 }
 
-function demoExternalNews() {
+function workspaceExternalNews() {
   return [
     {
       title: '产业链供应链安全与物流韧性成为采购风险关注点',
-      url: 'demo://external-signal/supply-chain-resilience',
-      domain: 'demo-external-signal',
-      seendate: 'demo',
+      url: 'workspace://external-signal/supply-chain-resilience',
+      domain: 'workspace-external-signal',
+      seendate: 'workspace-snapshot',
       sourcecountry: 'Global',
       ...externalSignalProvenance,
     },
     {
       title: '制造业企业继续关注核心零部件交期与合规要求',
-      url: 'demo://external-signal/component-lead-time',
-      domain: 'demo-external-signal',
-      seendate: 'demo',
+      url: 'workspace://external-signal/component-lead-time',
+      domain: 'workspace-external-signal',
+      seendate: 'workspace-snapshot',
       sourcecountry: 'Global',
       ...externalSignalProvenance,
     },
@@ -197,7 +198,7 @@ export async function fetchExternalSignals() {
   const fetchedAt = new Date(now).toISOString()
   const fx = {
     base: 'USD',
-    date: 'demo',
+    date: 'workspace-snapshot',
     rates: {
       CNY: 6.7694,
       EUR: 0.92,
@@ -205,18 +206,18 @@ export async function fetchExternalSignals() {
     },
     ...externalSignalProvenance,
   }
-  const news = demoExternalNews()
+  const news = workspaceExternalNews()
   const signals = [
     normalizeMarketSignal({
       type: 'fx',
       title: `USD/CNY ${fx.rates.CNY}`,
       severity: '低',
-      value: `Demo FX signal: USD/CNY=${fx.rates.CNY}, USD/EUR=${fx.rates.EUR}, USD/JPY=${fx.rates.JPY}`,
+      value: `工作区汇率信号: USD/CNY=${fx.rates.CNY}, USD/EUR=${fx.rates.EUR}, USD/JPY=${fx.rates.JPY}`,
       recommendedAction: '检查美元计价采购合同和进口件报价有效期。',
     }),
     normalizeMarketSignal({
       type: 'news',
-      title: '使用供应链风险主题 demo signal',
+      title: '使用供应链风险主题工作区信号',
       severity: '低',
       value: news.map((item) => `${item.title} (${item.domain})`).join('；'),
       recommendedAction: '保留内部 ERP 风险判断，正式环境再接入经审批的外部信号源。',
@@ -230,9 +231,9 @@ export async function fetchExternalSignals() {
       fx,
       news,
       signals,
-      meta: buildDemoMarketMeta({
-        provider: 'demo-external-signal',
-        note: 'Demo external signal only; no real external API was called.',
+      meta: buildWorkspaceMarketMeta({
+        provider: 'workspace-external-signal',
+        note: 'Workspace external signal only; no real external API was called.',
       }),
     },
   }
@@ -251,9 +252,9 @@ export async function handleMarketRoute(ctx) {
     const prices = ensureMarketPrices(db)
     return send(res, 200, {
       asOf: prices[0]?.asOf || null,
-      source: 'UAT 行情数据',
+      source: '工作区行情数据',
       prices,
-      meta: buildDemoMarketMeta(),
+      meta: buildWorkspaceMarketMeta(),
     })
   }
 
@@ -268,7 +269,7 @@ export async function handleMarketRoute(ctx) {
         changePct: nextChange,
         direction: nextChange > 0 ? 'up' : nextChange < 0 ? 'down' : 'flat',
         asOf: now,
-        source: item.source.includes('UAT') ? 'UAT行情刷新' : item.source,
+        source: item.source.includes('工作区') ? '工作区行情刷新' : item.source,
       })
     })
     db.marketPrices = prices
@@ -276,9 +277,9 @@ export async function handleMarketRoute(ctx) {
     await writeDb(db)
     return send(res, 200, {
       asOf: now,
-      source: 'UAT 行情数据',
+      source: '工作区行情数据',
       prices,
-      meta: buildDemoMarketMeta(),
+      meta: buildWorkspaceMarketMeta(),
     })
   }
 

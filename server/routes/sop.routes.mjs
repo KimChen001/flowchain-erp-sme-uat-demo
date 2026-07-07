@@ -98,7 +98,7 @@ export async function handleSopRoute(ctx) {
       financialConstraint: body.financialConstraint || draft.financialConstraint,
       consensus: body.consensus || draft.consensus,
       approvers: Array.isArray(body.approvers) ? body.approvers : draft.consensus.approvers,
-      approvedBy: body.approvedBy || '系统演示用户',
+      approvedBy: body.approvedBy || '系统工作区用户',
       createdAt: new Date().toISOString(),
     }
     if (!['草案', '待审批', '已发布', '已驳回'].includes(cycle.status)) {

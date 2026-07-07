@@ -79,7 +79,7 @@ async function assertCommitDoesNotWrite(route) {
   assert.equal(route.response.payload.overwritesDemoData, false)
 }
 
-test('R167 commit boundary blocks demo mode and never writes demo data', async () => {
+test('R167 commit boundary blocks protected fixture mode and never writes protected fixture data', async () => {
   const route = createRouteContext({ db: createEmptyDataset({ mode: 'demo' }) })
   await assertCommitDoesNotWrite(route)
   assert.equal(route.response.status, 501)

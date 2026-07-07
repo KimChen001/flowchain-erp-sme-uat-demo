@@ -86,7 +86,7 @@ test('R177 AI read context loads active DB-backed user dataset by tenant user sc
   assert.equal(context.db.products[0].sku, 'SKU-R177-1')
 })
 
-test('R177 missing active user dataset returns safe missing context without demo fallback', async () => {
+test('R177 missing active user dataset returns safe missing context without workspace fallback', async () => {
   const context = await buildAiReadContext(createEmptyDataset({ mode: 'user' }), {
     dataMode: 'user',
     userDataScope: { tenantId: 'tenant-r177', userId: 'missing-user' },

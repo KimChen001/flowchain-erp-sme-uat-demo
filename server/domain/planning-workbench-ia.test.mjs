@@ -119,7 +119,7 @@ test('Phase U.1 planning visible copy remains localized', () => {
     'Unit cost',
     'MRP 静态 profile',
     'forecast UI',
-    'demo/static assumptions',
+    'fixture/static assumptions',
   ]
   for (const text of visibleForbidden) {
     assert.doesNotMatch(forecast, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))

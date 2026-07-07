@@ -128,7 +128,7 @@ async function closeDraftPreview(page: Page) {
   }
 }
 
-test.describe("AI Copilot browser UAT", () => {
+test.describe("AI Copilot browser controlled review", () => {
   test("R134 empty AI panel shows prompt chips and 今日重点 returns overview", async ({ page }) => {
     await openLoggedInApp(page);
     await openAssistant(page);
@@ -372,7 +372,7 @@ test.describe("AI Copilot browser UAT", () => {
     await expectConfirmedSafeActionBoundary(page, "供应商跟进复核记录");
   });
 
-  test("R129 full AI Copilot demo scenario stays evidence-backed and review-first", async ({ page }) => {
+  test("R129 full AI Copilot workspace scenario stays evidence-backed and review-first", async ({ page }) => {
     await openLoggedInApp(page);
     let assistant = await askTodayPriority(page);
     await expectCleanAssistantOutput(assistant);

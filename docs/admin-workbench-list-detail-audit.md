@@ -52,4 +52,4 @@ Full-width tables feel closer to daily business systems: users can search, filte
 - Export must respect current filters.
 - AI assistant stays floating and complementary.
 - Do not restore an old fixed AI side panel.
-- Do not introduce customer-visible UAT, demo, sample, fallback, or static-data wording.
+- Do not introduce customer-visible development-environment, fixture, fallback, or static-data wording.

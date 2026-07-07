@@ -94,7 +94,7 @@ function businessSnapshot(db) {
 
 function failingReadContextRepositories() {
   const fail = async () => {
-    throw new Error('buildAiReadContext should not run for deterministic RFQ UAT prompts')
+    throw new Error('buildAiReadContext should not run for deterministic RFQ controlled-review prompts')
   }
   return {
     procurementRead: { listDocuments: fail, listFollowups: fail, getSummary: fail },
@@ -291,7 +291,7 @@ test('RFQ pending route returns RFQ response query and does not mutate data', as
   assert.deepEqual(businessSnapshot(db), before)
 })
 
-test('core RFQ UAT response prompts bypass read-context and external provider', async () => {
+test('core RFQ controlled-review response prompts bypass read-context and external provider', async () => {
   const db = createDb()
   const before = businessSnapshot(db)
   const prompts = ['哪些 RFQ 没回复？', 'Which RFQs need response?']

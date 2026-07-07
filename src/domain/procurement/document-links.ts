@@ -1,7 +1,7 @@
 import type { PurchaseOrder, PurchaseRequest, PurchaseReturn, ReceivingDoc, SupplierCreditMemo, SupplierInvoice, SupplierReconciliationStatement } from "../../types/scm";
 import { type DocumentTone, statusTone } from "../../components/document/DocumentShell";
 
-export type DemoDocumentLink = {
+export type BusinessDocumentLink = {
   label: string;
   value: string;
   moduleId?: string;
@@ -20,7 +20,7 @@ export function getInvoiceLinkedDocuments(
   invoice: SupplierInvoice,
   purchaseOrders: PurchaseOrder[],
   receivingDocs: ReceivingDoc[]
-): DemoDocumentLink[] {
+): BusinessDocumentLink[] {
   const po = purchaseOrders.find((item) => item.po === invoice.relatedPo);
   const grn = receivingDocs.find((item) => item.grn === invoice.relatedGrn);
   return [
@@ -28,7 +28,7 @@ export function getInvoiceLinkedDocuments(
     grn ? { label: "GRN / 收货单", value: grn.grn, moduleId: "receiving", tone: documentLinkTone(grn.status) } : present(invoice.relatedGrn) ? { label: "GRN / 收货单", value: invoice.relatedGrn!, moduleId: "receiving", tone: "warning" as const } : undefined,
     { label: "三单匹配结果", value: invoice.matchStatus, moduleId: "procurement", tone: documentLinkTone(invoice.matchStatus) },
     invoice.postedToAp ? { label: "AP / 应付账款", value: invoice.paid ? "已付款" : `已过账应付 · ${invoice.invoiceNumber}`, moduleId: "procurement", tone: invoice.paid ? "success" as const : "purple" as const } : undefined,
-  ].filter(Boolean) as DemoDocumentLink[];
+  ].filter(Boolean) as BusinessDocumentLink[];
 }
 
 export function getPoLinkedDocuments(
@@ -36,7 +36,7 @@ export function getPoLinkedDocuments(
   supplierInvoices: SupplierInvoice[],
   receivingDocs: ReceivingDoc[],
   purchaseRequests: PurchaseRequest[] = []
-): DemoDocumentLink[] {
+): BusinessDocumentLink[] {
   const grns = receivingDocs.filter((item) => item.po === po.po);
   const invoices = supplierInvoices.filter((item) => item.relatedPo === po.po);
   const sourcePr = purchaseRequests.find((item) => item.pr === po.sourceRequest);
@@ -46,21 +46,21 @@ export function getPoLinkedDocuments(
     ...grns.slice(0, 3).map((grn) => ({ label: "GRN / 收货单", value: grn.grn, moduleId: "receiving", tone: documentLinkTone(grn.status) })),
     ...invoices.slice(0, 3).map((invoice) => ({ label: "供应商发票", value: invoice.invoiceNumber, moduleId: "procurement", tone: documentLinkTone(invoice.status) })),
     invoices.some((invoice) => invoice.postedToAp) ? { label: "AP / 应付账款", value: "关联发票已过账", moduleId: "procurement", tone: "purple" as const } : undefined,
-  ].filter(Boolean) as DemoDocumentLink[];
+  ].filter(Boolean) as BusinessDocumentLink[];
 }
 
 export function getGrnLinkedDocuments(
   grn: ReceivingDoc,
   purchaseOrders: PurchaseOrder[],
   supplierInvoices: SupplierInvoice[]
-): DemoDocumentLink[] {
+): BusinessDocumentLink[] {
   const po = purchaseOrders.find((item) => item.po === grn.po);
   const invoices = supplierInvoices.filter((item) => item.relatedGrn === grn.grn || item.relatedPo === grn.po);
   return [
     po ? { label: "PO / 采购订单", value: po.po, moduleId: "purchasing", tone: documentLinkTone(po.status) } : { label: "PO / 采购订单", value: grn.po, moduleId: "purchasing", tone: "warning" },
     ...invoices.slice(0, 3).map((invoice) => ({ label: "供应商发票", value: invoice.invoiceNumber, moduleId: "procurement", tone: documentLinkTone(invoice.status) })),
     invoices.length ? { label: "三单匹配结果", value: invoices.some((invoice) => invoice.varianceType !== "无差异") ? "存在差异" : "可匹配", moduleId: "procurement", tone: invoices.some((invoice) => invoice.varianceType !== "无差异") ? "danger" as const : "success" as const } : undefined,
-  ].filter(Boolean) as DemoDocumentLink[];
+  ].filter(Boolean) as BusinessDocumentLink[];
 }
 
 export function getStatementLinkedDocuments(
@@ -68,7 +68,7 @@ export function getStatementLinkedDocuments(
   supplierInvoices: SupplierInvoice[],
   purchaseOrders: PurchaseOrder[],
   receivingDocs: ReceivingDoc[]
-): DemoDocumentLink[] {
+): BusinessDocumentLink[] {
   const invoiceNumbers = new Set(statement.lines.map((line) => line.relatedInvoice || (line.bizType === "SupplierInvoice" ? line.bizId : "")).filter(Boolean));
   const poNumbers = new Set(statement.lines.map((line) => line.relatedPo || (line.bizType === "PO" ? line.bizId : "")).filter(Boolean));
   const grnNumbers = new Set(statement.lines.map((line) => line.relatedGrn || (line.bizType === "GRN" ? line.bizId : "")).filter(Boolean));
@@ -87,7 +87,7 @@ export function getStatementLinkedDocuments(
     ...pos.slice(0, 3).map((po) => ({ label: "PO / 采购订单", value: po.po, moduleId: "purchasing", tone: documentLinkTone(po.status) })),
     ...grns.slice(0, 3).map((grn) => ({ label: "GRN / 收货单", value: grn.grn, moduleId: "receiving", tone: documentLinkTone(grn.status) })),
     { label: "三单匹配结果", value: hasExceptions ? "存在差异" : "已汇总", moduleId: "procurement", tone: hasExceptions ? "danger" as const : "success" as const },
-  ].filter(Boolean) as DemoDocumentLink[];
+  ].filter(Boolean) as BusinessDocumentLink[];
 }
 
 export function getPurchaseReturnLinkedDocuments(
@@ -97,7 +97,7 @@ export function getPurchaseReturnLinkedDocuments(
   supplierInvoices: SupplierInvoice[],
   creditMemos: SupplierCreditMemo[],
   reconciliationStatements: SupplierReconciliationStatement[]
-): DemoDocumentLink[] {
+): BusinessDocumentLink[] {
   const po = purchaseOrders.find((item) => item.po === returnDoc.relatedPo);
   const grn = receivingDocs.find((item) => item.grn === returnDoc.relatedGrn);
   const invoice = supplierInvoices.find((item) => item.invoiceNumber === returnDoc.relatedInvoice);
@@ -117,5 +117,5 @@ export function getPurchaseReturnLinkedDocuments(
     memo ? { label: "供应商贷项通知", value: memo.creditMemoNo, moduleId: "procurement", tone: documentLinkTone(memo.status) } : { label: "供应商贷项通知", value: "待供应商开具", moduleId: "procurement", tone: "warning" },
     hasApOffset ? { label: "AP / 应付账款", value: "贷项已冲减应付", moduleId: "procurement", tone: "purple" } : memo ? { label: "AP / 应付账款", value: memo.apOffsetStatus, moduleId: "procurement", tone: documentLinkTone(memo.apOffsetStatus) } : undefined,
     statement ? { label: "供应商对账", value: statement.statementNo, moduleId: "procurement", tone: documentLinkTone(statement.status) } : undefined,
-  ].filter(Boolean) as DemoDocumentLink[];
+  ].filter(Boolean) as BusinessDocumentLink[];
 }

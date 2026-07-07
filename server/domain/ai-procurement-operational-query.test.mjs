@@ -146,7 +146,7 @@ function businessSnapshot(db) {
 
 function failingReadContextRepositories() {
   const fail = async () => {
-    throw new Error('buildAiReadContext should not run for deterministic procurement UAT prompts')
+    throw new Error('buildAiReadContext should not run for deterministic procurement controlled-review prompts')
   }
   return {
     procurementRead: { listDocuments: fail, listFollowups: fail, getSummary: fail },
@@ -363,7 +363,7 @@ test('procurement follow-up summary returns read-only counts', async () => {
   assert.deepEqual(businessSnapshot(db), before)
 })
 
-test('core procurement UAT prompts bypass read-context and external provider', async () => {
+test('core procurement controlled-review prompts bypass read-context and external provider', async () => {
   const db = createDb()
   const before = businessSnapshot(db)
   const prompts = [

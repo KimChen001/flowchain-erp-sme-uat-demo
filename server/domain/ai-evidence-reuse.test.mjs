@@ -190,7 +190,7 @@ test('AI evidence reuse answers supplier follow-up questions without provider ca
   })
 })
 
-test('AI route returns deterministic cockpit answer with fake provider keys present', async () => {
+test('AI route returns deterministic cockpit answer with placeholder provider keys present', async () => {
   await withEnv({
     AI_PROVIDER_ENABLED: undefined,
     OPENAI_API_KEY: 'fake-openai-key',

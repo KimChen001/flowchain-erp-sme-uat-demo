@@ -4,13 +4,13 @@
 
 中文：
 
-FlowChain 是面向中小企业的 AI 进销存与供应链协同工作台。
+FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统。
 
-FlowChain 借鉴传统中小企业进销存 ERP 的对象骨架，包括基础资料、采购、销售需求、库存、结算可见性、报表和系统管理，但不做完整 ERP 替代。产品差异化在 AI 证据链、交付风险分析、库存可承诺量、可复核动作草稿和数据限制说明。
+FlowChain 借鉴传统中小企业进销存系统的对象骨架，包括基础资料、采购、销售需求、库存、结算可见性、报表和系统管理，但不做完整 ERP 替代。产品差异化在 AI 证据链、交付风险分析、库存可承诺量、可复核动作草稿和数据限制说明。
 
 English:
 
-FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier operations platform for SMEs.
+FlowChain is a lightweight inventory, purchasing, and supplier collaboration system for SMEs.
 
 ## Visible UI Language Policy
 
@@ -23,27 +23,7 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
   - PO = 采购订单
   - PR = 采购申请
   - GRN = 收货单 / 到货验收单
-- 用户可见页面避免出现：
-  - Demo
-  - UAT
-  - 演示数据
-  - 示例数据
-  - 样例数据
-  - mock
-  - fake
-  - sample data
-  - demo data
-  - UAT data
-  - fallback
-  - ActionDraft
-  - purchase_request_draft
-  - supplier_followup_draft
-  - provider fallback
-  - tool_result
-  - response_card
-  - entityType
-  - documentType
-  - raw JSON
+- 用户可见页面避免出现开发环境、调试、底层技术枚举、供应商调用或数据夹具语境；这些内容应转换为当前工作区数据、来源证据、业务记录、复核优先和草稿预览语境。
 
 ## Recommended Chinese Labels
 
@@ -85,15 +65,14 @@ FlowChain is an AI-assisted inventory, sales-demand, procurement, and supplier o
 
 ## Data Wording Replacements
 
-| Forbidden visible wording | Recommended visible wording |
+| Avoided visible wording pattern | Recommended visible wording |
 | --- | --- |
-| Demo / UAT | 当前版本 / 当前工作区 |
-| 演示数据 / 示例数据 / 样例数据 | 当前工作区数据 / 当前业务数据 |
-| demo data / sample data / UAT data | current workspace data / current business records |
-| fallback | 当前数据范围 / 当前配置 |
-| mock / fake | 占位配置 / 未启用配置 |
-| 当前使用演示客户订单 | 当前页面基于工作区内的客户订单、库存、采购和供应商记录识别交付风险 |
-| 由于这是演示数据 | 当前工作区缺少完整历史履约或库存分配记录，因此建议人工复核 |
+| 开发环境或验收阶段标签 | 当前版本 / 当前工作区 |
+| 数据夹具或数据集标签 | 当前工作区数据 / 当前业务数据 |
+| 调试兜底标签 | 当前数据范围 / 当前配置 |
+| 临时配置标签 | 占位配置 / 未启用配置 |
+| 将客户订单称为非正式数据 | 当前页面基于工作区内的客户订单、库存、采购和供应商记录识别交付风险 |
+| 将数据限制归因于非正式数据 | 当前工作区缺少完整历史履约或库存分配记录，因此建议人工复核 |
 
 ## Technical Naming Boundary
 
@@ -134,7 +113,7 @@ Good:
 
 Bad:
 
-“Forecast/MRP 使用演示商品主数据。”
+“物料需求计划使用非正式商品主数据。”
 
 Good:
 
@@ -150,7 +129,7 @@ Good:
 
 Bad:
 
-“当前使用演示库存数据计算 ATP。”
+“当前使用非正式库存数据计算 ATP。”
 
 Good:
 

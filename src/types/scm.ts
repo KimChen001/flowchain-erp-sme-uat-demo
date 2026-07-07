@@ -310,7 +310,7 @@ export type SupplierRecommendationResult = {
   rfqReason: string;
 };
 
-export type DemoUser = {
+export type WorkspaceUser = {
   id: string;
   company: string;
   name: string;

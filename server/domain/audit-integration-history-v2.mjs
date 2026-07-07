@@ -380,7 +380,7 @@ function buildSettingsGovernanceHistory(workspace) {
     targetSettingLabel: text(rule.objectLabel),
     governanceTypeLabel: '编号规则历史',
     status: text(rule.statusLabel, '当前规则可见'),
-    conclusion: `当前前缀 ${text(rule.prefix)}，示例 ${text(rule.example)}。`,
+        conclusion: `当前前缀 ${text(rule.prefix)}，参考值 ${text(rule.example)}。`,
     keyEvidence: [text(rule.objectLabel), text(rule.prefix)],
     reviewChecklist: ['确认编号对象', '确认业务可读性'],
     boundaryLabels: READ_ONLY_BOUNDARIES,

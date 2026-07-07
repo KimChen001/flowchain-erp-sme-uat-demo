@@ -398,7 +398,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
             <table className="w-full min-w-[880px] text-xs">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${A.border}` }}>
-                  {["来源字段", "系统字段", "来源示例值", "映射状态", "是否必填", "质量提示"].map((header) => (
+                  {["来源字段", "系统字段", "来源参考值", "映射状态", "是否必填", "质量提示"].map((header) => (
                     <th key={header} className="px-5 py-3 text-left font-semibold whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
                   ))}
                 </tr>

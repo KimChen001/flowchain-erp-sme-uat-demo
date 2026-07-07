@@ -1,8 +1,8 @@
-# FlowChain AI Operations Platform for SME Inventory, Sales, Procurement, and Suppliers
+# FlowChain Inventory, Purchasing, and Supplier Collaboration System for SMEs
 
-FlowChain is an AI-assisted operations platform for SMEs to manage sales demand, inventory availability, procurement, receiving, supplier risk, and finance-collaboration exceptions in one evidence-based workflow.
+FlowChain is a lightweight inventory, purchasing, and supplier collaboration system for SMEs. It helps operations teams manage purchase orders, inventory risk, supplier follow-up, receiving evidence, invoice variance visibility, and review-first action drafts from one workspace.
 
-FlowChain 是面向中小企业的 AI 进销存与供应链协同工作台，帮助团队围绕销售需求、库存、采购、收货、供应商和发票协同异常，识别交付风险、解释供需缺口、生成可复核动作，并形成可追踪的异常处理闭环。
+FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统。系统以当前工作区数据为基础，帮助运营团队查看今日行动、追踪 PO/SKU/供应商证据链、识别数据限制，并在人工复核前预览业务草稿。
 
 FlowChain 参考传统中小企业进销存 ERP 的对象骨架，如基础资料、采购、销售、库存、结算可见性、报表和系统管理，但不是完整 ERP 替代。当前差异化重点是 AI 证据链、交付风险分析、库存可承诺量、可复核动作草稿和数据限制说明。
 
@@ -14,7 +14,7 @@ Default local runtime behavior uses a deterministic workspace dataset. No produc
 
 ## Core Modules
 
-- Today Cockpit / 今日风险工作台
+- Daily Workbench / 每日工作台
 - Sales Demand / Customer Orders Lite
 - Inventory Allocation / Availability / Available to Promise
 - Evidence Graph / Cross-module Evidence Links
