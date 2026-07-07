@@ -743,6 +743,47 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
               </button>
             </div>
           </div>
+          <div data-testid="core-business-chain-entry" className="mt-3 rounded-lg border px-3 py-3" style={{ borderColor: A.border, background: A.white }}>
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5 grid h-7 w-7 place-items-center rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>
+                <TrendingUp size={15} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="truncate text-[12px] font-semibold" style={{ color: A.label }}>核心业务链</h3>
+                  <span className="rounded px-1.5 py-px text-[10px]" style={{ background: "#fff8f0", color: A.orange }}>
+                    待复核
+                  </span>
+                </div>
+                <p className="mt-1 text-[10px] leading-4" style={{ color: A.sub }}>
+                  销售需求、SKU 库存风险、PO、收货和财务协同放在同一条证据线上查看。
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button onClick={() => onNavigate("sales:evidence", { entityType: "sales_order", entityId: "SO-2026-0412-A" }, {
+                    returnTo: "overview",
+                    entityLabel: "SO-2026-0412-A",
+                    source: "coreBusinessChain",
+                    returnContext: {
+                      sourceModule: "overview",
+                      sourceRoute: "overview",
+                      sourceLabel: "今日行动",
+                      returnLabel: "返回 今日行动",
+                      originIntent: "coreBusinessChain",
+                    },
+                  })}
+                    className="rounded-md px-2.5 py-1.5 text-[11px] font-medium"
+                    style={{ background: "#eef4ff", color: A.blue }}>
+                    查看主链证据
+                  </button>
+                  <button onClick={onOpenAi}
+                    className="rounded-md px-2.5 py-1.5 text-[11px] font-medium"
+                    style={{ background: A.gray6, color: A.label }}>
+                    询问 AI
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </Card>
       </div>
 

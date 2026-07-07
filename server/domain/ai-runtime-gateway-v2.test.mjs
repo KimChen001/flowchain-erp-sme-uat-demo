@@ -310,6 +310,7 @@ test('request contract validates message length without throwing', () => {
 test('supported intents return evidence-bounded responses', () => {
   const prompts = [
     '今天有什么需要我处理？',
+    '这条核心业务链有什么证据？',
     '哪些供应商有潜在风险？',
     '哪些 SKU 有库存风险？',
     '这个 PO 为什么优先？',
@@ -330,6 +331,34 @@ test('supported intents return evidence-bounded responses', () => {
     assertRuntimeResponse(body)
     assert.ok(body.keyEvidence.length >= 1, prompt)
     assert.ok(body.sourceSummary.some((item) => /v2/.test(item.sourceId)), prompt)
+  }
+})
+
+test('core business chain questions explain sales inventory procurement receiving invoice finance and review draft boundaries', () => {
+  const prompts = [
+    ['这个销售需求影响哪些 SKU？', /SO-2026|SKU-00412|销售需求|库存风险/],
+    ['这个 SKU 为什么有库存风险，它和哪些 PR / PO 有关系？', /SKU-00412|库存风险|PR|PO|补货/],
+    ['这个 PO 对应哪个供应商、收货和发票？', /PO-2026-1282|供应商|收货|发票/],
+    ['这个收货异常会影响发票匹配吗？', /收货|GRN|发票|匹配/],
+    ['这张发票差异会影响什么财务协同？', /发票|差异|财务协同|人工复核/],
+    ['这条链路哪里证据不足？', /证据不足|发票差异证据待补充|数据限制/],
+    ['打开这条链路的人工复核草稿。', /人工复核草稿|草稿预览|人工复核/],
+  ]
+  let previous = null
+  for (const [message, expected] of prompts) {
+    const result = buildAiRuntimeResponseV2(loadDb(), {
+      message,
+      activeModuleId: 'overview',
+      conversationContext: previous ? contextFrom(previous) : undefined,
+    })
+    assert.equal(result.status, 200, message)
+    assertRuntimeResponse(result.body)
+    assert.match(visibleText(result.body), expected, message)
+    assert.ok(result.body.keyEvidence.some((item) => /销售需求|库存风险|采购订单|收货|发票|财务协同|人工复核草稿/.test(item.evidenceLabel)), message)
+    assert.ok(result.body.reviewCards.every((card) => card.previewOnly && card.reviewRequired && card.requiresHumanReview))
+    assert.doesNotMatch(visibleText(result.body), FORBIDDEN_AI_RUNTIME_TECHNICAL_PATTERN, message)
+    assert.doesNotMatch(visibleText(result.body), FORBIDDEN_AI_RUNTIME_ACTION_PATTERN, message)
+    previous = result.body
   }
 })
 

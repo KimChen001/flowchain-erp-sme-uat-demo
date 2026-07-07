@@ -2,6 +2,11 @@ import { buildAiResponseContractV2 } from './ai-response-contract-v2.mjs'
 import { buildAiSuggestionsWorkbenchV2 } from './ai-suggestions-workbench-v2.mjs'
 import { buildAuditIntegrationHistoryV2 } from './audit-integration-history-v2.mjs'
 import { buildCollaborationNotificationDraftsV2 } from './collaboration-notification-drafts-v2.mjs'
+import {
+  buildCoreBusinessChainV1,
+  findBusinessChainByEntityV1,
+  sanitizeCoreBusinessChainForAiV1,
+} from './core-business-chain-v1.mjs'
 import { buildDataAccessQualityV2 } from './data-access-quality-v2.mjs'
 import { buildOperationsControlTowerV2 } from './operations-control-tower-v2.mjs'
 import { buildPilotReadinessGovernanceV2 } from './pilot-readiness-governance-v2.mjs'
@@ -177,6 +182,7 @@ export function validateAiRuntimeRequest(input = {}) {
 const SUPPORTED_INTENTS = [
   ['today_attention', '今天有什么需要我处理', /今天|今日|先看|重点|处理|注意/],
   ['sales_delivery_risk', '客户订单交付风险', /客户订单|销售需求|销售订单|交付风险|\bSO-[A-Z0-9-]+\b/i],
+  ['core_business_chain', '核心业务链证据', /主链|核心业务链|链路|销售需求.*SKU|SKU.*PR|SKU.*PO|PO.*供应商.*收货.*发票|收货异常.*发票|发票差异.*财务协同|证据不足|这条链路|人工复核草稿/],
   ['inventory_risk', 'SKU 库存风险', /SKU|库存|补货|缺货|物料/],
   ['po_priority', 'PO 优先级', /PO|采购订单|优先|为什么/],
   ['supplier_risk', '供应商风险', /供应商|供方|风险|跟进|绩效/],
@@ -281,7 +287,8 @@ function buildContexts(db = {}, request = {}) {
   const audit = buildAuditIntegrationHistoryV2(db) || {}
   const pilot = buildPilotReadinessGovernanceV2(db) || {}
   const salesDemand = buildSalesDemandReadModel(db) || {}
-  return { db, responseContract, ai, tower, reports, review, collaboration, data, workspace, roles, boundary, audit, pilot, salesDemand }
+  const coreBusinessChain = request.coreBusinessChainRequested ? buildCoreBusinessChainV1(db) || {} : { chains: [], summary: { chainCount: 0, invoiceGapCount: 0 } }
+  return { db, responseContract, ai, tower, reports, review, collaboration, data, workspace, roles, boundary, audit, pilot, salesDemand, coreBusinessChain }
 }
 function collectLimitations(ctx, extra = []) {
   return uniqueBy([
@@ -296,6 +303,7 @@ function collectLimitations(ctx, extra = []) {
     ...asArray(ctx.boundary.dataLimitations),
     ...asArray(ctx.audit.dataLimitations),
     ...asArray(ctx.pilot.dataLimitations),
+    ...asArray(ctx.coreBusinessChain?.chains).flatMap((chain) => asArray(chain.dataLimitations)),
   ].map((item) => cleanLimitation(item)), (item) => item.label).slice(0, 8)
 }
 function sourceSummary(ctx) {
@@ -312,6 +320,7 @@ function sourceSummary(ctx) {
     ['Workspace Boundary Visibility v2', '工作区边界', number(ctx.boundary.summary?.boundaryScopeCount), nav('打开工作区边界', 'settings:boundaries')],
     ['Audit Integration History v2', '业务审计与历史', number(ctx.audit.summary?.totalHistoryCount), nav('打开业务审计与历史', 'audit-history')],
     ['Pilot Readiness Governance v2', '试点准备度', number(ctx.pilot.summary?.blockedItemCount) + number(ctx.pilot.summary?.observationItemCount), nav('打开试点准备度', 'pilot-readiness')],
+    ['Core Business Chain v1', '核心业务链', number(ctx.coreBusinessChain?.summary?.chainCount), nav('打开核心业务链', 'overview')],
   ].map(([sourceId, sourceLabel, signalCount, link]) => ({ sourceId, sourceLabel, signalCount, navigationLinks: [link] }))
 }
 function readinessSignals(ctx) {
@@ -574,6 +583,65 @@ function objectEvidenceForIntent(intent, ctx, request) {
   if (intent.id === 'collaboration_review') return [rfqEvidence(objects.rfq, { rfqId, poId }), poEvidence(objects.po, { poId })].filter(Boolean)
   return []
 }
+function requestedCoreChainEntity(request = {}) {
+  const message = text(request.message)
+  const id = matchId(message, 'SO') || matchId(message, 'SKU') || matchId(message, 'PO') || matchId(message, 'GRN') || matchId(message, 'INV') || text(request.focusTarget?.entityId)
+  const entityType = /SO-/i.test(id) || /销售需求|客户订单/.test(message)
+    ? 'customer_order'
+    : /SKU-/i.test(id) || /SKU|库存/.test(message)
+      ? 'inventory_item'
+      : /GRN-/i.test(id) || /收货|GRN/.test(message)
+        ? 'receiving_doc'
+        : /INV-/i.test(id) || /发票/.test(message)
+          ? 'supplier_invoice'
+          : /PO-/i.test(id) || /PO|采购订单/.test(message)
+            ? 'purchase_order'
+            : text(request.focusTarget?.entityType)
+  return { entityType, entityId: id }
+}
+function coreChainForRequest(ctx = {}, request = {}) {
+  const wanted = requestedCoreChainEntity(request)
+  const found = findBusinessChainByEntityV1(ctx.coreBusinessChain, wanted)
+  return sanitizeCoreBusinessChainForAiV1(found || asArray(ctx.coreBusinessChain?.chains)[0] || {})
+}
+function coreChainEvidenceForIntent(ctx = {}, request = {}) {
+  const chain = coreChainForRequest(ctx, request)
+  const rows = asArray(chain.summary)
+  const question = text(request.message)
+  const filtered = /证据不足|哪里.*不足|数据限制/.test(question)
+    ? [...rows, ...asArray(chain.dataLimitations).map((item, index) => ({
+      id: `chain-limitation-${index + 1}`,
+      moduleId: 'overview',
+      entityType: 'business_risk',
+      entityId: item.label,
+      entityLabel: item.label,
+      evidenceLabel: '链路证据不足',
+      evidenceSummary: `${item.description} ${text(item.consequence)}`,
+      severity: 'warning',
+    }))]
+    : /人工复核草稿|复核草稿|打开.*草稿/.test(question)
+      ? [...rows, ...asArray(chain.reviewDraftSuggestions).map((item, index) => ({
+        id: `chain-review-draft-${index + 1}`,
+        moduleId: 'review-actions',
+        entityType: item.targetEntityType || 'action_draft',
+        entityId: item.targetEntityId || item.title,
+        entityLabel: item.title,
+        evidenceLabel: '人工复核草稿',
+        evidenceSummary: item.description,
+        severity: 'warning',
+      }))]
+      : rows
+  return filtered.map((item) => evidence({
+    id: item.id,
+    moduleId: item.moduleId,
+    entityType: item.entityType,
+    entityId: item.entityId,
+    entityLabel: item.entityLabel,
+    evidenceLabel: item.evidenceLabel,
+    summary: item.evidenceSummary,
+    severity: item.severity,
+  })).filter(Boolean).slice(0, 8)
+}
 function evidenceForIntent(intent, ctx, request) {
   const common = [
     evidence({ id: 'ai-runtime-current-scope', moduleId: request.activeModuleId || 'overview', entityLabel: DATA_SCOPE, evidenceLabel: '当前上下文', summary: `当前上下文：${moduleLabel(request.activeModuleId || 'overview')}。今日重点、未收货订单、已收未票、发票差异和供应商风险需结合来源证据复核。` }),
@@ -609,6 +677,10 @@ function evidenceForIntent(intent, ctx, request) {
       severity: 'warning',
     }),
     ...objectEvidenceForIntent({ id: 'po_priority' }, ctx, request).slice(0, 3),
+  ]
+  if (intent.id === 'core_business_chain') return [
+    ...coreChainEvidenceForIntent(ctx, request),
+    evidence({ id: 'core-chain-summary', moduleId: 'overview', entityLabel: '核心业务链', evidenceLabel: '主链闭环', summary: `已串联 ${number(ctx.coreBusinessChain?.summary?.chainCount)} 条销售、库存、采购、收货、发票和财务协同链路，证据不足 ${number(ctx.coreBusinessChain?.summary?.invoiceGapCount)} 项。`, severity: number(ctx.coreBusinessChain?.summary?.invoiceGapCount) ? 'warning' : 'info' }),
   ]
   if (intent.id === 'supplier_risk') return [
     ...objectEvidenceForIntent(intent, ctx, request),
@@ -868,8 +940,9 @@ export function buildAiRuntimeResponseV2(db = {}, body = {}, options = {}) {
   const conversationGrounding = buildConversationGroundingV2({ request: initialRequest, previousContext: initialRequest.conversationContext, activeContext: { focusTarget: initialRequest.focusTarget } })
   const resolvedContext = resolveFollowUpReferenceV2({ message: initialRequest.message, conversationGrounding })
   const request = enrichRequestWithResolvedContext(initialRequest, resolvedContext)
-  const ctx = buildContexts(db, request)
-  const intent = intentWithConversationCarryOver(detectIntent(request), request, resolvedContext)
+  const detectedIntent = detectIntent(request)
+  const ctx = buildContexts(db, { ...request, coreBusinessChainRequested: detectedIntent.id === 'core_business_chain' })
+  const intent = intentWithConversationCarryOver(detectedIntent, request, resolvedContext)
   const contextBundle = buildContextBundle(request, ctx, intent, conversationGrounding, resolvedContext)
   const adapter = activeAdapter(options.env || process.env || {})
   const promptPackage = adapter.buildPromptPackage(contextBundle, request)
@@ -884,8 +957,9 @@ export async function buildAiRuntimeResponseV2Async(db = {}, body = {}, options 
   const conversationGrounding = buildConversationGroundingV2({ request: initialRequest, previousContext: initialRequest.conversationContext, activeContext: { focusTarget: initialRequest.focusTarget } })
   const resolvedContext = resolveFollowUpReferenceV2({ message: initialRequest.message, conversationGrounding })
   const request = enrichRequestWithResolvedContext(initialRequest, resolvedContext)
-  const ctx = buildContexts(db, request)
-  const intent = intentWithConversationCarryOver(detectIntent(request), request, resolvedContext)
+  const detectedIntent = detectIntent(request)
+  const ctx = buildContexts(db, { ...request, coreBusinessChainRequested: detectedIntent.id === 'core_business_chain' })
+  const intent = intentWithConversationCarryOver(detectedIntent, request, resolvedContext)
   const contextBundle = buildContextBundle(request, ctx, intent, conversationGrounding, resolvedContext)
   const env = options.env || process.env || {}
   const localDraft = localRuntimeDraft(contextBundle, request)
