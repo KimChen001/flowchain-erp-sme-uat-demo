@@ -67,12 +67,41 @@ function safeResponseShape(input = {}) {
     safetyBoundaries: asArray(shape.safetyBoundaries).slice(0, 12),
   }
 }
+function safeConversationGrounding(input = {}) {
+  const grounding = input.conversationGrounding || {}
+  if (!grounding || typeof grounding !== 'object') return null
+  return {
+    previousIntent: compact(grounding.previousIntent, 80),
+    resolvedFrom: compact(grounding.resolvedFrom, 40),
+    intentCarryOver: compact(grounding.intentCarryOver, 80),
+    confidence: compact(grounding.confidence, 20),
+    entityRefs: asArray(grounding.entityRefs).slice(0, 5).map((item) => ({
+      entityType: compact(item.entityType, 40),
+      entityId: compact(item.entityId, 80),
+      entityLabel: compact(item.entityLabel, 120),
+      source: compact(item.source, 40),
+      confidence: compact(item.confidence, 20),
+    })),
+    evidenceRefs: asArray(grounding.evidenceRefs).slice(0, 5).map((item) => ({
+      id: compact(item.id, 80),
+      label: compact(item.label, 120),
+      entityLabel: compact(item.entityLabel, 120),
+    })),
+    navigationRefs: asArray(grounding.navigationRefs).slice(0, 5).map((item) => ({
+      label: compact(item.label, 120),
+      moduleId: compact(item.moduleId, 80),
+      entityLabel: compact(item.entityLabel, 120),
+      returnTo: 'ai-assistant',
+    })),
+  }
+}
 export function buildBoundedProviderRequestCore(input = {}) {
   return {
     task: safeTask(input),
     evidencePackage: boundedEvidencePackage(input),
     safetyPolicy: safePolicy(input),
     responseShape: safeResponseShape(input),
+    conversationGrounding: safeConversationGrounding(input),
   }
 }
 function instructionText() {

@@ -95,6 +95,36 @@ export type AiResponseV2ReviewCard = {
   originEvidence?: Record<string, unknown>[];
 };
 
+export type AiRuntimeContextBreadcrumb = {
+  label: string;
+  moduleId?: string;
+  entityLabel?: string;
+  returnTo: "ai-assistant";
+};
+
+export type AiRuntimeBusinessEntityRef = {
+  entityType: string;
+  entityId?: string;
+  entityLabel: string;
+  source?: string;
+  confidence?: AiResponseV2Confidence;
+};
+
+export type AiRuntimeResolvedContext = {
+  resolvedFrom: "currentMessage" | "activePage" | "previousResponse" | "session" | "notResolved";
+  entityRefs: AiRuntimeBusinessEntityRef[];
+  intentCarryOver?: string;
+  confidence: AiResponseV2Confidence;
+  limitationLabel?: string;
+};
+
+export type AiRuntimeFollowUpSuggestion = {
+  label: string;
+  prompt: string;
+  intentHint?: string;
+  requiresReview?: boolean;
+};
+
 export type AiResponseV2 = {
   version: "v2";
   query: string;
@@ -108,4 +138,7 @@ export type AiResponseV2 = {
   dataLimitations: AiResponseV2DataLimitation[];
   reviewCards: AiResponseV2ReviewCard[];
   followUpQuestions?: string[];
+  contextBreadcrumbs?: AiRuntimeContextBreadcrumb[];
+  followUpSuggestions?: AiRuntimeFollowUpSuggestion[];
+  resolvedContext?: AiRuntimeResolvedContext;
 };

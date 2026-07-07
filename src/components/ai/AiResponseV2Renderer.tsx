@@ -197,13 +197,17 @@ export function AiResponseV2Renderer({
   response,
   onNavigate,
   onReviewActionDraft,
+  onFollowUp,
 }: {
   response: AiResponseV2;
   onNavigate?: Navigate;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
+  onFollowUp?: (prompt: string) => void;
 }) {
   if (!response || response.version !== "v2") return null;
   const conclusion = response.conclusion;
+  const breadcrumbs = asArray(response.contextBreadcrumbs).slice(0, 4);
+  const followUps = asArray(response.followUpSuggestions).slice(0, 4);
   return (
     <div data-testid="ai-response-v2" className="rounded-xl px-3 py-2.5 space-y-3" style={{ background: A.white, border: `1px solid ${A.border}` }}>
       <Section title="结论">
@@ -219,6 +223,22 @@ export function AiResponseV2Renderer({
           </div>
         </div>
       </Section>
+
+      {breadcrumbs.length ? (
+        <Section title="上下文">
+          <div className="flex flex-wrap gap-1.5">
+            {breadcrumbs.map((item, index) => (
+              <span
+                key={`${item.label}-${index}`}
+                className="inline-flex max-w-full rounded-full px-2 py-0.5 text-[10px] truncate"
+                style={{ color: A.gray1, background: A.gray6, border: `1px solid ${A.border}` }}
+              >
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </Section>
+      ) : null}
 
       <Section title="关键证据 / 依据">
         <div className="space-y-1.5">
@@ -281,6 +301,26 @@ export function AiResponseV2Renderer({
           ))}
         </div>
       </Section>
+
+      {followUps.length ? (
+        <Section title="继续追问">
+          <div className="flex flex-wrap gap-1.5">
+            {followUps.map((item) => (
+              <button
+                key={`${item.label}-${item.prompt}`}
+                type="button"
+                onClick={() => onFollowUp?.(item.prompt)}
+                disabled={!onFollowUp}
+                data-testid="ai-runtime-follow-up-chip"
+                className="rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed"
+                style={{ background: A.white, color: onFollowUp ? A.blue : A.gray2, border: `1px solid ${A.border}` }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </Section>
+      ) : null}
     </div>
   );
 }

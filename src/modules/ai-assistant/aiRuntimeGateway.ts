@@ -12,9 +12,20 @@ export type AiRuntimeRequestV2 = {
     entityLabel?: string;
   } | null;
   conversationContext?: {
+    previousIntent?: string;
     previousQuestion?: string;
+    previousConclusionTitle?: string;
     previousAnswerSummary?: string;
     userIntentLabel?: string;
+    previousEntityRefs?: Array<Record<string, unknown>>;
+    previousNavigationRefs?: Array<Record<string, unknown>>;
+    previousEvidenceRefs?: Array<Record<string, unknown>>;
+    previousModuleId?: string;
+    previousViewId?: string;
+    previousFocusTarget?: Record<string, unknown> | null;
+    breadcrumbTrail?: Array<Record<string, unknown>>;
+    lastResponseId?: string;
+    returnContext?: Record<string, unknown> | null;
   };
   sessionGrounding?: unknown;
   returnTo?: string;

@@ -176,6 +176,7 @@ export function buildProviderInputPackageV2(contextBundle = {}, request = {}, lo
       reviewCards: '草稿预览与人工复核',
       safetyBoundaries: REQUIRED_BOUNDARIES,
     },
+    conversationGrounding: contextBundle.conversationGrounding || null,
   }
 }
 

@@ -68,6 +68,21 @@ type AiSessionGrounding = {
   activeContext?: ActiveContext | null;
 };
 
+type SafeConversationContext = {
+  previousIntent?: string;
+  previousQuestion?: string;
+  previousConclusionTitle?: string;
+  previousEntityRefs?: Array<{ entityType?: string; entityId?: string; entityLabel: string; source: string; confidence: string }>;
+  previousNavigationRefs?: Array<{ label: string; moduleId?: string; entityType?: string; entityId?: string; entityLabel?: string; returnTo: "ai-assistant" }>;
+  previousEvidenceRefs?: Array<{ id?: string; label?: string; entityType?: string; entityId?: string; entityLabel?: string; moduleId?: string }>;
+  previousModuleId?: string;
+  previousViewId?: string;
+  previousFocusTarget?: { entityType?: string; entityId?: string; entityLabel?: string } | null;
+  breadcrumbTrail?: Array<{ label: string; moduleId?: string; entityLabel?: string; returnTo: "ai-assistant" }>;
+  lastResponseId?: string;
+  returnContext?: { returnTo: "ai-assistant"; returnLabel: string; sourceModuleId?: string; sourceViewId?: string };
+};
+
 const PAGE_LABELS: Record<string, string> = {
   overview: "每日工作台",
   sales: "销售需求",
@@ -377,10 +392,12 @@ function AiResponseCard({
   card,
   onNavigate,
   onReviewActionDraft,
+  onFollowUp,
 }: {
   card: AiChatCard;
   onNavigate?: AiNavigate;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
+  onFollowUp?: (prompt: string) => void;
 }) {
   const data = card.data || {};
   switch (card.type) {
@@ -390,6 +407,7 @@ function AiResponseCard({
           response={data as unknown as AiResponseV2}
           onNavigate={onNavigate}
           onReviewActionDraft={onReviewActionDraft}
+          onFollowUp={onFollowUp}
         />
       );
     case "supplier_status":
@@ -1310,6 +1328,110 @@ function buildSessionGrounding(messages: AiChatMessage[], activeContext: ActiveC
   };
 }
 
+function safeEntityType(value: unknown) {
+  const raw = String(value || "");
+  if (/purchase_order|PO/i.test(raw)) return "PO";
+  if (/purchase_request|PR/i.test(raw)) return "PR";
+  if (/rfq/i.test(raw)) return "RFQ";
+  if (/receiving|GRN/i.test(raw)) return "GRN";
+  if (/invoice|发票/i.test(raw)) return "Invoice";
+  if (/supplier|供应商/i.test(raw)) return "Supplier";
+  if (/inventory|item|SKU/i.test(raw)) return "SKU";
+  return "Unknown";
+}
+
+function latestAiRuntimeResponse(messages: AiChatMessage[]): AiResponseV2 | null {
+  const assistant = [...messages].reverse().find((message) => message.role === "assistant" && message.cards?.some((card) => card.type === "ai_response_v2"));
+  const card = assistant?.cards?.find((item) => item.type === "ai_response_v2");
+  return card?.data ? card.data as unknown as AiResponseV2 : null;
+}
+
+function buildSafeConversationContext(messages: AiChatMessage[], activeContext: ActiveContext | null, sessionGrounding: AiSessionGrounding): SafeConversationContext {
+  const response = latestAiRuntimeResponse(messages);
+  const refs: SafeConversationContext["previousEntityRefs"] = [];
+  const pushRef = (input: { entityType?: unknown; entityId?: unknown; entityLabel?: unknown; source: string; confidence?: string }) => {
+    const entityLabel = textValue(input.entityLabel || input.entityId);
+    if (!entityLabel) return;
+    const entityId = textValue(input.entityId);
+    const key = `${input.source}:${entityId || entityLabel}`;
+    if (refs.some((item) => `${item.source}:${item.entityId || item.entityLabel}` === key)) return;
+    refs.push({
+      entityType: safeEntityType(input.entityType || entityId || entityLabel),
+      entityId,
+      entityLabel,
+      source: input.source,
+      confidence: input.confidence || (entityId ? "high" : "medium"),
+    });
+  };
+
+  if (activeContext?.entityId || activeContext?.entityLabel) {
+    pushRef({ entityType: activeContext.entityType, entityId: activeContext.entityId, entityLabel: activeContext.entityLabel, source: "activePage", confidence: "high" });
+  }
+  if (sessionGrounding.lastPrimaryEntity) {
+    pushRef({ entityType: sessionGrounding.lastPrimaryEntity.type, entityId: sessionGrounding.lastPrimaryEntity.id, entityLabel: sessionGrounding.lastPrimaryEntity.label, source: "session", confidence: "high" });
+  }
+  for (const item of response?.keyEvidence || []) {
+    pushRef({ entityType: item.entityType, entityId: item.entityId, entityLabel: item.entityLabel || item.label, source: "evidence", confidence: "high" });
+  }
+  for (const link of response?.navigationLinks || []) {
+    const navEntityType = link.entityType;
+    const navEntityId = link.entityId;
+    const navLabel = link.label;
+    pushRef({ entityType: navEntityType, entityId: navEntityId, entityLabel: navLabel || navEntityId, source: "navigation", confidence: navEntityId ? "high" : "medium" });
+  }
+  for (const card of response?.reviewCards || []) {
+    pushRef({ entityType: card.targetEntityType, entityId: card.targetEntityId, entityLabel: card.title, source: "reviewCard", confidence: card.targetEntityId ? "high" : "medium" });
+  }
+
+  return {
+    previousIntent: response?.intent || sessionGrounding.lastIntent,
+    previousQuestion: response?.query,
+    previousConclusionTitle: response?.conclusion?.title,
+    previousEntityRefs: refs.slice(0, 12),
+    previousNavigationRefs: (response?.navigationLinks || []).slice(0, 8).map((link) => {
+      const navEntityType = link.entityType;
+      const navEntityId = link.entityId;
+      const navLabel = link.label;
+      return {
+        label: textValue(navLabel || navEntityId || link.moduleId),
+        moduleId: link.moduleId,
+        entityType: safeEntityType(navEntityType || navEntityId || navLabel),
+        entityId: textValue(navEntityId),
+        entityLabel: textValue(navLabel || navEntityId),
+        returnTo: "ai-assistant",
+      };
+    }),
+    previousEvidenceRefs: (response?.keyEvidence || []).slice(0, 8).map((item) => ({
+      id: item.id,
+      label: item.label,
+      entityType: safeEntityType(item.entityType || item.entityId),
+      entityId: item.entityId,
+      entityLabel: item.entityLabel,
+      moduleId: item.moduleId,
+    })),
+    previousModuleId: response?.scope?.module || activeContext?.module,
+    previousViewId: activeContext?.view,
+    previousFocusTarget: activeContext?.entityId ? {
+      entityType: activeContext.entityType,
+      entityId: activeContext.entityId,
+      entityLabel: activeContext.entityLabel || activeContext.entityId,
+    } : null,
+    breadcrumbTrail: (response?.contextBreadcrumbs || []).slice(0, 4).map((item) => ({
+      label: item.label,
+      moduleId: item.moduleId,
+      entityLabel: item.entityLabel,
+      returnTo: "ai-assistant",
+    })),
+    lastResponseId: (response as (AiResponseV2 & { responseId?: string }) | null)?.responseId,
+    returnContext: {
+      returnTo: "ai-assistant",
+      returnLabel: "返回 AI 助手",
+      sourceModuleId: activeContext?.module,
+      sourceViewId: activeContext?.view,
+    },
+  };
+}
+
 function uniqueFollowUpChips(chips: { label: string; prompt: string }[]) {
   const seen = new Set<string>();
   return chips.filter((chip) => {
@@ -1358,17 +1480,19 @@ function AiResponseCards({
   cards = [],
   onNavigate,
   onReviewActionDraft,
+  onFollowUp,
 }: {
   cards?: AiChatCard[];
   onNavigate?: AiNavigate;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
+  onFollowUp?: (prompt: string) => void;
 }) {
   const visibleCards = cards.filter((card) => card.type);
   if (!visibleCards.length) return null;
   return (
     <div className="mt-2 space-y-2">
       {visibleCards.map((card, index) => (
-        <AiResponseCard key={`${card.type}-${index}`} card={card} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />
+        <AiResponseCard key={`${card.type}-${index}`} card={card} onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} onFollowUp={onFollowUp} />
       ))}
     </div>
   );
@@ -1495,13 +1619,15 @@ export default function FloatingAiAssistant({
     }, 12000);
 
     try {
+      const safeConversationContext = buildSafeConversationContext(messages, context, sessionGrounding);
       const response = await postAiRuntimeResponse({
         message,
         activeModuleId: moduleId,
         activeViewId: context?.view,
         focusTarget: focusTargetFromActiveContext(context),
         conversationContext: {
-          previousQuestion: sessionGrounding.lastIntent,
+          ...safeConversationContext,
+          previousQuestion: safeConversationContext.previousQuestion || sessionGrounding.lastIntent,
           previousAnswerSummary: sessionGrounding.lastPrimaryEntity?.label,
           userIntentLabel: context?.entityLabel || contextLabel,
         },
@@ -1624,7 +1750,7 @@ export default function FloatingAiAssistant({
                   }}
                 >
                   <div className="whitespace-pre-wrap">{message.content}</div>
-                  {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={minimizeAfterNavigate} onReviewActionDraft={onReviewActionDraft} />}
+                  {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={minimizeAfterNavigate} onReviewActionDraft={onReviewActionDraft} onFollowUp={askAi} />}
                   {message.role === "assistant" && getAiFollowUpChips(message).length ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {getAiFollowUpChips(message).map((chip) => (

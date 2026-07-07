@@ -12,6 +12,7 @@ import {
 } from './ai-runtime-gateway-v2.mjs'
 import { handleAiRuntimeGatewayRoute } from '../routes/ai-runtime-gateway.routes.mjs'
 import { createScmServer } from '../routes/scm-legacy.routes.mjs'
+import { extractBusinessContextFromAiResponseV2 } from './ai-runtime-conversation-context-v2.mjs'
 
 function loadDb() {
   return JSON.parse(fs.readFileSync(new URL('../../data/scm-demo.json', import.meta.url), 'utf8'))
@@ -27,7 +28,7 @@ function visibleText(value) {
 }
 
 function assertRuntimeResponse(result) {
-  for (const key of ['responseId', 'runtimeModeLabel', 'conclusion', 'keyEvidence', 'businessImpact', 'recommendedActions', 'navigationLinks', 'dataLimitations', 'reviewCards', 'safetyBoundaries', 'followUpQuestions', 'sourceSummary', 'readinessSignals', 'generatedAt', 'dataScopeLabel']) {
+  for (const key of ['responseId', 'runtimeModeLabel', 'conclusion', 'keyEvidence', 'businessImpact', 'recommendedActions', 'navigationLinks', 'dataLimitations', 'reviewCards', 'safetyBoundaries', 'followUpQuestions', 'contextBreadcrumbs', 'followUpSuggestions', 'resolvedContext', 'sourceSummary', 'readinessSignals', 'generatedAt', 'dataScopeLabel']) {
     assert.ok(Object.hasOwn(result, key), key)
   }
   assert.equal(result.version, 'v2')
@@ -40,6 +41,10 @@ function assertRuntimeResponse(result) {
   assert.ok(result.reviewCards.every((card) => card.previewOnly === true))
   assert.ok(result.reviewCards.every((card) => card.reviewRequired === true))
   assert.ok(result.reviewCards.every((card) => card.requiresHumanReview === true))
+}
+
+function contextFrom(response) {
+  return extractBusinessContextFromAiResponseV2(response)
 }
 
 async function withServer(handler, run) {
@@ -84,6 +89,88 @@ test('normal respond returns AI Runtime and AI Response Contract v2 compatible p
   assert.equal(status, 200)
   assertRuntimeResponse(body)
   assert.match(visibleText(body), /结论|证据|人工复核|当前工作区数据|复核优先/)
+})
+
+test('multi-turn PO follow-up resolves prior evidence and returns breadcrumbs suggestions', () => {
+  const q1 = buildAiRuntimeResponseV2(loadDb(), { message: '今天有什么需要我处理？', activeModuleId: 'overview' })
+  assert.equal(q1.status, 200)
+  const q2 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '那这个 PO 为什么优先？',
+    activeModuleId: 'overview',
+    conversationContext: contextFrom(q1.body),
+  })
+  assert.equal(q2.status, 200)
+  assertRuntimeResponse(q2.body)
+  assert.equal(q2.body.resolvedContext.entityRefs[0].entityType, 'PO')
+  assert.match(visibleText(q2.body), /上下文|来自上一轮|采购订单|继续|人工复核/)
+  assert.ok(q2.body.contextBreadcrumbs.every((item) => item.returnTo === 'ai-assistant'))
+  assert.ok(q2.body.followUpSuggestions.length >= 3)
+  assert.doesNotMatch(visibleText(q2.body), /provider|model|endpoint|API|key|token|JSON|payload|fallback|mock/i)
+})
+
+test('multi-turn supplier SKU and data follow-ups carry business context safely', () => {
+  const supplier = buildAiRuntimeResponseV2(loadDb(), { message: '哪些供应商有潜在风险？', activeModuleId: 'srm' })
+  const supplierFollow = buildAiRuntimeResponseV2(loadDb(), {
+    message: '它和哪些 PO / SKU / GRN / 发票有关？',
+    activeModuleId: 'srm',
+    conversationContext: contextFrom(supplier.body),
+  })
+  assert.equal(supplierFollow.status, 200)
+  assertRuntimeResponse(supplierFollow.body)
+  assert.ok(supplierFollow.body.resolvedContext.entityRefs.some((ref) => ref.entityType === 'Supplier' || ref.entityType === 'PO'))
+  assert.match(visibleText(supplierFollow.body), /相关|PO|SKU|GRN|发票|人工复核/)
+
+  const sku = buildAiRuntimeResponseV2(loadDb(), { message: '哪些 SKU 有库存风险？', activeModuleId: 'inventory' })
+  const skuFollow = buildAiRuntimeResponseV2(loadDb(), {
+    message: '展开这个 SKU 的相关对象。',
+    activeModuleId: 'inventory',
+    conversationContext: contextFrom(sku.body),
+  })
+  assert.equal(skuFollow.status, 200)
+  assert.equal(skuFollow.body.resolvedContext.entityRefs[0].entityType, 'SKU')
+  assert.match(visibleText(skuFollow.body), /SKU|库存|采购|人工复核/)
+
+  const data = buildAiRuntimeResponseV2(loadDb(), { message: '哪些数据依据不完整？', activeModuleId: 'imports' })
+  const dataFollow = buildAiRuntimeResponseV2(loadDb(), {
+    message: '那我应该先补哪个？',
+    activeModuleId: 'imports',
+    conversationContext: contextFrom(data.body),
+  })
+  assert.equal(dataFollow.status, 200)
+  assert.equal(dataFollow.body.resolvedContext.intentCarryOver, 'data_incomplete')
+  assert.match(visibleText(dataFollow.body), /数据|证据|补充数据|人工复核/)
+})
+
+test('ambiguous and missing follow-up context returns limitation without guessing', () => {
+  const ambiguous = buildAiRuntimeResponseV2(loadDb(), {
+    message: '它怎么样？',
+    conversationContext: {
+      previousEntityRefs: [
+        { entityType: 'PO', entityId: 'PO-1', entityLabel: 'PO-1', source: 'previousResponse', confidence: 'high' },
+        { entityType: 'PO', entityId: 'PO-2', entityLabel: 'PO-2', source: 'previousResponse', confidence: 'high' },
+      ],
+    },
+  })
+  assert.equal(ambiguous.status, 200)
+  assert.match(visibleText(ambiguous.body.dataLimitations), /多个相关对象|人工确认/)
+
+  const missing = buildAiRuntimeResponseV2(loadDb(), { message: '它怎么样？' })
+  assert.equal(missing.status, 200)
+  assert.equal(missing.body.resolvedContext.resolvedFrom, 'notResolved')
+  assert.match(visibleText(missing.body.dataLimitations), /当前上下文不足|选择具体对象/)
+})
+
+test('unsafe follow-up with resolved context still refuses execution', () => {
+  const q1 = buildAiRuntimeResponseV2(loadDb(), { message: '这个 PO 为什么优先？', activeModuleId: 'procurement' })
+  const q2 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '那你直接批准并发给供应商。',
+    activeModuleId: 'procurement',
+    conversationContext: contextFrom(q1.body),
+  })
+  assert.equal(q2.status, 200)
+  assertRuntimeResponse(q2.body)
+  assert.match(visibleText(q2.body), /无法执行|草稿预览|人工复核|不形成正式业务处理/)
+  assert.doesNotMatch(visibleText(q2.body), FORBIDDEN_AI_RUNTIME_ACTION_PATTERN)
 })
 
 test('request contract validates message length without throwing', () => {
@@ -235,6 +322,35 @@ test('provider-specific kinds use unified safe runtime path without visible name
     assert.doesNotMatch(visibleText(response), /provider|model|endpoint|API|token|key|JSON|payload|fallback|OpenAI|DeepSeek|Doubao|豆包/i)
     assert.doesNotMatch(visibleText(response), FORBIDDEN_AI_RUNTIME_ACTION_PATTERN)
   }
+})
+
+test('provider-assisted path receives only bounded conversation summary and fallback keeps breadcrumbs', async () => {
+  const q1 = buildAiRuntimeResponseV2(loadDb(), { message: '今天有什么需要我处理？', activeModuleId: 'overview' })
+  let receivedBody = ''
+  const result = await withServer((req, res) => {
+    req.on('data', (chunk) => { receivedBody += chunk })
+    req.on('end', () => {
+      res.writeHead(200, { 'content-type': 'text/plain' })
+      res.end('可以自动批准并发送给供应商。')
+    })
+  }, async (endpoint) => buildAiRuntimeResponseV2Async(loadDb(), {
+    message: '那这个 PO 为什么优先？',
+    activeModuleId: 'overview',
+    conversationContext: contextFrom(q1.body),
+  }, {
+    env: {
+      FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted',
+      FLOWCHAIN_AI_PROVIDER_KIND: 'generic_http',
+      FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint,
+      FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key',
+    },
+  }))
+  assert.equal(result.status, 200)
+  assertRuntimeResponse(result.body)
+  assert.ok(result.body.contextBreadcrumbs.length >= 1)
+  assert.match(visibleText(result.body), /外部辅助结果未采用|当前工作区证据辅助回答/)
+  assert.doesNotMatch(receivedBody, /test-key|FLOWCHAIN|provider_assisted|conversation history|messages|localStorage|auth|token|system prompt/i)
+  assert.ok(JSON.parse(receivedBody).conversationGrounding.entityRefs.length <= 5)
 })
 
 test('empty data returns business-safe response and limitations', () => {
