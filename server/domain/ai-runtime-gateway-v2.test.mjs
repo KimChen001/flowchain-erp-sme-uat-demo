@@ -204,6 +204,39 @@ test('async runtime falls back safely when provider output is unsafe or unavaila
   assert.doesNotMatch(visibleText(missing.body), /provider|endpoint|API|token|fallback|JSON|payload/i)
 })
 
+test('provider-specific kinds use unified safe runtime path without visible names', async () => {
+  const missing = await buildAiRuntimeResponseV2Async(loadDb(), { message: '今天有什么需要我处理？' }, {
+    env: { FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted', FLOWCHAIN_AI_PROVIDER_KIND: 'openai_responses', FLOWCHAIN_AI_PROVIDER_ENDPOINT: 'http://local', FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key' },
+  })
+  assert.equal(missing.status, 200)
+  assertRuntimeResponse(missing.body)
+  assert.match(visibleText(missing.body), /外部辅助结果未采用|当前工作区证据辅助回答/)
+
+  const safe = await withServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ choices: [{ message: { content: '建议查看当前证据并进入人工复核。' } }] }))
+  }, async (endpoint) => buildAiRuntimeResponseV2Async(loadDb(), { message: '今天有什么需要我处理？' }, {
+    env: { FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted', FLOWCHAIN_AI_PROVIDER_KIND: 'deepseek_chat', FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint, FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key', FLOWCHAIN_AI_PROVIDER_MODEL: 'test-runtime-model' },
+  }))
+  assert.equal(safe.status, 200)
+  assertRuntimeResponse(safe.body)
+  assert.match(safe.body.conclusion.summary, /当前证据|人工复核/)
+
+  const unsafe = await withServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ output: { text: '直接付款并修改供应商主数据。' } }))
+  }, async (endpoint) => buildAiRuntimeResponseV2Async(loadDb(), { message: '这个 PO 为什么优先？' }, {
+    env: { FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted', FLOWCHAIN_AI_PROVIDER_KIND: 'doubao_chat', FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint, FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key', FLOWCHAIN_AI_PROVIDER_MODEL: 'test-runtime-model' },
+  }))
+  assert.equal(unsafe.status, 200)
+  assertRuntimeResponse(unsafe.body)
+  assert.match(visibleText(unsafe.body), /外部辅助结果未采用/)
+  for (const response of [missing.body, safe.body, unsafe.body]) {
+    assert.doesNotMatch(visibleText(response), /provider|model|endpoint|API|token|key|JSON|payload|fallback|OpenAI|DeepSeek|Doubao|豆包/i)
+    assert.doesNotMatch(visibleText(response), FORBIDDEN_AI_RUNTIME_ACTION_PATTERN)
+  }
+})
+
 test('empty data returns business-safe response and limitations', () => {
   const { status, body } = buildAiRuntimeResponseV2({}, { message: '今天有什么需要我处理？' })
   assert.equal(status, 200)

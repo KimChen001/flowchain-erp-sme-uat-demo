@@ -12,11 +12,14 @@ import { buildUserRolePermissionVisibilityV2 } from './user-role-permission-visi
 import { buildWorkspaceBoundaryVisibilityV2 } from './workspace-boundary-visibility-v2.mjs'
 import { buildWorkspaceSetupConfigV2 } from './workspace-setup-config-v2.mjs'
 import {
-  canCallGenericHttpProvider,
+  canCallConfiguredProvider,
+  buildProviderInputPackageV2,
+  callConfiguredProvider,
   fallbackResponse,
-  genericHttpProviderAdapter,
   isProviderAssistedRequested,
+  normalizeProviderOutput as normalizeProviderOutputCompat,
   providerRuntimeConfig,
+  selectProviderAdapter,
   validateAiRuntimeResponseV2,
 } from './ai-runtime-provider-adapter-v2.mjs'
 
@@ -732,7 +735,7 @@ function localRuntimeDraft(contextBundle, request) {
 }
 function providerModeLimitation(env = {}) {
   if (!isProviderAssistedRequested(env)) return []
-  if (canCallGenericHttpProvider(env)) return []
+  if (canCallConfiguredProvider(env)) return []
   return [{ label: '外部辅助模式未启用', description: '当前默认使用证据辅助回答。', severity: 'warning', consequence: '已使用当前工作区证据辅助回答。' }]
 }
 
@@ -740,7 +743,7 @@ export function buildAiRuntimeReadinessV2(db = {}, env = {}) {
   const ctx = buildContexts(db, { message: 'readiness' })
   const config = providerRuntimeConfig(env)
   const requested = isProviderAssistedRequested(env)
-  const callable = canCallGenericHttpProvider(env)
+  const callable = canCallConfiguredProvider(env)
   const dataLimitations = collectLimitations(ctx, providerModeLimitation(env))
   return {
     summary: {
@@ -797,17 +800,20 @@ export async function buildAiRuntimeResponseV2Async(db = {}, body = {}, options 
   const safeLocalDraft = localValidation.ok ? localDraft : buildResponse({ request, intent, ctx })
 
   if (!isProviderAssistedRequested(env)) return { status: 200, body: safeLocalDraft }
-  if (!genericHttpProviderAdapter.canCall(env)) {
+  const providerAdapter = selectProviderAdapter(env)
+  if (!providerAdapter || !canCallConfiguredProvider(env)) {
     return { status: 200, body: fallbackResponse(safeLocalDraft, 'not_configured') }
   }
 
-  const providerInput = genericHttpProviderAdapter.buildProviderInput(contextBundle, request, safeLocalDraft)
-  const providerResult = await genericHttpProviderAdapter.callProvider(providerInput, env, options.fetchImpl || globalThis.fetch)
+  const providerInput = providerAdapter.buildProviderInput
+    ? providerAdapter.buildProviderInput(contextBundle, request, safeLocalDraft)
+    : buildProviderInputPackageV2(contextBundle, request, safeLocalDraft)
+  const providerResult = await callConfiguredProvider(providerInput, env, options.fetchImpl || globalThis.fetch)
   if (!providerResult.ok) {
     return { status: 200, body: fallbackResponse(safeLocalDraft, providerResult.reason) }
   }
-  const normalized = genericHttpProviderAdapter.normalizeProviderOutput(providerResult.rawOutput, contextBundle, safeLocalDraft)
-  const validationResult = genericHttpProviderAdapter.validateProviderOutput(normalized, contextBundle, safeLocalDraft)
+  const normalized = normalizeProviderOutputCompat(providerResult.rawOutput, contextBundle, safeLocalDraft)
+  const validationResult = validateAiRuntimeResponseV2(normalized, contextBundle, safeLocalDraft)
   if (!validationResult.ok) {
     return { status: 200, body: fallbackResponse(safeLocalDraft, validationResult.reason) }
   }

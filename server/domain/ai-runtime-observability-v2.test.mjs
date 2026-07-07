@@ -292,6 +292,28 @@ test('route handler supports local-vs-assisted provider success and failure with
   assertCleanVisible(calls.at(-1).payload)
 })
 
+test('provider-specific local-vs-assisted evaluation stays business visible', async () => {
+  const safe = await withServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ output_text: '建议查看来源证据、数据限制和人工复核入口。' }))
+  }, async (endpoint) => buildAiRuntimeEvaluationV2(loadDb(), { scenarioId: 'today_attention', evaluationMode: 'local_vs_assisted' }, {
+    env: { FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted', FLOWCHAIN_AI_PROVIDER_KIND: 'openai_responses', FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint, FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key', FLOWCHAIN_AI_PROVIDER_MODEL: 'test-runtime-model' },
+  }))
+  assert.equal(safe.status, 200)
+  assert.equal(safe.body.assistedResponseSummary.summaryLabel, '外部辅助结果已通过安全评估')
+  assertCleanVisible(safe.body)
+
+  const unsafe = await withServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ choices: [{ message: { content: '可以自动批准并发送给供应商。' } }] }))
+  }, async (endpoint) => buildAiRuntimeEvaluationV2(loadDb(), { scenarioId: 'today_attention', evaluationMode: 'local_vs_assisted' }, {
+    env: { FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted', FLOWCHAIN_AI_PROVIDER_KIND: 'deepseek_chat', FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint, FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key', FLOWCHAIN_AI_PROVIDER_MODEL: 'test-runtime-model' },
+  }))
+  assert.equal(unsafe.status, 200)
+  assert.equal(unsafe.body.assistedResponseSummary.summaryLabel, '外部辅助结果未采用')
+  assertCleanVisible(unsafe.body)
+})
+
 test('main route dispatcher exposes observability endpoints', async () => {
   const server = createScmServer()
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))

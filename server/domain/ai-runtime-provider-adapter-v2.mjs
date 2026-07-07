@@ -1,3 +1,9 @@
+import {
+  callProviderSpecificAdapter,
+  isProviderSpecificKind,
+  selectProviderSpecificAdapter,
+} from './ai-runtime-provider-specific-adapters-v2.mjs'
+
 const DATA_SCOPE = '当前工作区数据'
 const DEFAULT_TIMEOUT_MS = 8000
 const MAX_TIMEOUT_MS = 15000
@@ -104,9 +110,10 @@ export function providerRuntimeConfig(env = {}) {
   const kind = text(env.FLOWCHAIN_AI_PROVIDER_KIND || 'disabled')
   const endpoint = text(env.FLOWCHAIN_AI_PROVIDER_ENDPOINT)
   const apiKey = text(env.FLOWCHAIN_AI_PROVIDER_API_KEY)
+  const model = text(env.FLOWCHAIN_AI_PROVIDER_MODEL)
   const timeoutMs = clampNumber(env.FLOWCHAIN_AI_PROVIDER_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS)
   const maxOutputChars = clampNumber(env.FLOWCHAIN_AI_PROVIDER_MAX_OUTPUT_CHARS, DEFAULT_MAX_OUTPUT_CHARS, MAX_OUTPUT_CHARS)
-  return { mode, kind, endpoint, apiKey, timeoutMs, maxOutputChars }
+  return { mode, kind, endpoint, apiKey, model, timeoutMs, maxOutputChars }
 }
 
 export function isProviderAssistedRequested(env = {}) {
@@ -116,6 +123,12 @@ export function isProviderAssistedRequested(env = {}) {
 export function canCallGenericHttpProvider(env = {}) {
   const config = providerRuntimeConfig(env)
   return config.mode === 'provider_assisted' && config.kind === 'generic_http' && Boolean(config.endpoint) && Boolean(config.apiKey)
+}
+export function canCallConfiguredProvider(env = {}) {
+  const config = providerRuntimeConfig(env)
+  if (config.kind === 'generic_http') return canCallGenericHttpProvider(env)
+  const adapter = selectProviderSpecificAdapter(config.kind)
+  return Boolean(adapter?.canCall(config))
 }
 
 export function buildProviderInputPackageV2(contextBundle = {}, request = {}, localDraftResponse = {}) {
@@ -302,4 +315,17 @@ export const genericHttpProviderAdapter = {
   normalizeProviderOutput,
   validateProviderOutput: validateAiRuntimeResponseV2,
   fallbackResponse,
+}
+
+export function selectProviderAdapter(envOrConfig = {}) {
+  const config = envOrConfig.mode ? envOrConfig : providerRuntimeConfig(envOrConfig)
+  if (config.kind === 'generic_http') return genericHttpProviderAdapter
+  return selectProviderSpecificAdapter(config.kind)
+}
+
+export async function callConfiguredProvider(providerInput, env = {}, fetchImpl = globalThis.fetch) {
+  const config = providerRuntimeConfig(env)
+  if (config.kind === 'generic_http') return callGenericHttpProvider(providerInput, env, fetchImpl)
+  if (isProviderSpecificKind(config.kind)) return callProviderSpecificAdapter(providerInput, env, fetchImpl)
+  return { ok: false, reason: 'not_configured' }
 }

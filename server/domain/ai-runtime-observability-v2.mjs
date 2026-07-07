@@ -1,6 +1,6 @@
 import { buildAiRuntimeReadinessV2, buildAiRuntimeResponseV2, buildAiRuntimeResponseV2Async, validateAiRuntimeRequest } from './ai-runtime-gateway-v2.mjs'
 import {
-  canCallGenericHttpProvider,
+  canCallConfiguredProvider,
   fallbackResponse,
   FORBIDDEN_AI_RUNTIME_PROVIDER_ACTION_PATTERN,
   FORBIDDEN_AI_RUNTIME_PROVIDER_TECHNICAL_PATTERN,
@@ -279,7 +279,7 @@ function buildSnapshot({ request, localResponse, assistedResponse, validation, f
 export function buildAiRuntimeObservabilityV2(db = {}, env = {}) {
   const readiness = buildAiRuntimeReadinessV2(db, env)
   const requested = isProviderAssistedRequested(env)
-  const callable = canCallGenericHttpProvider(env)
+  const callable = canCallConfiguredProvider(env)
   const fallbackReasonSummary = [
     { fallbackReasonLabel: callable ? '已使用当前工作区证据辅助回答' : '外部辅助模式未启用', occurrenceCount: callable ? 0 : 1, businessSafeExplanation: '已使用当前工作区证据辅助回答，并保留人工复核边界。' },
     { fallbackReasonLabel: '外部辅助结果未采用', occurrenceCount: 0, businessSafeExplanation: '结果超出当前安全边界时使用当前工作区证据辅助回答。' },
@@ -332,7 +332,7 @@ export async function buildAiRuntimeEvaluationV2(db = {}, input = {}, options = 
   const mode = input.evaluationMode === 'local_vs_assisted' ? 'local_vs_assisted' : 'local_only'
   const env = options.env || process.env || {}
   const requested = mode === 'local_vs_assisted'
-  const callable = mode === 'local_vs_assisted' && canCallGenericHttpProvider(env)
+  const callable = mode === 'local_vs_assisted' && canCallConfiguredProvider(env)
   const localResult = buildAiRuntimeResponseV2(db, request, { env: {} })
   const localResponse = localResult.body
   let assistedResult = { status: 200, body: localResponse }

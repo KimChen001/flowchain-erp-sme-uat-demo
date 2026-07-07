@@ -12,6 +12,8 @@ import {
   genericHttpProviderAdapter,
   normalizeProviderOutput,
   providerRuntimeConfig,
+  selectProviderAdapter,
+  canCallConfiguredProvider,
   validateAiRuntimeResponseV2,
 } from './ai-runtime-provider-adapter-v2.mjs'
 import {
@@ -205,4 +207,14 @@ test('adapter facade exposes expected server-only contract methods', () => {
   const fallback = fallbackResponse(draft, 'manual')
   assertRuntimeResponse(fallback)
   assert.doesNotMatch(visibleText(fallback), FORBIDDEN_AI_RUNTIME_PROVIDER_TECHNICAL_PATTERN)
+})
+
+test('configured provider selection keeps generic regression and supports specific kinds', () => {
+  assert.equal(selectProviderAdapter({ FLOWCHAIN_AI_PROVIDER_KIND: 'generic_http' })?.id, 'generic-http-provider-adapter-v2')
+  assert.equal(selectProviderAdapter({ FLOWCHAIN_AI_PROVIDER_KIND: 'openai_responses' })?.kind, 'openai_responses')
+  assert.equal(selectProviderAdapter({ FLOWCHAIN_AI_PROVIDER_KIND: 'deepseek_chat' })?.kind, 'deepseek_chat')
+  assert.equal(selectProviderAdapter({ FLOWCHAIN_AI_PROVIDER_KIND: 'doubao_chat' })?.kind, 'doubao_chat')
+  assert.equal(selectProviderAdapter({ FLOWCHAIN_AI_PROVIDER_KIND: 'disabled' }), null)
+  assert.equal(canCallConfiguredProvider({ FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted', FLOWCHAIN_AI_PROVIDER_KIND: 'openai_responses', FLOWCHAIN_AI_PROVIDER_ENDPOINT: 'http://local', FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key' }), false)
+  assert.equal(canCallConfiguredProvider({ FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted', FLOWCHAIN_AI_PROVIDER_KIND: 'openai_responses', FLOWCHAIN_AI_PROVIDER_ENDPOINT: 'http://local', FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key', FLOWCHAIN_AI_PROVIDER_MODEL: 'test-runtime-model' }), true)
 })
