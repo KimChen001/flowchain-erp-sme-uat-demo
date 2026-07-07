@@ -14,6 +14,7 @@
     "test:browser:ai": "playwright test tests/browser/ai-copilot.spec.ts",
     "test:browser:ai:empty": "node scripts/browser-uat-ai-empty.mjs",
     "test:ai-provider-smoke:fake": "node scripts/ai-runtime-provider-smoke.mjs --all-fake",
+    "check:ai-provider-env": "node scripts/ai-runtime-provider-env-check.mjs",
     "test:harness": "node --test server/domain/system-harness-product-review.test.mjs",
     "test:contracts": "node --test server/domain/json-adapter-contracts.test.mjs",
     "test:db": "node --test server/domain/db-test-harness.test.mjs",
