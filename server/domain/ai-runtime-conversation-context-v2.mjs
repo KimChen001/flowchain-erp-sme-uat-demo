@@ -382,12 +382,13 @@ export function buildFollowUpSuggestionsV2(response = {}, conversationGrounding 
 }
 
 export function boundedConversationSummaryV2(conversationGrounding = {}, resolvedContext = {}) {
+  const refs = asArray(resolvedContext.entityRefs).length ? asArray(resolvedContext.entityRefs) : asArray(conversationGrounding.entityRefs)
   return {
     previousIntent: cleanText(conversationGrounding.context?.previousIntent),
     resolvedFrom: cleanText(resolvedContext.resolvedFrom || 'currentMessage'),
     intentCarryOver: cleanText(resolvedContext.intentCarryOver),
     confidence: normalizeConfidence(resolvedContext.confidence),
-    entityRefs: asArray(resolvedContext.entityRefs).slice(0, 5).map((ref) => ({
+    entityRefs: refs.slice(0, 5).map((ref) => ({
       entityType: ref.entityType,
       entityId: cleanText(ref.entityId),
       entityLabel: cleanText(ref.entityLabel),

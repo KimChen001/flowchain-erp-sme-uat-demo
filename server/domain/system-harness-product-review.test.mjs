@@ -307,7 +307,7 @@ test('Phase 0 product positioning and visible language governance stay productiz
   assert.match(constants, /AI 进销存与供应链协同工作台/)
   assert.match(forecast, /计划使用边界/)
   assert.match(forecast, /当前物料需求计划基于工作区内的商品、库存、采购、销售需求与供应商记录/)
-  assert.match(actionShell, /保存待复核草稿/)
+  assert.match(actionShell, /保留待复核草稿/)
   assert.match(importsPage, /覆盖当前工作区数据/)
   assert.match(inventoryPage, /当前工作区数据补足/)
   assert.match(reportsPage, /API \/ 当前数据范围/)

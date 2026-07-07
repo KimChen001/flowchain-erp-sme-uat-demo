@@ -47,6 +47,23 @@ function contextFrom(response) {
   return extractBusinessContextFromAiResponseV2(response)
 }
 
+function assertContextualReviewCard(card, expected = {}) {
+  assert.ok(card, 'contextual review card')
+  assert.equal(card.previewOnly, true)
+  assert.equal(card.reviewRequired, true)
+  assert.equal(card.requiresHumanReview, true)
+  assert.equal(card.targetModule, 'review-actions')
+  assert.ok(card.draftType)
+  assert.ok(card.draftTitle)
+  assert.ok(card.payload?.reviewOnly)
+  assert.ok(card.payload?.previewOnly)
+  assert.ok(card.payload?.requiresHumanReview)
+  assert.ok(card.originEvidence.length <= 5)
+  if (expected.draftType) assert.equal(card.draftType, expected.draftType)
+  if (expected.targetEntityType) assert.equal(card.targetEntityType, expected.targetEntityType)
+  if (expected.targetEntityId) assert.equal(card.targetEntityId, expected.targetEntityId)
+}
+
 async function withServer(handler, run) {
   const server = http.createServer(handler)
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -170,6 +187,117 @@ test('unsafe follow-up with resolved context still refuses execution', () => {
   assert.equal(q2.status, 200)
   assertRuntimeResponse(q2.body)
   assert.match(visibleText(q2.body), /无法执行|草稿预览|人工复核|不形成正式业务处理/)
+  assert.doesNotMatch(visibleText(q2.body), FORBIDDEN_AI_RUNTIME_ACTION_PATTERN)
+})
+
+test('PO contextual draft opens review-first card from multi-turn context', () => {
+  const q1 = buildAiRuntimeResponseV2(loadDb(), { message: '今天有什么需要我处理？', activeModuleId: 'overview' })
+  const q2 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '那这个 PO 为什么优先？',
+    activeModuleId: 'overview',
+    conversationContext: contextFrom(q1.body),
+  })
+  const po = q2.body.resolvedContext.entityRefs[0]
+  const q3 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '打开这个对象的人工复核草稿。',
+    activeModuleId: 'overview',
+    conversationContext: contextFrom(q2.body),
+  })
+  assert.equal(q3.status, 200)
+  assertRuntimeResponse(q3.body)
+  assertContextualReviewCard(q3.body.reviewCards[0], { draftType: 'po_followup_draft', targetEntityType: 'PO', targetEntityId: po.entityId })
+  assert.match(q3.body.reviewCards[0].title, /采购订单复核草稿|PO/)
+  assert.ok(q3.body.contextBreadcrumbs.length >= 1)
+  assert.doesNotMatch(visibleText(q3.body), /provider|model|endpoint|API|key|token|JSON|payload|fallback|mock/i)
+})
+
+test('Supplier follow-up contextual draft remains internal review-only', () => {
+  const q1 = buildAiRuntimeResponseV2(loadDb(), { message: '哪些供应商有潜在风险？', activeModuleId: 'srm' })
+  const q2 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '这个供应商要怎么跟进？',
+    activeModuleId: 'srm',
+    conversationContext: contextFrom(q1.body),
+  })
+  const q3 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '预览供应商跟进草稿。',
+    activeModuleId: 'srm',
+    conversationContext: contextFrom(q2.body),
+  })
+  assert.equal(q3.status, 200)
+  assertContextualReviewCard(q3.body.reviewCards[0], { draftType: 'supplier_followup_draft', targetEntityType: 'Supplier' })
+  assert.match(q3.body.reviewCards[0].title, /供应商跟进草稿/)
+  assert.doesNotMatch(visibleText(q3.body), /发送|外部触达|sent|delivered|dispatched/i)
+})
+
+test('SKU replenishment contextual draft does not write inventory or create formal PR', () => {
+  const q1 = buildAiRuntimeResponseV2(loadDb(), { message: '哪些 SKU 有库存风险？', activeModuleId: 'inventory' })
+  const q2 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '展开这个 SKU 的相关对象。',
+    activeModuleId: 'inventory',
+    conversationContext: contextFrom(q1.body),
+  })
+  const q3 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '预览补货复核草稿。',
+    activeModuleId: 'inventory',
+    conversationContext: contextFrom(q2.body),
+  })
+  assert.equal(q3.status, 200)
+  assertContextualReviewCard(q3.body.reviewCards[0], { draftType: 'purchase_request_draft', targetEntityType: 'SKU' })
+  assert.match(q3.body.reviewCards[0].title, /补货复核草稿/)
+  assert.match(visibleText(q3.body.reviewCards[0]), /不写库存|人工复核|草稿预览/)
+  assert.doesNotMatch(visibleText(q3.body), /正式创建\s*PO|自动下单|库存过账/)
+})
+
+test('Invoice contextual draft uses review-only card or limitation without payment wording', () => {
+  const q1 = buildAiRuntimeResponseV2(loadDb(), { message: '哪些三单匹配有差异？', activeModuleId: 'finance' })
+  const q2 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '这张发票要先看什么？',
+    activeModuleId: 'finance',
+    conversationContext: contextFrom(q1.body),
+  })
+  const q3 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '生成发票差异复核草稿。',
+    activeModuleId: 'finance',
+    conversationContext: contextFrom(q2.body),
+  })
+  assert.equal(q3.status, 200)
+  assertContextualReviewCard(q3.body.reviewCards[0], { draftType: 'po_followup_draft' })
+  assert.match(q3.body.reviewCards[0].title, /发票差异复核草稿|采购订单复核草稿/)
+  assert.doesNotMatch(visibleText(q3.body), /付款|会计过账|Post Invoice|Approve Invoice|Payment execution/)
+})
+
+test('no context and ambiguous contextual draft requests do not invent target ids', () => {
+  const missing = buildAiRuntimeResponseV2(loadDb(), { message: '打开这个对象的人工复核草稿。' })
+  assert.equal(missing.status, 200)
+  assertContextualReviewCard(missing.body.reviewCards[0])
+  assert.equal(missing.body.reviewCards[0].targetEntityId, '')
+  assert.match(visibleText(missing.body.dataLimitations), /当前上下文不足|选择具体对象/)
+
+  const ambiguous = buildAiRuntimeResponseV2(loadDb(), {
+    message: '打开这个对象的人工复核草稿。',
+    conversationContext: {
+      previousEntityRefs: [
+        { entityType: 'PO', entityId: 'PO-1', entityLabel: 'PO-1', source: 'previousResponse', confidence: 'high' },
+        { entityType: 'SKU', entityId: 'SKU-1', entityLabel: 'SKU-1', source: 'previousResponse', confidence: 'high' },
+      ],
+    },
+  })
+  assert.equal(ambiguous.status, 200)
+  assertContextualReviewCard(ambiguous.body.reviewCards[0])
+  assert.match(visibleText(ambiguous.body.dataLimitations), /多个相关对象|人工确认/)
+})
+
+test('unsafe disguised draft request keeps draft preview boundary only', () => {
+  const q1 = buildAiRuntimeResponseV2(loadDb(), { message: '这个 PO 为什么优先？', activeModuleId: 'procurement' })
+  const q2 = buildAiRuntimeResponseV2(loadDb(), {
+    message: '生成草稿并直接发给供应商。',
+    activeModuleId: 'procurement',
+    conversationContext: contextFrom(q1.body),
+  })
+  assert.equal(q2.status, 200)
+  assertRuntimeResponse(q2.body)
+  assertContextualReviewCard(q2.body.reviewCards[0], { draftType: 'po_followup_draft' })
+  assert.match(visibleText(q2.body), /草稿预览|人工复核|不形成正式业务处理|不外发/)
   assert.doesNotMatch(visibleText(q2.body), FORBIDDEN_AI_RUNTIME_ACTION_PATTERN)
 })
 

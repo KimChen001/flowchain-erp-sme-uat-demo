@@ -29,6 +29,7 @@ import {
   buildFollowUpSuggestionsV2,
   resolveFollowUpReferenceV2,
 } from './ai-runtime-conversation-context-v2.mjs'
+import { buildContextualReviewCardsV2 } from './ai-runtime-contextual-action-drafts-v2.mjs'
 
 export const FORBIDDEN_AI_RUNTIME_ACTION_PATTERN = /自动批准|自动下单|正式创建\s*PO|下发\s*PO|发送\s*PO|发布\s*RFQ|邀请供应商|发送邮件|发送|推送|已发送|提交收货|Receive Submit|Submit Receipt|库存过账|Post Invoice|Approve Invoice|Mark as Paid|Payment execution|Export to Accounting|付款|会计过账|修改供应商主数据|更新银行账户|发布风险评级|自动黑名单|自动暂停供应商|自动修复|自动提交导入|自动覆盖数据|自动写入数据库|批量删除|清空数据|sent|delivered|dispatched|webhook|portal invite|保存配置|保存权限|保存边界|保存历史|保存准备度|修改权限|修改历史|修改准备度|删除历史|立即生效|自动应用|分配角色|创建用户|删除用户|禁用用户|创建租户|切换租户|合并租户|迁移数据|同步数据|跨租户查询|写入配置|写入日志|推送日志|导出审计报告|生成正式审计报告|发送审计报告|启用试点|开启试点|上线|部署|生成正式报告|导出正式报告|发送报告/i
 export const FORBIDDEN_AI_RUNTIME_TECHNICAL_PATTERN = /JSON|dry-run|tenantId|userId|datasetId|writesDb|writesFiles|DB|database|schema|environment|tool_result|provider|model|endpoint|token|API key|API|fallback|deterministic|mock|fake|demo|UAT|sample data|demo data|response_card|entityType|documentType|raw enum|payload|webhook|Coupa|RBAC|production|deploy|go-live|system prompt|prompt package/i
@@ -691,7 +692,15 @@ function buildResponse({ request, intent, ctx, modeNotice = '', conversationGrou
   const ev = evidenceForIntent(intent, ctx, request)
   const links = linksForEvidence(ev)
   const extraLimitations = modeNotice ? [{ label: '外部辅助模式未启用', description: modeNotice, severity: 'warning', consequence: '已使用当前工作区证据辅助回答。' }] : []
-  const limitations = collectLimitations(ctx, [...extraLimitations, ...conversationLimitations(resolvedContext || {})])
+  const contextualDraft = buildContextualReviewCardsV2({
+    request,
+    intent,
+    contextBundle: { evidenceRefs: ev, navigationRefs: links },
+    resolvedContext,
+    conversationGrounding,
+    baseReviewCards: reviewCards(intent, links),
+  })
+  const limitations = collectLimitations(ctx, [...extraLimitations, ...conversationLimitations(resolvedContext || {}), ...contextualDraft.dataLimitations])
   const conclusion = conclusionFor(intent, ev)
   const responseId = `AIR-${Date.now()}-${Math.abs(request.message.length * 17)}`
   const base = {
@@ -719,7 +728,7 @@ function buildResponse({ request, intent, ctx, modeNotice = '', conversationGrou
     recommendedActions: recommendedActions(links, intent.id === 'unsafe_request'),
     navigationLinks: links,
     dataLimitations: limitations,
-    reviewCards: reviewCards(intent, links),
+    reviewCards: contextualDraft.reviewCards,
     safetyBoundaries: SAFETY_BOUNDARIES,
     followUpQuestions: ['查看数据限制', '进入人工复核', '打开相关模块'],
     contextBreadcrumbs: conversationGrounding ? buildContextBreadcrumbsV2(conversationGrounding, resolvedContext || {}) : [],

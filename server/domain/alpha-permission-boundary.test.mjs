@@ -80,13 +80,13 @@ test('Alpha permission gate keeps legacy mutations blocked and preview routes di
 })
 
 test('ActionDraft and Forecast/MRP UI copy keeps final confirmation and release boundaries explicit', () => {
-  assert.match(actionDraftShell, /用户确认后仅能创建或保存允许的安全内部记录/)
+  assert.match(actionDraftShell, /用户确认后也只保留允许范围内的安全内部记录/)
   assert.match(actionDraftShell, /confirmed-action-boundary/)
-  assert.match(actionDraftShell, /不会提交审批/)
-  assert.match(actionDraftShell, /不会发出 PO/)
-  assert.match(actionDraftShell, /不会发送邮件/)
-  assert.match(actionDraftShell, /不会授标/)
-  assert.match(actionDraftShell, /不会自动库存或发票过账/)
+  assert.match(actionDraftShell, /不提交/)
+  assert.match(actionDraftShell, /不外发/)
+  assert.match(actionDraftShell, /不写库存/)
+  assert.match(actionDraftShell, /不写财务凭证/)
+  assert.match(actionDraftShell, /不处理资金/)
 
   assert.match(forecastPage, /系统只会生成采购申请草稿/)
   assert.match(forecastPage, /需人工复核后才能继续处理/)

@@ -158,15 +158,15 @@ function confirmedActionTypeForDraft(type?: string) {
 
 function confirmedActionLabel(type?: string) {
   const labels: Record<string, string> = {
-    create_supplier_application: "创建供应商准入申请",
-    create_purchase_request: "创建 PR",
-    create_sourcing_event: "创建寻源事件 / RFQ 草稿",
-    create_rfq: "创建寻源事件 / RFQ 草稿",
-    save_supplier_followup_note: "保存供应商跟进备注",
-    save_exception_case_note: "保存工单备注",
-    save_reviewed_draft: "保存已复核草稿",
+    create_supplier_application: "供应商准入复核记录",
+    create_purchase_request: "PR 复核记录",
+    create_sourcing_event: "寻源复核记录",
+    create_rfq: "RFQ 复核记录",
+    save_supplier_followup_note: "供应商跟进复核记录",
+    save_exception_case_note: "工单复核记录",
+    save_reviewed_draft: "已复核内部记录",
   };
-  return labels[confirmedActionTypeForDraft(type)] || "保存已复核草稿";
+  return labels[confirmedActionTypeForDraft(type)] || "已复核内部记录";
 }
 
 function isEditableScalar(value: unknown) {
@@ -285,7 +285,7 @@ export function ActionDraftReviewShell({
       open={open}
       onClose={onClose}
       title={activeDraft?.title || "动作草稿预览"}
-      subtitle="审阅工作区：可编辑和保存草稿，用户确认后仅能创建或保存允许的安全内部记录"
+      subtitle="审阅工作区：可编辑草稿，用户确认后也只保留允许范围内的安全内部记录"
       width={860}
       footer={(
         <>
@@ -322,13 +322,13 @@ export function ActionDraftReviewShell({
               <div>
                 <div className="font-semibold">预览 / 保存边界</div>
                 <div className="mt-1" style={{ color: A.sub }}>
-                  当前工作区允许审阅、复制、编辑简单字段、保存待复核草稿，并在明确用户确认后创建或保存允许范围内的安全记录。
+                  当前工作区允许审阅、复制、编辑简单字段和保留待复核草稿；后续仍受人工确认和安全边界约束。
                 </div>
                 <div className="mt-1" style={{ color: A.sub }}>
-                  危险动作不会创建或发出 PO，不会提交审批，不会发送外部邮件；所有安全记录仍需人工确认。
+                  危险动作保持关闭：不提交、不外发、不写库存、不写财务凭证、不处理资金。
                 </div>
                 <div className="mt-1" style={{ color: A.sub }}>
-                  不会提交审批、不会发出 PO、不会发送邮件、不会授标，也不会自动库存或发票过账。
+                  草稿预览只用于人工复核，不形成正式业务处理，不改主数据，不覆盖当前工作区数据。
                 </div>
               </div>
             </div>
@@ -339,14 +339,14 @@ export function ActionDraftReviewShell({
           <section data-testid="confirmed-action-boundary" className="rounded-lg border px-3 py-3" style={{ borderColor: A.border, background: A.white }}>
             <div className="text-[12px] font-semibold" style={{ color: A.label }}>{confirmedActionLabel(activeDraft.type)}</div>
             <div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>
-              将从已复核草稿 {activeDraft.id} 创建或保存：{confirmedActionLabel(activeDraft.type)}。关联记录和依据仅作为引用，不会被自动修改。
+              已复核草稿 {activeDraft.id} 只能进入安全内部记录确认：{confirmedActionLabel(activeDraft.type)}。关联记录和依据仅作为引用，不会被自动修改。
             </div>
             <div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>
-              危险动作保持禁用或不展示：提交、审批、付款、过账、发送邮件、发出 PO、供应商授标。
+              危险动作保持禁用或不展示：不提交、不外发、不写库存、不写财务凭证、不处理资金、不改主数据。
             </div>
             {confirmResult && (
               <div className="mt-2 rounded-md px-2 py-2 text-[11px]" style={{ background: "#f0faf4", color: A.green }}>
-                已创建记录 {confirmResult.createdRecordId || "—"} · 状态 {confirmResult.status || "—"} · 审计 {confirmResult.auditEventId || "暂无"}
+                内部记录编号 {confirmResult.createdRecordId || "—"} · 状态 {confirmResult.status || "—"} · 审计 {confirmResult.auditEventId || "暂无"}
               </div>
             )}
           </section>
@@ -426,7 +426,7 @@ export function ActionDraftReviewShell({
                 {validation.errors.map((item) => <div key={item} className="text-[11px]" style={{ color: A.sub }}>{item}</div>)}
               </div>
             ) : (
-              <div className="mt-1 text-[11px]" style={{ color: A.sub }}>该草稿仍不会自动提交；用户确认后也只会创建或保存允许范围内的安全内部记录。</div>
+              <div className="mt-1 text-[11px]" style={{ color: A.sub }}>该草稿仍需人工复核；用户确认后也只保留允许范围内的安全内部记录。</div>
             )}
           </section>
 

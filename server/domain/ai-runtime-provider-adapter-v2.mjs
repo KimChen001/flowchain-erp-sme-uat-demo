@@ -62,6 +62,16 @@ function compactLimitation(item = {}) {
     consequence: cleanText(item.consequence, '建议查看来源证据后再进入人工复核。').slice(0, 260),
   }
 }
+function compactReviewDraft(item = {}) {
+  return {
+    title: cleanText(item.title || item.draftTitle, '草稿预览').slice(0, 120),
+    draftTitle: cleanText(item.draftTitle || item.title, '草稿预览').slice(0, 120),
+    targetLabel: cleanText(item.targetEntityId || item.targetEntityLabel || item.title, '业务对象').slice(0, 120),
+    previewOnly: true,
+    reviewRequired: true,
+    requiresHumanReview: true,
+  }
+}
 function uniqueBy(items = [], keyOf = (item) => item.label || item.id) {
   const seen = new Set()
   const out = []
@@ -152,6 +162,7 @@ export function buildProviderInputPackageV2(contextBundle = {}, request = {}, lo
       keyEvidence,
       sourceSummary,
       businessObjects,
+      reviewDraftSummary: asArray(localDraftResponse.reviewCards).slice(0, 3).map(compactReviewDraft),
       dataLimitations: asArray(localDraftResponse.dataLimitations).slice(0, 12).map(compactLimitation),
       readinessSignals: asArray(localDraftResponse.readinessSignals).slice(0, 12).map((item) => ({
         signalLabel: cleanText(item.signalLabel).slice(0, 80),

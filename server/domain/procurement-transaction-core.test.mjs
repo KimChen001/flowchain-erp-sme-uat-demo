@@ -175,7 +175,7 @@ test('R270 guardrails preserve confirmed action boundary provider-free UI and R2
   assert.match(confirmedBoundary, /send_rfq/)
   assert.match(confirmedBoundary, /issue_po/)
   assert.match(confirmedBoundary, /award_supplier/)
-  assert.match(shell, /用户确认后也只会创建或保存允许范围内的安全内部记录/)
+  assert.match(shell, /用户确认后也只保留允许范围内的安全内部记录/)
   assert.doesNotMatch(shell, /future work/)
   assert.doesNotMatch(app, /AI Command Center|AI Assistant<\/|standalone-ai/i)
   assert.match(prPage, /\/api\/procurement\/rfq-drafts\/from-pr/)

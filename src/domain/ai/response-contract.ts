@@ -83,6 +83,7 @@ export type AiResponseV2ReviewCard = {
   title: string;
   description: string;
   previewOnly: true;
+  reviewRequired?: true;
   requiresHumanReview: true;
   prohibitedActions: string[];
   allowedNextStep: string;

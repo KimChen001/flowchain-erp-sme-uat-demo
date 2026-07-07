@@ -173,7 +173,7 @@ function ReviewCard({
       </div>
       <div className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{card.description}</div>
       <div className="mt-1 text-[10px] leading-4" style={{ color: A.gray2 }}>
-        需人工复核 · 不会外发 · 不提交 · 不写入财务凭证 · 不改供应商资料
+        需人工复核 · 不会外发 · 不提交 · 不写库存 · 不写财务凭证 · 不改主数据
       </div>
       {request && onReviewActionDraft ? (
         <button
