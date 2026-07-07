@@ -96,5 +96,5 @@ test('AI and Today Cockpit render evidence through canonical links', () => {
   assert.match(cockpit, /normalizeTodayCockpitTarget\(doc\)/)
   assert.match(cockpit, /onNavigate\(moduleId, link\?\.focusTarget \|\| null, \{/)
   assert.match(cockpit, /returnTo:\s*"overview"/)
-  assert.match(cockpit, /returnLabel:\s*"返回今日驾驶舱"/)
+  assert.match(cockpit, /returnLabel:\s*"返回 今日行动"/)
 })

@@ -1442,8 +1442,17 @@ function uniqueFollowUpChips(chips: { label: string; prompt: string }[]) {
   }).slice(0, 4);
 }
 
+function hasRuntimeFollowUpSuggestions(message: AiChatMessage) {
+  return Boolean(message.cards?.some((card) =>
+    card.type === "ai_response_v2"
+    && Array.isArray((card.data as AiResponseV2 | undefined)?.followUpSuggestions)
+    && ((card.data as AiResponseV2 | undefined)?.followUpSuggestions || []).length > 0
+  ));
+}
+
 export function getAiFollowUpChips(message: AiChatMessage) {
   if (message.role !== "assistant" || !message.cards?.length) return [];
+  if (hasRuntimeFollowUpSuggestions(message)) return [];
   const ids = collectBusinessIdsFromCards(message.cards);
   const firstPo = ids.po?.[0] || "";
   const firstSku = ids.sku?.[0] || "";

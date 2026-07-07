@@ -36,7 +36,6 @@ function cockpitSeverityStyle(severity: TodayCockpitSeverity) {
   if (severity === "medium" || severity === "中") return { color: A.orange, bg: "#fff8f0", label: "中" };
   return { color: A.green, bg: "#f0faf4", label: "低" };
 }
-
 function cockpitTargetModule(target?: { module?: string }, fallback?: string) {
   return target?.module || fallback || "overview";
 }
@@ -214,7 +213,7 @@ export function TodayCockpitSummaryCards({
               returnTo: "overview",
               entityLabel: link?.label || card.title,
               source: "todayCockpit",
-              returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: card.title, returnLabel: "返回今日驾驶舱", originIntent: "priorityCard" },
+              returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: card.title, returnLabel: "返回 今日行动", originIntent: "priorityCard" },
             })}
             className="min-h-[118px] rounded-lg border p-3 text-left transition-colors hover:bg-slate-50"
             style={{ borderColor: A.border, background: A.white }}
@@ -267,7 +266,7 @@ export function TodayCockpitActionList({
                 returnTo: "overview",
                 entityLabel: link?.label || item.title,
                 source: "todayCockpit",
-                returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: item.title, returnLabel: "返回今日驾驶舱", originIntent: item.id },
+                returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: item.title, returnLabel: "返回 今日行动", originIntent: item.id },
               })} className="w-full text-left">
                 <div className="flex items-center gap-2">
                   <Chip label={style.label} color={style.color} bg={style.bg} />
@@ -333,7 +332,7 @@ export function TodayCockpitInventoryRisks({
                 returnTo: "overview",
                 entityLabel: link?.label || item.sku || item.id,
                 source: "todayCockpit",
-                returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: item.sku || item.id, returnLabel: "返回今日驾驶舱", originIntent: item.id },
+                returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: item.sku || item.id, returnLabel: "返回 今日行动", originIntent: item.id },
               })}
               className="w-full rounded-md border px-3 py-2 text-left hover:bg-slate-50"
               style={{ borderColor: A.border }}
@@ -397,7 +396,7 @@ export function TodayCockpitRecentDocuments({
                         returnTo: "overview",
                         entityLabel: link.label || doc.id,
                         source: "todayCockpit",
-                        returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: doc.id, returnLabel: "返回今日驾驶舱", originIntent: "recentDocument" },
+                        returnContext: { sourceModule: "todayCockpit", sourceRoute: "overview", sourceLabel: doc.id, returnLabel: "返回 今日行动", originIntent: "recentDocument" },
                       })} className={tableLinkClass}>
                         {doc.id}
                       </button>

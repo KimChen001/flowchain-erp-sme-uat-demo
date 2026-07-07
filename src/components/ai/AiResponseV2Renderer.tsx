@@ -193,6 +193,18 @@ function ReviewCard({
   );
 }
 
+function runtimeFollowUps(response: AiResponseV2) {
+  const hasReviewCard = asArray(response.reviewCards).length > 0;
+  const seen = new Set<string>();
+  return asArray(response.followUpSuggestions).filter((item) => {
+    const key = `${text(item.label)}|${text(item.prompt)}`;
+    if (!key.trim() || seen.has(key)) return false;
+    seen.add(key);
+    if (hasReviewCard && /进入人工复核|预览.*草稿|草稿.*预览|人工复核/.test(`${item.label} ${item.prompt}`)) return false;
+    return true;
+  }).slice(0, 4);
+}
+
 export function AiResponseV2Renderer({
   response,
   onNavigate,
@@ -207,7 +219,7 @@ export function AiResponseV2Renderer({
   if (!response || response.version !== "v2") return null;
   const conclusion = response.conclusion;
   const breadcrumbs = asArray(response.contextBreadcrumbs).slice(0, 4);
-  const followUps = asArray(response.followUpSuggestions).slice(0, 4);
+  const followUps = runtimeFollowUps(response);
   return (
     <div data-testid="ai-response-v2" className="rounded-xl px-3 py-2.5 space-y-3" style={{ background: A.white, border: `1px solid ${A.border}` }}>
       <Section title="结论">

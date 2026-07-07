@@ -49,7 +49,6 @@ const SOURCE_ENTITY_LABELS: Record<string, string> = {
 function clean(value: unknown) {
   return String(value ?? "").trim();
 }
-
 function compactContext(context: WorkflowContext) {
   return {
     sourceModule: clean(context.sourceModule) || "overview",
@@ -118,6 +117,6 @@ export function formatReturnLabel(context: WorkflowContext | null | undefined) {
     const entityLabel = SOURCE_ENTITY_LABELS[safe.sourceEntityType || ""] || "";
     return `返回 ${[entityLabel, safe.sourceEntityId].filter(Boolean).join(" ")}`;
   }
-  if (safe.sourceModule === "overview" || safe.sourceModule === "todayCockpit") return "返回今日驾驶舱";
+  if (safe.sourceModule === "overview" || safe.sourceModule === "todayCockpit") return "返回 今日行动";
   return `返回${SOURCE_MODULE_LABELS[safe.sourceModule] || "上一级"}`;
 }

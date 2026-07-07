@@ -502,7 +502,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
   ];
 
   if (initialView === "ai") {
-    return <AiSuggestionsPage onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} />;
+    return <AiSuggestionsPage onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} onOpenAi={onOpenAi} />;
   }
 
   if (initialView === "risks") {
@@ -629,7 +629,18 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
               今日重点集中在采购到货、库存短缺、供应商状态和发票协同，详细证据可从队列进入。
             </div>
           </div>
-          <button onClick={() => onNavigate("overview:ai")}
+          <button onClick={() => onNavigate("overview:ai", null, {
+            returnTo: "overview",
+            entityLabel: "AI 建议",
+            source: "todayCockpit",
+            returnContext: {
+              sourceModule: "todayCockpit",
+              sourceRoute: "overview",
+              sourceLabel: "今日行动",
+              returnLabel: "返回 今日行动",
+              originIntent: "openAiSuggestions",
+            },
+          })}
             className="inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-[13px] font-semibold"
             style={{ background: "#eef4ff", color: A.blue }}>
             查看 AI 建议 <ArrowRight size={14} />
@@ -714,7 +725,18 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
                 <h3 className="text-[12px] font-semibold" style={{ color: A.label }}>轻量入口</h3>
                 <p className="text-[10px] mt-0.5" style={{ color: A.sub }}>AI 建议已独立到专页。</p>
               </div>
-              <button onClick={() => onNavigate("overview:ai")}
+              <button onClick={() => onNavigate("overview:ai", null, {
+                returnTo: "overview",
+                entityLabel: "AI 建议",
+                source: "todayCockpit",
+                returnContext: {
+                  sourceModule: "todayCockpit",
+                  sourceRoute: "overview",
+                  sourceLabel: "今日行动",
+                  returnLabel: "返回 今日行动",
+                  originIntent: "openAiSuggestions",
+                },
+              })}
                 className="text-[11px] px-3 py-1.5 rounded-md font-medium"
                 style={{ background: A.white, color: A.blue }}>
                 查看 AI 建议

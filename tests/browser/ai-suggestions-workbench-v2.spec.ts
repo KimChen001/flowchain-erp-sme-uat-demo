@@ -111,8 +111,8 @@ test("AI Suggestions Workbench v2 renders dynamic evidence suggestions drafts fi
   await expect(reopened.getByTestId("ai-draft-preview-card").first()).toBeVisible();
   await expect(reopened).toContainText("预览草稿");
   await expect(reopened).toContainText("进入人工复核");
-  await expect(reopened).toContainText("打开行动草稿");
-  await expect(reopened).toContainText("标记仅内部留存");
+  await expect(reopened).not.toContainText("打开行动草稿");
+  await expect(reopened).not.toContainText("标记仅内部留存");
   await expect(reopened).toContainText("不形成正式业务处理");
   await reopened.getByRole("button", { name: "进入人工复核" }).first().click();
   await expect(page.getByTestId("module-export-scope")).toContainText(/行动草稿与人工复核|等待人工复核/);

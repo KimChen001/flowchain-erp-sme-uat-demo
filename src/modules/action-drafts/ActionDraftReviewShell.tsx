@@ -251,7 +251,7 @@ export function ActionDraftReviewShell({
     setSaveError("");
     try {
       await onSaveDraft(activeDraft);
-      setSaveStatus("草稿已保存，仍需人工确认后才能进入业务执行。");
+      setSaveStatus("待复核草稿已保留，后续仍需人工确认。");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "草稿保存失败");
     } finally {
@@ -272,7 +272,7 @@ export function ActionDraftReviewShell({
     try {
       const result = await onConfirmSafeAction(activeDraft);
       setConfirmResult(result);
-      setSaveStatus("用户确认的安全动作已记录。");
+      setSaveStatus("复核结果已记录为内部记录。");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "安全确认失败");
     } finally {
@@ -302,10 +302,10 @@ export function ActionDraftReviewShell({
             <Copy size={12} className="mr-1 inline" />复制草稿内容
           </button>
           <button type="button" onClick={saveDraft} disabled={!activeDraft || !onSaveDraft || saving} className={draftButtonClass} style={{ background: activeDraft && onSaveDraft ? A.blue : A.gray4, color: A.white }}>
-            <Save size={12} className="mr-1 inline" />{saving ? "保存中" : "保存草稿"}
+            <Save size={12} className="mr-1 inline" />{saving ? "保留中" : "保留待复核草稿"}
           </button>
           <button type="button" onClick={confirmSafeAction} disabled={!activeDraft || !onConfirmSafeAction || confirming || Boolean(validation?.errors?.length)} className={`${draftButtonClass} text-white`} style={{ background: activeDraft && onConfirmSafeAction && !validation?.errors?.length ? A.green : A.gray3 }}>
-            {confirming ? "确认中" : confirmedActionLabel(activeDraft?.type)}
+            {confirming ? "记录中" : "记录复核结果"}
           </button>
         </>
       )}

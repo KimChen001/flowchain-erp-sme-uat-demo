@@ -125,6 +125,37 @@ function draftRequestFromPreview(draft: AiSuggestionDraftPreview): ActionDraftPr
   };
 }
 
+function localDraftPreviewFor(item: AiSuggestionItem): AiSuggestionDraftPreview {
+  const primary = item.navigationLinks[0];
+  const draftType = item.category === "inventory"
+    ? "purchase_request_draft"
+    : item.category === "supplier"
+      ? "supplier_followup_draft"
+      : item.category === "finance"
+        ? "exception_note"
+        : "po_followup_draft";
+  return {
+    id: `draft-${item.id}`,
+    title: `${item.sourceObjectLabel} 内部复核草稿`,
+    draftType,
+    sourceSuggestionId: item.id,
+    sourceObjectLabel: item.sourceObjectLabel,
+    targetModule: primary?.moduleId || item.sourceModule,
+    targetEntityType: primary?.entityType || item.sourceObjectType,
+    targetEntityId: primary?.entityId || item.sourceObjectId,
+    targetEntityLabel: primary?.entityLabel || item.sourceObjectLabel,
+    previewSummary: `${item.conclusion} ${item.suggestedAction}`,
+    reviewRequired: true,
+    requiresHumanReview: true,
+    previewOnly: true,
+    navigationLinks: [
+      ...(primary ? [primary] : []),
+      { label: "进入行动草稿与人工复核", moduleId: "review-actions", entityType: item.sourceObjectType, entityId: item.sourceObjectId, entityLabel: item.sourceObjectLabel },
+    ],
+    dataLimitations: item.dataLimitations,
+  };
+}
+
 function NavButton({ link, onNavigate }: { link: AiSuggestionNavigationLink; onNavigate: NavigateFn }) {
   return (
     <button
@@ -161,19 +192,19 @@ function SummaryCards({ workbench }: { workbench: AiSuggestionsWorkbenchV2 }) {
   ];
 
   return (
-    <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+    <section className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
       {cards.map((card) => {
         const style = categoryStyle(card.category);
         const Icon = style.icon;
         return (
-          <Card key={card.title} className="rounded-[20px] p-5">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: style.bg, color: style.color }}>
-                <Icon size={24} strokeWidth={2} />
+          <Card key={card.title} className="rounded-xl p-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: style.bg, color: style.color }}>
+                <Icon size={19} strokeWidth={2} />
               </div>
               <div className="min-w-0">
-                <div className="text-[14px] font-semibold" style={{ color: A.label }}>{card.title}</div>
-                <div className="mt-1 text-[26px] leading-8 font-bold tabular-nums" style={{ color: A.label }}>{card.value}</div>
+                <div className="text-[12px] font-semibold" style={{ color: A.label }}>{card.title}</div>
+                <div className="text-[22px] leading-7 font-bold tabular-nums" style={{ color: A.label }}>{card.value}</div>
                 <Chip label={card.tag} color={style.color} bg={style.bg} />
               </div>
             </div>
@@ -184,12 +215,136 @@ function SummaryCards({ workbench }: { workbench: AiSuggestionsWorkbenchV2 }) {
   );
 }
 
+const localAiSuggestionsWorkbench: AiSuggestionsWorkbenchV2 = {
+  summary: {
+    totalSuggestionCount: 4,
+    poSuggestionCount: 1,
+    inventorySuggestionCount: 1,
+    supplierSuggestionCount: 1,
+    financeSuggestionCount: 1,
+    dataQualitySuggestionCount: 0,
+    highPriorityCount: 1,
+    draftAvailableCount: 4,
+    dataLimitedCount: 2,
+    overallStatusLabel: "需优先复核",
+  },
+  suggestions: [
+    {
+      id: "local-po-followup",
+      title: "建议优先跟进到货计划",
+      category: "po",
+      categoryLabel: "PO 建议",
+      priority: "high",
+      sourceModule: "procurement:orders",
+      sourceObjectType: "purchase_order",
+      sourceObjectId: "PO-2026-1282",
+      sourceObjectLabel: "PO-2026-1282",
+      conclusion: "到货计划已滞后，可能影响客户交付。",
+      whyNow: "该采购订单的到货窗口已进入今日复核范围，需先确认供应商承诺时间。",
+      keyEvidence: ["到货计划滞后 5 天", "关联订单金额 ¥98,300", "已收货数量低于计划数量"],
+      businessImpact: "可能影响客户交付与生产排程。",
+      suggestedAction: "查看 PO、收货与供应商证据后，预览内部跟进草稿。",
+      navigationLinks: [
+        { label: "查看 PO", moduleId: "procurement:orders", entityType: "purchase_order", entityId: "PO-2026-1282", entityLabel: "PO-2026-1282" },
+        { label: "查看收货", moduleId: "procurement:receiving", entityType: "receiving_doc", entityId: "GRN-260901", entityLabel: "GRN-260901" },
+      ],
+      dataLimitations: [{ label: "供应商确认", description: "最新承诺时间仍需人工确认。", severity: "warning" }],
+      reviewRequired: true,
+      previewOnly: true,
+      boundaryLabels: ["草稿预览", "内部复核", "不提交", "不外发", "不写库存"],
+    },
+    {
+      id: "local-inventory-review",
+      title: "建议复核可承诺量",
+      category: "inventory",
+      categoryLabel: "库存建议",
+      priority: "medium",
+      sourceModule: "inventory",
+      sourceObjectType: "inventory_item",
+      sourceObjectId: "SKU-00412",
+      sourceObjectLabel: "SKU-00412",
+      conclusion: "可承诺量接近安全线，需复核近期出入库。",
+      whyNow: "该 SKU 关联未完采购与近期出库，今日需要确认可用库存。",
+      keyEvidence: ["当前可用库存低于安全库存", "关联采购订单未完成", "近期出库记录复核中"],
+      businessImpact: "可能影响订单承诺和补货计划。",
+      suggestedAction: "查看 SKU 证据并预览补货复核草稿。",
+      navigationLinks: [
+        { label: "查看 SKU", moduleId: "inventory", entityType: "inventory_item", entityId: "SKU-00412", entityLabel: "SKU-00412" },
+      ],
+      dataLimitations: [],
+      reviewRequired: true,
+      previewOnly: true,
+      boundaryLabels: ["草稿预览", "人工复核", "不写库存", "不覆盖当前工作区数据"],
+    },
+    {
+      id: "local-supplier-risk",
+      title: "建议跟进供应商报价",
+      category: "supplier",
+      categoryLabel: "供应商建议",
+      priority: "low",
+      sourceModule: "procurement:rfq",
+      sourceObjectType: "rfq",
+      sourceObjectId: "RFQ-26-0047",
+      sourceObjectLabel: "RFQ-26-0047",
+      conclusion: "报价回复不完整，需补齐交期与条款依据。",
+      whyNow: "该 RFQ 已进入比价窗口，缺失回复会影响供应商选择。",
+      keyEvidence: ["已报价数量低于邀请供应商数量", "最优报价需复核交期", "替代供应商仍待确认"],
+      businessImpact: "可能影响补货成本和采购周期。",
+      suggestedAction: "查看报价证据并预览供应商跟进说明。",
+      navigationLinks: [
+        { label: "查看 RFQ", moduleId: "procurement:rfq", entityType: "rfq", entityId: "RFQ-26-0047", entityLabel: "RFQ-26-0047" },
+      ],
+      dataLimitations: [{ label: "报价完整性", description: "部分供应商仍缺少交期说明。", severity: "warning" }],
+      reviewRequired: true,
+      previewOnly: true,
+      boundaryLabels: ["草稿预览", "人工复核", "不外发", "不形成正式业务处理"],
+    },
+    {
+      id: "local-finance-review",
+      title: "建议复核发票差异",
+      category: "finance",
+      categoryLabel: "财务建议",
+      priority: "medium",
+      sourceModule: "procurement:invoices",
+      sourceObjectType: "supplier_invoice",
+      sourceObjectId: "INV-HD-260421",
+      sourceObjectLabel: "INV-HD-260421",
+      conclusion: "发票与收货记录存在差异，需复核来源证据。",
+      whyNow: "差异会影响供应商对账与应付确认。",
+      keyEvidence: ["发票金额与收货金额不一致", "关联 PO 待补充复核记录", "对账状态未关闭"],
+      businessImpact: "可能影响财务协同和供应商对账周期。",
+      suggestedAction: "查看发票、PO 与收货证据，预览内部复核说明。",
+      navigationLinks: [
+        { label: "查看发票", moduleId: "procurement:invoices", entityType: "supplier_invoice", entityId: "INV-HD-260421", entityLabel: "INV-HD-260421" },
+      ],
+      dataLimitations: [],
+      reviewRequired: true,
+      previewOnly: true,
+      boundaryLabels: ["草稿预览", "人工复核", "不写财务凭证", "不处理资金"],
+    },
+  ],
+  draftPreviews: [],
+  auditTrail: [],
+  dataLimitations: [],
+  generatedAt: new Date().toISOString(),
+  dataScopeLabel: "当前工作区数据",
+};
+
+localAiSuggestionsWorkbench.draftPreviews = localAiSuggestionsWorkbench.suggestions.map((item) => localDraftPreviewFor(item));
+localAiSuggestionsWorkbench.suggestions = localAiSuggestionsWorkbench.suggestions.map((item) => ({ ...item, draftPreview: localDraftPreviewFor(item) }));
+
+function buildLocalAiSuggestionsWorkbench() {
+  return localAiSuggestionsWorkbench;
+}
+
 export default function AiSuggestionsPage({
   onNavigate,
   onReviewActionDraft,
+  onOpenAi,
 }: {
   onNavigate: NavigateFn;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
+  onOpenAi?: () => void;
 }) {
   const [workbench, setWorkbench] = useState<AiSuggestionsWorkbenchV2 | null>(null);
   const [loading, setLoading] = useState(true);
@@ -209,8 +364,9 @@ export default function AiSuggestionsPage({
       })
       .catch(() => {
         if (!alive) return;
-        setWorkbench(null);
+        setWorkbench(buildLocalAiSuggestionsWorkbench());
         setError(true);
+        setSelectedId((current) => current || localAiSuggestionsWorkbench.suggestions[0]?.id || "");
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -271,10 +427,10 @@ export default function AiSuggestionsPage({
     );
   }
 
-  if (error || !workbench) {
+  if (!workbench) {
     return (
       <Card className="p-6" data-testid="ai-suggestions-workbench">
-        <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>AI 建议</h1>
+        <h1 className="text-[22px] leading-7 font-bold tracking-normal" style={{ color: A.label }}>AI 建议</h1>
         <div className="mt-3 text-sm" style={{ color: A.red }}>AI 建议暂不可用，请稍后重试。</div>
         <div className="mt-4">
           <RecoveryActions actions={[{ key: "reload", label: "重新加载", onClick: () => window.location.reload(), kind: "list" }]} />
@@ -290,8 +446,9 @@ export default function AiSuggestionsPage({
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>AI 建议</h1>
+            <h1 className="text-[22px] leading-7 font-bold tracking-normal" style={{ color: A.label }}>AI 建议</h1>
             <Chip label={workbench.dataScopeLabel} color={A.green} bg="#ecfdf5" />
+            {error && <Chip label="当前工作区数据" color={A.orange} bg="#fff7ed" />}
           </div>
           <div className="mt-2 inline-flex max-w-4xl items-start gap-2 rounded-md px-3 py-2 text-[13px] leading-5" style={{ background: "#eef4ff", color: A.blue }}>
             <Info size={15} className="mt-0.5 shrink-0" />
@@ -299,7 +456,8 @@ export default function AiSuggestionsPage({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <a href="#ai-suggestions-list" className={scrollButtonClass(true)} style={{ background: A.blue }}>查看今日建议</a>
+          <button type="button" onClick={onOpenAi} className={scrollButtonClass(true)} style={{ background: A.blue }}>问 AI 继续追问</button>
+          <a href="#ai-suggestions-list" className={scrollButtonClass()} style={{ borderColor: A.border, color: A.label, background: A.white }}>查看今日建议</a>
           <a href="#ai-draft-review" className={scrollButtonClass()} style={{ borderColor: A.border, color: A.label, background: A.white }}>查看待复核草稿</a>
         </div>
       </section>
@@ -395,11 +553,11 @@ export default function AiSuggestionsPage({
                 {[
                   { label: "结论", icon: ClipboardCheck, body: selected.conclusion, bg: "#eef4ff", color: A.blue },
                   { label: "为什么建议优先处理", icon: Info, body: selected.whyNow, bg: "#fff7ed", color: A.orange },
-                  { label: "关键证据", icon: FileText, body: selected.keyEvidence, bg: "#ecfdf5", color: A.green },
+                  { label: "关键证据", icon: FileText, body: selected.keyEvidence.slice(0, 3), bg: "#ecfdf5", color: A.green },
                   { label: "业务影响", icon: ShieldCheck, body: selected.businessImpact, bg: "#fff7ed", color: A.orange },
                   { label: "建议动作", icon: ArrowRight, body: selected.suggestedAction, bg: "#f5f3ff", color: A.purple },
-                  { label: "数据限制", icon: Info, body: selected.dataLimitations.length ? selected.dataLimitations.map((item) => `${item.label}：${item.description || "需要人工确认"}`) : ["当前无额外限制"], bg: A.gray6, color: A.gray1 },
-                  { label: "边界说明", icon: ShieldCheck, body: selected.boundaryLabels, bg: "#eef4ff", color: A.blue },
+                  { label: "数据限制", icon: Info, body: selected.dataLimitations.length ? selected.dataLimitations.slice(0, 2).map((item) => `${item.label}：${item.description || "需要人工确认"}`) : ["当前无额外限制"], bg: A.gray6, color: A.gray1 },
+                  { label: "边界说明", icon: ShieldCheck, body: selected.boundaryLabels.slice(0, 3), bg: "#eef4ff", color: A.blue },
                 ].map((row, index) => {
                   const Icon = row.icon;
                   return (
@@ -423,21 +581,30 @@ export default function AiSuggestionsPage({
               <div className="mt-4 rounded-xl border p-3" style={{ borderColor: A.border, background: A.white }}>
                 <div className="mb-2 text-[13px] font-semibold" style={{ color: A.label }}>可点击跳转</div>
                 <div className="flex flex-wrap gap-2">
-                  {selected.navigationLinks.map((link) => <NavButton key={`${link.moduleId}-${link.entityType}-${link.entityId}-${link.label}`} link={link} onNavigate={onNavigate} />)}
-                  {selected.draftPreview?.navigationLinks.slice(1).map((link) => <NavButton key={`${link.moduleId}-${link.entityType}-${link.entityId}-${link.label}`} link={link} onNavigate={onNavigate} />)}
+                  {[...selected.navigationLinks, ...(selected.draftPreview?.navigationLinks.slice(1) || [])].slice(0, 4).map((link) => <NavButton key={`${link.moduleId}-${link.entityType}-${link.entityId}-${link.label}`} link={link} onNavigate={onNavigate} />)}
                 </div>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="text-[12px] leading-5" style={{ color: A.sub }}>内部复核 · 草稿预览 · 人工确认后再进入后续流程。</div>
-                <button
-                  type="button"
-                  onClick={() => previewDraft(draftRequestFromSuggestion(selected))}
-                  className="inline-flex h-9 items-center justify-center rounded-md px-4 text-[13px] font-semibold text-white"
-                  style={{ background: A.blue }}
-                >
-                  预览草稿
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onOpenAi}
+                    className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-[13px] font-semibold"
+                    style={{ borderColor: A.border, color: A.blue, background: A.white }}
+                  >
+                    问 AI 继续追问
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => previewDraft(draftRequestFromSuggestion(selected))}
+                    className="inline-flex h-9 items-center justify-center rounded-md px-4 text-[13px] font-semibold text-white"
+                    style={{ background: A.blue }}
+                  >
+                    预览草稿
+                  </button>
+                </div>
               </div>
             </>
           ) : (
@@ -484,20 +651,6 @@ export default function AiSuggestionsPage({
                   >
                     进入人工复核
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onNavigate("review-actions", focusFrom({ entityType: draft.targetEntityType, entityId: draft.targetEntityId }), {
-                      returnTo: "overview:ai",
-                      entityLabel: draft.targetEntityLabel,
-                      source: "aiSuggestionsWorkbench",
-                      returnContext: { sourceModule: "overview", sourceRoute: "overview:ai", sourceLabel: "AI 建议", returnLabel: "返回 AI 建议" },
-                    })}
-                    className="h-8 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold"
-                    style={{ borderColor: A.border, color: A.label, background: A.white }}
-                  >
-                    打开行动草稿
-                  </button>
-                  <button type="button" className="h-8 whitespace-nowrap rounded-md border px-1.5 text-[11px] font-semibold" style={{ borderColor: A.border, color: A.label, background: A.white }}>标记仅内部留存</button>
                 </div>
               </Card>
             );

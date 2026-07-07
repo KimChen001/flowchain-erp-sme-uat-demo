@@ -110,7 +110,7 @@ async function openDraftPreview(page: Page, draftType: string) {
   return shell;
 }
 
-async function expectConfirmedSafeActionBoundary(page: Page, expectedLabel: string | RegExp = /PR 复核记录|已复核内部记录/) {
+async function expectConfirmedSafeActionBoundary(page: Page, expectedLabel: string | RegExp = "记录复核结果") {
   await expect(page.getByRole("button", { name: expectedLabel })).toBeVisible();
   const shell = page.getByTestId("action-draft-review-shell");
   await expect(shell).toContainText("只能进入安全内部记录确认");
@@ -162,13 +162,13 @@ test.describe("AI Copilot browser controlled review", () => {
     await openLoggedInApp(page);
     await askTodayPriority(page);
 
-    const chip = page.getByTestId("ai-follow-up-chip").filter({ hasText: "为什么这个 PO 优先？" }).first();
+    const chip = page.getByTestId("ai-runtime-follow-up-chip").filter({ hasText: "展开相关对象" }).first();
     await expect(chip).toBeVisible();
     await chip.click();
 
     const assistant = page.getByTestId("ai-message-assistant").last();
     await expect(assistant).toContainText("PO-2026-1282");
-    await expect(assistant).toContainText(/未到货明细|供应商剩余交期|部分到货/);
+    await expect(assistant).toContainText(/SKU-00412|RFQ-26-0046|GRN-202605-0419|相关对象/);
     await expect(assistant).not.toContainText(/provider fallback|tool_result|debug|documentType|entityType/i);
   });
 
@@ -348,7 +348,7 @@ test.describe("AI Copilot browser controlled review", () => {
     const shell = await openDraftPreview(page, "purchase_request_draft");
     await expect(shell).toContainText("SKU-00412");
     await expect(shell).toContainText("待复核草稿");
-    await expectConfirmedSafeActionBoundary(page, "PR 复核记录");
+    await expectConfirmedSafeActionBoundary(page);
 
     await closeDraftPreview(page);
     await expect(page.getByTestId("ai-assistant-panel")).toBeVisible();
@@ -362,14 +362,14 @@ test.describe("AI Copilot browser controlled review", () => {
     await askAssistant(page, "解释 PO-2026-1282 为什么优先");
     let shell = await openDraftPreview(page, "po_followup_draft");
     await expect(shell).toContainText("PO-2026-1282");
-    await expectConfirmedSafeActionBoundary(page, "已复核内部记录");
+    await expectConfirmedSafeActionBoundary(page);
     await closeDraftPreview(page);
 
     await askAssistant(page, "RFQ-26-0046 需要怎么跟进？");
     shell = await openDraftPreview(page, "supplier_followup_draft");
     await expect(shell).toContainText("RFQ-26-0046");
     await expect(shell).toContainText(/不形成正式业务处理|不外发/);
-    await expectConfirmedSafeActionBoundary(page, "供应商跟进复核记录");
+    await expectConfirmedSafeActionBoundary(page);
   });
 
   test("R129 full AI Copilot workspace scenario stays evidence-backed and review-first", async ({ page }) => {
@@ -400,7 +400,7 @@ test.describe("AI Copilot browser controlled review", () => {
     const shell = await openDraftPreview(page, "po_followup_draft");
     await expect(shell).toContainText("PO-2026-1282");
     await expect(shell).toContainText("待复核草稿");
-    await expectConfirmedSafeActionBoundary(page, "已复核内部记录");
-    await expect(page.getByRole("button", { name: "保存草稿" })).toBeVisible();
+    await expectConfirmedSafeActionBoundary(page);
+    await expect(page.getByRole("button", { name: "保留待复核草稿" })).toBeVisible();
   });
 });

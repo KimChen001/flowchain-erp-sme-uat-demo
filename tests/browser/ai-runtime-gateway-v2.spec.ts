@@ -36,8 +36,10 @@ async function openAssistant(page: Page) {
 
 async function ask(page: Page, question: string) {
   const panel = page.getByTestId("ai-assistant-panel");
+  const before = await panel.getByTestId("ai-response-v2").count();
   await panel.getByTestId("ai-assistant-input").fill(question);
   await panel.getByTestId("ai-assistant-send").click();
+  await expect(panel.getByTestId("ai-response-v2")).toHaveCount(before + 1, { timeout: 25000 });
   await expect(panel.getByTestId("ai-response-v2").last()).toBeVisible({ timeout: 20000 });
   return panel.getByTestId("ai-message-assistant").last();
 }
@@ -113,7 +115,7 @@ test("AI Runtime Gateway powers assistant with evidence-bounded review-first ans
   await reopenAssistant(page);
   await ask(page, "试点准备度还有哪些阻塞项？");
   await clickRuntimeLink(page, /试点准备度/);
-  await expect(page.getByTestId("pilot-readiness-governance")).toContainText("试点准备度");
+  await expect(page.getByTestId("module-export-scope")).toContainText("试点准备度");
 
   await reopenAssistant(page);
   await ask(page, "这个 PO 为什么优先？");
