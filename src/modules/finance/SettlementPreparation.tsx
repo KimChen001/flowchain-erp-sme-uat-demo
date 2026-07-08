@@ -23,16 +23,16 @@ export default function SettlementPreparation() {
       负责人: row.owner,
       下一步: row.nextStep,
     })));
-    toast.success("导出文件已生成", { description: "结算准备清单" });
+    toast.success("导出文件已生成", { description: "结算资料准备清单" });
   }
 
   return (
     <Card>
       <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
         <div>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>结算准备</h2>
+          <h2 className="text-sm font-semibold" style={{ color: A.label }}>结算资料准备</h2>
           <p className="text-[11px] leading-5 mt-1 max-w-2xl" style={{ color: A.sub }}>
-            汇总供应商发票、应付账款、贷项冲减和供应商对账状态，形成付款前的结算准备清单。
+            汇总供应商发票、应付可见性、贷项冲减和供应商对账状态，形成付款前的资料复核清单；不执行付款或会计过账。
           </p>
         </div>
         <button onClick={exportCsv}
@@ -45,7 +45,7 @@ export default function SettlementPreparation() {
         <table className="w-full text-xs">
           <thead>
             <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["供应商", "发票金额", "贷项冲减", "未结应付", "对账状态", "结算准备", "负责人", "下一步"].map((header) => (
+              {["供应商", "发票金额", "贷项冲减", "未结应付", "对账状态", "资料准备", "负责人", "下一步"].map((header) => (
                 <th key={header} className="text-left px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
               ))}
             </tr>

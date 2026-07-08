@@ -168,8 +168,8 @@ function NavButton({ link, onNavigate }: { link: AiSuggestionNavigationLink; onN
         returnContext: {
           sourceModule: "overview",
           sourceRoute: "overview:ai",
-          sourceLabel: "AI 建议",
-          returnLabel: "返回 AI 建议",
+          sourceLabel: "AI 摘要",
+          returnLabel: "返回 AI 摘要",
           originIntent: "aiSuggestionsWorkbench",
         },
       })}
@@ -312,7 +312,7 @@ const localAiSuggestionsWorkbench: AiSuggestionsWorkbenchV2 = {
       conclusion: "发票与收货记录存在差异，需复核来源证据。",
       whyNow: "差异会影响供应商对账与应付确认。",
       keyEvidence: ["发票金额与收货金额不一致", "关联 PO 待补充复核记录", "对账状态未关闭"],
-      businessImpact: "可能影响财务协同和供应商对账周期。",
+      businessImpact: "可能影响发票与匹配协同和供应商对账周期。",
       suggestedAction: "查看发票、PO 与收货证据，预览内部复核说明。",
       navigationLinks: [
         { label: "查看发票", moduleId: "procurement:invoices", entityType: "supplier_invoice", entityId: "INV-HD-260421", entityLabel: "INV-HD-260421" },
@@ -430,8 +430,8 @@ export default function AiSuggestionsPage({
   if (!workbench) {
     return (
       <Card className="p-6" data-testid="ai-suggestions-workbench">
-        <h1 className="text-[22px] leading-7 font-bold tracking-normal" style={{ color: A.label }}>AI 建议</h1>
-        <div className="mt-3 text-sm" style={{ color: A.red }}>AI 建议暂不可用，请稍后重试。</div>
+        <h1 className="text-[22px] leading-7 font-bold tracking-normal" style={{ color: A.label }}>AI 摘要</h1>
+        <div className="mt-3 text-sm" style={{ color: A.red }}>AI 摘要暂不可用，请稍后重试。</div>
         <div className="mt-4">
           <RecoveryActions actions={[{ key: "reload", label: "重新加载", onClick: () => window.location.reload(), kind: "list" }]} />
         </div>
@@ -446,7 +446,7 @@ export default function AiSuggestionsPage({
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-[22px] leading-7 font-bold tracking-normal" style={{ color: A.label }}>AI 建议</h1>
+            <h1 className="text-[22px] leading-7 font-bold tracking-normal" style={{ color: A.label }}>AI 摘要</h1>
             <Chip label={workbench.dataScopeLabel} color={A.green} bg="#ecfdf5" />
             {error && <Chip label="当前工作区数据" color={A.orange} bg="#fff7ed" />}
           </div>
@@ -466,7 +466,7 @@ export default function AiSuggestionsPage({
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(460px,0.92fr)_minmax(620px,1.08fr)]" id="ai-suggestions-list">
         <Card className="rounded-[20px] p-4">
-          <h2 className={typography.sectionTitle} style={{ color: A.label }}>AI 建议列表</h2>
+          <h2 className={typography.sectionTitle} style={{ color: A.label }}>AI 摘要列表</h2>
           <div className="mt-3 flex flex-wrap gap-2" data-testid="ai-suggestion-filters">
             {filterOrder.map((key) => {
               const active = activeFilter === key;
@@ -524,7 +524,7 @@ export default function AiSuggestionsPage({
             })}
             {!filteredSuggestions.length && (
               <div className="rounded-xl border px-4 py-8 text-center" style={{ borderColor: A.border, background: "#fbfdff" }}>
-                <div className="text-[14px] font-semibold" style={{ color: A.label }}>当前分类暂无 AI 建议</div>
+                <div className="text-[14px] font-semibold" style={{ color: A.label }}>当前分类暂无 AI 摘要</div>
                 <div className="mt-1 text-[12px]" style={{ color: A.sub }}>可切换全部或查看今日行动。</div>
                 <div className="mt-4 flex justify-center gap-2">
                   <button type="button" onClick={() => setActiveFilter("all")} className="h-8 rounded-md px-3 text-[12px] font-semibold text-white" style={{ background: A.blue }}>查看全部</button>
@@ -608,7 +608,7 @@ export default function AiSuggestionsPage({
               </div>
             </>
           ) : (
-            <div className="text-sm" style={{ color: A.sub }}>当前没有可展示的 AI 建议。</div>
+            <div className="text-sm" style={{ color: A.sub }}>当前没有可展示的 AI 摘要。</div>
           )}
         </Card>
       </section>
@@ -644,7 +644,7 @@ export default function AiSuggestionsPage({
                       returnTo: "overview:ai",
                       entityLabel: draft.targetEntityLabel,
                       source: "aiSuggestionsWorkbench",
-                      returnContext: { sourceModule: "overview", sourceRoute: "overview:ai", sourceLabel: "AI 建议", returnLabel: "返回 AI 建议" },
+                      returnContext: { sourceModule: "overview", sourceRoute: "overview:ai", sourceLabel: "AI 摘要", returnLabel: "返回 AI 摘要" },
                     })}
                     className="h-8 whitespace-nowrap rounded-md px-1.5 text-[11px] font-semibold text-white"
                     style={{ background: A.blue }}

@@ -385,11 +385,11 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
   ];
 
   const quickLinks = [
-    { label: "采购管理", id: "procurement" },
-    { label: "库存管理", id: "inventory" },
-    { label: "供应商管理", id: "srm" },
-    { label: "财务协同", id: "finance" },
-    { label: "预测与 MRP 物料需求计划", id: "forecast" },
+    { label: "采购与收货", id: "procurement" },
+    { label: "库存与可承诺量", id: "inventory" },
+    { label: "供应商运营", id: "srm" },
+    { label: "发票与匹配协同", id: "finance" },
+    { label: "预测与 MRP", id: "forecast" },
   ];
   const visibleKpis = [
     kpis[0],
@@ -483,10 +483,9 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
 
   const recentDocuments = todayCockpit?.recentDocuments.slice(0, 6) || [];
   const todaySummaryCards = [
-    { label: "PO 看板", value: String(pendingOrders.length + receivingRisks.length), sub: `${pendingOrders.length} 待审批 · ${receivingRisks.length} 待收货`, icon: Truck, color: A.blue },
-    { label: "库存管理", value: String(inventoryRiskItems.length), sub: topRiskSku?.sku || "库存稳定", icon: Package, color: A.green },
-    { label: "供应商状态", value: String(supplierRisks.length), sub: supplierRisks[0]?.name || "供应稳定", icon: Users, color: A.purple },
-    { label: "财务协同", value: String(invoiceRisks.length), sub: invoiceRisks[0]?.invoiceNumber || "发票稳定", icon: CircleDollarSign, color: A.orange },
+    { label: "交付风险", value: String(receivingRisks.length + pendingOrders.length), sub: pendingOrders[0]?.po || receivingRisks[0]?.grn || "交付稳定", icon: Truck, color: A.blue },
+    { label: "采购待处理", value: String(pendingRequests.length + pendingOrders.length + openRfqs.length), sub: `${pendingRequests.length} PR · ${pendingOrders.length} PO · ${openRfqs.length} RFQ`, icon: ClipboardList, color: A.orange },
+    { label: "库存风险", value: String(inventoryRiskItems.length + inventoryMovementRisks.length), sub: topRiskSku?.sku || inventoryMovementRisks[0]?.movementId || "库存稳定", icon: Package, color: A.green },
   ];
   const riskKpis = [
     { label: "采购风险", value: String(pendingOrders.length + receivingRisks.length + openRfqs.length), sub: pendingOrders[0]?.po || receivingRisks[0]?.grn || openRfqs[0]?.id || "稳定", icon: Truck, color: A.blue },
@@ -624,31 +623,31 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
                 今日更新
               </span>
             </div>
-            <p className="text-sm" style={{ color: A.sub }}>从今日摘要、四类业务看板、优先处理队列和最近单据开始处理。</p>
+            <p className="text-sm" style={{ color: A.sub }}>从每日结论、三张业务卡、优先处理队列和 AI 摘要入口开始处理。</p>
             <div className="mt-3 rounded-xl px-3 py-2 text-xs leading-5" style={{ background: "#f8fafc", color: A.sub, border: `1px solid ${A.border}` }}>
-              今日重点集中在采购到货、库存短缺、供应商状态和发票协同，详细证据可从队列进入。
+              今日重点集中在交付风险、采购待处理和库存风险；供应商与发票证据从队列详情进入。
             </div>
           </div>
           <button onClick={() => onNavigate("overview:ai", null, {
             returnTo: "overview",
-            entityLabel: "AI 建议",
+            entityLabel: "AI 摘要",
             source: "todayCockpit",
             returnContext: {
               sourceModule: "todayCockpit",
               sourceRoute: "overview",
               sourceLabel: "今日行动",
               returnLabel: "返回 今日行动",
-              originIntent: "openAiSuggestions",
+              originIntent: "openAiSummary",
             },
           })}
             className="inline-flex h-9 items-center gap-1.5 rounded-md px-4 text-[13px] font-semibold"
             style={{ background: "#eef4ff", color: A.blue }}>
-            查看 AI 建议 <ArrowRight size={14} />
+            查看 AI 摘要 <ArrowRight size={14} />
           </button>
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {todaySummaryCards.map((kpi) => (
           <KpiCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} color={kpi.color} />
         ))}
@@ -723,23 +722,23 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-[12px] font-semibold" style={{ color: A.label }}>轻量入口</h3>
-                <p className="text-[10px] mt-0.5" style={{ color: A.sub }}>AI 建议已独立到专页。</p>
+                <p className="text-[10px] mt-0.5" style={{ color: A.sub }}>AI 摘要只作轻入口，完整问答在 AI 助手。</p>
               </div>
               <button onClick={() => onNavigate("overview:ai", null, {
                 returnTo: "overview",
-                entityLabel: "AI 建议",
+                entityLabel: "AI 摘要",
                 source: "todayCockpit",
                 returnContext: {
                   sourceModule: "todayCockpit",
                   sourceRoute: "overview",
                   sourceLabel: "今日行动",
                   returnLabel: "返回 今日行动",
-                  originIntent: "openAiSuggestions",
+                  originIntent: "openAiSummary",
                 },
               })}
                 className="text-[11px] px-3 py-1.5 rounded-md font-medium"
                 style={{ background: A.white, color: A.blue }}>
-                查看 AI 建议
+                打开 AI 摘要
               </button>
             </div>
           </div>
@@ -756,7 +755,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
                   </span>
                 </div>
                 <p className="mt-1 text-[10px] leading-4" style={{ color: A.sub }}>
-                  销售需求、SKU 库存风险、PO、收货和财务协同放在同一条证据线上查看。
+                  销售需求、SKU 库存风险、PO、收货和发票协同放在同一条证据线上查看。
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button onClick={() => onNavigate("sales:evidence", { entityType: "sales_order", entityId: "SO-2026-0412-A" }, {
@@ -791,7 +790,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>最近单据</h2>
-            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>近期采购、收货、报价和财务协同记录。</p>
+            <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>近期采购、收货、报价和发票协同记录。</p>
           </div>
           {todayCockpitLoading && <span className="text-[11px]" style={{ color: A.sub }}>加载中</span>}
           {todayCockpitError && <span className="text-[11px]" style={{ color: A.orange }}>最近单据暂不可用</span>}

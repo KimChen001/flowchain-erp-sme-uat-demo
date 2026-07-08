@@ -219,10 +219,10 @@ function actionDraftErrorMessage(error: unknown) {
 }
 
 const PAGE_LABELS: Record<string, string> = {
-  overview: "每日工作台", sales: "销售需求", inventory: "库存管理",
+  overview: "每日工作台", sales: "需求与交付", inventory: "库存与可承诺量",
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购管理", finance: "财务协同", "master-data": "基础资料", srm: "供应商管理", reports: "报表与分析", imports: "数据接入与质量", "exception-cases": "异常处理工单", "collaboration-drafts": "协同通知草稿", "review-actions": "行动草稿与人工复核", "audit-history": "业务审计与历史", "pilot-readiness": "试点准备度", settings: "系统设置",
+  procurement: "采购与收货", finance: "发票与匹配协同", "master-data": "数据与治理", srm: "供应商运营", reports: "报表与分析", imports: "数据接入与质量", "exception-cases": "异常处理工单", "collaboration-drafts": "协同通知草稿", "review-actions": "行动草稿与人工复核", "audit-history": "业务审计与历史", "pilot-readiness": "试点准备度", settings: "系统设置",
 };
 
 type GlobalSearchResult = {

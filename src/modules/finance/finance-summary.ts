@@ -24,7 +24,7 @@ export function financeSummaryCards() {
     { label: "应付敞口", value: fmt(openPayables.reduce((sum, item) => sum + item.amount, 0)), sub: `${openPayables.length} 笔未关闭 AP`, icon: CreditCard, color: A.purple },
     { label: "贷项冲减", value: fmt(creditOffset), sub: `${SUPPLIER_CREDIT_MEMOS.length} 张贷项通知`, icon: ReceiptText, color: A.teal },
     { label: "对账异常", value: String(reconciliationExceptions.length), sub: "差异、驳回或逾期需复核", icon: AlertTriangle, color: A.orange },
-    { label: "结算准备", value: String(settlementReady), sub: "供应商可进入结算复核", icon: HandCoins, color: A.green },
+    { label: "结算资料准备", value: String(settlementReady), sub: "供应商可进入资料复核", icon: HandCoins, color: A.green },
   ];
 }
 
@@ -57,7 +57,7 @@ export function settlementRows() {
         ? "确认贷项冲减"
         : openPayable > 0
           ? "复核 AP 余额"
-          : "进入结算复核";
+          : "进入结算资料复核";
 
     return {
       supplier,
@@ -66,7 +66,7 @@ export function settlementRows() {
       openPayable,
       reconciliationStatus: reconciliation?.status || "待生成",
       readiness,
-      owner: reconciliation?.owner || invoices[0]?.apOwner || credits[0]?.owner || "财务协同",
+      owner: reconciliation?.owner || invoices[0]?.apOwner || credits[0]?.owner || "发票协同",
       nextStep,
     };
   }).sort((a, b) => b.openPayable - a.openPayable);

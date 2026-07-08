@@ -22,11 +22,11 @@ export const navItems = [
     icon: BarChart2, label: "每日工作台", id: "overview",
     children: [
       { id: "overview", label: "今日行动" },
-      { id: "overview:ai", label: "AI 建议" },
+      { id: "overview:ai", label: "AI 摘要" },
     ],
   },
   {
-    icon: ClipboardList, label: "销售需求", id: "sales",
+    icon: ClipboardList, label: "需求与交付", id: "sales",
     children: [
       { id: "sales", label: "客户订单" },
       { id: "sales:risks", label: "交付风险" },
@@ -34,7 +34,7 @@ export const navItems = [
     ],
   },
   {
-    icon: Handshake, label: "采购管理", id: "procurement",
+    icon: Handshake, label: "采购与收货", id: "procurement",
     children: [
       { id: "procurement", label: "采购工作台" },
       { id: "procurement:requests", label: "采购申请" },
@@ -48,7 +48,7 @@ export const navItems = [
     ],
   },
   {
-    icon: Package, label: "库存管理", id: "inventory",
+    icon: Package, label: "库存与可承诺量", id: "inventory",
     children: [
       { id: "inventory", label: "库存工作台" },
       { id: "inventory:movements", label: "库存事务流水" },
@@ -61,7 +61,7 @@ export const navItems = [
     ],
   },
   {
-    icon: Users, label: "供应商管理", id: "srm",
+    icon: Users, label: "供应商运营", id: "srm",
     children: [
       { id: "srm", label: "SRM 总览" },
       { id: "srm:master", label: "供应商资料目录" },
@@ -72,7 +72,7 @@ export const navItems = [
     ],
   },
   {
-    icon: Database, label: "基础资料", id: "master-data",
+    icon: Database, label: "数据与治理", id: "master-data",
     children: [
       { id: "master-data", label: "基础资料总览" },
       { id: "master-data:items", label: "物料资料" },
@@ -83,14 +83,14 @@ export const navItems = [
     ],
   },
   {
-    icon: CircleDollarSign, label: "财务协同", id: "finance",
+    icon: CircleDollarSign, label: "发票与匹配协同", id: "finance",
     children: [
-      { id: "finance", label: "财务总览" },
+      { id: "finance", label: "发票协同总览" },
       { id: "finance:invoices", label: "供应商发票" },
-      { id: "finance:payables", label: "应付账款" },
+      { id: "finance:payables", label: "应付可见性" },
       { id: "finance:credits", label: "贷项冲减" },
       { id: "finance:reconciliation", label: "供应商对账" },
-      { id: "finance:settlement", label: "结算准备" },
+      { id: "finance:settlement", label: "结算资料准备" },
     ],
   },
   {
@@ -186,8 +186,8 @@ export const navItems = [
 ] as const;
 
 export const navGroups = [
-  { label: "运营", itemIds: ["overview"] },
-  { label: "供应链", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast", "exception-cases", "collaboration-drafts", "review-actions"] },
-  { label: "数据", itemIds: ["master-data", "reports", "imports"] },
-  { label: "治理", itemIds: ["audit-history", "pilot-readiness", "settings"] },
+  { label: "主工作区", itemIds: ["overview"] },
+  { label: "业务工作区", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast"] },
+  { label: "数据与分析", itemIds: ["master-data", "reports", "imports"] },
+  { label: "治理与支持", itemIds: ["exception-cases", "collaboration-drafts", "review-actions", "audit-history", "pilot-readiness", "settings"] },
 ] as const;

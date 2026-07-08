@@ -35,6 +35,12 @@ function invoiceStatusStyle(status: SupplierInvoiceStatus) {
   return { color: A.gray1, bg: A.gray6 };
 }
 
+function invoiceStatusLabel(status: SupplierInvoiceStatus) {
+  if (status === "已过账应付") return "AP 可见";
+  if (status === "已付款") return "外部已付款";
+  return status;
+}
+
 function invoiceSourceLabel(source: SupplierInvoice["source"]) {
   return ({
     "supplier-portal": "供应商协同导入",
@@ -57,8 +63,8 @@ function invoiceTimeline(invoice: SupplierInvoice): TimelineStep[] {
     { label: "待匹配", status: blocked ? "blocked" : isMatched || hasVariance ? "done" : "current", helper: invoice.matchStatus },
     { label: hasVariance ? "存在差异" : "已匹配", status: blocked ? "blocked" : hasVariance ? "warning" : isMatched ? "done" : "pending", helper: invoice.varianceType },
     { label: "已审批", status: isApproved ? "done" : blocked || hasVariance ? "pending" : "current", helper: invoice.approvalStatus || "等待 AP 审批" },
-    { label: "已过账应付", status: isPosted ? "done" : "pending", helper: invoice.postedToAp ? "已进入应付" : "未过账" },
-    { label: "已付款", status: isPaid ? "done" : "pending", helper: invoice.paid ? "付款完成" : "待付款" },
+    { label: "应付可见性", status: isPosted ? "done" : "pending", helper: invoice.postedToAp ? "已进入 AP 可见性" : "待复核" },
+    { label: "付款状态", status: isPaid ? "done" : "pending", helper: invoice.paid ? "外部付款完成" : "未付款" },
   ];
 }
 
@@ -127,13 +133,13 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
     toast.success(`${invoice.invoiceNumber} 已标记为已审批`);
   }
 
-  function postToAp(invoice: SupplierInvoice) {
-    if (!["已审批", "已过账应付"].includes(invoice.status)) {
-      toast.warning("请先完成发票审批");
+  function previewPayableImpact(invoice: SupplierInvoice) {
+    if (!["已审批", "已过账应付", "已付款"].includes(invoice.status) && !invoice.postedToAp) {
+      toast.warning("请先完成发票审批复核");
       return;
     }
-    updateInvoice(invoice.id, { status: "已过账应付", postedToAp: true });
-    toast.success(`${invoice.invoiceNumber} 已过账应付`, { description: "状态已更新，请继续复核应付影响。" });
+    setOpenActionId(null);
+    toast("应付影响预览", { description: `${invoice.invoiceNumber} · 仅复核 AP 可见性，不做发票过账或会计分录。` });
   }
 
   function reject(invoice: SupplierInvoice) {
@@ -165,7 +171,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
       ["AP负责人", invoice.apOwner || ""],
       ["来源", invoiceSourceLabel(invoice.source)],
       ["匹配状态", invoice.matchStatus],
-      ["发票状态", invoice.status],
+      ["发票状态", invoiceStatusLabel(invoice.status)],
       ["审批状态", invoice.approvalStatus || ""],
       ["重复风险", invoice.duplicateRisk ? "是" : "否"],
       ["差异类型", invoice.varianceType],
@@ -177,8 +183,8 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
       ["运费", invoice.freight || 0],
       ["发票总额", invoice.total],
       ["差异金额", invoice.varianceAmount],
-      ["已过账应付", invoice.postedToAp ? "是" : "否"],
-      ["已付款", invoice.paid ? "是" : "否"],
+      ["AP可见性", invoice.postedToAp ? "是" : "否"],
+      ["付款状态", invoice.paid ? "外部已付款" : "未付款"],
       ["备注", invoice.notes || ""],
     ].map(([field, value]) => ({ section: "header", field, value }));
     const lineRows = invoice.lines.map((line) => ({
@@ -259,8 +265,8 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
         <KpiCard label="待匹配" value={String(pendingMatch)} sub="需补齐 PO/GRN" icon={Search} color={A.orange} />
         <KpiCard label="差异发票" value={String(varianceInvoices.length)} sub={fmt(varianceInvoices.reduce((sum, invoice) => sum + invoice.varianceAmount, 0))} icon={AlertOctagon} color={A.red} />
         <KpiCard label={isProcurementMode ? "待采购确认" : "待审批"} value={String(pendingApproval)} sub={isProcurementMode ? "匹配后确认" : "匹配后审批"} icon={CheckCircle2} color={A.green} />
-        <KpiCard label={isProcurementMode ? "已关联应付" : "已过账应付"} value={String(posted)} sub={isProcurementMode ? "财务协同跟进" : "进入应付账款"} icon={Wallet} color={A.purple} />
-        <KpiCard label={isProcurementMode ? "后续处理金额" : "应付待付"} value={fmt(dueSoonAmount)} sub={isProcurementMode ? "审批/差异跟进" : "审批/过账发票"} icon={CreditCard} color={A.teal} />
+        <KpiCard label={isProcurementMode ? "已关联应付" : "应付可见性"} value={String(posted)} sub={isProcurementMode ? "发票协同跟进" : "AP 状态可见"} icon={Wallet} color={A.purple} />
+        <KpiCard label={isProcurementMode ? "后续处理金额" : "待复核金额"} value={fmt(dueSoonAmount)} sub={isProcurementMode ? "审批/差异跟进" : "匹配/审批后复核"} icon={CreditCard} color={A.teal} />
       </div>
 
       <Card className="p-5">
@@ -270,14 +276,23 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
                 {isProcurementMode
                 ? "围绕 PO / GRN 匹配、发票差异、税额拆分、采购确认、关联退货贷项与下一步动作形成协同证据链。"
-                : "管理供应商发票、发票行、税额拆分、三单匹配、审批状态与过账应付，形成 AP 处理证据链。"}
+                : "复核供应商发票、发票行、税额拆分、三单匹配、审批状态与 AP 可见性，形成匹配证据链。"}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {!isProcurementMode && <ContextualImportActions entityLabel="发票" templateName="发票" compact />}
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}
               className="h-8 rounded-lg px-2 text-xs outline-none" style={{ background: A.gray6, color: A.label }}>
-              {["全部", "待匹配", "存在差异", "已匹配", "待审批", "已审批", "已过账应付", "已付款"].map((item) => <option key={item}>{item}</option>)}
+              {[
+                { value: "全部", label: "全部" },
+                { value: "待匹配", label: "待匹配" },
+                { value: "存在差异", label: "存在差异" },
+                { value: "已匹配", label: "已匹配" },
+                { value: "待审批", label: "待审批" },
+                { value: "已审批", label: "已审批" },
+                { value: "已过账应付", label: "AP 可见" },
+                { value: "已付款", label: "外部已付款" },
+              ].map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
             <select value={varianceFilter} onChange={(event) => setVarianceFilter(event.target.value)}
               className="h-8 rounded-lg px-2 text-xs outline-none" style={{ background: A.gray6, color: A.label }}>
@@ -326,7 +341,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
                     <td className={`${tdNumericClass} font-semibold`} style={{ color: A.label }}>{fmt(invoice.total)}</td>
                     <td className={tdNowrapClass} style={{ color: A.sub }}>{invoice.paymentTerms}</td>
                     <td className={tdNowrapClass}><Chip label={invoice.matchStatus} color={matchStyle.color} bg={matchStyle.bg} /></td>
-                    <td className={tdNowrapClass}><Chip label={invoice.status} color={statusStyle.color} bg={statusStyle.bg} /></td>
+                    <td className={tdNowrapClass}><Chip label={invoiceStatusLabel(invoice.status)} color={statusStyle.color} bg={statusStyle.bg} /></td>
                     <td className={tdNowrapClass} style={{ color: invoice.varianceType === "无差异" ? A.green : A.red }}>{invoice.varianceType}</td>
                     <td className={tdActionClass}>
                       <div className="relative flex items-center gap-1">
@@ -338,7 +353,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
                           <div className="absolute right-0 top-7 z-20 w-28 rounded-lg p-1 shadow-lg" style={{ background: A.white, boxShadow: "0 10px 30px rgba(15,23,42,0.12)" }}>
                             <button onClick={() => runMatch(invoice)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.blue }}>运行匹配</button>
                             <button onClick={() => approve(invoice)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.green }}>审批确认</button>
-                            {!isProcurementMode && <button onClick={() => postToAp(invoice)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.purple }}>过账应付</button>}
+                            {!isProcurementMode && <button onClick={() => previewPayableImpact(invoice)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.purple }}>预览应付影响</button>}
                             <button onClick={() => reject(invoice)} className="w-full text-left px-2 py-1.5 rounded-md font-medium" style={{ color: A.red }}>驳回</button>
                           </div>
                         )}
@@ -357,7 +372,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
         onClose={() => setSelectedInvoice(null)}
         width={980}
         title="供应商发票"
-        subtitle={isProcurementMode ? "采购协同 · 发票匹配" : "财务协同 · 供应商发票"}>
+        subtitle={isProcurementMode ? "采购协同 · 发票匹配" : "发票与匹配协同 · 供应商发票"}>
         {selectedInvoice && selectedSnapshot && (
           (() => {
             const taxSummary = calculateInvoiceTaxSummary(selectedInvoice);
@@ -373,8 +388,8 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
           <DocumentShell
             title="供应商发票"
             documentNo={selectedInvoice.invoiceNumber}
-            moduleLabel={isProcurementMode ? "采购 / 发票协同" : "财务 / 发票与应付"}
-            status={selectedInvoice.status}
+            moduleLabel={isProcurementMode ? "采购 / 发票协同" : "财务 / 发票与匹配"}
+            status={invoiceStatusLabel(selectedInvoice.status)}
             subtitle={`${selectedInvoice.supplier} · PO ${selectedInvoice.relatedPo || "—"} · GRN ${selectedInvoice.relatedGrn || "缺少"}`}
           >
             <DocumentHeader
@@ -391,7 +406,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
                 { label: "AP负责人", value: selectedInvoice.apOwner || "—" },
                 { label: "来源", value: invoiceSourceLabel(selectedInvoice.source) },
                 { label: "匹配状态", value: selectedInvoice.matchStatus, tone: statusTone(selectedInvoice.matchStatus) },
-                { label: "发票状态", value: selectedInvoice.status, tone: statusTone(selectedInvoice.status) },
+                { label: "发票状态", value: invoiceStatusLabel(selectedInvoice.status), tone: statusTone(selectedInvoice.status) },
                 { label: "审批状态", value: selectedInvoice.approvalStatus || "—" },
                 { label: "重复风险", value: selectedInvoice.duplicateRisk ? "是" : "否", tone: selectedInvoice.duplicateRisk ? "danger" : "success" },
                 { label: "差异类型", value: selectedSnapshot.varianceType, tone: selectedSnapshot.varianceType === "无差异" ? "success" : "danger" },
@@ -473,7 +488,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
               })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>预览差异处理备注</button>
               <button onClick={() => runMatch(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>运行匹配</button>
               <button onClick={() => approve(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>标记已审批</button>
-              {!isProcurementMode && <button onClick={() => postToAp(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>过账到应付</button>}
+              {!isProcurementMode && <button onClick={() => previewPayableImpact(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>预览应付影响</button>}
               <button onClick={() => reject(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>驳回</button>
               <button onClick={() => exportInvoice(selectedInvoice)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
               <button onClick={() => setSelectedInvoice(null)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>

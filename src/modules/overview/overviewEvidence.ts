@@ -249,7 +249,7 @@ export function buildInvoiceEvidence(item: SupplierInvoice): EvidenceDetail {
     object: item.invoiceNumber,
     module: "供应商发票",
     moduleId: "procurement:invoices",
-    businessReason: "供应商发票需要与采购订单和收货单一致后，才能进入审批、过账应付和付款准备状态。",
+    businessReason: "供应商发票需要与采购订单和收货单一致后，才能进入审批复核、AP 可见性和结算资料准备状态。",
     evidence: [
       { label: "发票号码", value: item.invoiceNumber },
       { label: "供应商", value: item.supplier },
@@ -265,7 +265,7 @@ export function buildInvoiceEvidence(item: SupplierInvoice): EvidenceDetail {
       { label: "来源", value: item.source },
     ],
     confidence: `${item.confidence || 76}% · ${item.matchStatus === "自动匹配" ? "高" : "需复核"}`,
-    suggestedAction: item.varianceType === "无差异" ? "打开发票协同，确认是否审批或过账应付。" : "打开发票协同，复核 PO、GRN 和发票差异。",
+    suggestedAction: item.varianceType === "无差异" ? "打开发票协同，复核审批状态和 AP 可见性。" : "打开发票协同，复核 PO、GRN 和发票差异。",
   };
 }
 

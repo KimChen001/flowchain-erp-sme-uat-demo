@@ -10,10 +10,10 @@ export default function FinanceOverview({ onOpenTab }: { onOpenTab: (tab: Financ
   );
   const entries = [
     { tab: "invoices" as const, title: "供应商发票", desc: "发票登记、税额拆分、PO/GRN 匹配和异常复核。", signal: `${SUPPLIER_INVOICES.length} 张发票`, icon: FileText },
-    { tab: "payables" as const, title: "应付账款", desc: "查看 AP 状态和未关闭应付，不执行付款。", signal: `${financePayables.filter((item) => item.status !== "已付款").length} 笔未关闭`, icon: CreditCard },
+    { tab: "payables" as const, title: "应付可见性", desc: "查看 AP 状态和未关闭应付，不执行付款。", signal: `${financePayables.filter((item) => item.status !== "已付款").length} 笔未关闭`, icon: CreditCard },
     { tab: "credits" as const, title: "贷项冲减", desc: "供应商贷项通知、退货关联和 AP 冲减可见性。", signal: `${SUPPLIER_CREDIT_MEMOS.length} 张贷项`, icon: ReceiptText },
     { tab: "reconciliation" as const, title: "供应商对账", desc: "供应商期间对账、差异和未结余额。", signal: `${reconciliationExceptions.length} 个异常`, icon: FileSpreadsheet },
-    { tab: "settlement" as const, title: "结算准备", desc: "付款前可见性清单，不包含支付执行或 GL。", signal: `${settlementRows().filter((row) => row.readiness === "可结算").length} 个可结算`, icon: HandCoins },
+    { tab: "settlement" as const, title: "结算资料准备", desc: "付款前资料可见性清单，不包含支付执行、GL 或税务申报。", signal: `${settlementRows().filter((row) => row.readiness === "可结算").length} 个可结算`, icon: HandCoins },
   ];
 
   return (

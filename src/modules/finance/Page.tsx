@@ -27,7 +27,7 @@ function CreditMemoOffsetPanel() {
       relatedReturn,
       statement,
       offsetDone,
-      nextStep: offsetDone ? "复核对账影响" : memo.status === "待确认" ? "确认贷项通知" : memo.status === "已驳回" ? "复核驳回原因" : "准备 AP 冲减",
+      nextStep: offsetDone ? "复核对账影响" : memo.status === "待确认" ? "确认贷项通知" : memo.status === "已驳回" ? "复核驳回原因" : "复核 AP 冲减影响",
     };
   });
 
@@ -54,9 +54,9 @@ function CreditMemoOffsetPanel() {
     <Card>
       <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
         <div>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>贷项冲减</h2>
+          <h2 className="text-sm font-semibold" style={{ color: A.label }}>贷项冲减可见性</h2>
           <p className="text-[11px] leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
-            面向财务协同复核供应商贷项通知、关联发票、AP 冲减状态与对账影响；采购退货流程仍由采购工作台处理。
+            面向发票与匹配协同复核供应商贷项通知、关联发票、AP 冲减状态与对账影响；采购退货流程仍由采购工作台处理。
           </p>
         </div>
         <button onClick={exportCsv}
@@ -108,12 +108,12 @@ function CreditMemoOffsetPanel() {
 export default function FinanceWorkbench({ initialView = "overview" }: { initialView?: FinanceTab }) {
   const [tab, setTab] = useState<FinanceTab>(initialView);
   const tabs = [
-    { id: "overview", label: "财务总览", icon: CheckCircle2 },
+    { id: "overview", label: "发票协同总览", icon: CheckCircle2 },
     { id: "invoices", label: "供应商发票", icon: FileText },
-    { id: "payables", label: "应付账款", icon: CreditCard },
+    { id: "payables", label: "应付可见性", icon: CreditCard },
     { id: "credits", label: "贷项冲减", icon: ReceiptText },
     { id: "reconciliation", label: "供应商对账", icon: FileSpreadsheet },
-    { id: "settlement", label: "结算准备", icon: HandCoins },
+    { id: "settlement", label: "结算资料准备", icon: HandCoins },
   ] as const;
   useEffect(() => {
     if (initialView) setTab(initialView);
@@ -124,12 +124,12 @@ export default function FinanceWorkbench({ initialView = "overview" }: { initial
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight" style={{ color: A.label }}>财务协同</h1>
+            <h1 className="text-lg font-semibold tracking-tight" style={{ color: A.label }}>发票与匹配协同</h1>
             <p className="text-xs leading-5 mt-1" style={{ color: A.sub }}>
-              管理供应商发票、AP 状态、应付账款、贷项冲减、供应商对账与结算准备。
+              只读汇总供应商发票、匹配状态、应付可见性、贷项冲减、供应商对账与结算资料准备。
             </p>
             <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-              这里只展示协同可见性，不进入 GL、支付执行或会计过账。
+              这里只展示可见性和复核证据：不执行付款、不做 GL 过账、不生成会计凭证、不做税务申报、不做发票过账。
             </div>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
@@ -138,7 +138,7 @@ export default function FinanceWorkbench({ initialView = "overview" }: { initial
               <ContextualImportActions entityLabel="对账单" templateName="对账单" compact={false} />
             </div>
             <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: A.green }}>
-              <CheckCircle2 size={13} /> 财务工作台
+              <CheckCircle2 size={13} /> 只读协同边界
             </div>
           </div>
         </div>
