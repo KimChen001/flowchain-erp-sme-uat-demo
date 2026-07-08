@@ -310,6 +310,9 @@ test('request contract validates message length without throwing', () => {
 test('supported intents return evidence-bounded responses', () => {
   const prompts = [
     '今天有什么需要我处理？',
+    '今天最需要处理什么？',
+    '今天有哪些收货异常？',
+    '哪些库存项目需要关注？',
     '这条核心业务链有什么证据？',
     '哪些供应商有潜在风险？',
     '哪些 SKU 有库存风险？',
@@ -331,6 +334,7 @@ test('supported intents return evidence-bounded responses', () => {
     assertRuntimeResponse(body)
     assert.ok(body.keyEvidence.length >= 1, prompt)
     assert.ok(body.sourceSummary.some((item) => /v2/.test(item.sourceId)), prompt)
+    assert.doesNotMatch(visibleText(body), /AI 助手暂不可用|当前未能读取工作区证据|请稍后重试/i, prompt)
   }
 })
 

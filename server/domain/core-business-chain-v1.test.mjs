@@ -83,3 +83,32 @@ test('chain helpers expose navigation limitations and review-first draft suggest
   assert.doesNotMatch(visibleText(aiView), /JSON|payload|entityType|documentType|database|mock|fake|demo|UAT/i)
   assert.doesNotMatch(visibleText(aiView), /自动批准|自动下单|发送|付款|会计过账|库存过账/)
 })
+
+test('summary metrics remain bounded numeric and missing entity does not invent a chain', () => {
+  const chain = buildCoreBusinessChainV1(loadDb())
+  const expectedFields = [
+    'chainCount',
+    'highRiskChainCount',
+    'invoiceGapCount',
+    'reviewDraftCount',
+    'salesDemandCount',
+    'inventoryRiskCount',
+    'replenishmentCandidateCount',
+    'openPrCount',
+    'openPoCount',
+    'receivingIssueCount',
+    'invoiceVarianceCount',
+    'financeReviewCount',
+    'dataLimitedCount',
+  ]
+  for (const field of expectedFields) {
+    assert.equal(typeof chain.summary[field], 'number', field)
+    assert.ok(chain.summary[field] >= 0, field)
+  }
+  assert.equal(findBusinessChainByEntityV1(chain, { entityType: 'purchase_order', entityId: 'NON-EXISTENT' }), null)
+  assert.ok(chain.chains.every((item) => item.summary.length <= 12))
+  assert.ok(chain.chains.every((item) => item.navigationLinks.length <= 8))
+  assert.ok(chain.chains.every((item) => item.reviewDraftSuggestions.every((draft) =>
+    draft.previewOnly === true && draft.reviewRequired === true && draft.requiresHumanReview === true
+  )))
+})

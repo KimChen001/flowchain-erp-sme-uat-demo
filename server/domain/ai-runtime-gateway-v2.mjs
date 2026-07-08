@@ -43,6 +43,22 @@ const GENERATED_AT = '2026-05-25T13:00:00.000Z'
 const DATA_SCOPE = '当前工作区数据'
 const SAFETY_BOUNDARIES = ['草稿预览', '人工复核', '不形成正式业务处理', '不外发', '不写库存', '不写财务凭证', '不处理资金', '不改主数据', '不覆盖当前工作区数据']
 const ALLOWED_ACTIONS = ['查看证据', '预览草稿', '进入人工复核', '打开来源对象', '打开相关模块', '标记仅内部留存', '补充数据', '查看数据限制']
+const SAFE_CONTEXT_LIMITATIONS = Object.freeze({
+  responseContract: 'AI 回复证据暂不完整',
+  ai: 'AI 建议证据暂不完整',
+  tower: '今日行动证据暂不完整',
+  reports: '报表证据暂不完整',
+  review: '人工复核证据暂不完整',
+  collaboration: '协同草稿证据暂不完整',
+  data: '数据质量证据暂不完整',
+  workspace: '工作区配置证据暂不完整',
+  roles: '角色权限证据暂不完整',
+  boundary: '工作区边界证据暂不完整',
+  audit: '业务历史证据暂不完整',
+  pilot: '准备度证据暂不完整',
+  salesDemand: '销售需求证据暂不完整',
+  coreBusinessChain: '核心业务链证据暂不完整',
+})
 
 function asArray(value) { return Array.isArray(value) ? value : [] }
 function number(value, fallback = 0) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback }
@@ -180,10 +196,11 @@ export function validateAiRuntimeRequest(input = {}) {
 }
 
 const SUPPORTED_INTENTS = [
-  ['today_attention', '今天有什么需要我处理', /今天|今日|先看|重点|处理|注意/],
+  ['receiving_exception', '收货异常', /收货异常|到货异常|GRN\s*异常|GRN issue|receiving exception|质检中|异常处理|待收货|哪些还没收货|还没收货|未收货/iu],
+  ['today_attention', '今天有什么需要我处理', /今天|今日|先看|重点|处理|注意|最需要处理/],
   ['sales_delivery_risk', '客户订单交付风险', /客户订单|销售需求|销售订单|交付风险|\bSO-[A-Z0-9-]+\b/i],
   ['core_business_chain', '核心业务链证据', /主链|核心业务链|链路|销售需求.*SKU|SKU.*PR|SKU.*PO|PO.*供应商.*收货.*发票|收货异常.*发票|发票差异.*财务协同|证据不足|这条链路|人工复核草稿/],
-  ['inventory_risk', 'SKU 库存风险', /SKU|库存|补货|缺货|物料/],
+  ['inventory_risk', 'SKU 库存风险', /SKU|库存|补货|缺货|物料|库存项目|库存需要关注|哪些库存|可用量|可承诺量/],
   ['po_priority', 'PO 优先级', /PO|采购订单|优先|为什么/],
   ['supplier_risk', '供应商风险', /供应商|供方|风险|跟进|绩效/],
   ['unreceived_orders', '未收货订单', /未收货|还没有收货|待收货|到货/],
@@ -273,21 +290,65 @@ function detectUnsafeRequest(message = '') {
   ]
   return checks.find(([, pattern]) => pattern.test(message))?.[0] || ''
 }
-function buildContexts(db = {}, request = {}) {
-  const responseContract = buildAiResponseContractV2(db, { message: request.message, question: request.message, moduleId: request.activeModuleId }) || {}
-  const ai = buildAiSuggestionsWorkbenchV2(db) || {}
-  const tower = buildOperationsControlTowerV2(db) || {}
-  const reports = buildReportsAnalyticsV2(db) || {}
-  const review = buildReviewFirstActionWorkflowV2(db) || {}
-  const collaboration = buildCollaborationNotificationDraftsV2(db) || {}
-  const data = buildDataAccessQualityV2(db) || {}
-  const workspace = buildWorkspaceSetupConfigV2(db) || {}
-  const roles = buildUserRolePermissionVisibilityV2(db) || {}
-  const boundary = buildWorkspaceBoundaryVisibilityV2(db) || {}
-  const audit = buildAuditIntegrationHistoryV2(db) || {}
-  const pilot = buildPilotReadinessGovernanceV2(db) || {}
-  const salesDemand = buildSalesDemandReadModel(db) || {}
-  const coreBusinessChain = request.coreBusinessChainRequested ? buildCoreBusinessChainV1(db) || {} : { chains: [], summary: { chainCount: 0, invoiceGapCount: 0 } }
+function contextLimitation(key = 'source') {
+  return {
+    label: SAFE_CONTEXT_LIMITATIONS[key] || '来源证据暂不完整',
+    description: '当前工作区的部分来源证据暂时无法完整读取，已保留可用证据并转入人工复核。',
+    severity: 'warning',
+    consequence: '建议打开来源模块核对后再继续处理。',
+  }
+}
+function withDataLimitation(value = {}, key = '') {
+  if (Array.isArray(value)) return { rows: value, dataLimitations: [contextLimitation(key)] }
+  if (!value || typeof value !== 'object') return { dataLimitations: [contextLimitation(key)] }
+  return {
+    ...value,
+    dataLimitations: [...asArray(value.dataLimitations), contextLimitation(key)],
+  }
+}
+function safeBuildContext(key, build, emptyValue = {}) {
+  try {
+    return build() || emptyValue
+  } catch {
+    return withDataLimitation(emptyValue, key)
+  }
+}
+function buildContextBuilders(overrides = {}) {
+  return {
+    responseContract: overrides.responseContract || ((db, request) => buildAiResponseContractV2(db, { message: request.message, question: request.message, moduleId: request.activeModuleId })),
+    ai: overrides.ai || ((db) => buildAiSuggestionsWorkbenchV2(db)),
+    tower: overrides.tower || ((db) => buildOperationsControlTowerV2(db)),
+    reports: overrides.reports || ((db) => buildReportsAnalyticsV2(db)),
+    review: overrides.review || ((db) => buildReviewFirstActionWorkflowV2(db)),
+    collaboration: overrides.collaboration || ((db) => buildCollaborationNotificationDraftsV2(db)),
+    data: overrides.data || ((db) => buildDataAccessQualityV2(db)),
+    workspace: overrides.workspace || ((db) => buildWorkspaceSetupConfigV2(db)),
+    roles: overrides.roles || ((db) => buildUserRolePermissionVisibilityV2(db)),
+    boundary: overrides.boundary || ((db) => buildWorkspaceBoundaryVisibilityV2(db)),
+    audit: overrides.audit || ((db) => buildAuditIntegrationHistoryV2(db)),
+    pilot: overrides.pilot || ((db) => buildPilotReadinessGovernanceV2(db)),
+    salesDemand: overrides.salesDemand || ((db) => buildSalesDemandReadModel(db)),
+    coreBusinessChain: overrides.coreBusinessChain || ((db) => buildCoreBusinessChainV1(db)),
+  }
+}
+function buildContexts(db = {}, request = {}, options = {}) {
+  const builders = buildContextBuilders(options.contextBuilders || {})
+  const responseContract = safeBuildContext('responseContract', () => builders.responseContract(db, request), {})
+  const ai = safeBuildContext('ai', () => builders.ai(db, request), {})
+  const tower = safeBuildContext('tower', () => builders.tower(db, request), {})
+  const reports = safeBuildContext('reports', () => builders.reports(db, request), {})
+  const review = safeBuildContext('review', () => builders.review(db, request), {})
+  const collaboration = safeBuildContext('collaboration', () => builders.collaboration(db, request), {})
+  const data = safeBuildContext('data', () => builders.data(db, request), {})
+  const workspace = safeBuildContext('workspace', () => builders.workspace(db, request), {})
+  const roles = safeBuildContext('roles', () => builders.roles(db, request), {})
+  const boundary = safeBuildContext('boundary', () => builders.boundary(db, request), {})
+  const audit = safeBuildContext('audit', () => builders.audit(db, request), {})
+  const pilot = safeBuildContext('pilot', () => builders.pilot(db, request), {})
+  const salesDemand = safeBuildContext('salesDemand', () => builders.salesDemand(db, request), {})
+  const coreBusinessChain = request.coreBusinessChainRequested
+    ? safeBuildContext('coreBusinessChain', () => builders.coreBusinessChain(db, request), { chains: [], summary: { chainCount: 0, invoiceGapCount: 0, reviewDraftCount: 0 } })
+    : { chains: [], summary: { chainCount: 0, invoiceGapCount: 0, reviewDraftCount: 0 } }
   return { db, responseContract, ai, tower, reports, review, collaboration, data, workspace, roles, boundary, audit, pilot, salesDemand, coreBusinessChain }
 }
 function collectLimitations(ctx, extra = []) {
@@ -303,6 +364,7 @@ function collectLimitations(ctx, extra = []) {
     ...asArray(ctx.boundary.dataLimitations),
     ...asArray(ctx.audit.dataLimitations),
     ...asArray(ctx.pilot.dataLimitations),
+    ...asArray(ctx.coreBusinessChain?.dataLimitations),
     ...asArray(ctx.coreBusinessChain?.chains).flatMap((chain) => asArray(chain.dataLimitations)),
   ].map((item) => cleanLimitation(item)), (item) => item.label).slice(0, 8)
 }
@@ -358,10 +420,10 @@ function reviewCards(intent, links = []) {
           ? `${firstPo.entityId} ${intent.label}复核草稿`
           : `${intent.label}复核草稿`
   const draftType = intent.id === 'inventory_risk'
-    ? 'purchase_request_draft'
-    : intent.id === 'collaboration_review'
+      ? 'purchase_request_draft'
+      : intent.id === 'collaboration_review'
           ? 'supplier_followup_draft'
-          : firstPo || ['po_priority', 'unreceived_orders', 'three_way_match_variance', 'received_not_invoiced', 'today_attention', 'related_objects', 'po_overdue_sop'].includes(intent.id)
+          : firstPo || ['po_priority', 'receiving_exception', 'unreceived_orders', 'three_way_match_variance', 'received_not_invoiced', 'today_attention', 'related_objects', 'po_overdue_sop'].includes(intent.id)
             ? 'po_followup_draft'
             : 'general_review'
   const target = draftType === 'purchase_request_draft' ? firstSku || links[0] || {} : firstPo || firstSku || firstRfq || links[0] || {}
@@ -512,6 +574,39 @@ function grnEvidence(grn = {}) {
     severity: /异常|拒收|待质检/.test(text(grn.status)) || number(grn.failed) > 0 ? 'warning' : 'info',
   })
 }
+function receivingIssueEvidence(row = {}) {
+  const grnId = text(row.grn || row.grnId || row.id || row.receivingId)
+  const poId = text(row.po || row.poId || row.relatedPo)
+  const status = text(row.status || row.receivingStatus, '待复核')
+  const receivedQty = number(row.items ?? row.receivedQuantity ?? row.receivedQty)
+  const acceptedQty = number(row.passed ?? row.acceptedQty)
+  const exceptionQty = number(row.failed ?? row.rejectedQty)
+  const pendingQty = Math.max(0, number(row.expectedQty ?? row.orderedQuantity ?? row.items, receivedQty) - acceptedQty)
+  return evidence({
+    id: grnId || poId || 'receiving-issue',
+    moduleId: 'procurement:receiving',
+    entityType: 'receiving_doc',
+    entityId: grnId || poId,
+    entityLabel: grnId || poId || '收货事项',
+    evidenceLabel: '收货异常',
+    summary: `${grnId || '收货单待确认'} 关联 ${poId || 'PO 待确认'}，供应商 ${text(row.supplier || row.supplierName, '待确认')}，状态 ${status}，已收 ${receivedQty}，合格 ${acceptedQty}，异常 ${exceptionQty}，待确认 ${pendingQty}。可能影响库存可用量、PO 履约、发票匹配和财务协同。`,
+    severity: /异常|质检|待收货|部分|未收/.test(status) || exceptionQty > 0 ? 'risk' : 'warning',
+  })
+}
+function receivingIssueEvidenceRows(ctx = {}) {
+  const rows = sourceRows(ctx)
+  const receiving = asArray(rows.receivingDocs)
+    .filter((row) => /待收货|质检|异常|部分|未收|处理中/.test(text(row.status || row.receivingStatus)) || number(row.failed ?? row.rejectedQty) > 0)
+    .slice(0, 5)
+    .map(receivingIssueEvidence)
+    .filter(Boolean)
+  const poReceiving = asArray(rows.purchaseOrders)
+    .filter((row) => /未收货|部分收货|部分到货|待收货|逾期|已审批|已发出|待审批/.test(text(row.receivingStatus || row.status)))
+    .slice(0, Math.max(0, 5 - receiving.length))
+    .map((po) => poEvidence(po, { poId: text(po.po || po.id) }))
+    .filter(Boolean)
+  return uniqueBy([...receiving, ...poReceiving], (item) => `${item.entityType}:${item.entityId}`).slice(0, 5)
+}
 function invoiceEvidence(invoice = {}) {
   const invoiceId = text(invoice.invoiceNumber || invoice.invoiceId || invoice.id)
   if (!invoiceId) return null
@@ -578,6 +673,7 @@ function objectEvidenceForIntent(intent, ctx, request) {
   if (intent.id === 'inventory_risk') return [skuEvidence(objects.sku, { sku: skuId, poId, salesOrderId: soId }), salesOrderEvidence(objects.so), poEvidence(objects.po, { poId }), grnEvidence(objects.grn)].filter(Boolean).slice(0, 5)
   if (intent.id === 'sales_delivery_risk') return [salesOrderEvidence(objects.so), skuEvidence(objects.sku, { sku: skuId, poId, salesOrderId: soId }), poEvidence(objects.po, { poId }), grnEvidence(objects.grn)].filter(Boolean).slice(0, 5)
   if (intent.id === 'supplier_risk') return [poEvidence(objects.po, { poId }), rfqEvidence(objects.rfq, { rfqId, poId }), grnEvidence(objects.grn), invoiceEvidence(objects.invoice)].filter(Boolean).slice(0, 5)
+  if (intent.id === 'receiving_exception') return receivingIssueEvidenceRows(ctx)
   if (intent.id === 'unreceived_orders') return [poEvidence(objects.po, { poId }), grnEvidence(objects.grn)].filter(Boolean)
   if (['received_not_invoiced', 'three_way_match_variance'].includes(intent.id)) return [invoiceEvidence(objects.invoice) || syntheticInvoiceEvidence(objects), poEvidence(objects.po, { poId }), grnEvidence(objects.grn)].filter(Boolean)
   if (intent.id === 'collaboration_review') return [rfqEvidence(objects.rfq, { rfqId, poId }), poEvidence(objects.po, { poId })].filter(Boolean)
@@ -677,6 +773,11 @@ function evidenceForIntent(intent, ctx, request) {
       severity: 'warning',
     }),
     ...objectEvidenceForIntent({ id: 'po_priority' }, ctx, request).slice(0, 3),
+  ]
+  if (intent.id === 'receiving_exception') return [
+    ...receivingIssueEvidenceRows(ctx),
+    evidence({ id: 'receiving-impact-inventory', moduleId: 'inventory', entityLabel: '库存可用量', evidenceLabel: '库存影响', summary: '收货异常会影响可用量、可承诺量和库存风险判断，需结合 PO 与 GRN 来源证据人工复核。', severity: 'warning' }),
+    evidence({ id: 'receiving-impact-finance', moduleId: 'finance', entityLabel: '发票匹配', evidenceLabel: '发票匹配影响', summary: '收货数量、质检结果或异常数量不完整时，可能影响发票匹配与财务协同，只进入复核说明。', severity: 'warning' }),
   ]
   if (intent.id === 'core_business_chain') return [
     ...coreChainEvidenceForIntent(ctx, request),
@@ -898,6 +999,87 @@ function providerModeLimitation(env = {}) {
   return [{ label: '外部辅助模式未启用', description: '当前默认使用证据辅助回答。', severity: 'warning', consequence: '已使用当前工作区证据辅助回答。' }]
 }
 
+export function buildAiRuntimeSafeFallbackV2(request = {}, reasonLabel = '当前工作区证据暂不完整') {
+  const safeRequest = normalizeRequest(request)
+  const message = safeRequest.message || '当前问题'
+  const primaryModule = safeRequest.activeModuleId || 'overview'
+  const responseId = `AIR-SAFE-${Date.now()}-${Math.abs(message.length * 19)}`
+  const keyEvidence = [
+    evidence({
+      id: 'safe-local-current-scope',
+      moduleId: primaryModule,
+      entityLabel: moduleLabel(primaryModule),
+      evidenceLabel: '当前工作区数据',
+      summary: `${moduleLabel(primaryModule)} 的部分来源证据暂时未完整读取，仍可先查看今日行动、库存管理、收货记录和人工复核入口。`,
+      severity: 'warning',
+    }),
+    evidence({
+      id: 'safe-local-review-boundary',
+      moduleId: 'review-actions',
+      entityLabel: '人工复核',
+      evidenceLabel: '人工复核边界',
+      summary: '当前回答只提供来源证据查看、草稿预览和人工复核入口，不形成正式业务处理。',
+      severity: 'warning',
+    }),
+  ]
+  const links = [
+    nav('打开今日行动', 'overview'),
+    nav('打开库存管理', 'inventory'),
+    nav('打开收货记录', 'procurement:receiving'),
+    nav('打开人工复核', 'review-actions'),
+  ]
+  return {
+    version: 'v2',
+    responseId,
+    query: message,
+    intent: 'safe_local_evidence',
+    runtimeModeLabel: '证据辅助回答 · 当前工作区数据 · 复核优先',
+    scope: {
+      module: primaryModule,
+      entityType: text(safeRequest.focusTarget?.entityType),
+      entityId: text(safeRequest.focusTarget?.entityId),
+      dataScopeLabel: DATA_SCOPE,
+    },
+    conclusion: {
+      title: '当前工作区证据：需要结合来源复核',
+      summary: '已保留可用业务证据入口。建议先查看今日行动、库存管理、收货记录和人工复核入口，再继续处理。',
+      severity: 'warning',
+      confidence: 'medium',
+    },
+    keyEvidence,
+    businessImpact: [
+      impact('采购', '采购优先级和到货节奏需要结合来源证据人工复核。', 'warning'),
+      impact('库存', '库存可用量和可承诺量需从库存管理继续核对。', 'warning'),
+      impact('财务', '发票匹配和财务协同只进入人工复核说明。', 'warning'),
+      impact('数据质量', '部分来源证据暂不完整，会影响回答可信度。', 'warning'),
+    ],
+    recommendedActions: recommendedActions(links),
+    navigationLinks: links,
+    dataLimitations: [cleanLimitation({ label: reasonLabel, description: '部分来源证据暂时未完整读取，已保留可用模块入口。', severity: 'warning', consequence: '请打开来源模块核对后再继续处理。' })],
+    reviewCards: reviewCards({ id: 'today_attention', label: '当前工作区证据' }, links),
+    safetyBoundaries: SAFETY_BOUNDARIES,
+    followUpQuestions: ['查看数据限制', '进入人工复核', '打开相关模块'],
+    contextBreadcrumbs: [],
+    followUpSuggestions: [],
+    resolvedContext: {
+      resolvedFrom: 'safeLocalEvidence',
+      entityRefs: [],
+      intentCarryOver: 'today_attention',
+      confidence: 'low',
+    },
+    sourceSummary: [
+      { sourceId: 'safe-local-evidence', sourceLabel: '当前工作区数据', signalCount: keyEvidence.length, navigationLinks: links.slice(0, 1) },
+    ],
+    readinessSignals: [
+      { signalLabel: '证据辅助回答', statusLabel: DATA_SCOPE, signalCount: keyEvidence.length },
+      { signalLabel: '复核优先', statusLabel: '草稿预览和人工复核', signalCount: SAFETY_BOUNDARIES.length },
+      { signalLabel: '数据限制', statusLabel: '集中展示', signalCount: 1 },
+    ],
+    generatedAt: GENERATED_AT,
+    dataScopeLabel: DATA_SCOPE,
+  }
+}
+
 export function buildAiRuntimeReadinessV2(db = {}, env = {}) {
   const ctx = buildContexts(db, { message: 'readiness' })
   const config = providerRuntimeConfig(env)
@@ -936,53 +1118,61 @@ export function buildAiRuntimeReadinessV2(db = {}, env = {}) {
 export function buildAiRuntimeResponseV2(db = {}, body = {}, options = {}) {
   const validation = validateAiRuntimeRequest(body)
   if (!validation.ok) return { status: validation.status, body: { error: validation.error, dataScopeLabel: DATA_SCOPE } }
-  const initialRequest = validation.request
-  const conversationGrounding = buildConversationGroundingV2({ request: initialRequest, previousContext: initialRequest.conversationContext, activeContext: { focusTarget: initialRequest.focusTarget } })
-  const resolvedContext = resolveFollowUpReferenceV2({ message: initialRequest.message, conversationGrounding })
-  const request = enrichRequestWithResolvedContext(initialRequest, resolvedContext)
-  const detectedIntent = detectIntent(request)
-  const ctx = buildContexts(db, { ...request, coreBusinessChainRequested: detectedIntent.id === 'core_business_chain' })
-  const intent = intentWithConversationCarryOver(detectedIntent, request, resolvedContext)
-  const contextBundle = buildContextBundle(request, ctx, intent, conversationGrounding, resolvedContext)
-  const adapter = activeAdapter(options.env || process.env || {})
-  const promptPackage = adapter.buildPromptPackage(contextBundle, request)
-  const raw = adapter.generateResponse(promptPackage)
-  return { status: 200, body: adapter.normalizeResponse(raw, contextBundle) }
+  try {
+    const initialRequest = validation.request
+    const conversationGrounding = buildConversationGroundingV2({ request: initialRequest, previousContext: initialRequest.conversationContext, activeContext: { focusTarget: initialRequest.focusTarget } })
+    const resolvedContext = resolveFollowUpReferenceV2({ message: initialRequest.message, conversationGrounding })
+    const request = enrichRequestWithResolvedContext(initialRequest, resolvedContext)
+    const detectedIntent = detectIntent(request)
+    const ctx = buildContexts(db, { ...request, coreBusinessChainRequested: detectedIntent.id === 'core_business_chain' }, options)
+    const intent = intentWithConversationCarryOver(detectedIntent, request, resolvedContext)
+    const contextBundle = buildContextBundle(request, ctx, intent, conversationGrounding, resolvedContext)
+    const adapter = activeAdapter(options.env || process.env || {})
+    const promptPackage = adapter.buildPromptPackage(contextBundle, request)
+    const raw = adapter.generateResponse(promptPackage)
+    return { status: 200, body: adapter.normalizeResponse(raw, contextBundle) }
+  } catch {
+    return { status: 200, body: buildAiRuntimeSafeFallbackV2(validation.request, '当前工作区证据暂不完整') }
+  }
 }
 
 export async function buildAiRuntimeResponseV2Async(db = {}, body = {}, options = {}) {
   const validation = validateAiRuntimeRequest(body)
   if (!validation.ok) return { status: validation.status, body: { error: validation.error, dataScopeLabel: DATA_SCOPE } }
-  const initialRequest = validation.request
-  const conversationGrounding = buildConversationGroundingV2({ request: initialRequest, previousContext: initialRequest.conversationContext, activeContext: { focusTarget: initialRequest.focusTarget } })
-  const resolvedContext = resolveFollowUpReferenceV2({ message: initialRequest.message, conversationGrounding })
-  const request = enrichRequestWithResolvedContext(initialRequest, resolvedContext)
-  const detectedIntent = detectIntent(request)
-  const ctx = buildContexts(db, { ...request, coreBusinessChainRequested: detectedIntent.id === 'core_business_chain' })
-  const intent = intentWithConversationCarryOver(detectedIntent, request, resolvedContext)
-  const contextBundle = buildContextBundle(request, ctx, intent, conversationGrounding, resolvedContext)
-  const env = options.env || process.env || {}
-  const localDraft = localRuntimeDraft(contextBundle, request)
-  const localValidation = validateAiRuntimeResponseV2(localDraft, contextBundle, localDraft)
-  const safeLocalDraft = localValidation.ok ? localDraft : buildResponse({ request, intent, ctx })
+  try {
+    const initialRequest = validation.request
+    const conversationGrounding = buildConversationGroundingV2({ request: initialRequest, previousContext: initialRequest.conversationContext, activeContext: { focusTarget: initialRequest.focusTarget } })
+    const resolvedContext = resolveFollowUpReferenceV2({ message: initialRequest.message, conversationGrounding })
+    const request = enrichRequestWithResolvedContext(initialRequest, resolvedContext)
+    const detectedIntent = detectIntent(request)
+    const ctx = buildContexts(db, { ...request, coreBusinessChainRequested: detectedIntent.id === 'core_business_chain' }, options)
+    const intent = intentWithConversationCarryOver(detectedIntent, request, resolvedContext)
+    const contextBundle = buildContextBundle(request, ctx, intent, conversationGrounding, resolvedContext)
+    const env = options.env || process.env || {}
+    const localDraft = localRuntimeDraft(contextBundle, request)
+    const localValidation = validateAiRuntimeResponseV2(localDraft, contextBundle, localDraft)
+    const safeLocalDraft = localValidation.ok ? localDraft : buildResponse({ request, intent, ctx })
 
-  if (!isProviderAssistedRequested(env)) return { status: 200, body: safeLocalDraft }
-  const providerAdapter = selectProviderAdapter(env)
-  if (!providerAdapter || !canCallConfiguredProvider(env)) {
-    return { status: 200, body: fallbackResponse(safeLocalDraft, 'not_configured') }
-  }
+    if (!isProviderAssistedRequested(env)) return { status: 200, body: safeLocalDraft }
+    const providerAdapter = selectProviderAdapter(env)
+    if (!providerAdapter || !canCallConfiguredProvider(env)) {
+      return { status: 200, body: fallbackResponse(safeLocalDraft, 'not_configured') }
+    }
 
-  const providerInput = providerAdapter.buildProviderInput
-    ? providerAdapter.buildProviderInput(contextBundle, request, safeLocalDraft)
-    : buildProviderInputPackageV2(contextBundle, request, safeLocalDraft)
-  const providerResult = await callConfiguredProvider(providerInput, env, options.fetchImpl || globalThis.fetch)
-  if (!providerResult.ok) {
-    return { status: 200, body: fallbackResponse(safeLocalDraft, providerResult.reason) }
+    const providerInput = providerAdapter.buildProviderInput
+      ? providerAdapter.buildProviderInput(contextBundle, request, safeLocalDraft)
+      : buildProviderInputPackageV2(contextBundle, request, safeLocalDraft)
+    const providerResult = await callConfiguredProvider(providerInput, env, options.fetchImpl || globalThis.fetch)
+    if (!providerResult.ok) {
+      return { status: 200, body: fallbackResponse(safeLocalDraft, providerResult.reason) }
+    }
+    const normalized = normalizeProviderOutputCompat(providerResult.rawOutput, contextBundle, safeLocalDraft)
+    const validationResult = validateAiRuntimeResponseV2(normalized, contextBundle, safeLocalDraft)
+    if (!validationResult.ok) {
+      return { status: 200, body: fallbackResponse(safeLocalDraft, validationResult.reason) }
+    }
+    return { status: 200, body: normalized }
+  } catch {
+    return { status: 200, body: buildAiRuntimeSafeFallbackV2(validation.request, '当前工作区证据暂不完整') }
   }
-  const normalized = normalizeProviderOutputCompat(providerResult.rawOutput, contextBundle, safeLocalDraft)
-  const validationResult = validateAiRuntimeResponseV2(normalized, contextBundle, safeLocalDraft)
-  if (!validationResult.ok) {
-    return { status: 200, body: fallbackResponse(safeLocalDraft, validationResult.reason) }
-  }
-  return { status: 200, body: normalized }
 }

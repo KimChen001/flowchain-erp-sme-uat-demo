@@ -34,6 +34,9 @@ function riskRank(value = '') {
   if (/待|未|low/i.test(raw)) return 2
   return 1
 }
+function isOpenStatus(value = '') {
+  return !/已完成|已取消|已关闭|已收货|已匹配|closed|cancelled|fulfilled/i.test(text(value))
+}
 function node(kind, row = {}, extra = {}) {
   const id = text(extra.id || row.id || row.salesOrderId || row.sku || row.poId || row.invoiceId)
   if (!id) return null
@@ -205,6 +208,7 @@ export function buildInvoiceToFinanceLinksV1(db = {}) {
 export function buildCoreBusinessChainV1(db = {}) {
   const salesToInventory = buildSalesDemandToInventoryLinksV1(db)
   const inventoryToProcurement = buildInventoryToProcurementLinksV1(db)
+  const requests = buildProcurementPurchaseRequests(db)
   const procurementToReceiving = buildProcurementToReceivingLinksV1(db)
   const receivingToInvoice = buildReceivingToInvoiceLinksV1(db)
   const invoiceToFinance = buildInvoiceToFinanceLinksV1(db)
@@ -289,6 +293,15 @@ export function buildCoreBusinessChainV1(db = {}) {
       highRiskChainCount: chains.filter((chain) => Math.max(riskRank(chain.salesDemand?.status), riskRank(chain.inventory?.availability?.status)) >= 4).length,
       invoiceGapCount: chains.filter((chain) => !chain.invoice.supplierInvoices.length).length,
       reviewDraftCount: chains.reduce((sum, chain) => sum + chain.reviewDraftSuggestions.length, 0),
+      salesDemandCount: salesToInventory.length,
+      inventoryRiskCount: chains.filter((chain) => riskRank(chain.inventory?.availability?.status) >= 3).length,
+      replenishmentCandidateCount: chains.filter((chain) => number(chain.replenishment?.suggestedQty) > 0 || asArray(chain.replenishment?.purchaseRequests).length > 0).length,
+      openPrCount: requests.filter((request) => isOpenStatus(request.status)).length,
+      openPoCount: orders.filter((po) => isOpenStatus(po.status)).length,
+      receivingIssueCount: receivingDocs.filter((grn) => /待收货|质检|异常|部分|未收|处理中/.test(text(grn.status)) || number(grn.rejectedQty) > 0).length,
+      invoiceVarianceCount: invoices.filter((invoice) => number(invoice.varianceAmount) !== 0 || /差异|异常|待复核/.test(text(invoice.matchStatus || invoice.status))).length,
+      financeReviewCount: chains.reduce((sum, chain) => sum + asArray(chain.finance?.impacts).length, 0),
+      dataLimitedCount: chains.reduce((sum, chain) => sum + asArray(chain.dataLimitations).length, 0),
     },
     dataScopeLabel: '当前工作区数据',
   }

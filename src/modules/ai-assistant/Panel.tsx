@@ -1442,6 +1442,31 @@ function uniqueFollowUpChips(chips: { label: string; prompt: string }[]) {
   }).slice(0, 4);
 }
 
+function displaySafeAssistantRecoveryMessage(prompt: string) {
+  const topic = /收货|GRN|到货/.test(prompt)
+    ? "收货异常、采购订单和发票匹配"
+    : /库存|SKU|补货|可用量|可承诺量/.test(prompt)
+      ? "库存项目、SKU 风险和补货建议"
+      : /PO|采购订单/.test(prompt)
+        ? "采购订单、收货和供应商证据"
+        : "今日行动、库存管理和来源证据";
+  return [
+    "证据辅助回答 · 当前工作区数据 · 复核优先",
+    "",
+    "结论",
+    "当前工作区数据暂时未能完整读取，仍可先从相关模块查看来源证据并进入人工复核。",
+    "",
+    "关键证据",
+    `${topic} 可从今日行动、库存管理、收货记录、采购订单和财务协同继续查看。`,
+    "",
+    "建议动作",
+    "打开今日行动或相关模块查看来源证据，必要时预览草稿并交由人工复核。",
+    "",
+    "人工复核边界",
+    "草稿预览 · 人工复核 · 不提交 · 不外发 · 不写库存 · 不写财务凭证 · 不处理资金 · 不改主数据",
+  ].join("\n");
+}
+
 function hasRuntimeFollowUpSuggestions(message: AiChatMessage) {
   return Boolean(message.cards?.some((card) =>
     card.type === "ai_response_v2"
@@ -1672,9 +1697,7 @@ export default function FloatingAiAssistant({
         ...current,
         {
           role: "assistant",
-          content: timeoutHit || abortReasonRef.current === "timeout"
-            ? "AI 助手响应超时，当前未能读取工作区证据。可以重新生成，或先查看当前页面证据。"
-            : "AI 助手暂不可用，请稍后重试。当前未能读取工作区证据。",
+          content: displaySafeAssistantRecoveryMessage(message),
           retryPrompt: timeoutHit || abortReasonRef.current === "timeout" ? message : undefined,
         },
       ]);
