@@ -672,7 +672,7 @@ export default function FlowChainApp() {
       body: JSON.stringify({ draft }),
     });
     if (response.createsBusinessDocument) {
-      throw new Error("保存边界异常：接口声明会创建业务单据。");
+      throw new Error("留存边界异常：接口声明会创建业务单据。");
     }
     setDraftPreview(response.draft);
     toast.success("草稿已保存", { description: "仅保存待复核草稿，不会创建业务单据。" });

@@ -45,11 +45,13 @@ FlowChain packages a focused operations workflow:
 - AI Assistant answers with deterministic read-model evidence before any provider path.
 - Draft-first actions prepare PR, RFQ, supplier follow-up, and exception case drafts for user review instead of executing autonomous writes.
 
-## Current Development Scope
+## Current Product State
 
-The current implementation is a local JSON-backed development project suitable for product walkthroughs, workflow validation, architecture review, and repeatable local testing. It uses a deterministic workspace dataset and is intentionally not production-ready persistence.
+FlowChain 当前形成了轻量进销存、采购、库存和供应商协同系统的工作区闭环。当前状态服务于产品沟通、内部验收和后续开发对齐，不声明完整商业化运行能力。
 
-Implemented foundations include canonical evidence links, navigation recovery, Today Cockpit read models, procurement and inventory read APIs, AI cockpit fast path, AI provider safety gate, audit latency hardening, action draft preview, exception case workflow controls, and system harness tests.
+当前核心入口包括今日行动、AI 建议、AI 助手、核心业务链、数据接入与质量、角色权限、业务审计、工作区边界和人工复核草稿。
+
+当前产品边界是证据解释、草稿预览和人工复核。系统不自动审批、不自动下单、不提交收货、不外发、不写库存、不写财务凭证、不处理资金、不修改供应商主数据、不覆盖当前工作区数据、不形成正式业务处理。
 
 ## Roadmap Shape
 

@@ -15,7 +15,7 @@ test('action draft review shell keeps dangerous actions disabled and exposes con
 
   assert.match(shell, /export function ActionDraftReviewShell/)
   assert.match(shell, /审阅工作区：可编辑草稿，用户确认后也只保留允许范围内的安全内部记录/)
-  assert.match(shell, /预览 \/ 保存边界/)
+  assert.match(shell, /预览 \/ 留存边界/)
   assert.match(shell, /confirmed-action-boundary/)
   assert.match(shell, /PR 复核记录/)
   assert.match(shell, /RFQ 复核记录/)

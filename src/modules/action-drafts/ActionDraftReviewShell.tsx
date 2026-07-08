@@ -320,7 +320,7 @@ export function ActionDraftReviewShell({
             <div className="flex items-start gap-2">
               <ShieldCheck size={15} className="mt-0.5 shrink-0" />
               <div>
-                <div className="font-semibold">预览 / 保存边界</div>
+                <div className="font-semibold">预览 / 留存边界</div>
                 <div className="mt-1" style={{ color: A.sub }}>
                   当前工作区允许审阅、复制、编辑简单字段和保留待复核草稿；后续仍受人工确认和安全边界约束。
                 </div>
