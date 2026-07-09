@@ -33,12 +33,18 @@ test("wide workbench layout is available across operational pages without page o
 
   await expectWorkbenchWidth(page);
 
-  for (const label of ["报表与分析", "数据接入与质量", "行动草稿与人工复核"]) {
+  for (const label of ["销售", "采购", "库存", "供应商与对账", "报表", "基础设置"]) {
     await page.getByRole("button", { name: label }).first().click();
     await expectWorkbenchWidth(page);
   }
 
-  await page.getByRole("button", { name: "每日工作台" }).first().click();
-  await page.getByRole("button", { name: "AI 建议", exact: true }).click();
+  await page.getByRole("button", { name: "高级与内部" }).click();
+  for (const label of ["数据接入与质量", "行动草稿与人工复核"]) {
+    await page.getByRole("button", { name: label }).first().click();
+    await expectWorkbenchWidth(page);
+  }
+
+  await page.getByRole("button", { name: "今日工作台" }).first().click();
+  await page.getByRole("button", { name: "AI 摘要", exact: true }).click();
   await expectWorkbenchWidth(page);
 });

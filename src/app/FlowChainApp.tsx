@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Lock,
   X,
+  ChevronRight,
 } from "lucide-react";
 import { navGroups, navItems } from "./routes";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
@@ -219,10 +220,10 @@ function actionDraftErrorMessage(error: unknown) {
 }
 
 const PAGE_LABELS: Record<string, string> = {
-  overview: "每日工作台", sales: "需求与交付", inventory: "库存与可承诺量",
+  overview: "今日工作台", sales: "销售", inventory: "库存",
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购与收货", finance: "发票与匹配协同", "master-data": "数据与治理", srm: "供应商运营", reports: "报表与分析", imports: "数据接入与质量", "exception-cases": "异常处理工单", "collaboration-drafts": "协同通知草稿", "review-actions": "行动草稿与人工复核", "audit-history": "业务审计与历史", "pilot-readiness": "试点准备度", settings: "系统设置",
+  procurement: "采购", finance: "供应商与对账", "master-data": "基础设置", srm: "供应商与对账", reports: "报表", imports: "数据接入与质量", "exception-cases": "异常处理工单", "collaboration-drafts": "协同通知草稿", "review-actions": "行动草稿与人工复核", "audit-history": "业务审计与历史", "pilot-readiness": "试点准备度", settings: "系统设置",
 };
 
 type GlobalSearchResult = {
@@ -483,6 +484,7 @@ export default function FlowChainApp() {
   const [aiOpenSignal, setAiOpenSignal] = useState(0);
   const [aiActiveContext, setAiActiveContext] = useState<ActiveContext | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [expandedNavGroups, setExpandedNavGroups] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -522,8 +524,16 @@ export default function FlowChainApp() {
   const replenishmentItem = replenishmentSku ? inventoryItems.find((item) => item.sku === replenishmentSku) ?? null : null;
 
   const { moduleId: activeModule, viewId: activeView } = splitNavigationId(active);
-  const activeModuleLabel = PAGE_LABELS[activeModule] || activeModule;
-  const activeNavItem = navItems.find((item) => item.id === activeModule);
+
+  function navItemMatchesActive(item: typeof navItems[number]) {
+    const routeAliases = ("routeAliases" in item ? item.routeAliases : []) as readonly string[];
+    if (active === item.id || activeModule === item.id || routeAliases.includes(activeModule)) return true;
+    return Boolean(item.children?.some((child) => child.id === active));
+  }
+
+  const activeNavItem = navItems.find((item) => item.children?.some((child) => child.id === active))
+    || navItems.find(navItemMatchesActive);
+  const activeModuleLabel = activeNavItem?.label || PAGE_LABELS[activeModule] || activeModule;
   const activeChildLabel = activeNavItem?.children?.find((item) => item.id === active)?.label;
   const contentMaxWidthClass = activeModule === "srm"
     ? "max-w-[1440px]"
@@ -829,46 +839,69 @@ export default function FlowChainApp() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
-          {navGroups.map((group) => (
-            <div key={group.label}>
-              <div className="text-[10px] font-semibold uppercase tracking-widest px-2 mb-2" style={{ color: "rgba(148,163,184,0.58)" }}>{group.label}</div>
-              <div className="space-y-0.5">
-                {group.itemIds.map((itemId) => {
-                  const item = navItems.find((entry) => entry.id === itemId);
-                  if (!item) return null;
-                  const isActive = activeModule === item.id;
-                  return (
-                    <div key={item.id} className="space-y-0.5">
-                      <button onClick={() => navigateTo(item.id)}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-medium transition-colors duration-150"
-                        style={isActive
-                          ? { background: A.sidebarAccent, color: "#f8fafc" }
-                          : { background: "transparent", color: A.sidebarSub }}>
-                        <item.icon size={15} strokeWidth={isActive ? 2 : 1.8} />
-                        <span className="truncate">{item.label}</span>
-                      </button>
-                      {isActive && item.children && (
-                        <div className="ml-4 pl-3 py-1 space-y-0.5" style={{ borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
-                          {item.children.map((child) => {
-                            const childActive = active === child.id || (active === item.id && child.id === item.id);
-                            return (
-                              <button key={child.id} onClick={() => navigateTo(child.id)}
-                                className="w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors"
-                                style={childActive
-                                  ? { background: "rgba(37,99,235,0.16)", color: "#bfdbfe" }
-                                  : { background: "transparent", color: A.sidebarSub }}>
-                                {child.label}
-                              </button>
-                            );
-                          })}
+          {navGroups.map((group) => {
+            const isCollapsible = "defaultCollapsed" in group && group.defaultCollapsed;
+            const isExpanded = !isCollapsible || expandedNavGroups[group.label];
+            return (
+              <div key={group.label}>
+                {isCollapsible ? (
+                  <button
+                    type="button"
+                    aria-expanded={Boolean(isExpanded)}
+                    onClick={() => setExpandedNavGroups((current) => ({ ...current, [group.label]: !current[group.label] }))}
+                    className="w-full flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-widest px-2 mb-2"
+                    style={{ color: "rgba(148,163,184,0.58)" }}
+                  >
+                    <span>{group.label}</span>
+                    <ChevronRight
+                      size={12}
+                      className="transition-transform"
+                      style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+                    />
+                  </button>
+                ) : (
+                  <div className="text-[10px] font-semibold uppercase tracking-widest px-2 mb-2" style={{ color: "rgba(148,163,184,0.58)" }}>{group.label}</div>
+                )}
+                {isExpanded && (
+                  <div className="space-y-0.5">
+                    {group.itemIds.map((itemId) => {
+                      const item = navItems.find((entry) => entry.id === itemId);
+                      if (!item) return null;
+                      const isActive = activeNavItem?.id === item.id;
+                      return (
+                        <div key={item.id} className="space-y-0.5">
+                          <button onClick={() => navigateTo(item.id)}
+                            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-medium transition-colors duration-150"
+                            style={isActive
+                              ? { background: A.sidebarAccent, color: "#f8fafc" }
+                              : { background: "transparent", color: A.sidebarSub }}>
+                            <item.icon size={15} strokeWidth={isActive ? 2 : 1.8} />
+                            <span className="truncate">{item.label}</span>
+                          </button>
+                          {isActive && item.children && (
+                            <div className="ml-4 pl-3 py-1 space-y-0.5" style={{ borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
+                              {item.children.map((child) => {
+                                const childActive = active === child.id || (active === item.id && child.id === item.id);
+                                return (
+                                  <button key={child.id} onClick={() => navigateTo(child.id)}
+                                    className="w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors"
+                                    style={childActive
+                                      ? { background: "rgba(37,99,235,0.16)", color: "#bfdbfe" }
+                                      : { background: "transparent", color: A.sidebarSub }}>
+                                    {child.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
 
         <div className="p-3 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>

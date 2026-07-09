@@ -139,7 +139,7 @@ export function buildInventoryEvidence(item: ReturnType<typeof overviewReplenish
     title: "库存短缺证据",
     priority: item.plan.priority,
     object: item.sku,
-    module: moduleId === "forecast" ? "预测与 MRP" : "库存管理",
+    module: moduleId === "forecast" ? "预测与 MRP" : "库存",
     moduleId,
     businessReason: "库存低于再订货点或覆盖天数低于采购提前期，可能影响后续生产和客户订单交付。",
     evidence: [

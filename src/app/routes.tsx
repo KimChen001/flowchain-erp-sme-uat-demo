@@ -1,6 +1,5 @@
 import {
   BarChart2,
-  CircleDollarSign,
   FileSpreadsheet,
   Handshake,
   Database,
@@ -19,14 +18,15 @@ import {
 
 export const navItems = [
   {
-    icon: BarChart2, label: "每日工作台", id: "overview",
+    icon: BarChart2, label: "今日工作台", id: "overview",
     children: [
-      { id: "overview", label: "今日行动" },
+      { id: "overview", label: "今日待办" },
+      { id: "overview:risks", label: "交付与库存风险" },
       { id: "overview:ai", label: "AI 摘要" },
     ],
   },
   {
-    icon: ClipboardList, label: "需求与交付", id: "sales",
+    icon: ClipboardList, label: "销售", id: "sales",
     children: [
       { id: "sales", label: "客户订单" },
       { id: "sales:risks", label: "交付风险" },
@@ -34,84 +34,65 @@ export const navItems = [
     ],
   },
   {
-    icon: Handshake, label: "采购与收货", id: "procurement",
+    icon: Handshake, label: "采购", id: "procurement",
     children: [
       { id: "procurement", label: "采购工作台" },
       { id: "procurement:requests", label: "采购申请" },
-      { id: "procurement:rfq", label: "寻源 / RFx" },
+      { id: "procurement:rfq", label: "询价 / RFQ" },
       { id: "procurement:orders", label: "采购订单" },
-      { id: "procurement:contracts", label: "框架合同" },
-      { id: "procurement:receiving", label: "收货协同" },
-      { id: "procurement:invoices", label: "发票协同" },
-      { id: "procurement:match", label: "三单匹配" },
-      { id: "procurement:returns", label: "采购退货 / 贷项" },
+      { id: "procurement:receiving", label: "收货" },
+      { id: "procurement:invoices", label: "发票匹配" },
     ],
   },
   {
-    icon: Package, label: "库存与可承诺量", id: "inventory",
+    icon: Package, label: "库存", id: "inventory",
     children: [
       { id: "inventory", label: "库存工作台" },
-      { id: "inventory:movements", label: "库存事务流水" },
-      { id: "inventory:exceptions", label: "库存异常单据" },
-      { id: "inventory:lots", label: "批次 / 序列号" },
-      { id: "inventory:transfer", label: "库间调拨" },
-      { id: "inventory:count", label: "循环盘点" },
-      { id: "inventory:abcxyz", label: "ABC/XYZ 分类" },
-      { id: "inventory:bins", label: "库位地图" },
+      { id: "inventory:movements", label: "出入库流水" },
+      { id: "inventory:exceptions", label: "库存异常" },
+      { id: "inventory:count", label: "盘点" },
     ],
   },
   {
-    icon: Users, label: "供应商运营", id: "srm",
+    icon: Users, label: "供应商与对账", id: "srm",
+    routeAliases: ["finance"],
     children: [
-      { id: "srm", label: "SRM 总览" },
-      { id: "srm:master", label: "供应商资料目录" },
-      { id: "srm:performance", label: "绩效评分与风险队列" },
-      { id: "srm:certification", label: "认证资料与准入复核" },
-      { id: "srm:sourcing", label: "RFx 参与" },
-      { id: "srm:contracts", label: "合同与目录" },
+      { id: "srm:master", label: "供应商列表" },
+      { id: "srm:performance", label: "供应商风险" },
+      { id: "finance:invoices", label: "供应商发票" },
+      { id: "procurement:match", label: "三单匹配" },
+      { id: "finance:reconciliation", label: "供应商对账" },
     ],
   },
   {
-    icon: Database, label: "数据与治理", id: "master-data",
+    icon: FileSpreadsheet, label: "报表", id: "reports",
     children: [
-      { id: "master-data", label: "基础资料总览" },
+      { id: "reports", label: "报表总览" },
+      { id: "reports:procurement", label: "采购分析" },
+      { id: "reports:inventory", label: "库存分析" },
+      { id: "reports:delivery", label: "销售与交付" },
+      { id: "reports:finance", label: "供应商与对账" },
+      { id: "reports:quality", label: "数据质量" },
+    ],
+  },
+  {
+    icon: Database, label: "基础设置", id: "master-data",
+    children: [
       { id: "master-data:items", label: "物料资料" },
       { id: "master-data:suppliers", label: "供应商资料" },
       { id: "master-data:warehouses", label: "仓库资料" },
-      { id: "master-data:tax-codes", label: "条款与税码" },
-      { id: "master-data:payment-terms", label: "付款条款" },
+      { id: "imports", label: "数据导入" },
+      { id: "settings:numbering", label: "编号规则" },
     ],
   },
   {
-    icon: CircleDollarSign, label: "发票与匹配协同", id: "finance",
-    children: [
-      { id: "finance", label: "发票协同总览" },
-      { id: "finance:invoices", label: "供应商发票" },
-      { id: "finance:payables", label: "应付可见性" },
-      { id: "finance:credits", label: "贷项冲减" },
-      { id: "finance:reconciliation", label: "供应商对账" },
-      { id: "finance:settlement", label: "结算资料准备" },
-    ],
-  },
-  {
-    icon: TrendingUp, label: "预测与 MRP 物料需求计划", id: "forecast",
+    icon: TrendingUp, label: "预测与 MRP", id: "forecast",
     children: [
       { id: "forecast:cockpit", label: "计划驾驶舱" },
       { id: "forecast:demand", label: "需求预测" },
       { id: "forecast:mrp", label: "MRP 计划" },
       { id: "forecast:replenishment", label: "补货工作台" },
       { id: "forecast:parameters", label: "计划参数" },
-    ],
-  },
-  {
-    icon: FileSpreadsheet, label: "报表与分析", id: "reports",
-    children: [
-      { id: "reports", label: "报表总览" },
-      { id: "reports:procurement", label: "采购报表" },
-      { id: "reports:inventory", label: "库存报表" },
-      { id: "reports:finance", label: "供应商报表" },
-      { id: "reports:delivery", label: "交付风险报表" },
-      { id: "reports:quality", label: "数据质量报表" },
     ],
   },
   {
@@ -168,7 +149,6 @@ export const navItems = [
       { id: "settings:boundaries", label: "工作区边界" },
       { id: "settings:modules", label: "模块启用状态" },
       { id: "settings:review", label: "复核策略" },
-      { id: "settings:numbering", label: "编号规则" },
       { id: "settings:ai", label: "AI 边界" },
       { id: "settings:collaboration", label: "协同草稿策略" },
       { id: "settings:data-quality", label: "数据质量设置" },
@@ -187,7 +167,7 @@ export const navItems = [
 
 export const navGroups = [
   { label: "主工作区", itemIds: ["overview"] },
-  { label: "业务工作区", itemIds: ["sales", "procurement", "inventory", "srm", "finance", "forecast"] },
-  { label: "数据与分析", itemIds: ["master-data", "reports", "imports"] },
-  { label: "治理与支持", itemIds: ["exception-cases", "collaboration-drafts", "review-actions", "audit-history", "pilot-readiness", "settings"] },
+  { label: "进销存业务", itemIds: ["sales", "procurement", "inventory", "srm"] },
+  { label: "经营管理", itemIds: ["reports", "master-data"] },
+  { label: "高级与内部", itemIds: ["forecast", "imports", "exception-cases", "collaboration-drafts", "review-actions", "audit-history", "pilot-readiness", "settings"], defaultCollapsed: true },
 ] as const;

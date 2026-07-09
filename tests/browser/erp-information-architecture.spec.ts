@@ -18,14 +18,13 @@ async function openLoggedInApp(page: Page) {
 }
 
 test.describe("ERP information architecture cleanup", () => {
-  test("supplier management merges performance and risk and hides supplier portal", async ({ page }) => {
+  test("supplier and reconciliation keeps supplier risk without exposing supplier portal", async ({ page }) => {
     await openLoggedInApp(page);
-    await page.getByRole("button", { name: "供应商管理" }).first().click();
+    await page.getByRole("button", { name: "供应商与对账" }).first().click();
     const scope = page.getByTestId("module-export-scope");
 
-    await expect(page.getByRole("button", { name: "绩效评分与风险队列" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "供应商风险" })).toBeVisible();
     await expect(page.getByRole("button", { name: "供应商绩效", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "供应商风险", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "供应商门户" })).toHaveCount(0);
     await expect(scope).not.toContainText(/supplier portal/i);
 
@@ -34,10 +33,10 @@ test.describe("ERP information architecture cleanup", () => {
 
   test("supplier management subpages have distinct business surfaces", async ({ page }) => {
     await openLoggedInApp(page);
-    await page.getByRole("button", { name: "供应商管理" }).first().click();
+    await page.getByRole("button", { name: "供应商与对账" }).first().click();
     const scope = page.getByTestId("module-export-scope");
 
-    await page.getByRole("button", { name: "供应商资料目录" }).click();
+    await page.getByRole("button", { name: "供应商列表" }).click();
     await expect(scope).toContainText("供应商资料目录");
     await expect(scope).toContainText("供应商编码");
     await expect(scope).toContainText("默认币种");
@@ -74,24 +73,35 @@ test.describe("ERP information architecture cleanup", () => {
     await expect(page.locator("body")).not.toContainText(/supplier portal/i);
   });
 
-  test("navigation clarifies foundation data, data quality, and reports boundaries", async ({ page }) => {
+  test("default navigation presents SME business trunk and folds advanced internal entries", async ({ page }) => {
     await openLoggedInApp(page);
+    const nav = page.locator("aside nav");
 
-    await expect(page.getByRole("button", { name: "基础资料" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "主数据" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "数据接入与质量" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "报表与分析" })).toBeVisible();
-    const supplyChainGroup = page.locator("nav > div").filter({ hasText: "供应链" });
-    const dataGroup = page.locator("nav > div").filter({ hasText: "数据" });
-    await expect(dataGroup.getByRole("button", { name: "基础资料" })).toBeVisible();
-    await expect(supplyChainGroup.getByRole("button", { name: "基础资料" })).toHaveCount(0);
+    for (const label of ["今日工作台", "销售", "采购", "库存", "供应商与对账", "报表", "基础设置"]) {
+      await expect(nav.getByRole("button", { name: label, exact: true })).toBeVisible();
+    }
 
-    await page.getByRole("button", { name: "基础资料" }).first().click();
+    for (const label of ["预测与 MRP", "数据接入与质量", "行动草稿与人工复核", "业务审计与历史", "试点准备度", "系统设置"]) {
+      await expect(nav.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+    }
+
+    const advancedToggle = nav.getByRole("button", { name: "高级与内部" });
+    await expect(advancedToggle).toHaveAttribute("aria-expanded", "false");
+    await advancedToggle.click();
+    await expect(advancedToggle).toHaveAttribute("aria-expanded", "true");
+    for (const label of ["预测与 MRP", "数据接入与质量", "异常处理工单", "协同通知草稿", "行动草稿与人工复核", "业务审计与历史", "试点准备度", "系统设置"]) {
+      await expect(nav.getByRole("button", { name: label, exact: true })).toBeVisible();
+    }
+
+    await page.getByRole("button", { name: "基础设置" }).first().click();
     const scope = page.getByTestId("module-export-scope");
+    for (const label of ["物料资料", "供应商资料", "仓库资料", "数据导入", "编号规则"]) {
+      await expect(nav.getByRole("button", { name: label, exact: true })).toBeVisible();
+    }
     await expect(scope).toContainText("基础资料只维护业务对象基础记录，不做报表分析或业务审批。");
     await expect(scope).not.toContainText("主数据");
 
-    await page.getByRole("button", { name: "报表与分析" }).first().click();
+    await page.getByRole("button", { name: "报表" }).first().click();
     await expect(scope).toContainText("报表与分析只做汇总、趋势、分析和导出");
     await expect(scope.getByRole("button", { name: /批准|拒绝|过账|编辑业务数据/ })).toHaveCount(0);
 

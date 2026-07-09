@@ -242,7 +242,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
       title: "处理库存短缺 SKU",
       object: item.sku,
       evidence: `${item.name} · 当前 ${item.qty.toLocaleString()} / 安全 ${item.min.toLocaleString()} · ROP ${item.plan.reorderPoint}`,
-      module: "库存管理",
+      module: "库存",
       moduleId: "inventory:movements",
       cta: "补货",
       detail: buildInventoryEvidence(item),
@@ -385,11 +385,11 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
   ];
 
   const quickLinks = [
-    { label: "采购与收货", id: "procurement" },
-    { label: "库存与可承诺量", id: "inventory" },
-    { label: "供应商运营", id: "srm" },
-    { label: "发票与匹配协同", id: "finance" },
-    { label: "预测与 MRP", id: "forecast" },
+    { label: "销售", id: "sales" },
+    { label: "采购", id: "procurement" },
+    { label: "库存", id: "inventory" },
+    { label: "供应商与对账", id: "srm" },
+    { label: "报表", id: "reports" },
   ];
   const visibleKpis = [
     kpis[0],
@@ -755,7 +755,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
                   </span>
                 </div>
                 <p className="mt-1 text-[10px] leading-4" style={{ color: A.sub }}>
-                  销售需求、SKU 库存风险、PO、收货和发票协同放在同一条证据线上查看。
+                  销售订单、SKU 库存风险、PO、收货和供应商发票放在同一条证据线上查看。
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button onClick={() => onNavigate("sales:evidence", { entityType: "sales_order", entityId: "SO-2026-0412-A" }, {

@@ -312,7 +312,7 @@ const localAiSuggestionsWorkbench: AiSuggestionsWorkbenchV2 = {
       conclusion: "发票与收货记录存在差异，需复核来源证据。",
       whyNow: "差异会影响供应商对账与应付确认。",
       keyEvidence: ["发票金额与收货金额不一致", "关联 PO 待补充复核记录", "对账状态未关闭"],
-      businessImpact: "可能影响发票与匹配协同和供应商对账周期。",
+      businessImpact: "可能影响供应商发票匹配和对账周期。",
       suggestedAction: "查看发票、PO 与收货证据，预览内部复核说明。",
       navigationLinks: [
         { label: "查看发票", moduleId: "procurement:invoices", entityType: "supplier_invoice", entityId: "INV-HD-260421", entityLabel: "INV-HD-260421" },
