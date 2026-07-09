@@ -220,10 +220,10 @@ function actionDraftErrorMessage(error: unknown) {
 }
 
 const PAGE_LABELS: Record<string, string> = {
-  overview: "今日工作台", sales: "销售", inventory: "库存",
+  overview: "首页", sales: "销售管理", inventory: "库存管理",
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购", finance: "供应商与对账", "master-data": "基础设置", srm: "供应商与对账", reports: "报表", imports: "数据接入与质量", "exception-cases": "异常处理工单", "collaboration-drafts": "协同通知草稿", "review-actions": "行动草稿与人工复核", "audit-history": "业务审计与历史", "pilot-readiness": "试点准备度", settings: "系统设置",
+  procurement: "采购管理", finance: "结算管理", "master-data": "基础资料", srm: "基础资料", reports: "报表中心", imports: "数据接入与质量", "exception-cases": "异常处理工单", "collaboration-drafts": "协同通知草稿", "review-actions": "行动草稿与人工复核", "audit-history": "业务审计与历史", "pilot-readiness": "试点准备度", settings: "系统管理",
 };
 
 type GlobalSearchResult = {
@@ -250,7 +250,7 @@ type GlobalSearchFocus = {
 };
 
 const SEARCH_TYPE_LABELS: Record<string, string> = {
-  sales_order: "客户订单",
+  sales_order: "销售订单",
   purchase_request: "PR",
   rfq: "RFQ",
   purchase_order: "PO",
@@ -264,13 +264,13 @@ const SEARCH_TYPE_LABELS: Record<string, string> = {
 };
 
 const SEARCH_GROUP_LABELS: Record<string, string> = {
-  sales_order: "客户订单",
+  sales_order: "销售订单",
   purchase_request: "采购申请",
   rfq: "RFQ / 寻源",
   purchase_order: "采购订单",
-  receiving_doc: "收货单",
+  receiving_doc: "采购收货单",
   supplier_invoice: "供应商发票",
-  supplier: "供应商",
+  supplier: "供应商资料",
   item: "物料",
   inventory_item: "库存",
   warehouse: "仓库 / 库位",
@@ -291,8 +291,8 @@ const SEARCH_GROUP_ORDER = [
 const SEARCH_GROUP_VISIBLE_LIMIT = 5;
 
 const FOCUS_ENTITY_LABELS: Record<string, string> = {
-  customer_order: "客户订单",
-  sales_order: "客户订单",
+  customer_order: "销售订单",
+  sales_order: "销售订单",
   inventory_availability: "库存可用量",
   inventory_item: "SKU",
   item: "SKU",
@@ -360,10 +360,10 @@ function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string
 
           <div>
             <h1 className="text-[38px] leading-tight font-semibold mb-4" style={{ color: A.label }}>
-              把采购、入库、预测和 AI insight 放进同一个工作台。
+              把采购、销售、库存和结算放进同一个进销存工作台。
             </h1>
             <p className="text-base leading-7 max-w-xl" style={{ color: A.sub }}>
-              FlowChain 是面向中小企业的 ERP 进销存协同平台，统一支撑采购、收货、库存、销售需求、供应商协同与发票匹配，并以 AI 证据链和权限边界保障业务闭环可控运行。
+              FlowChain 是面向中小企业的 ERP 进销存协同平台，统一支撑基础资料、采购管理、销售管理、库存管理、结算管理、报表中心和系统管理。
             </p>
           </div>
 

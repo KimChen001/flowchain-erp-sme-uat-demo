@@ -33,7 +33,7 @@ test("wide workbench layout is available across operational pages without page o
 
   await expectWorkbenchWidth(page);
 
-  for (const label of ["销售", "采购", "库存", "供应商与对账", "报表", "基础设置"]) {
+  for (const label of ["基础资料", "采购管理", "销售管理", "库存管理", "结算管理", "报表中心", "系统管理"]) {
     await page.getByRole("button", { name: label }).first().click();
     await expectWorkbenchWidth(page);
   }
@@ -44,7 +44,7 @@ test("wide workbench layout is available across operational pages without page o
     await expectWorkbenchWidth(page);
   }
 
-  await page.getByRole("button", { name: "今日工作台" }).first().click();
+  await page.getByRole("button", { name: "首页" }).first().click();
   await page.getByRole("button", { name: "AI 摘要", exact: true }).click();
   await expectWorkbenchWidth(page);
 });

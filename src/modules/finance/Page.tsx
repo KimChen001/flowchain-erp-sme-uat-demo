@@ -108,12 +108,12 @@ function CreditMemoOffsetPanel() {
 export default function FinanceWorkbench({ initialView = "overview" }: { initialView?: FinanceTab }) {
   const [tab, setTab] = useState<FinanceTab>(initialView);
   const tabs = [
-    { id: "overview", label: "发票协同总览", icon: CheckCircle2 },
+    { id: "overview", label: "结算总览", icon: CheckCircle2 },
     { id: "invoices", label: "供应商发票", icon: FileText },
-    { id: "payables", label: "应付可见性", icon: CreditCard },
-    { id: "credits", label: "贷项冲减", icon: ReceiptText },
-    { id: "reconciliation", label: "供应商对账", icon: FileSpreadsheet },
-    { id: "settlement", label: "结算资料准备", icon: HandCoins },
+    { id: "payables", label: "费用 / 应付", icon: CreditCard },
+    { id: "credits", label: "预付款 / 贷项", icon: ReceiptText },
+    { id: "reconciliation", label: "对账单", icon: FileSpreadsheet },
+    { id: "settlement", label: "结算单", icon: HandCoins },
   ] as const;
   useEffect(() => {
     if (initialView) setTab(initialView);
@@ -124,9 +124,9 @@ export default function FinanceWorkbench({ initialView = "overview" }: { initial
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight" style={{ color: A.label }}>发票与匹配协同</h1>
+            <h1 className="text-lg font-semibold tracking-tight" style={{ color: A.label }}>结算管理</h1>
             <p className="text-xs leading-5 mt-1" style={{ color: A.sub }}>
-              只读汇总供应商发票、匹配状态、应付可见性、贷项冲减、供应商对账与结算资料准备。
+              汇总供应商发票、费用/应付、贷项、对账单、结算单和三单匹配的复核状态。
             </p>
             <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
               这里只展示可见性和复核证据：不执行付款、不做 GL 过账、不生成会计凭证、不做税务申报、不做发票过账。

@@ -264,7 +264,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[26px] font-semibold tracking-tight" style={{ color: A.label }}>采购工作台</h1>
+            <h1 className="text-[26px] font-semibold tracking-tight" style={{ color: A.label }}>采购管理</h1>
             <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: A.gray1 }}>
               <Calendar size={13} />
               <span>{dateLabel} · 今日共 {queue.length} 项待办</span>

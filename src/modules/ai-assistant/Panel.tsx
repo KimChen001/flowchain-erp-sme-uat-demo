@@ -84,17 +84,17 @@ type SafeConversationContext = {
 };
 
 const PAGE_LABELS: Record<string, string> = {
-  overview: "今日工作台",
-  sales: "销售",
-  inventory: "库存",
+  overview: "首页",
+  sales: "销售管理",
+  inventory: "库存管理",
   forecast: "预测与 MRP",
   purchaseRequests: "采购申请",
   purchasing: "采购订单",
   rfq: "供应商报价",
   receiving: "收货",
-  procurement: "采购",
-  srm: "供应商与对账",
-  finance: "供应商与对账",
+  procurement: "采购管理",
+  srm: "基础资料",
+  finance: "结算管理",
 };
 
 const aiEvidenceLinkClass = `max-w-full text-left ${typography.compactMetadata} font-medium truncate hover:underline`;
@@ -1449,7 +1449,7 @@ function displaySafeAssistantRecoveryMessage(prompt: string) {
       ? "库存项目、SKU 风险和补货建议"
       : /PO|采购订单/.test(prompt)
         ? "采购订单、收货和供应商证据"
-        : "今日行动、库存和来源证据";
+        : "首页、库存管理和来源证据";
   return [
     "证据辅助回答 · 当前工作区数据 · 复核优先",
     "",
@@ -1457,7 +1457,7 @@ function displaySafeAssistantRecoveryMessage(prompt: string) {
     "当前工作区数据暂时未能完整读取，仍可先从相关模块查看来源证据并进入人工复核。",
     "",
     "关键证据",
-    `${topic} 可从今日行动、库存、收货记录、采购订单和供应商与对账继续查看。`,
+    `${topic} 可从首页、库存管理、收货记录、采购订单和结算管理继续查看。`,
     "",
     "建议动作",
     "打开今日行动或相关模块查看来源证据，必要时预览草稿并交由人工复核。",

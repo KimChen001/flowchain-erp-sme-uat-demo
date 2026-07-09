@@ -18,71 +18,86 @@ import {
 
 export const navItems = [
   {
-    icon: BarChart2, label: "今日工作台", id: "overview",
+    icon: BarChart2, label: "首页", id: "overview",
     children: [
       { id: "overview", label: "今日待办" },
-      { id: "overview:risks", label: "交付与库存风险" },
+      { id: "overview:risks", label: "经营预警" },
       { id: "overview:ai", label: "AI 摘要" },
     ],
   },
   {
-    icon: ClipboardList, label: "销售", id: "sales",
+    icon: Database, label: "基础资料", id: "master-data",
+    routeAliases: ["srm"],
     children: [
-      { id: "sales", label: "客户订单" },
-      { id: "sales:risks", label: "交付风险" },
-      { id: "sales:evidence", label: "订单证据链" },
+      { id: "master-data:items", label: "商品资料 / 物料资料" },
+      { id: "master-data:warehouses", label: "仓库资料" },
+      { id: "inventory:bins", label: "库位 / 货位" },
+      { id: "srm:master", label: "供应商" },
+      { id: "master-data:payment-terms", label: "支付方式 / 付款条款" },
+      { id: "master-data:tax-codes", label: "条款与税码" },
     ],
   },
   {
-    icon: Handshake, label: "采购", id: "procurement",
+    icon: Handshake, label: "采购管理", id: "procurement",
     children: [
-      { id: "procurement", label: "采购工作台" },
+      { id: "procurement:orders", label: "采购订单" },
+      { id: "procurement:receiving", label: "采购收货单 / 入库单" },
+      { id: "procurement:returns", label: "采购退货单" },
       { id: "procurement:requests", label: "采购申请" },
       { id: "procurement:rfq", label: "询价 / RFQ" },
-      { id: "procurement:orders", label: "采购订单" },
-      { id: "procurement:receiving", label: "收货" },
-      { id: "procurement:invoices", label: "发票匹配" },
     ],
   },
   {
-    icon: Package, label: "库存", id: "inventory",
+    icon: ClipboardList, label: "销售管理", id: "sales",
     children: [
-      { id: "inventory", label: "库存工作台" },
-      { id: "inventory:movements", label: "出入库流水" },
-      { id: "inventory:exceptions", label: "库存异常" },
-      { id: "inventory:count", label: "盘点" },
+      { id: "sales", label: "销售订单" },
+      { id: "sales:risks", label: "销售出库单 / 发货单" },
+      { id: "sales:evidence", label: "销售单据关联" },
     ],
   },
   {
-    icon: Users, label: "供应商与对账", id: "srm",
-    routeAliases: ["finance"],
+    icon: Package, label: "库存管理", id: "inventory",
     children: [
-      { id: "srm:master", label: "供应商列表" },
-      { id: "srm:performance", label: "供应商风险" },
+      { id: "inventory", label: "库存查询" },
+      { id: "inventory:movements", label: "库存流水" },
+      { id: "inventory:exceptions", label: "库存调整" },
+      { id: "inventory:count", label: "库存盘点" },
+      { id: "inventory:lots", label: "库存预警" },
+      { id: "inventory:transfer", label: "仓库调拨" },
+    ],
+  },
+  {
+    icon: Users, label: "结算管理", id: "finance",
+    children: [
       { id: "finance:invoices", label: "供应商发票" },
+      { id: "finance:payables", label: "费用单 / 应付" },
+      { id: "finance:credits", label: "预付款 / 贷项" },
+      { id: "finance:reconciliation", label: "对账单" },
+      { id: "finance:settlement", label: "结算单" },
       { id: "procurement:match", label: "三单匹配" },
-      { id: "finance:reconciliation", label: "供应商对账" },
     ],
   },
   {
-    icon: FileSpreadsheet, label: "报表", id: "reports",
+    icon: FileSpreadsheet, label: "报表中心", id: "reports",
     children: [
-      { id: "reports", label: "报表总览" },
-      { id: "reports:procurement", label: "采购分析" },
-      { id: "reports:inventory", label: "库存分析" },
-      { id: "reports:delivery", label: "销售与交付" },
-      { id: "reports:finance", label: "供应商与对账" },
+      { id: "reports:procurement", label: "采购报表" },
+      { id: "reports:delivery", label: "销售报表" },
+      { id: "reports:inventory", label: "库存报表" },
+      { id: "reports:finance", label: "结算报表" },
+      { id: "reports", label: "经营统计" },
       { id: "reports:quality", label: "数据质量" },
     ],
   },
   {
-    icon: Database, label: "基础设置", id: "master-data",
+    icon: Settings, label: "系统管理", id: "settings",
     children: [
-      { id: "master-data:items", label: "物料资料" },
-      { id: "master-data:suppliers", label: "供应商资料" },
-      { id: "master-data:warehouses", label: "仓库资料" },
-      { id: "imports", label: "数据导入" },
       { id: "settings:numbering", label: "编号规则" },
+      { id: "settings:roles", label: "角色权限" },
+      { id: "settings:modules", label: "菜单 / 模块" },
+      { id: "settings", label: "系统参数" },
+      { id: "audit-history:settings", label: "操作日志" },
+      { id: "settings:ai", label: "AI 设置" },
+      { id: "settings:review", label: "复核策略" },
     ],
   },
   {
@@ -142,19 +157,6 @@ export const navItems = [
     ],
   },
   {
-    icon: Settings, label: "系统设置", id: "settings",
-    children: [
-      { id: "settings", label: "工作区配置" },
-      { id: "settings:roles", label: "角色权限可见性" },
-      { id: "settings:boundaries", label: "工作区边界" },
-      { id: "settings:modules", label: "模块启用状态" },
-      { id: "settings:review", label: "复核策略" },
-      { id: "settings:ai", label: "AI 边界" },
-      { id: "settings:collaboration", label: "协同草稿策略" },
-      { id: "settings:data-quality", label: "数据质量设置" },
-    ],
-  },
-  {
     icon: Upload, label: "数据接入与质量", id: "imports",
     children: [
       { id: "imports", label: "导入任务" },
@@ -166,8 +168,6 @@ export const navItems = [
 ] as const;
 
 export const navGroups = [
-  { label: "主工作区", itemIds: ["overview"] },
-  { label: "进销存业务", itemIds: ["sales", "procurement", "inventory", "srm"] },
-  { label: "经营管理", itemIds: ["reports", "master-data"] },
-  { label: "高级与内部", itemIds: ["forecast", "imports", "exception-cases", "collaboration-drafts", "review-actions", "audit-history", "pilot-readiness", "settings"], defaultCollapsed: true },
+  { label: "主导航", itemIds: ["overview", "master-data", "procurement", "sales", "inventory", "finance", "reports", "settings"] },
+  { label: "高级与内部", itemIds: ["forecast", "imports", "exception-cases", "collaboration-drafts", "review-actions", "audit-history", "pilot-readiness"], defaultCollapsed: true },
 ] as const;

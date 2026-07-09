@@ -385,11 +385,12 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
   ];
 
   const quickLinks = [
-    { label: "销售", id: "sales" },
-    { label: "采购", id: "procurement" },
-    { label: "库存", id: "inventory" },
-    { label: "供应商与对账", id: "srm" },
-    { label: "报表", id: "reports" },
+    { label: "基础资料", id: "master-data" },
+    { label: "采购管理", id: "procurement" },
+    { label: "销售管理", id: "sales" },
+    { label: "库存管理", id: "inventory" },
+    { label: "结算管理", id: "finance" },
+    { label: "报表中心", id: "reports" },
   ];
   const visibleKpis = [
     kpis[0],
@@ -512,7 +513,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
             <div>
               <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>风险与异常</h1>
               <p className="mt-1 max-w-3xl text-[14px] leading-6" style={{ color: A.sub }}>
-                聚合采购、库存、供应商和财务异常，优先进入证据和业务模块处理。
+                聚合采购、销售、库存和结算异常，优先进入对应业务单据处理。
               </p>
             </div>
             <button onClick={() => onNavigate("exception-cases")}
@@ -617,15 +618,15 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>今日行动</h1>
+              <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>首页</h1>
               <Chip label="运营工作台" color={A.blue} bg="#f0f6ff" />
               <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ color: A.green, background: "#f0faf4" }}>
                 今日更新
               </span>
             </div>
-            <p className="text-sm" style={{ color: A.sub }}>从每日结论、三张业务卡、优先处理队列和 AI 摘要入口开始处理。</p>
+            <p className="text-sm" style={{ color: A.sub }}>从今日待办、业务预警、进销存快捷入口和 AI 摘要开始处理。</p>
             <div className="mt-3 rounded-xl px-3 py-2 text-xs leading-5" style={{ background: "#f8fafc", color: A.sub, border: `1px solid ${A.border}` }}>
-              今日重点集中在交付风险、采购待处理和库存风险；供应商与发票证据从队列详情进入。
+              今日重点集中在销售交付、采购待处理、库存预警和结算差异；供应商资料回到基础资料维护。
             </div>
           </div>
           <button onClick={() => onNavigate("overview:ai", null, {

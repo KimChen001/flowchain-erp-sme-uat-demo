@@ -178,9 +178,9 @@ export default function SrmPage({
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>供应商管理</h1>
+            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>供应商资料</h1>
             <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
-              点击供应商查看 360° 画像，展开各维度了解评分构成。
+              供应商作为基础资料维护；绩效、风险和认证信息作为资料页内的辅助视图保留。
             </p>
           </div>
           <ContextualImportActions entityLabel="供应商资料" templateName="供应商资料" compact={false} />
@@ -231,7 +231,7 @@ export default function SrmPage({
           <div className="text-xs leading-5 px-1" style={{ color: A.sub }}>{tabSubtitles[tab]}</div>
           {["master", "performance", "certification"].includes(tab) && (
             <Card className="p-4">
-              <SectionHeader title={tabs.find((item) => item.id === tab)?.label || "供应商管理"} />
+              <SectionHeader title={tabs.find((item) => item.id === tab)?.label || "供应商资料"} />
               <p className="text-xs leading-5" style={{ color: A.sub }}>{tabSubtitles[tab]}</p>
             </Card>
           )}

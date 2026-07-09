@@ -199,9 +199,9 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
               <ClipboardList size={17} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>销售需求</h1>
+              <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>销售管理</h1>
               <p className="text-xs mt-0.5" style={{ color: A.sub }}>
-                {view === "orders" ? "客户订单" : view === "risks" ? "交付风险" : "订单证据链"}
+                {view === "orders" ? "销售订单" : view === "risks" ? "销售出库单 / 发货单" : "销售单据关联"}
               </p>
               <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
                 <span className="font-semibold">交付风险协同：</span>

@@ -940,12 +940,12 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
                 <FileSpreadsheet size={17} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>报表与分析</h1>
+                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>报表中心</h1>
                 <p className="text-xs mt-0.5" style={{ color: A.sub }}>统一查看标准经营报表、数据来源与 CSV 导出入口 · {filterLabel}</p>
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
-              报表与分析只做汇总、趋势、分析和导出，不编辑业务数据，也不承担审批动作；如需导出某个业务页面的当前筛选或临时操作状态，请使用模块内导出。
+              报表中心只做采购、销售、库存、结算和经营统计的汇总、趋势、分析和导出，不编辑业务数据，也不承担审批动作。
             </p>
           </div>
           {onNavigate && (
@@ -964,7 +964,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       </Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="标准报表" value={String(reports.length)} sub="报表与分析 v1" icon={FileSpreadsheet} color={A.blue} />
+        <KpiCard label="标准报表" value={String(reports.length)} sub="报表中心" icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="覆盖模块" value={String(modulesCovered)} sub="采购/库存/基础资料/财务/计划/供应商/审计" icon={Database} color={A.green} />
         <KpiCard label="API / 当前数据范围" value={String(apiCount)} sub="只读现有端点" icon={RefreshCw} color={A.orange} />
         <KpiCard label="可导出" value={String(exportReadyCount)} sub="CSV 标准导出" icon={ShieldCheck} color={A.purple} />
