@@ -362,7 +362,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string
               把采购、入库、预测和 AI insight 放进同一个工作台。
             </h1>
             <p className="text-base leading-7 max-w-xl" style={{ color: A.sub }}>
-              这是一个可交互的供应链协同工作台。用户登录后，系统会保存用户档案，后续可扩展公司级租户、权限边界、审批协同和业务数据服务。
+              FlowChain 是面向中小企业的 ERP 进销存协同平台，统一支撑采购、收货、库存、销售需求、供应商协同与发票匹配，并以 AI 证据链和权限边界保障业务闭环可控运行。
             </p>
           </div>
 
