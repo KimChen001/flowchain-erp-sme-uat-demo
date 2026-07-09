@@ -214,8 +214,8 @@ function InventoryOverview({
             <div className="mt-1">合格数量与质检冻结数量分开复核；冻结数量不会增加可用库存。</div>
           </div>
           <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div className="font-semibold" style={{ color: A.label }}>过账安全边界</div>
-            <div className="mt-1">草稿复核不会自动库存过账，不修改库存余额，也不会关闭 PO。</div>
+            <div className="font-semibold" style={{ color: A.label }}>过账复核</div>
+            <div className="mt-1">库存过账、余额更新与 PO 关闭在复核确认后执行。</div>
           </div>
         </div>
       </Card>
@@ -621,9 +621,9 @@ function InventoryTransfers() {
       </div>
 
       <Card className="p-5">
-        <SectionHeader title="调拨与库存影响使用边界" />
+        <SectionHeader title="调拨与库存影响" />
         <p className="text-xs leading-6" style={{ color: A.sub }}>
-          当前页面仅展示调拨复核草稿、批次复核建议和库存影响预览。系统不会自动下发 WMS、不会自动出库、不会自动签收，也不会自动更新库存余额。任何后续库存变动都需要人工复核并通过受控流程处理。
+          生成调拨复核草稿、批次复核建议和库存影响预览，库存过账、出库与签收经复核后通过受控流程执行。
         </p>
       </Card>
 
@@ -1163,17 +1163,17 @@ function InventoryAllocationPanel({
   }
 
   function previewNotificationDraft() {
-    toast("内部通知草稿预览", { description: "系统仅生成内部通知草稿，不会自动发送到外部协同工具。" });
+    toast("内部通知草稿预览", { description: "生成内部通知草稿，复核后发送到协同工具。" });
   }
 
   return (
     <Card className="p-5">
       <SectionHeader
-        title="库存可用量使用边界"
-        right={<Chip label="只读分析" color={A.blue} bg="#f0f6ff" />}
+        title="库存可用量与可承诺量"
+        right={<Chip label="ATP 分析" color={A.blue} bg="#f0f6ff" />}
       />
       <p className="mt-2 max-w-5xl text-[11px] leading-5" style={{ color: A.sub }}>
-        当前页面基于工作区内的库存、销售需求、采购订单、收货和供应商记录计算库存可用量、可承诺量与供需缺口。系统仅提供库存预留建议和采购补货建议，不会自动锁定库存、自动出库或自动创建采购订单。
+        基于库存、销售需求、采购订单、收货和供应商记录计算库存可用量、可承诺量与供需缺口，生成库存预留建议和采购补货建议，锁库、出库与建单经复核后执行。
       </p>
 
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -1244,7 +1244,7 @@ function InventoryAllocationPanel({
                 SKU → 库存可用量 → 客户订单 → 采购订单 → 供应商 → 收货单
               </div>
               <div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>
-                当前证据链基于工作区内的客户订单、库存、采购、供应商、收货和发票协同记录生成。系统只展示关联证据，不会自动创建、修改或关闭任何业务单据。
+                证据链基于客户订单、库存、采购、供应商、收货和发票协同记录生成，展示跨单据的关联证据。
               </div>
             </div>
             {!!selected.dataLimitations.length && (
@@ -1266,7 +1266,7 @@ function InventoryAllocationPanel({
           </div>
 
           <div className="rounded-xl p-4" style={{ background: "#f0f6ff" }}>
-            <SectionHeader title="库存预留建议" right={<Chip label="仅预览，不会自动锁库" color={A.blue} bg={A.white} />} />
+            <SectionHeader title="库存预留建议" right={<Chip label="复核后锁库" color={A.blue} bg={A.white} />} />
             <div className="mt-3 grid grid-cols-2 gap-2">
               {[
                 ["建议预留数量", selected.reservationSuggestedQty],
@@ -1285,7 +1285,7 @@ function InventoryAllocationPanel({
               冲突订单：{selected.reservationConflictOrders.map((order) => order.salesOrderId).join("、") || "暂无明显冲突"}
             </div>
             <div className="mt-2 rounded-lg px-3 py-2 text-[11px]" style={{ background: A.white, color: A.blue }}>
-              系统仅生成内部通知草稿，不会自动发送到外部协同工具。
+              生成内部通知草稿，复核后发送到协同工具。
             </div>
           </div>
         </div>

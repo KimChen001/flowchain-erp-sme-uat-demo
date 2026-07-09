@@ -4,13 +4,13 @@
 
 中文：
 
-FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统。
+FlowChain 是面向中小企业的 ERP 进销存协同平台。
 
-FlowChain 借鉴传统中小企业进销存系统的对象骨架，包括基础资料、采购、销售需求、库存、结算可见性、报表和系统管理，但不做完整 ERP 替代。产品差异化在 AI 证据链、交付风险分析、库存可承诺量、可复核动作草稿和数据限制说明。
+FlowChain 覆盖中小企业进销存 ERP 的对象骨架，包括基础资料、采购、销售需求、库存、结算、报表和系统管理。产品差异化在 AI 证据链、交付风险分析、库存可承诺量、可复核动作草稿和数据质量说明。
 
 English:
 
-FlowChain is a lightweight inventory, purchasing, and supplier collaboration system for SMEs.
+FlowChain is an ERP and inventory-purchase-sales (进销存) collaboration platform for SMEs.
 
 ## Visible UI Language Policy
 
@@ -82,7 +82,7 @@ FlowChain is a lightweight inventory, purchasing, and supplier collaboration sys
 
 ## Scope Rules
 
-- 要做轻量销售需求 / 客户订单，不做完整 CRM。
+- 要做销售需求 / 客户订单进销存闭环，客户关系管理由外部 CRM 承接。
 - 销售需求当前聚焦客户订单、交付风险、订单证据链；未来可扩展销售总览、库存预留建议、供需缺口、客户沟通草稿和订单导入，但不要新增空菜单。
 - 要做库存可用量、预留量、在途量、缺口解释，不做复杂 WMS。
 - 要做财务协同异常可见，不做完整总账、付款、税务。
@@ -94,7 +94,7 @@ FlowChain is a lightweight inventory, purchasing, and supplier collaboration sys
 
 ## Final Closure Language
 
-- 当前产品状态应描述为：轻量进销存、采购、库存和供应商协同系统的工作区闭环。
+- 当前产品状态应描述为：ERP 进销存协同平台，覆盖采购、库存、销售需求、供应商协同与发票匹配的业务闭环。
 - 当前核心入口包括：今日行动、AI 建议、AI 助手、核心业务链、数据接入与质量、角色权限、业务审计、工作区边界、人工复核草稿。
 - 当前运行说明应强调：当前工作区数据、来源证据、数据限制、草稿预览、人工复核。
 - 当前边界应使用明确否定表达：不自动审批、不自动下单、不提交收货、不写库存、不写财务凭证、不处理资金、不修改供应商主数据、不外发供应商邮件、不覆盖当前工作区数据、不形成正式业务处理。

@@ -2,15 +2,15 @@
 
 ## Positioning
 
-FlowChain is a lightweight inventory, purchasing, and supplier collaboration system for SMEs.
+FlowChain is an ERP and inventory-purchase-sales (进销存) collaboration platform for SMEs.
 
-FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统。系统以当前工作区数据为基础，帮助运营团队查看今日行动、追踪 PO/SKU/供应商证据链、识别数据限制，并在人工复核前预览业务草稿。
+FlowChain 是面向中小企业的 ERP 进销存协同平台。系统以工作区数据为基础，统一支撑采购、收货、库存、销售需求、供应商协同与发票匹配，并在关键动作执行前提供证据链和人工复核。
 
-FlowChain is not a full ERP replacement, not a full finance/GL system, not an HR/payroll system, not a CRM/customer lifecycle suite, not a bank/payment execution system, not a tax filing system, and not an autonomous AI execution platform.
+FlowChain concentrates on the inventory-purchase-sales (进销存) ERP core plus supplier collaboration and finance matching; general ledger, HR/payroll, CRM, bank/payment execution, and tax filing are handled by integrating specialist systems rather than rebuilt inside FlowChain.
 
 ## Target Users
 
-FlowChain is designed for SME operations teams where planners, buyers, warehouse staff, supplier managers, sales-demand coordinators, and finance collaborators need a shared operating picture without adopting a heavy enterprise ERP stack upfront.
+FlowChain is designed for SME operations teams where planners, buyers, warehouse staff, supplier managers, sales-demand coordinators, and finance collaborators need a shared operating picture on a right-sized ERP built for their scale.
 
 Typical users include:
 
@@ -37,7 +37,7 @@ SME operations work is often fragmented:
 FlowChain packages a focused operations workflow:
 
 - Today Cockpit gives a daily view of urgent follow-ups, inventory risks, recent documents, and recommended review-first actions.
-- Sales Demand Lite will connect lightweight customer order demand to inventory availability and procurement evidence.
+- Sales Demand connects customer order demand to inventory availability and procurement evidence.
 - Inventory Allocation / Availability will explain available, reserved, in-transit, and shortage quantities.
 - Demand-to-Procurement Links connect sales demand, shortages, purchase requests, RFQs, purchase orders, receiving, and invoice exceptions.
 - Procurement/P2P visibility connects purchase requests, RFQs, purchase orders, receiving, invoices, and three-way match signals.
@@ -47,7 +47,7 @@ FlowChain packages a focused operations workflow:
 
 ## Current Product State
 
-FlowChain 当前形成了轻量进销存、采购、库存和供应商协同系统的工作区闭环。当前状态服务于产品沟通、内部验收和后续开发对齐，不声明完整商业化运行能力。
+FlowChain 已形成采购、库存、销售需求、供应商协同与发票匹配的进销存业务闭环。当前状态服务于产品沟通、内部验收和后续开发对齐。
 
 当前核心入口包括今日行动、AI 建议、AI 助手、核心业务链、数据接入与质量、角色权限、业务审计、工作区边界和人工复核草稿。
 

@@ -140,8 +140,8 @@ test('final docs exist', () => {
 test('final docs and README preserve product positioning and surfaces', () => {
   const readme = read('README.md')
   const packageText = finalClosurePackageText()
-  assert.match(readme, /FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统/)
-  assert.match(packageText, /FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统/)
+  assert.match(readme, /FlowChain 是面向中小企业的 ERP 进销存协同平台/)
+  assert.match(packageText, /FlowChain 是面向中小企业的 ERP 进销存协同平台/)
   for (const label of ['今日行动', 'AI 建议', 'AI 助手', '核心业务链', '数据接入与质量', '角色权限', '业务审计', '工作区边界', '人工复核', '草稿预览']) {
     assert.match(packageText, new RegExp(label), label)
   }

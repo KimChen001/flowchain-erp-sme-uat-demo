@@ -88,7 +88,7 @@ test.describe("Sales Demand Lite browser flow", () => {
     await expect(moduleScope).not.toContainText("客户订单与交付风险");
     await expect(moduleScope).not.toContainText("交付风险订单");
     await expect(moduleScope.getByText("客户订单列表")).toBeVisible();
-    await expect(moduleScope.getByText("销售需求使用边界")).toBeVisible();
+    await expect(moduleScope.getByText("交付风险协同")).toBeVisible();
     await expect(moduleScope.getByRole("button", { name: "询问 AI" })).toHaveCount(0);
     await expect(moduleScope).toContainText("SO-2026-0412-A");
     await expect(moduleScope).toContainText("SKU-00412");

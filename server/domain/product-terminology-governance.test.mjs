@@ -143,7 +143,9 @@ test('primary product docs use FlowChain inventory purchase stock supplier posit
   const narrative = fs.readFileSync(path.join(repoRoot, 'docs', 'product-narrative-v1.md'), 'utf8')
   const combined = [readme, language, narrative].join('\n')
 
-  assert.match(combined, /FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统/)
-  assert.match(readme, /lightweight inventory, purchasing, and supplier collaboration system for SMEs/)
+  assert.match(combined, /FlowChain 是面向中小企业的 ERP 进销存协同平台/)
+  assert.match(readme, /FlowChain is an ERP and inventory-purchase-sales \(进销存\) collaboration platform for SMEs/)
   assert.doesNotMatch(combined, FORBIDDEN_PRODUCT_POSITIONING)
+  // 锁定新定位：禁止旧的自我降级表述回潮
+  assert.doesNotMatch(combined, /轻量进销存|lightweight inventory|not a full ERP replacement|不是完整 ERP 替代|不做完整 ERP 替代|仅供辅助|辅助分析|auxiliary-only|demo-only/)
 })

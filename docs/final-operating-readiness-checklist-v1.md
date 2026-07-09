@@ -12,7 +12,7 @@ This checklist records the current acceptance state for product communication an
 | Role / Audit / Workspace Boundary readiness | Closed for current stage | 角色权限、业务审计、工作区边界展示可见范围、业务历史、内部复核记录和边界。 | 不创建用户，不分配角色，不写配置，不导出正式报告。 | 三类治理页面均可进入并保持只读可见性。 |
 | Review-first Action Draft readiness | Closed for current stage | ActionDraftReviewShell 显示草稿预览、来源证据、数据限制和人工复核边界。 | 不提交、不外发、不写库存、不写财务凭证、不处理资金、不修改供应商主数据。 | 可打开待复核草稿并查看边界说明。 |
 | Safety Boundary readiness | Closed for current stage | 回答和草稿统一显示人工复核、草稿预览和不形成正式业务处理。 | 不自动审批、不自动下单、不提交收货。 | 安全边界测试通过。 |
-| Product Terminology readiness | Closed for current stage | 产品口径保持轻量进销存、采购、库存和供应商协同系统。 | 不使用旧产品口径包装用户可见说明。 | 术语治理测试通过。 |
+| Product Terminology readiness | Closed for current stage | 产品口径保持 ERP 进销存协同平台。 | 不使用旧产品口径包装用户可见说明。 | 术语治理测试通过。 |
 | Browser Regression readiness | Closed for current stage | AI 助手、核心业务链、数据接入与质量、角色权限、业务审计、工作区边界和草稿复核有浏览器验收覆盖。 | 不提交截图、追踪文件或测试产物。 | 指定浏览器验收和完整浏览器套件通过。 |
 | Source Test readiness | Closed for current stage | 最终收口文档、AI 可用性、核心业务链、术语治理和运行时回答有源级测试覆盖。 | 不修改受保护数据文件。 | 源级测试和构建通过。 |
 

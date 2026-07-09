@@ -6,7 +6,7 @@ This document describes the current working product state for product communicat
 
 ## Product Positioning
 
-FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统。
+FlowChain 是面向中小企业的 ERP 进销存协同平台。
 
 系统以当前工作区数据为基础，帮助运营团队查看今日行动、追踪 PO/SKU/供应商证据链、识别数据限制，并在人工复核前预览业务草稿。
 
@@ -55,7 +55,7 @@ AI 助手稳定支持：
 
 ## Operating Readiness Summary
 
-当前阶段已形成轻量进销存、采购、库存和供应商协同系统的工作区闭环。每日工作台保持入口型，AI 建议和 AI 助手保持证据优先，核心业务链可以下钻，数据接入与质量、角色权限、业务审计、工作区边界可以用于内部验收。
+当前阶段已形成采购、库存、销售需求、供应商协同与发票匹配的进销存业务闭环。每日工作台保持入口型，AI 建议和 AI 助手保持证据优先，核心业务链可以下钻，数据接入与质量、角色权限、业务审计、工作区边界可以用于内部验收。
 
 ## Known Boundaries
 

@@ -1,14 +1,14 @@
-# FlowChain Inventory, Purchasing, and Supplier Collaboration System for SMEs
+# FlowChain — ERP & Inventory-Purchase-Sales (进销存) Collaboration Platform for SMEs
 
-FlowChain is a lightweight inventory, purchasing, and supplier collaboration system for SMEs. It helps operations teams manage purchase orders, inventory risk, supplier follow-up, receiving evidence, invoice variance visibility, and review-first action drafts from one workspace.
+FlowChain is an ERP and inventory-purchase-sales (进销存) collaboration platform for SMEs. It gives operations teams one workspace to run purchase orders, receiving, inventory, sales demand, supplier collaboration, and invoice matching, backed by an AI evidence layer and review-first controls.
 
-FlowChain 是面向中小企业的轻量进销存、采购、库存和供应商协同系统。系统以当前工作区数据为基础，帮助运营团队查看今日行动、追踪 PO/SKU/供应商证据链、识别数据限制，并在人工复核前预览业务草稿。
+FlowChain 是面向中小企业的 ERP 进销存协同平台。系统以工作区数据为基础，统一支撑采购、收货、库存、销售需求、供应商协同与发票匹配的业务闭环，并以 AI 证据链、交付风险分析和权限边界保障运营可控。
 
-FlowChain 参考传统中小企业进销存 ERP 的对象骨架，如基础资料、采购、销售、库存、结算可见性、报表和系统管理，但不是完整 ERP 替代。当前差异化重点是 AI 证据链、交付风险分析、库存可承诺量、可复核动作草稿和数据限制说明。
+FlowChain 覆盖中小企业进销存 ERP 的对象骨架：基础资料、采购、销售、库存、结算、报表和系统管理。差异化重点是 AI 证据链、交付风险分析、库存可承诺量、可复核动作草稿和数据质量说明。
 
 ## Current Product State
 
-FlowChain 当前形成了轻量进销存、采购、库存和供应商协同系统的工作区闭环。
+FlowChain 已形成采购、库存、销售需求、供应商协同与发票匹配的进销存业务闭环。
 
 当前核心入口：
 
@@ -35,7 +35,7 @@ FlowChain 当前形成了轻量进销存、采购、库存和供应商协同系�
 
 ## Current Status
 
-FlowChain is an early-stage local development project. It is not yet production-ready SaaS infrastructure.
+FlowChain runs today as a local-first workspace. Multi-tenant SaaS hosting and managed database deployment are on the roadmap.
 
 Default local runtime behavior uses a deterministic workspace dataset. No production database, ORM, RDS, or PolarDB connection is required for local development.
 
@@ -60,24 +60,21 @@ Default local runtime behavior uses a deterministic workspace dataset. No produc
 - AI Assistant
 - Finance collaboration visibility
 
-## Non-goals
+## Scope Boundaries
 
-FlowChain is intentionally focused. It is not:
+FlowChain focuses on the inventory-purchase-sales (进销存) ERP core and its supplier collaboration and finance-matching layers. The following adjacent enterprise systems are out of scope for this platform and are expected to integrate rather than be rebuilt inside FlowChain:
 
-- a full ERP replacement;
-- a SAP/Oracle replacement;
-- a full finance or general ledger system;
-- an HR or payroll system;
-- a CRM or customer lifecycle suite;
-- a bank or payment execution system;
-- a tax filing system;
-- an autonomous AI execution platform.
+- general ledger and statutory accounting;
+- HR and payroll;
+- CRM and customer lifecycle management;
+- bank and payment execution;
+- tax filing.
 
-AI-assisted actions are review-first. The system may prepare drafts and explanations, but it must not autonomously issue purchase orders, send supplier emails, post inventory, approve invoices, execute payments, or mutate supplier master data.
+AI-assisted actions are review-first: the system prepares drafts and explanations, and a person confirms before purchase orders are issued, supplier emails are sent, inventory is posted, invoices are approved, payments are executed, or supplier master data is changed.
 
-Supplier-facing portal capability is not currently provided. FlowChain does not create external supplier accounts, supplier logins, supplier self-service profile maintenance, online PO confirmation, or online invoice submission.
+Supplier-facing portal capability is on the roadmap but not yet enabled: FlowChain does not currently create external supplier accounts, supplier logins, supplier self-service profile maintenance, online PO confirmation, or online invoice submission.
 
-Workbench/dashboard/cockpit surfaces are summary and navigation surfaces only. They show pending counts, risk counts, top priority lists, evidence links, and draft preview entry points. Detailed review actions belong in the corresponding business object detail, drawer, or review panel, where reject, request-changes, and cancel decisions must include a reason.
+Workbench/dashboard/cockpit surfaces are summary and navigation surfaces. They show pending counts, risk counts, top priority lists, evidence links, and document entry points. Detailed actions belong in the corresponding business document detail, drawer, or review panel, where reject, request-changes, and cancel decisions include a reason.
 
 ## Run Locally
 

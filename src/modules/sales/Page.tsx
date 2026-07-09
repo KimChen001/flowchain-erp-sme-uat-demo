@@ -204,8 +204,8 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
                 {view === "orders" ? "客户订单" : view === "risks" ? "交付风险" : "订单证据链"}
               </p>
               <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-                <span className="font-semibold">销售需求使用边界：</span>
-                当前页面基于工作区内的客户订单、库存、采购、收货和供应商记录识别交付风险。系统仅提供库存可用量、采购在途和供应商风险的辅助分析，不会自动确认订单、自动出库或自动通知客户。
+                <span className="font-semibold">交付风险协同：</span>
+                整合客户订单、库存可用量、采购在途和供应商风险，识别交付风险并支撑履约决策。出库、确认与客户通知经复核后执行。
               </div>
             </div>
           </div>
@@ -561,7 +561,7 @@ function EvidenceChainView({
           })}
         </div>
         <p className="mt-4 text-[11px] leading-5" style={{ color: A.sub }}>
-          客户订单 → SKU → 库存可用量 → 采购订单 → 供应商 → 收货单。这里只展示关联证据、相关记录和返回路径，不会自动创建、修改或关闭任何业务单据。
+          客户订单 → SKU → 库存可用量 → 采购订单 → 供应商 → 收货单。展示跨单据的关联证据、相关记录和返回路径。
         </p>
       </Card>
 

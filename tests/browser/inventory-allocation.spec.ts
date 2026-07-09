@@ -53,7 +53,7 @@ test.describe("Inventory Allocation and ATP", () => {
 
     await page.getByRole("button", { name: "库存管理" }).first().click();
     const inventory = page.getByTestId("module-export-scope");
-    await expect(inventory).toContainText("库存可用量使用边界");
+    await expect(inventory).toContainText("库存可用量与可承诺量");
     await expect(inventory).toContainText("库存预留建议");
     await expect(inventory.getByTestId("inventory-allocation-SKU-00412")).toBeVisible();
     await expect(inventory.getByTestId("inventory-allocation-SKU-00412")).toContainText("SKU-00412");
@@ -66,10 +66,10 @@ test.describe("Inventory Allocation and ATP", () => {
     await expect(inventory).toContainText("缺口");
     await expect(inventory).toContainText("证据链预览");
     await expect(inventory).toContainText("SKU → 库存可用量 → 客户订单 → 采购订单 → 供应商 → 收货单");
-    await expect(inventory).toContainText("系统仅生成内部通知草稿，不会自动发送到外部协同工具。");
+    await expect(inventory).toContainText("生成内部通知草稿，复核后发送到协同工具。");
 
     await page.getByRole("button", { name: "调拨影响预览" }).first().click();
-    await expect(inventory).toContainText("调拨与库存影响使用边界");
+    await expect(inventory).toContainText("调拨与库存影响");
     await expect(inventory).toContainText("调拨影响预览");
     await expect(inventory).toContainText("库存影响预览");
     await expect(inventory).toContainText("不会自动下发 WMS");
