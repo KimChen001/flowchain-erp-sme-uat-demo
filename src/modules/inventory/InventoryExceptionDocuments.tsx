@@ -95,7 +95,7 @@ export default function InventoryExceptionDocuments() {
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>库存异常单据</h1>
+            <h2 className="fc-section-title" style={{ color: A.label }}>库存异常单据</h2>
             <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
               汇总库存调整、调拨差异、盘点差异关闭和冻结/释放处理，解释库存事务流水背后的业务原因与证据链。
             </p>
@@ -152,7 +152,7 @@ export default function InventoryExceptionDocuments() {
                     <td className="px-4 py-3 max-w-[220px] truncate" style={{ color: A.label }}>{doc.itemName}</td>
                     <td className="px-4 py-3 min-w-[150px]" style={{ color: A.sub }}>
                       <div style={{ color: A.label }}>{doc.warehouse}</div>
-                      <div className="text-[10px]">{doc.location}</div>
+                      <div className="fc-caption">{doc.location}</div>
                     </td>
                     <td className="px-4 py-3 min-w-[88px] text-center whitespace-nowrap tabular-nums font-semibold" style={{ color: doc.quantityImpact < 0 ? A.red : doc.quantityImpact > 0 ? A.green : A.gray2 }}>
                       {doc.quantityImpact > 0 ? "+" : ""}{doc.quantityImpact.toLocaleString("zh-CN")} {doc.unit}

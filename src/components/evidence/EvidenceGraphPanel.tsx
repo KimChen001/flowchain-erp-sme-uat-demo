@@ -140,7 +140,7 @@ function EvidenceNodeCard({
     <>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-[10px] font-semibold" style={{ color: A.gray2 }}>{typeLabel(node.type)}</div>
+          <div className="fc-caption font-semibold" style={{ color: A.gray2 }}>{typeLabel(node.type)}</div>
           <div className="mt-0.5 truncate text-xs font-semibold tabular-nums" style={{ color: clickable ? A.blue : A.label }}>{node.label || node.id}</div>
         </div>
         {(node.riskLabel || node.status) && <Chip label={node.riskLabel || node.status || "需复核"} color={risk.color} bg={risk.bg} />}

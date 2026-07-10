@@ -104,7 +104,7 @@ export function ScanReceiveModal({ open, onClose, candidates, onReceive }: {
           style={{ background: A.blue, opacity: scanning ? 0.6 : 1 }}>
           {scanning ? "扫描中…" : "模拟扫码"}
         </button>
-        <span className="text-[10px] mt-2" style={{ color: A.gray2 }}>对准条码 5–10 cm</span>
+        <span className="fc-caption mt-2" style={{ color: A.gray2 }}>对准条码 5–10 cm</span>
       </div>
 
       <div className="mt-5">
@@ -129,10 +129,10 @@ export function ScanReceiveModal({ open, onClose, candidates, onReceive }: {
                 <div key={line.poLineId || `${line.sku}-${index}`} className="rounded-xl p-3" style={{ background: A.gray6 }}>
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="min-w-0">
-                      <div className="text-[10px] font-semibold truncate" style={{ color: A.blue }}>{line.poLineId}</div>
+                      <div className="fc-caption font-semibold truncate" style={{ color: A.blue }}>{line.poLineId}</div>
                       <div className="text-xs font-medium truncate" style={{ color: A.label }}>{line.sku} · {line.itemName}</div>
                     </div>
-                    <span className="text-[10px] shrink-0" style={{ color: A.gray2 }}>剩余 {remaining} {line.unit}</span>
+                    <span className="fc-caption shrink-0" style={{ color: A.gray2 }}>剩余 {remaining} {line.unit}</span>
                   </div>
                   <div className="grid grid-cols-4 gap-2">
                     {[

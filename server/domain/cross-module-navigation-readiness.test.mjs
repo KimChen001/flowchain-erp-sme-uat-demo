@@ -78,7 +78,7 @@ test('R206-R208 AI insight, cockpit, and transactional links preserve workflow r
 })
 
 test('R210 guardrails keep AI embedded provider-free and non-mutating', () => {
-  const routes = source('src', 'app', 'routes.tsx')
+  const routes = source('src', 'app', 'routeRegistry.tsx')
   const app = source('src', 'app', 'FlowChainApp.tsx')
   const changed = [
     source('src', 'components', 'ai', 'ContextualAIInsightPanel.tsx'),

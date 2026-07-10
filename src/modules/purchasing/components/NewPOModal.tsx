@@ -162,7 +162,7 @@ export function NewPOModal({ open, onClose, onCreate }: {
           合计 {lines.length} 行 · 数量 {lines.reduce((s, l) => s + l.qty, 0)}
         </span>
         <div className="text-right">
-          <div className="text-[10px]" style={{ color: A.gray2 }}>订单总额</div>
+          <div className="fc-caption" style={{ color: A.gray2 }}>订单总额</div>
           <div className="text-xl font-semibold tracking-tight" style={{ color: A.blue }}>{fmt(total)}</div>
         </div>
       </div>

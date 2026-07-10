@@ -228,6 +228,7 @@ test('R280/R290/R300 source guardrails preserve boundaries no keys and no standa
     read('server', 'domain', 'supplier-risk-control-tower.mjs'),
   ].join('\n')
   const uiSource = [
+    read('src', 'app', 'routeRegistry.tsx'),
     read('src', 'modules', 'receiving', 'Page.tsx'),
     read('src', 'modules', 'inventory', 'Page.tsx'),
     read('src', 'modules', 'procurement', 'ThreeWayMatchPanel.tsx'),

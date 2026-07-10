@@ -54,7 +54,7 @@ function asArray<T>(value: T[] | undefined | null): T[] {
 function Chip({ children, tone = "info" }: { children: ReactNode; tone?: string }) {
   const colors = severityColors[tone] || severityColors.info;
   return (
-    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ color: colors.color, background: colors.bg }}>
+    <span className="inline-flex items-center rounded-full px-2 py-0.5 fc-caption font-semibold" style={{ color: colors.color, background: colors.bg }}>
       {children}
     </span>
   );
@@ -172,7 +172,7 @@ function ReviewCard({
         <Chip tone="warning">草稿预览</Chip>
       </div>
       <div className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{card.description}</div>
-      <div className="mt-1 text-[10px] leading-4" style={{ color: A.gray2 }}>
+      <div className="mt-1 fc-caption leading-4" style={{ color: A.gray2 }}>
         需人工复核 · 不会外发 · 不提交 · 不写库存 · 不写财务凭证 · 不改主数据
       </div>
       {request && onReviewActionDraft ? (
@@ -229,7 +229,7 @@ export function AiResponseV2Renderer({
           <div className="flex flex-wrap gap-1.5">
             <Chip tone={conclusion.severity}>{severityLabels[conclusion.severity] || "信息"}</Chip>
             <Chip>可信度 {confidenceLabels[conclusion.confidence] || "中"}</Chip>
-            <span className="inline-flex rounded-full px-2 py-0.5 text-[10px]" style={{ color: A.gray1, background: A.gray6 }}>
+            <span className="inline-flex rounded-full px-2 py-0.5 fc-caption" style={{ color: A.gray1, background: A.gray6 }}>
               {response.scope?.dataScopeLabel || "当前工作区数据"}
             </span>
           </div>
@@ -242,7 +242,7 @@ export function AiResponseV2Renderer({
             {breadcrumbs.map((item, index) => (
               <span
                 key={`${item.label}-${index}`}
-                className="inline-flex max-w-full rounded-full px-2 py-0.5 text-[10px] truncate"
+                className="inline-flex max-w-full rounded-full px-2 py-0.5 fc-caption truncate"
                 style={{ color: A.gray1, background: A.gray6, border: `1px solid ${A.border}` }}
               >
                 {item.label}
@@ -280,7 +280,7 @@ export function AiResponseV2Renderer({
             <div key={`${action.label}-${action.targetEntityId || action.targetModule}`} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
               <div className={`${typography.compactMetadata} font-semibold`} style={{ color: A.label }}>{action.label}</div>
               <div className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{action.description}</div>
-              {action.reviewRequired ? <div className="mt-1 text-[10px]" style={{ color: A.gray2 }}>需人工复核后继续</div> : null}
+              {action.reviewRequired ? <div className="mt-1 fc-caption" style={{ color: A.gray2 }}>需人工复核后继续</div> : null}
             </div>
           ))}
         </div>
@@ -300,7 +300,7 @@ export function AiResponseV2Renderer({
             <div key={item.label} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
               <div className={`${typography.compactMetadata} font-semibold`} style={{ color: A.label }}>{item.label}</div>
               <div className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{item.description}</div>
-              {item.consequence ? <div className="mt-1 text-[10px]" style={{ color: A.gray2 }}>{item.consequence}</div> : null}
+              {item.consequence ? <div className="mt-1 fc-caption" style={{ color: A.gray2 }}>{item.consequence}</div> : null}
             </div>
           ))}
         </div>

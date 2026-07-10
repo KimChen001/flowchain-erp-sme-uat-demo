@@ -352,19 +352,19 @@ export function ActionDraftReviewShell({
           </section>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>类型</div>
+              <div className="fc-caption" style={{ color: A.gray2 }}>类型</div>
               <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{draftTypeLabel(activeDraft.type)}</div>
             </div>
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>状态</div>
+              <div className="fc-caption" style={{ color: A.gray2 }}>状态</div>
               <div className="mt-1"><Chip label={draftStatusLabel(activeDraft.status)} color={A.blue} bg="#eef4ff" /></div>
             </div>
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>来源</div>
+              <div className="fc-caption" style={{ color: A.gray2 }}>来源</div>
               <div className="mt-1 text-[12px] font-semibold" style={{ color: A.label }}>{draftSourceLabel(activeDraft.source)}</div>
             </div>
             <div className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>确认边界</div>
+              <div className="fc-caption" style={{ color: A.gray2 }}>确认边界</div>
               <div className="mt-1 text-[12px] font-semibold" style={{ color: A.orange }}>{activeDraft.requiresConfirmation ? "需要人工确认" : "仅预览"}</div>
             </div>
           </div>
@@ -374,7 +374,7 @@ export function ActionDraftReviewShell({
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
               {payloadEntries.length ? payloadEntries.map(([key, value]) => (
                 <div key={key} className="rounded-lg border px-3 py-2" style={{ borderColor: A.border }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{payloadLabel(key)}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{payloadLabel(key)}</div>
                   {isEditableScalar(value) ? (
                     typeof value === "boolean" ? (
                       <select value={String(value)} onChange={(event) => updatePayloadField(key, event.target.value, value)} className="mt-1 w-full rounded-md border px-2 py-1 text-[12px] font-semibold outline-none" style={{ borderColor: A.border, color: A.label, background: A.white }}>

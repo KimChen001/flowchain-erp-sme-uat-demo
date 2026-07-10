@@ -99,15 +99,15 @@ export function QCModal({ open, onClose, grn, onComplete }: {
 
       <div className="grid grid-cols-3 gap-2 mb-4">
         <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
-          <div className="text-[10px]" style={{ color: A.gray1 }}>本次收货</div>
+          <div className="fc-caption" style={{ color: A.gray1 }}>本次收货</div>
           <div className="text-xl font-semibold tabular-nums" style={{ color: A.label }}>{totalReceived}</div>
         </div>
         <div className="rounded-xl p-3" style={{ background: "#f0faf4" }}>
-          <div className="text-[10px]" style={{ color: A.green }}>合格入库</div>
+          <div className="fc-caption" style={{ color: A.green }}>合格入库</div>
           <div className="text-xl font-semibold tabular-nums" style={{ color: A.green }}>{totalAccepted}</div>
         </div>
         <div className="rounded-xl p-3" style={{ background: "#fff1f0" }}>
-          <div className="text-[10px]" style={{ color: A.red }}>拒收隔离</div>
+          <div className="fc-caption" style={{ color: A.red }}>拒收隔离</div>
           <div className="text-xl font-semibold tabular-nums" style={{ color: A.red }}>{totalRejected}</div>
         </div>
       </div>
@@ -115,7 +115,7 @@ export function QCModal({ open, onClose, grn, onComplete }: {
       {(grn.postedAt || grn.postedBy || typeof grn.inventoryApplied === "boolean" || grn.inventoryMovementIds?.length) && (
         <div className="rounded-xl p-3 mb-4" style={{ background: A.gray6 }}>
           <div className="text-[11px] font-semibold mb-2" style={{ color: A.label }}>过账与库存应用</div>
-          <div className="grid grid-cols-2 gap-2 text-[10px]">
+          <div className="grid grid-cols-2 gap-2 fc-caption">
             <div><span style={{ color: A.gray2 }}>postedAt</span><div className="font-medium" style={{ color: A.label }}>{grn.postedAt ? new Date(grn.postedAt).toLocaleString("zh-CN") : "—"}</div></div>
             <div><span style={{ color: A.gray2 }}>postedBy</span><div className="font-medium" style={{ color: A.label }}>{grn.postedBy || "—"}</div></div>
             <div><span style={{ color: A.gray2 }}>inventoryApplied</span><div className="font-medium" style={{ color: grn.inventoryApplied ? A.green : A.gray1 }}>{grn.inventoryApplied ? "true" : "false"}</div></div>
@@ -125,7 +125,7 @@ export function QCModal({ open, onClose, grn, onComplete }: {
       )}
 
       <div className="rounded-xl overflow-hidden" style={{ border: `0.5px solid ${A.gray4}` }}>
-        <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_1fr] gap-2 px-3 py-2 text-[10px] font-medium" style={{ color: A.gray1, background: A.gray6 }}>
+        <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_1fr] gap-2 px-3 py-2 fc-caption font-medium" style={{ color: A.gray1, background: A.gray6 }}>
           <span>PO Line / SKU</span><span>收货</span><span>合格</span><span>拒收</span><span>仓库</span>
         </div>
         <div className="max-h-72 overflow-auto">
@@ -134,7 +134,7 @@ export function QCModal({ open, onClose, grn, onComplete }: {
               className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_1fr] gap-2 px-3 py-2.5 text-xs items-center"
               style={{ borderTop: index > 0 ? "0.5px solid rgba(0,0,0,0.05)" : "none" }}>
               <div className="min-w-0">
-                <div className="text-[10px] font-semibold truncate" style={{ color: A.blue }}>{line.poLineId || "legacy-match-by-sku"}</div>
+                <div className="fc-caption font-semibold truncate" style={{ color: A.blue }}>{line.poLineId || "legacy-match-by-sku"}</div>
                 <div className="font-medium truncate" style={{ color: A.label }}>{line.sku} · {line.itemName}</div>
               </div>
               {(["receivedQty", "acceptedQty", "rejectedQty"] as const).map((field) => (

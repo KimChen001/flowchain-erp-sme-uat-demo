@@ -77,7 +77,7 @@ export default function SupplierTable({ rows, onDetail, mode }: { rows: Supplier
                   <tr key={row.supplier.code} style={{ borderBottom: index < visible.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                     <td className={`${tdNameClass} max-w-[220px] font-semibold`} style={{ color: A.label }}>
                       <span className="block truncate">{row.supplier.name}</span>
-                      <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>{row.supplier.code} · {row.category}</div>
+                      <div className="fc-caption mt-0.5" style={{ color: A.gray2 }}>{row.supplier.code} · {row.category}</div>
                     </td>
                     <td className={tdNowrapClass}><Chip label={row.supplier.certificationStatus} color={certStyle.color} bg={certStyle.bg} /></td>
                     <td className={tdNowrapClass}><Chip label={row.supplier.status} color={recordStyle.color} bg={recordStyle.bg} /></td>
@@ -97,7 +97,7 @@ export default function SupplierTable({ rows, onDetail, mode }: { rows: Supplier
                 <tr key={row.supplier.code} style={{ borderBottom: index < visible.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                   <td className={`${tdNameClass} max-w-[220px] font-semibold`} style={{ color: A.label }}>
                     <span className="block truncate">{row.supplier.name}</span>
-                    <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>{row.supplier.code} · {row.flag}</div>
+                    <div className="fc-caption mt-0.5" style={{ color: A.gray2 }}>{row.supplier.code} · {row.flag}</div>
                   </td>
                   <td className={`${tdNumericClass} font-semibold`} style={{ color: row.rating >= 4.5 ? A.green : row.rating >= 4 ? A.blue : A.orange }}>{row.rating.toFixed(1)}</td>
                   <td className={tdNumericClass} style={{ color: A.label }}>{row.onTimeRate}%</td>

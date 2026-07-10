@@ -884,7 +884,7 @@ export default function PurchaseRequestsPage({
                       <td className={tdNowrapClass} style={{ color: item.priority === "高" ? A.red : item.priority === "中" ? A.orange : A.green }}>{item.priority}</td>
                       <td className={tdNumericClass} style={{ color: A.sub }}>{buildPrLines(item).length}</td>
                       <td className={`${tdNumericClass} font-semibold`} style={{ color: A.label }}>{fmt(item.amount)}</td>
-                      <td className={tdNowrapClass}><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: sourceMeta.bg, color: sourceMeta.color }}><SourceIcon size={10} />{sourceMeta.label}</span></td>
+                      <td className={tdNowrapClass}><span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full fc-caption font-medium" style={{ background: sourceMeta.bg, color: sourceMeta.color }}><SourceIcon size={10} />{sourceMeta.label}</span></td>
                       <td className={tdNameClass} style={{ color: A.sub }}>{linkedRfqForPr(item)} / {linkedPoForPr(item) || "PO 草稿预览待生成"}</td>
                       <td className={tdNameClass} style={{ color: A.blue }}>{nextStepForPr(item)}</td>
                       <td className={tdActionClass}>

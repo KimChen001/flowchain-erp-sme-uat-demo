@@ -164,7 +164,7 @@ export default function ThreeWayMatchPanel() {
                 ["发票金额", fmt(selected.invAmt), A.orange],
               ].map(([label, value, color]) => (
                 <div key={String(label)} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                   <div className="text-sm font-semibold mt-1" style={{ color: String(color) }}>{value}</div>
                 </div>
               ))}

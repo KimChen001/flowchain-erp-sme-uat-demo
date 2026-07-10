@@ -10,6 +10,7 @@ import {
 import { fmt } from "../../lib/format";
 import { A } from "../../components/ui";
 import { typography } from "../../components/ui/typography";
+import { routeById } from "../../app/routeRegistry";
 import { AiResponseV2Renderer } from "../../components/ai/AiResponseV2Renderer";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import type { AiResponseV2 } from "../../domain/ai/response-contract";
@@ -83,20 +84,6 @@ type SafeConversationContext = {
   returnContext?: { returnTo: "ai-assistant"; returnLabel: string; sourceModuleId?: string; sourceViewId?: string };
 };
 
-const PAGE_LABELS: Record<string, string> = {
-  overview: "首页",
-  sales: "销售管理",
-  inventory: "库存管理",
-  forecast: "预测与 MRP",
-  purchaseRequests: "采购申请",
-  purchasing: "采购订单",
-  rfq: "供应商报价",
-  receiving: "收货",
-  procurement: "采购管理",
-  srm: "基础资料",
-  finance: "结算管理",
-};
-
 const aiEvidenceLinkClass = `max-w-full text-left ${typography.compactMetadata} font-medium truncate hover:underline`;
 const aiEvidenceTitleClass = `${typography.compactMetadata} font-medium truncate`;
 const aiEvidenceMetaClass = `${typography.compactMetadata} truncate`;
@@ -128,7 +115,7 @@ export function getAiContextLabel(moduleId: string, activeContext?: ActiveContex
     const label = CONTEXT_ENTITY_LABELS[activeContext.entityType || ""] || "业务对象";
     return `${label} ${activeContext.entityLabel || activeContext.entityId}`;
   }
-  return PAGE_LABELS[moduleId] || "当前页面";
+  return routeById(moduleId)?.moduleLabel || "当前页面";
 }
 
 export function getAiInputPlaceholder(moduleId: string, activeContext?: ActiveContext | null) {
@@ -246,7 +233,7 @@ function KeyValueGrid({ fields }: { fields: [string, unknown][] }) {
     <div className="grid grid-cols-2 gap-1.5">
       {entries.map(([label, value]) => (
         <div key={label} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-          <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+          <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
           <div className="text-[11px] font-medium truncate" style={{ color: A.label }}>{businessValue(label, value)}</div>
         </div>
       ))}
@@ -266,7 +253,7 @@ function MiniList({ items, limit = 2 }: { items: unknown[]; limit?: number }) {
         return (
           <div key={`${textValue(title)}-${index}`} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
             {hasValue(title) && <div className="text-[11px] font-medium truncate" style={{ color: A.label }}>{textValue(title)}</div>}
-            {hasValue(detail) && <div className="text-[10px] truncate" style={{ color: A.gray2 }}>{textValue(detail)}</div>}
+            {hasValue(detail) && <div className="fc-caption truncate" style={{ color: A.gray2 }}>{textValue(detail)}</div>}
           </div>
         );
       })}
@@ -1747,7 +1734,7 @@ export default function FloatingAiAssistant({
                 <div data-testid="ai-empty-context-chip" className={`${typography.compactMetadata} inline-flex rounded-full px-2 py-1`} style={{ background: A.white, color: A.gray1, border: `1px solid ${A.border}` }}>
                   当前上下文：{contextLabel}
                 </div>
-                <div data-testid="ai-runtime-boundary" className="grid grid-cols-3 gap-1.5 text-[10px]">
+                <div data-testid="ai-runtime-boundary" className="grid grid-cols-3 gap-1.5 fc-caption">
                   {["当前工作区数据", "证据辅助回答", "复核优先", "草稿预览", "人工复核", "不形成正式业务处理", "不外发", "不写库存", "不写财务凭证", "不处理资金", "不改主数据", "不覆盖当前工作区数据"].map((label) => (
                     <span key={label} className="rounded-full px-2 py-1 text-center" style={{ background: A.white, color: A.gray1, border: `1px solid ${A.border}` }}>
                       {label}

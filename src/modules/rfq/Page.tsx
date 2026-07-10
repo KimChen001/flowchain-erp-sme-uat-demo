@@ -823,7 +823,7 @@ export default function PurchasingRFQPage({
                     <td className={tdIdClass}><button onClick={() => openDetail(r.id)} className={tableLinkClass} style={{ color: A.blue }}>{r.id}</button></td>
                     <td className={`${tdNameClass} max-w-[260px] font-medium`} style={{ color: A.label }}>
                       <div className="truncate">{r.title}</div>
-                      <div className="text-[10px] mt-0.5 truncate" style={{ color: A.gray2 }}>{source.sku} · {source.name}</div>
+                      <div className="fc-caption mt-0.5 truncate" style={{ color: A.gray2 }}>{source.sku} · {source.name}</div>
                     </td>
                     <td className={tdIdClass} style={{ color: A.blue }}>{source.pr}</td>
                     <td className={tdNowrapClass}><Chip label={displayRfqStatus(r.status)} color={style.color} bg={style.bg} /></td>

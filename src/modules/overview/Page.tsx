@@ -449,7 +449,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
                 { label: selectedEvidence.confidence ? "置信度" : "风险分", value: selectedEvidence.confidence || selectedEvidence.riskScore || "—", color: A.green },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{item.label}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{item.label}</div>
                   <div className="text-sm font-semibold mt-1 truncate" style={{ color: item.color }}>{item.value}</div>
                 </div>
               ))}
@@ -465,7 +465,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
               <div className="grid grid-cols-2 gap-2">
                 {selectedEvidence.evidence.map((item) => (
                   <div key={item.label} className="rounded-xl px-3 py-2.5" style={{ background: A.gray6 }}>
-                    <div className="text-[10px]" style={{ color: A.gray2 }}>{item.label}</div>
+                    <div className="fc-caption" style={{ color: A.gray2 }}>{item.label}</div>
                     <div className="text-xs font-semibold mt-1 break-words" style={{ color: A.label }}>{item.value}</div>
                   </div>
                 ))}
@@ -511,7 +511,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
         <Card className="p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>风险与异常</h1>
+              <h2 className="fc-section-title" style={{ color: A.label }}>风险与异常</h2>
               <p className="mt-1 max-w-3xl text-[14px] leading-6" style={{ color: A.sub }}>
                 聚合采购、销售、库存和结算异常，优先进入对应业务单据处理。
               </p>
@@ -618,9 +618,9 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>首页</h1>
+              <h2 className="fc-section-title" style={{ color: A.label }}>今日经营概览</h2>
               <Chip label="运营工作台" color={A.blue} bg="#f0f6ff" />
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ color: A.green, background: "#f0faf4" }}>
+              <span className="fc-caption px-2 py-0.5 rounded-full font-medium" style={{ color: A.green, background: "#f0faf4" }}>
                 今日更新
               </span>
             </div>
@@ -714,7 +714,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
                   className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium hover:bg-slate-50 transition-colors"
                   style={{ background: A.white, borderColor: A.border, color: A.label }}>
                   <span className="truncate">{link.label}</span>
-                  <span className="rounded px-1.5 py-px text-[10px]" style={{ background: "#eef4ff", color: A.blue }}>{signal}</span>
+                  <span className="rounded px-1.5 py-px fc-caption" style={{ background: "#eef4ff", color: A.blue }}>{signal}</span>
                 </button>
               );
             })}
@@ -723,7 +723,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-[12px] font-semibold" style={{ color: A.label }}>轻量入口</h3>
-                <p className="text-[10px] mt-0.5" style={{ color: A.sub }}>AI 摘要只作轻入口，完整问答在 AI 助手。</p>
+                <p className="fc-caption mt-0.5" style={{ color: A.sub }}>AI 摘要只作轻入口，完整问答在 AI 助手。</p>
               </div>
               <button onClick={() => onNavigate("overview:ai", null, {
                 returnTo: "overview",
@@ -751,11 +751,11 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="truncate text-[12px] font-semibold" style={{ color: A.label }}>核心业务链</h3>
-                  <span className="rounded px-1.5 py-px text-[10px]" style={{ background: "#fff8f0", color: A.orange }}>
+                  <span className="rounded px-1.5 py-px fc-caption" style={{ background: "#fff8f0", color: A.orange }}>
                     待复核
                   </span>
                 </div>
-                <p className="mt-1 text-[10px] leading-4" style={{ color: A.sub }}>
+                <p className="mt-1 fc-caption leading-4" style={{ color: A.sub }}>
                   销售订单、SKU 库存风险、PO、收货和供应商发票放在同一条证据线上查看。
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">

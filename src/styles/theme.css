@@ -1,7 +1,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-size: 14px;
+  --font-size: 16px;
   --background: #f5f5f7;
   --foreground: #1d1d1f;
   --card: #ffffff;
@@ -39,6 +39,7 @@
   --sidebar-accent-foreground: #1d1d1f;
   --sidebar-border: rgba(0, 0, 0, 0.08);
   --sidebar-ring: rgba(0, 113, 227, 0.4);
+  --fc-font-family: Inter, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .dark {
@@ -126,6 +127,9 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: var(--fc-font-family);
+    font-size: 13px;
+    line-height: 20px;
   }
 
   /**
@@ -179,3 +183,54 @@
     line-height: 1.5;
   }
 }
+
+@layer components {
+  .fc-module-shell { @apply space-y-4; }
+  .fc-breadcrumb { @apply flex min-h-5 flex-wrap items-center gap-1; }
+  .fc-module-header { @apply flex items-start justify-between gap-4; }
+  .fc-module-title { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+  .fc-page-header { @apply flex items-start justify-between gap-4 rounded-xl bg-white px-5 py-4; border: 1px solid rgba(0,0,0,.08); }
+  .fc-page-title { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+  .fc-page-subtitle { font-size: 12px; line-height: 18px; color: #6e6e73; }
+  .fc-modal-title { font-size: 16px; line-height: 24px; font-weight: 600; }
+  .fc-section-title { font-size: 14px; line-height: 20px; font-weight: 600; }
+  .fc-body { font-size: 13px; line-height: 20px; }
+  .fc-label { font-size: 12px; line-height: 18px; color: #86868b; }
+  .fc-caption { font-size: 11px; line-height: 16px; }
+  .fc-table-header { font-size: 13px; line-height: 20px; font-weight: 600; color: #6e6e73; }
+  .fc-table-cell, .fc-button-text, .fc-input-text { font-size: 13px; line-height: 20px; }
+  .fc-kpi-value { font-size: 24px; line-height: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .fc-nav-primary { font-size: 13px; line-height: 20px; font-weight: 500; }
+  .fc-nav-secondary { font-size: 12px; line-height: 18px; font-weight: 500; }
+  .fc-module-subnav { @apply flex flex-wrap items-center gap-1 rounded-xl bg-white p-1.5; border: 1px solid rgba(0,0,0,.08); }
+  .fc-module-subnav a { @apply rounded-lg px-3 py-2; font-size: 13px; line-height: 20px; color: #6e6e73; }
+  .fc-module-subnav a.is-active, .fc-module-subnav a[aria-current="page"] { color: #0071e3; background: #f0f6ff; font-weight: 600; }
+  .fc-recent-pages { @apply flex items-center gap-2 rounded-lg px-2 py-1.5; background: rgba(255,255,255,.72); border: 1px solid rgba(0,0,0,.06); }
+  .fc-recent-page { @apply flex h-7 max-w-44 items-center gap-1 rounded-md px-2; font-size: 11px; line-height: 16px; color: #6e6e73; }
+  .fc-recent-page.is-active { color: #0071e3; background: #f0f6ff; font-weight: 600; }
+  .fc-action-button { @apply inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 disabled:opacity-50; font-family: var(--fc-font-family); font-size: 13px; line-height: 20px; font-weight: 600; }
+  .fc-action-primary { color: white; background: #0071e3; }
+  .fc-action-secondary { color: #0071e3; background: #f0f6ff; }
+  .fc-action-quiet { color: #6e6e73; background: #f5f5f7; }
+  .fc-action-danger { color: #d92d20; background: #fff1f0; }
+  .fc-action-compact, .fc-action-table-action { @apply h-8 px-2.5; font-size: 12px; line-height: 18px; }
+  .fc-filter-bar { @apply flex min-h-14 flex-wrap items-center gap-2 bg-white p-3; border-bottom: 1px solid rgba(0,0,0,.08); }
+  .fc-filter-bar select, .fc-filter-bar input { @apply h-9 rounded-lg px-3; border: 1px solid rgba(0,0,0,.1); font-family: var(--fc-font-family); font-size: 13px; line-height: 20px; }
+  .fc-search-input { @apply flex h-9 min-w-64 items-center gap-2 rounded-lg px-3; background: #f5f5f7; color: #86868b; }
+  .fc-search-input input { @apply h-auto w-full border-0 bg-transparent p-0 outline-none; }
+  .fc-data-table { @apply w-full; font-size: 13px; line-height: 20px; }
+  .fc-data-table th { @apply whitespace-nowrap px-4 py-3 text-left; font-size: 13px; line-height: 20px; font-weight: 600; color: #6e6e73; }
+  .fc-data-table td { @apply px-4 py-3; border-top: 1px solid rgba(0,0,0,.06); }
+  .fc-module-content table:not(.print-data-table), .fc-module-content table:not(.print-data-table) th, .fc-module-content table:not(.print-data-table) td { font-size: 13px !important; line-height: 20px !important; }
+  .fc-detail-field { @apply rounded-lg p-3; background: #f5f5f7; }
+  .fc-status-chip { @apply inline-flex min-h-6 items-center rounded-full px-2; font-size: 12px; line-height: 18px; font-weight: 600; }
+  .fc-status-neutral { color: #6e6e73; background: #f5f5f7; }
+  .fc-status-info { color: #0071e3; background: #f0f6ff; }
+  .fc-status-success { color: #248a3d; background: #f0faf4; }
+  .fc-status-warning { color: #b55d00; background: #fff8f0; }
+  .fc-status-danger { color: #d92d20; background: #fff1f0; }
+  .fc-module-content .text-\[10px\] { font-size: 11px !important; line-height: 16px !important; }
+}
+
+button, input, select, textarea { font-family: var(--fc-font-family); font-size: 13px; line-height: 20px; }
+.tabular-nums, [data-numeric="true"] { font-variant-numeric: tabular-nums; }

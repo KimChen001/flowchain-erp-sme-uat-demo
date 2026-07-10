@@ -208,11 +208,11 @@ function DataQualitySettings({ items, onNavigate }: { items: WorkspaceDataQualit
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <div className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-                <div className="text-[10px]" style={{ color: A.gray2 }}>映射字段数</div>
+                <div className="fc-caption" style={{ color: A.gray2 }}>映射字段数</div>
                 <div className="text-[13px] font-semibold" style={{ color: A.label }}>{item.mappedFieldsCount}</div>
               </div>
               <div className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-                <div className="text-[10px]" style={{ color: A.gray2 }}>影响模块</div>
+                <div className="fc-caption" style={{ color: A.gray2 }}>影响模块</div>
                 <div className="truncate text-[13px] font-semibold" style={{ color: A.label }}>{item.affectedModules.join("、")}</div>
               </div>
             </div>

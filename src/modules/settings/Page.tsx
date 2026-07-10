@@ -71,7 +71,7 @@ export default function SettingsPage({ initialView, onNavigate }: { initialView?
   if (error || !payloadReady) {
     return (
       <Card className="p-6" data-testid={isBoundaryView ? "workspace-boundary-visibility" : isRoleView ? "user-role-permission-visibility" : "workspace-setup-config"}>
-        <h1 className="text-[24px] leading-8 font-bold tracking-normal" style={{ color: A.label }}>系统设置</h1>
+        <h2 className="fc-section-title" style={{ color: A.label }}>系统设置加载失败</h2>
         <div className="mt-3 text-sm" style={{ color: A.red }}>{isBoundaryView ? "工作区边界" : isRoleView ? "角色权限可见性" : "工作区配置"}暂不可用，请稍后重试。</div>
         <div className="mt-4">
           <RecoveryActions actions={[{ key: "reload", label: "重新加载", onClick: () => window.location.reload(), kind: "list" }]} />

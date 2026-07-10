@@ -38,7 +38,7 @@ export default function MasterDataDetailModal({ detail, onClose }: { detail: Det
                   ["事务流水", usage.movementCount],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                    <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                    <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                     <div className="text-xs font-semibold mt-1 truncate" style={{ color: A.label }}>{value}</div>
                   </div>
                 ))}
@@ -66,7 +66,7 @@ export default function MasterDataDetailModal({ detail, onClose }: { detail: Det
                   ["对账状态", usage.reconciliationStatus],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                    <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                    <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                     <div className="text-xs font-semibold mt-1 truncate" style={{ color: A.label }}>{value}</div>
                   </div>
                 ))}
@@ -96,7 +96,7 @@ export default function MasterDataDetailModal({ detail, onClose }: { detail: Det
                 ["负责人", item.owner],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                   <div className="text-xs font-semibold mt-1 truncate" style={{ color: A.label }}>{value}</div>
                 </div>
               ))}

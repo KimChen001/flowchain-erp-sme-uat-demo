@@ -36,7 +36,8 @@ test('global search opens canonical focus targets where safe', () => {
   const source = readSource('src', 'app', 'FlowChainApp.tsx')
 
   assert.match(source, /navigationIntentFromGlobalSearchResult\(result, \{ returnTo: active \}\)/)
-  assert.match(source, /splitNavigationId\(active\)/)
+  assert.match(source, /routeByPath\(location\.pathname\)/)
+  assert.match(source, /routePathForId\(intent\.activeId\)/)
   assert.match(source, /navigationIntentFromModule\(moduleId, \{/)
   assert.match(source, /onNavigate=\{navigateTo\}/)
   assert.match(readSource('src', 'lib', 'evidenceLinks.ts'), /source: "globalSearch"/)

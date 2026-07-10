@@ -430,7 +430,7 @@ export default function AiSuggestionsPage({
   if (!workbench) {
     return (
       <Card className="p-6" data-testid="ai-suggestions-workbench">
-        <h1 className="text-[22px] leading-7 font-bold tracking-normal" style={{ color: A.label }}>AI 摘要</h1>
+        <h2 className="fc-section-title" style={{ color: A.label }}>AI 摘要</h2>
         <div className="mt-3 text-sm" style={{ color: A.red }}>AI 摘要暂不可用，请稍后重试。</div>
         <div className="mt-4">
           <RecoveryActions actions={[{ key: "reload", label: "重新加载", onClick: () => window.location.reload(), kind: "list" }]} />
@@ -446,7 +446,7 @@ export default function AiSuggestionsPage({
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-[22px] leading-7 font-bold tracking-normal" style={{ color: A.label }}>AI 摘要</h1>
+            <h2 className="fc-section-title" style={{ color: A.label }}>AI 摘要</h2>
             <Chip label={workbench.dataScopeLabel} color={A.green} bg="#ecfdf5" />
             {error && <Chip label="当前工作区数据" color={A.orange} bg="#fff7ed" />}
           </div>

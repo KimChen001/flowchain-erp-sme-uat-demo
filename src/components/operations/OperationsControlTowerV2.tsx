@@ -75,7 +75,7 @@ function draftRequest(item: OperationActionItem, action = item.reviewActions[0])
 
 function BoundaryText() {
   return (
-    <div className="text-[10px] leading-4" style={{ color: A.gray2 }}>
+    <div className="fc-caption leading-4" style={{ color: A.gray2 }}>
       草稿预览 · 需人工复核 · 不会外发 · 不提交 · 不写入库存 · 不写入财务凭证 · 不处理资金 · 不改供应商资料
     </div>
   );
@@ -139,7 +139,7 @@ export function OperationsControlTowerV2({ tower, loading, error = false, onNavi
               <card.icon size={14} color={card.color} />
             </div>
             <div className="mt-2 text-xl font-semibold tabular-nums" style={{ color: card.color }}>{card.value}</div>
-            <div className="mt-1 truncate text-[10px]" style={{ color: A.gray2 }}>{card.sub}</div>
+            <div className="mt-1 truncate fc-caption" style={{ color: A.gray2 }}>{card.sub}</div>
           </div>
         ))}
       </div>
@@ -271,7 +271,7 @@ export function OperationsControlTowerV2({ tower, loading, error = false, onNavi
                   <div key={item.label} className="rounded-lg p-3" style={{ background: A.gray6 }}>
                     <div className="text-[11px] font-semibold" style={{ color: A.label }}>{item.label}</div>
                     <div className="mt-1 text-[11px]" style={{ color: A.sub }}>{item.description}</div>
-                    {item.consequence ? <div className="mt-1 text-[10px]" style={{ color: A.gray2 }}>{item.consequence}</div> : null}
+                    {item.consequence ? <div className="mt-1 fc-caption" style={{ color: A.gray2 }}>{item.consequence}</div> : null}
                   </div>
                 ))}
               </div>
@@ -310,7 +310,7 @@ export function OperationsControlTowerV2({ tower, loading, error = false, onNavi
               <div className="text-xs font-semibold" style={{ color: A.label }}>禁止动作 / 边界</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {selected.blockedActions.map((item) => (
-                  <span key={item} className="rounded-full px-2.5 py-1 text-[10px]" style={{ background: "#fff7db", color: A.orange }}>{item}</span>
+                  <span key={item} className="rounded-full px-2.5 py-1 fc-caption" style={{ background: "#fff7db", color: A.orange }}>{item}</span>
                 ))}
               </div>
             </section>

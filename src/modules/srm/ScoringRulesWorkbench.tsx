@@ -62,7 +62,7 @@ export default function ScoringRulesWorkbench() {
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-xl font-semibold font-mono" style={{ color: A.label }}>{dimension.weight}%</div>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>维度权重</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>维度权重</div>
                 </div>
               </div>
 

@@ -106,7 +106,7 @@ test('R217 Today Cockpit remains evidence/count consistent for delayed PO invent
 })
 
 test('R218-R220 relationship guardrails preserve navigation safety and AI boundaries', () => {
-  const routes = source('src', 'app', 'routes.tsx')
+  const routes = source('src', 'app', 'routeRegistry.tsx')
   const links = source('src', 'lib', 'businessLinks.ts')
   const nav = source('src', 'components', 'navigation', 'RelatedRecordsPanel.tsx')
   const allChanged = [

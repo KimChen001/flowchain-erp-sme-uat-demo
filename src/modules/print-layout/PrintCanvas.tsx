@@ -6,7 +6,7 @@ function textValue(value: unknown) {
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
-function ElementContent({ element, data }: { element: PrintLayoutElement; data: PrintDocumentData }) {
+function ElementContent({ element, data, instanceValues }: { element: PrintLayoutElement; data: PrintDocumentData; instanceValues: Record<string, string> }) {
   const style: React.CSSProperties = {
     fontSize: element.style?.fontSize || 12,
     fontWeight: element.style?.bold ? 700 : element.style?.fontWeight || 400,
@@ -26,18 +26,21 @@ function ElementContent({ element, data }: { element: PrintLayoutElement; data: 
   }
   if (element.type === "line") return <div style={{ borderTop: `${element.style?.borderWidth || 1}px solid #111`, marginTop: element.height / 2 }} />;
   if (element.type === "pageNumber") return <div style={style}>第 1 页 / 共 1 页</div>;
-  if (element.type === "barcode") return <div className="print-placeholder-code" style={style}>||||| {textValue(data[element.field || "documentNo"])}</div>;
-  if (element.type === "qrcode") return <div className="print-placeholder-qr" style={style}>QR<br />{textValue(data[element.field || "documentNo"])}</div>;
-  if (element.type === "field") return <div style={style}><span className="print-field-label">{element.title}：</span>{textValue(data[element.field || ""])}</div>;
-  if (element.type === "signature") return <div style={style}>{element.field ? `${element.title}：${textValue(data[element.field])}` : element.value || element.title}</div>;
-  return <div style={style}>{element.value || element.title}</div>;
+  if (element.type === "barcode") return <div className="print-placeholder-code" style={style}><small>条码占位</small><br />||||| {textValue(data[element.field || "documentNo"])}</div>;
+  if (element.type === "qrcode") return <div className="print-placeholder-qr" style={style}><small>二维码占位</small><br />QR<br />{textValue(data[element.field || "documentNo"])}</div>;
+  const mode = element.contentMode || (element.type === "field" ? "field" : "static");
+  const value = mode === "instance" ? instanceValues[element.id] : mode === "field" ? data[element.field || ""] : element.value;
+  if (element.type === "field" || mode === "field") return <div style={style}><span className="print-field-label">{element.title}：</span>{textValue(value)}</div>;
+  if (element.type === "signature") return <div className="print-multiline-content" style={style}>{value ? String(value) : element.title}</div>;
+  return <div className="print-multiline-content" style={style}>{value ? String(value) : element.placeholder || element.title}</div>;
 }
 
 export default function PrintCanvas({
-  template, data, selectedId, scale, onSelect, onElementChange,
+  template, data, instanceValues, selectedId, scale, onSelect, onElementChange,
 }: {
   template: PrintLayoutTemplate;
   data: PrintDocumentData;
+  instanceValues: Record<string, string>;
   selectedId: string;
   scale: number;
   onSelect: (id: string) => void;
@@ -87,13 +90,14 @@ export default function PrintCanvas({
             className={`print-layout-element ${selectedId === element.id ? "is-selected" : ""} ${element.style?.bordered ? "is-bordered" : ""}`}
             data-testid={`print-element-${element.id}`}
             data-element-id={element.id}
+            data-instance-empty={(element.contentMode === "instance" && !instanceValues[element.id]) || undefined}
             role="button"
             tabIndex={0}
             onPointerDown={(event) => startPointer(event, element, "move")}
             onClick={(event) => { event.stopPropagation(); onSelect(element.id); }}
             style={{ left: element.x, top: element.y, width: element.width, height: element.height, borderWidth: element.style?.borderWidth }}
           >
-            <ElementContent element={element} data={data} />
+            <ElementContent element={element} data={data} instanceValues={instanceValues} />
             {selectedId === element.id && element.resizable && (
               <span className="print-resize-handle" data-testid="print-resize-handle" onPointerDown={(event) => startPointer(event, element, "resize")} />
             )}

@@ -130,7 +130,7 @@ test('R181-R190 full safe user data loop respects commit gate, scope, deactivate
 
 test('R181-R190 source guardrails keep UI review-first and provider-free', () => {
   const importsPage = fs.readFileSync(path.join(root, 'src/modules/imports/Page.tsx'), 'utf8')
-  const routes = fs.readFileSync(path.join(root, 'src/app/routes.tsx'), 'utf8')
+  const routes = fs.readFileSync(path.join(root, 'src/app/routeRegistry.tsx'), 'utf8')
   const userDataRoutes = fs.readFileSync(path.join(root, 'server/routes/user-data.routes.mjs'), 'utf8')
 
   assert.match(importsPage, /data-testid="user-data-import-panel"/)

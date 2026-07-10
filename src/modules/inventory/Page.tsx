@@ -25,6 +25,7 @@ import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../compon
 import { makeSkuInsight, type ContextualAiAction } from "../../domain/contextual-ai";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
+import { BusinessDocumentForm } from "../../components/business/BusinessDocumentForm";
 import {
   fetchInventoryItems,
   fetchInventoryLots,
@@ -238,12 +239,12 @@ function InventoryOverview({
                   <Chip label={item.plan.priority} color={item.plan.priority === "高" ? A.red : item.plan.priority === "中" ? A.orange : A.green} bg={item.plan.priority === "高" ? "#fff1f0" : item.plan.priority === "中" ? "#fff8f0" : "#f0faf4"} />
                 </div>
                 <div className="text-xs font-medium mt-1 truncate" style={{ color: A.label }}>{item.name}</div>
-                <div className="grid grid-cols-3 gap-2 mt-3 text-[10px]">
+                <div className="grid grid-cols-3 gap-2 mt-3 fc-caption">
                   <div><div style={{ color: A.gray2 }}>覆盖</div><div className="font-semibold" style={{ color: item.plan.daysCover <= item.plan.leadTimeDays ? A.red : A.label }}>{item.plan.daysCover}天</div></div>
                   <div><div style={{ color: A.gray2 }}>ROP</div><div className="font-semibold" style={{ color: A.label }}>{item.plan.reorderPoint}</div></div>
                   <div><div style={{ color: A.gray2 }}>建议</div><div className="font-semibold" style={{ color: A.label }}>{item.plan.suggestedQty}</div></div>
                 </div>
-                <div className="text-[10px] mt-2 leading-relaxed" style={{ color: A.sub }}>
+                <div className="fc-caption mt-2 leading-relaxed" style={{ color: A.sub }}>
                   {item.plan.supplier} · 评分 {score.score} · {item.plan.policy}
                 </div>
                 <button onClick={() => previewInventoryDraft(item)}
@@ -337,11 +338,11 @@ function InventoryOverview({
                     <td className={tdIdClass} style={{ color: A.blue }}>{item.sku}</td>
                     <td className={`${tdNameClass} max-w-[240px]`}>
                       <div className="font-medium truncate" style={{ color: A.label }}>{item.name}</div>
-                      <div className="text-[10px] truncate" style={{ color: A.sub }}>{item.category} · {item.location}</div>
+                      <div className="fc-caption truncate" style={{ color: A.sub }}>{item.category} · {item.location}</div>
                     </td>
                     <td className={tdNumericClass}>
                       <div className="font-medium" style={{ color: A.label }}>{item.qty.toLocaleString()}</div>
-                      <div className="text-[10px]" style={{ color: A.sub }}>可用 {item.plan.projectedAvailable.toLocaleString()} {item.plan.unit}</div>
+                      <div className="fc-caption" style={{ color: A.sub }}>可用 {item.plan.projectedAvailable.toLocaleString()} {item.plan.unit}</div>
                     </td>
                     <td className={tdNumericClass} style={{ color: A.gray1 }}>{item.min.toLocaleString()}</td>
                     <td className={`${tdNowrapClass} w-36`}>
@@ -814,7 +815,7 @@ function InventoryCycleCount() {
                       <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
                         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct === 100 ? A.green : pct > 0 ? A.blue : A.gray3 }} />
                       </div>
-                      <span className="text-[10px] tabular-nums w-12 text-right" style={{ color: A.gray1 }}>{p.counted}/{p.scope}</span>
+                      <span className="fc-caption tabular-nums w-12 text-right" style={{ color: A.gray1 }}>{p.counted}/{p.scope}</span>
                     </div>
                   </td>
                   <td className="px-4 py-3 font-medium tabular-nums" style={{ color: p.variance === 0 ? A.green : p.variance > 0 ? A.blue : A.red }}>
@@ -945,7 +946,7 @@ function InventoryABCXYZ() {
 
       <Card className="p-5">
         <SectionHeader title="ABC × XYZ 策略矩阵" right={
-          <div className="flex gap-2 text-[10px]" style={{ color: A.sub }}>
+          <div className="flex gap-2 fc-caption" style={{ color: A.sub }}>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.green }} />补货建议</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.blue }} />周期补</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.orange }} />按订单</span>
@@ -971,15 +972,15 @@ function InventoryABCXYZ() {
                     style={{ background: `${s.color}10`, border: `1px solid ${s.color}30` }}>
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-base font-semibold" style={{ color: s.color }}>{row}{col}</span>
-                      <span className="text-[10px] px-1.5 py-px rounded-full font-medium" style={{ background: A.white, color: s.color }}>
+                      <span className="fc-caption px-1.5 py-px rounded-full font-medium" style={{ background: A.white, color: s.color }}>
                         {cell.length} SKU
                       </span>
                     </div>
-                    <div className="text-[10px] mb-2" style={{ color: A.sub }}>{s.policy}</div>
+                    <div className="fc-caption mb-2" style={{ color: A.sub }}>{s.policy}</div>
                     {cell.slice(0, 2).map((it) => (
-                      <div key={it.sku} className="text-[10px] truncate" style={{ color: A.label }}>· {it.name}</div>
+                      <div key={it.sku} className="fc-caption truncate" style={{ color: A.label }}>· {it.name}</div>
                     ))}
-                    {cell.length > 2 && <div className="text-[10px]" style={{ color: A.gray2 }}>+{cell.length - 2} 更多</div>}
+                    {cell.length > 2 && <div className="fc-caption" style={{ color: A.gray2 }}>+{cell.length - 2} 更多</div>}
                   </div>
                 );
               })}
@@ -1061,7 +1062,7 @@ function InventoryWarehouseMap() {
 
       <Card className="p-5">
         <SectionHeader title="实时库位热力图"
-          right={<div className="flex items-center gap-2 text-[10px]" style={{ color: A.sub }}>
+          right={<div className="flex items-center gap-2 fc-caption" style={{ color: A.sub }}>
             <button onClick={exportBinsCsv}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>
               <FileSpreadsheet size={11} /> 导出当前结果
@@ -1078,7 +1079,7 @@ function InventoryWarehouseMap() {
         <div className="space-y-1.5">
           {grid.map((row, r) => (
             <div key={r} className="flex items-center gap-1.5">
-              <span className="w-6 text-[10px] font-semibold text-right" style={{ color: A.gray1 }}>{String.fromCharCode(65 + r)}</span>
+              <span className="w-6 fc-caption font-semibold text-right" style={{ color: A.gray1 }}>{String.fromCharCode(65 + r)}</span>
               {row.map((cell, c) => (
                 <button key={c}
                   onClick={() => toast(`库位 ${cell.code}`, { description: `占用率 ${cell.fill}% · ${cell.status === "满" ? "请优先出库" : cell.status === "空" ? "可接收新货" : "正常运转"}` })}
@@ -1088,7 +1089,7 @@ function InventoryWarehouseMap() {
                     border: cell.fill > 90 ? `1px solid ${A.red}` : "1px solid transparent",
                   }}>
                   <span className="text-[9px] font-medium tabular-nums" style={{ color: cell.fill > 50 ? A.white : A.label }}>{cell.fill}%</span>
-                  <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 whitespace-nowrap text-[10px] px-1.5 py-0.5 rounded text-white" style={{ background: A.label }}>
+                  <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 whitespace-nowrap fc-caption px-1.5 py-0.5 rounded text-white" style={{ background: A.label }}>
                     {cell.code}
                   </div>
                 </button>
@@ -1100,7 +1101,7 @@ function InventoryWarehouseMap() {
 
       <Card className="p-5">
         <SectionHeader title="拣货热度 TOP 10 库位"
-          right={<span className="text-[10px]" style={{ color: A.gray2 }}>近 30 天</span>} />
+          right={<span className="fc-caption" style={{ color: A.gray2 }}>近 30 天</span>} />
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={[
             { bin: "A-07", picks: 412 }, { bin: "B-01", picks: 384 }, { bin: "D-02", picks: 356 },
@@ -1120,7 +1121,7 @@ function InventoryWarehouseMap() {
 }
 
 // ─── Inventory · Master Wrapper ───────────────────────────────────────────────
-type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins" | "exceptions" | "adjustments" | "warnings";
+type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins" | "exceptions" | "adjustments" | "adjustments-new" | "warnings";
 
 function limitationText(code: string) {
   return ({
@@ -1206,7 +1207,7 @@ function InventoryAllocationPanel({
               >
                 <td className={tdNameClass}>
                   <div className="font-semibold tabular-nums" style={{ color: A.blue }}>{item.sku}</div>
-                  <div className="text-[10px] truncate" style={{ color: A.sub }}>{item.itemName}</div>
+                  <div className="fc-caption truncate" style={{ color: A.sub }}>{item.itemName}</div>
                 </td>
                 {[item.onHandQty, item.reservedQty, item.salesDemandQty, item.availableQty, item.availableToPromiseQty, item.incomingPurchaseQty, item.projectedAvailableQty, item.shortageQty].map((value, valueIndex) => (
                   <td key={valueIndex} className={tdNumericClass} style={{ color: valueIndex === 7 && value > 0 ? A.red : A.label }}>{value.toLocaleString("zh-CN")}</td>
@@ -1252,7 +1253,7 @@ function InventoryAllocationPanel({
             {!!selected.dataLimitations.length && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {selected.dataLimitations.map((item) => (
-                  <span key={item} className="rounded-md px-2 py-1 text-[10px]" style={{ background: "#fff8f0", color: A.orange }}>{limitationText(item)}</span>
+                  <span key={item} className="rounded-md px-2 py-1 fc-caption" style={{ background: "#fff8f0", color: A.orange }}>{limitationText(item)}</span>
                 ))}
               </div>
             )}
@@ -1277,7 +1278,7 @@ function InventoryAllocationPanel({
                 ["可承诺量", selected.availableToPromiseQty],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg p-3" style={{ background: A.white }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                   <div className="mt-1 text-base font-semibold tabular-nums" style={{ color: label === "预留缺口" && Number(value) > 0 ? A.red : A.label }}>{Number(value).toLocaleString("zh-CN")}</div>
                 </div>
               ))}
@@ -1299,11 +1300,13 @@ function InventoryAllocationPanel({
 export default function InventoryPage({
   initialView = "overview",
   focus,
+  onNavigate,
   onActiveContextChange,
   onReviewActionDraft,
 }: {
   initialView?: InvTab;
   focus?: { entityType: string; entityId: string; at: number } | null;
+  onNavigate?: (routeId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
@@ -1372,21 +1375,32 @@ export default function InventoryPage({
     if (tab !== "overview") onActiveContextChange?.(null);
   }, [tab, onActiveContextChange]);
 
+  function openTab(next: InvTab) {
+    const routes: Partial<Record<InvTab, string>> = {
+      overview: "inventory:stock", movements: "inventory:movements", adjustments: "inventory:adjustments",
+      count: "inventory:count", warnings: "inventory:warnings", transfer: "inventory:transfer",
+      lots: "inventory:lots", bins: "inventory:bins", exceptions: "inventory:exceptions",
+    };
+    const routeId = routes[next];
+    if (routeId && onNavigate) onNavigate(routeId);
+    else setTab(next);
+  }
+
   return (
     <div className="space-y-4">
-      <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as InvTab)} />
       {fallbackScopes.length > 0 && (
         <div className="rounded-lg px-3 py-2 text-[11px] leading-5" style={{ background: "#fff8f0", color: A.orange, border: "0.5px solid rgba(255,149,0,0.25)" }}>
           当前库存读模型有 {fallbackScopes.length} 个端点使用当前工作区数据补足，页面操作仍保持预览优先。
         </div>
       )}
-      {tab === "overview"  && <InventoryLanding items={stockItems} lots={lots} availability={availability} allocationSummary={allocationSummary} focus={focus} onOpenTab={setTab} onActiveContextChange={onActiveContextChange} onReviewActionDraft={onReviewActionDraft} />}
+      {tab === "overview"  && <InventoryLanding items={stockItems} lots={lots} availability={availability} allocationSummary={allocationSummary} focus={focus} onOpenTab={openTab} onActiveContextChange={onActiveContextChange} onReviewActionDraft={onReviewActionDraft} />}
       {tab === "lots"      && <InventoryLots lots={lots} serials={serials} />}
       {tab === "transfer"  && <InventoryTransfers />}
       {tab === "count"     && <InventoryCycleCount />}
       {tab === "abcxyz"    && <InventoryABCXYZ />}
       {tab === "movements" && <InventoryMovementLedger />}
       {tab === "adjustments" && <InventoryAdjustmentPage />}
+      {tab === "adjustments-new" && <BusinessDocumentForm documentLabel="库存调整单" listPath="/app/inventory/adjustments" />}
       {tab === "warnings" && <InventoryWarningPage />}
       {tab === "exceptions" && <InventoryExceptionDocuments />}
       {tab === "bins"      && <InventoryWarehouseMap />}
@@ -1499,15 +1513,8 @@ function InventoryLanding({
 
   return (
     <div className="space-y-4">
-      <Card className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>库存管理</h1>
-            <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
-              查看库存健康、事务流水、异常单据、批次序列号、调拨、盘点和库位状态。
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
+      <div className="flex justify-end">
+          <div className="flex flex-col items-end gap-2">
             <div className="flex flex-wrap justify-end gap-2">
               <ContextualImportActions entityLabel="库存余额" templateName="库存余额" compact={false} />
               <ContextualImportActions entityLabel="库存流水" templateName="库存流水" compact={false} />
@@ -1516,8 +1523,7 @@ function InventoryLanding({
               处理异常
             </button>
           </div>
-        </div>
-      </Card>
+      </div>
 
       <InventoryOverview items={items} onReviewActionDraft={onReviewActionDraft} />
 
@@ -1561,17 +1567,17 @@ function InventoryLanding({
               )}
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedMovements.map((movement) => (
-                  <span key={movement.movementId} className="rounded-md px-2 py-1 text-[10px] tabular-nums" style={{ background: A.gray6, color: A.blue }}>
+                  <span key={movement.movementId} className="rounded-md px-2 py-1 fc-caption tabular-nums" style={{ background: A.gray6, color: A.blue }}>
                     {movement.movementId}
                   </span>
                 ))}
                 {selectedExceptions.map((doc) => (
-                  <span key={doc.id} className="rounded-md px-2 py-1 text-[10px] tabular-nums" style={{ background: "#fff8f0", color: A.orange }}>
+                  <span key={doc.id} className="rounded-md px-2 py-1 fc-caption tabular-nums" style={{ background: "#fff8f0", color: A.orange }}>
                     {doc.id}
                   </span>
                 ))}
                 {selectedLots.map((lot) => (
-                  <span key={lot.lot} className="rounded-md px-2 py-1 text-[10px] tabular-nums" style={{ background: "#f0faf4", color: A.green }}>
+                  <span key={lot.lot} className="rounded-md px-2 py-1 fc-caption tabular-nums" style={{ background: "#f0faf4", color: A.green }}>
                     {lot.lot}
                   </span>
                 ))}
@@ -1691,7 +1697,7 @@ function InventoryLanding({
             style={{ background: A.white, color: A.gray1, boxShadow: `0 0 0 0.5px ${A.border}` }}
           >
             <span>{entry.title}</span>
-            <span className="rounded-full px-1.5 py-px text-[10px]" style={{ background: A.gray6, color: A.blue }}>{entry.signal}</span>
+            <span className="rounded-full px-1.5 py-px fc-caption" style={{ background: A.gray6, color: A.blue }}>{entry.signal}</span>
           </button>
         ))}
       </div>

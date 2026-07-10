@@ -127,9 +127,9 @@ export function DocumentHeader({ fields, columns = 4 }: { fields: DocumentField[
           const style = documentToneStyle(field.tone);
           return (
             <div key={field.label} className="min-w-0">
-              <div className="text-[10px] font-medium" style={{ color: A.gray2 }}>{field.label}</div>
+              <div className="fc-caption font-medium" style={{ color: A.gray2 }}>{field.label}</div>
               <div className="text-xs font-semibold mt-1 truncate" style={{ color: field.tone ? style.color : A.label }}>{field.value || "—"}</div>
-              {field.helper && <div className="text-[10px] leading-4 mt-0.5 truncate" style={{ color: A.sub }}>{field.helper}</div>}
+              {field.helper && <div className="fc-caption leading-4 mt-0.5 truncate" style={{ color: A.sub }}>{field.helper}</div>}
             </div>
           );
         })}
@@ -196,7 +196,7 @@ export function DocumentTotals({ totals, columns = 4 }: { totals: DocumentTotal[
           const style = documentToneStyle(total.tone);
           return (
             <div key={total.label} className="rounded-lg px-3 py-2" style={{ background: total.tone ? style.bg : A.gray6 }}>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>{total.label}</div>
+              <div className="fc-caption" style={{ color: A.gray2 }}>{total.label}</div>
               <div className="text-sm font-semibold mt-0.5 truncate" style={{ color: total.tone ? style.color : A.label }}>{total.value}</div>
             </div>
           );
@@ -227,7 +227,7 @@ export function DocumentStatusTimeline({ steps }: { steps: TimelineStep[] }) {
               </div>
               <div className="ml-2 -mt-0.5">
                 <div className="text-xs font-semibold" style={{ color: step.status === "pending" ? A.gray1 : A.label }}>{step.label}</div>
-                {step.helper && <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>{step.helper}</div>}
+                {step.helper && <div className="fc-caption mt-0.5" style={{ color: A.gray2 }}>{step.helper}</div>}
               </div>
             </div>
           );
@@ -299,9 +299,9 @@ export function DocumentEvidencePanel({
                   disabled={!clickable}
                   className="w-full rounded-lg px-2.5 py-2 text-left disabled:cursor-default"
                   style={{ background: style.bg, color: style.color }}>
-                  <div className="text-[10px] font-medium">{doc.relationshipLabel}</div>
+                  <div className="fc-caption font-medium">{doc.relationshipLabel}</div>
                   <div className="text-xs font-semibold mt-0.5 truncate">{doc.displayLabel}</div>
-                  {doc.disabledReason ? <div className="mt-0.5 text-[10px]">{doc.disabledReason}</div> : null}
+                  {doc.disabledReason ? <div className="mt-0.5 fc-caption">{doc.disabledReason}</div> : null}
                 </button>
               );
             })}
@@ -314,7 +314,7 @@ export function DocumentEvidencePanel({
               const style = documentToneStyle(row.tone);
               return (
                 <div key={row.label} className="rounded-lg px-2.5 py-2" style={{ background: row.tone ? style.bg : A.gray6 }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{row.label}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{row.label}</div>
                   <div className="text-[11px] font-semibold mt-0.5 truncate" style={{ color: row.tone ? style.color : A.label }}>{row.value || "—"}</div>
                 </div>
               );

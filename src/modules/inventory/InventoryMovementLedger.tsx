@@ -153,7 +153,7 @@ export default function InventoryMovementLedger() {
                     <td className="px-4 py-3 min-w-[180px] max-w-[220px] truncate" style={{ color: A.label }}>{item.itemName}</td>
                     <td className="px-4 py-3 min-w-[150px]" style={{ color: A.sub }}>
                       <div style={{ color: A.label }}>{item.warehouse}</div>
-                      <div className="text-[10px]">{item.location}</div>
+                      <div className="fc-caption">{item.location}</div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap tabular-nums" style={{ color: A.indigo }}>{item.sourceDocument}</td>
                     <td className="px-4 py-3 min-w-[64px] text-center whitespace-nowrap tabular-nums font-semibold" style={{ color: item.quantityIn ? A.green : A.gray2 }}>{quantityText(item.quantityIn)}</td>
@@ -199,7 +199,7 @@ export default function InventoryMovementLedger() {
                 ["负责人", selected.owner],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg p-3" style={{ background: A.gray6 }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                   <div className="text-xs font-semibold mt-1 break-words" style={{ color: A.label }}>{value}</div>
                 </div>
               ))}
@@ -207,14 +207,14 @@ export default function InventoryMovementLedger() {
 
             <div className="grid grid-cols-3 gap-3">
               <Card className="p-4" style={{ boxShadow: "none", background: A.gray6 }}>
-                <div className="text-[10px]" style={{ color: A.gray2 }}>数量影响</div>
+                <div className="fc-caption" style={{ color: A.gray2 }}>数量影响</div>
                 <div className="text-sm font-semibold mt-2" style={{ color: A.label }}>
                   入库 {quantityText(selected.quantityIn)} · 出库 {quantityText(selected.quantityOut)} · 调整 {selected.adjustmentQty || "—"}
                 </div>
                 <div className="text-[11px] mt-2 leading-5" style={{ color: A.sub }}>{selected.inventoryImpact}</div>
               </Card>
               <Card className="p-4 col-span-2" style={{ boxShadow: "none", background: A.gray6 }}>
-                <div className="text-[10px]" style={{ color: A.gray2 }}>原因</div>
+                <div className="fc-caption" style={{ color: A.gray2 }}>原因</div>
                 <div className="text-xs mt-2 leading-5" style={{ color: A.label }}>{selected.reason}</div>
               </Card>
             </div>
@@ -241,7 +241,7 @@ export default function InventoryMovementLedger() {
                       </div>
                       <div>
                         <div className="text-[11px] font-semibold" style={{ color: A.label }}>{item.label}</div>
-                        <div className="text-[10px] mt-0.5" style={{ color: A.sub }}>{item.value}</div>
+                        <div className="fc-caption mt-0.5" style={{ color: A.sub }}>{item.value}</div>
                       </div>
                       {index < selected.timeline.length - 1 && <ArrowRight size={12} className="ml-auto mt-1" style={{ color: A.gray3 }} />}
                     </div>

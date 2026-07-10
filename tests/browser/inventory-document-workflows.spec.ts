@@ -5,7 +5,7 @@ async function openLoggedInApp(page: Page) { await page.addInitScript((profile) 
 
 test("inventory adjustment is a real document view", async ({ page }) => {
   await openLoggedInApp(page); const nav = page.locator("aside nav"); await nav.getByRole("button", { name: "库存管理", exact: true }).click(); await nav.getByRole("button", { name: "库存调整单", exact: true }).click();
-  const scope = page.getByTestId("inventory-adjustment-page"); await expect(scope.getByRole("heading", { name: "库存调整单" })).toBeVisible(); await expect(scope).toContainText("调整单号"); await expect(scope).toContainText("调整类型");
+  const scope = page.getByTestId("inventory-adjustment-page"); await expect(page.getByTestId("page-title")).toHaveText("库存调整单"); await expect(scope).toContainText("调整单号"); await expect(scope).toContainText("调整类型");
   await scope.getByRole("button", { name: "查看详情" }).first().click(); await expect(page.getByRole("columnheader", { name: "调整前数量" })).toBeVisible(); await expect(page.getByRole("columnheader", { name: "调整数量" }).last()).toBeVisible(); await expect(page.getByRole("columnheader", { name: "调整后数量" })).toBeVisible();
 });
 

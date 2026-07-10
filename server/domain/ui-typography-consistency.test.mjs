@@ -23,11 +23,13 @@ test('typography tokens expose consolidated operational scale', () => {
   const source = readSource('src', 'components', 'ui', 'typography.ts')
 
   assert.match(source, /pageTitle: "text-\[20px\] leading-7 font-semibold/)
-  assert.match(source, /sectionTitle: "text-\[16px\] leading-6 font-semibold/)
-  assert.match(source, /body: "text-\[14px\] leading-\[22px\]/)
+  assert.match(source, /moduleTitle: "text-\[20px\] leading-7 font-semibold/)
+  assert.match(source, /modalTitle: "text-\[16px\] leading-6 font-semibold/)
+  assert.match(source, /sectionTitle: "text-\[14px\] leading-5 font-semibold/)
+  assert.match(source, /body: "text-\[13px\] leading-5/)
   assert.match(source, /tableHeader: "text-\[13px\] leading-5 font-semibold/)
-  assert.match(source, /tableCell: "text-\[14px\] leading-\[22px\]/)
-  assert.match(source, /tableLink: "text-\[14px\] leading-\[22px\] font-medium/)
+  assert.match(source, /tableCell: "text-\[13px\] leading-5/)
+  assert.match(source, /tableLink: "text-\[13px\] leading-5 font-medium/)
   assert.match(source, /formLabel: "text-\[13px\] leading-5 font-semibold/)
   assert.match(source, /chip: "text-\[12px\] leading-\[18px\] font-semibold/)
 })
@@ -47,10 +49,12 @@ test('shared field input and chip typography follows compact SaaS scale', () => 
   const source = readSource('src', 'components', 'ui', 'index.tsx')
 
   assert.match(source, /import \{ typography \} from "\.\/typography"/)
-  assert.match(source, /text-\[12px\] leading-\[18px\] font-semibold/)
+  assert.match(source, /fc-status-chip/)
   assert.match(source, /className=\{`h-8 inline-flex items-center gap-1\.5 rounded-lg px-3 \$\{typography\.denseButton\}`\}/)
   assert.match(source, /text-\[13px\] leading-5 font-semibold/)
-  assert.match(source, /fontSize: 14, lineHeight: "22px"/)
+  assert.match(source, /fc-section-title/)
+  assert.match(source, /fc-modal-title/)
+  assert.match(source, /fontSize: 13, lineHeight: "20px"/)
 })
 
 test('AI assistant evidence and actions use compact typography tokens', () => {

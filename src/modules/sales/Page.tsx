@@ -17,6 +17,8 @@ import EvidenceGraphPanel, { type EvidenceGraphResponse, type EvidenceNavigate }
 import DeliveryPage from "./DeliveryPage";
 import ReceiptPage from "./ReceiptPage";
 import SalesReturnPage from "./SalesReturnPage";
+import { BusinessDocumentForm } from "../../components/business/BusinessDocumentForm";
+import { useLocation } from "react-router";
 
 type SalesOrder = {
   salesOrderId: string;
@@ -103,6 +105,12 @@ function viewFromInitial(initialView?: string): SalesView {
 }
 
 export default function SalesDemandPage(props: SalesDemandPageProps) {
+  const location = useLocation();
+  const documentId = decodeURIComponent(location.pathname.split("/").at(-2) || "");
+  if (props.initialView === "delivery-new") return <BusinessDocumentForm documentLabel="发货单" listPath="/app/sales/deliveries" />;
+  if (props.initialView === "delivery-edit") return <BusinessDocumentForm mode="edit" documentLabel="发货单" documentId={documentId} listPath="/app/sales/deliveries" />;
+  if (props.initialView === "receipts-new") return <BusinessDocumentForm documentLabel="签收单" listPath="/app/sales/receipts" />;
+  if (props.initialView === "returns-new") return <BusinessDocumentForm documentLabel="销售退货单" listPath="/app/sales/returns" />;
   if (props.initialView === "delivery") return <DeliveryPage />;
   if (props.initialView === "receipts") return <ReceiptPage />;
   if (props.initialView === "returns") return <SalesReturnPage />;
@@ -202,22 +210,9 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
 
   return (
     <div className="space-y-5">
-      <Card className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4 min-w-0">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#f0f6ff", color: A.blue }}>
-              <ClipboardList size={17} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>{view === "orders" ? "销售订单" : view === "risks" ? "交付风险" : "订单证据链"}</h1>
-              <p className="text-xs mt-0.5" style={{ color: A.sub }}>
-                {view === "orders" ? "管理客户订单、数量、承诺日期与履约状态。" : view === "risks" ? "识别可能影响客户交付承诺的订单风险。" : "按销售订单查看库存、采购与收货关联。"}
-              </p>
-            </div>
-          </div>
+      <div className="flex justify-end">
           {view === "orders" && <ContextualImportActions entityLabel="客户订单" compact={false} />}
-        </div>
-      </Card>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard label="客户订单" value={String(activeSummary.totalOrders)} sub="当前工作区订单" icon={ClipboardList} color={A.blue} />
@@ -266,7 +261,7 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
                       <td className="px-3 py-3" style={{ color: A.label }}>{order.customerName}</td>
                       <td className="px-3 py-3">
                         <div className="font-semibold tabular-nums" style={{ color: A.label }}>{order.sku}</div>
-                        <div className="text-[10px] truncate max-w-[180px]" style={{ color: A.sub }}>{order.itemName}</div>
+                        <div className="fc-caption truncate max-w-[180px]" style={{ color: A.sub }}>{order.itemName}</div>
                       </td>
                       <td className="px-3 py-3 tabular-nums" style={{ color: A.label }}>{qty(order.orderedQty)}</td>
                       <td className="px-3 py-3 tabular-nums" style={{ color: A.green }}>{qty(order.reservedQty)}</td>
@@ -309,7 +304,7 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
                         ["证据链", "sales:evidence"],
                       ].map(([label, target]) => (
                         <button key={label} onClick={() => { if (target === "sales:evidence") setSelectedOrderId(order.salesOrderId); onNavigate?.(target); }}
-                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          className="rounded-full px-2 py-0.5 fc-caption font-semibold"
                           style={{ background: A.gray6, color: A.blue }}>
                           {label}
                         </button>

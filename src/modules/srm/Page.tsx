@@ -175,17 +175,9 @@ export default function SrmPage({
     <div className="space-y-4">
       <SupplierDetailModal row={selected} onClose={() => setSelected(null)} onOpenTab={(next) => setTab(next)} onNavigate={onNavigate} />
 
-      <Card className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>供应商资料</h1>
-            <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
-              供应商作为基础资料维护；绩效、风险和认证信息作为资料页内的辅助视图保留。
-            </p>
-          </div>
+      <div className="flex justify-end">
           <ContextualImportActions entityLabel="供应商资料" templateName="供应商资料" compact={false} />
-        </div>
-      </Card>
+      </div>
 
       {tab === "overview" && (
         <div className="grid grid-cols-4 gap-3">

@@ -4,13 +4,15 @@ import type { PrintFieldOption, PrintLayoutElement } from "./printLayoutTypes";
 const numberKeys = ["x", "y", "width", "height"] as const;
 
 export default function PrintElementInspector({
-  elements, selected, fieldOptions, onSelect, onChange, onDelete,
+  elements, selected, fieldOptions, instanceValue, onSelect, onChange, onInstanceValueChange, onDelete,
 }: {
   elements: PrintLayoutElement[];
   selected?: PrintLayoutElement;
   fieldOptions: PrintFieldOption[];
+  instanceValue?: string;
   onSelect: (id: string) => void;
   onChange: (patch: Partial<PrintLayoutElement>) => void;
+  onInstanceValueChange: (value: string) => void;
   onDelete: () => void;
 }) {
   return (
@@ -30,10 +32,17 @@ export default function PrintElementInspector({
           <div className="print-inspector-title">元素属性</div>
           <label>元素类型<input value={selected.type} disabled /></label>
           <label>元素名称<input data-testid="print-element-name-input" value={selected.title} onChange={(event) => onChange({ title: event.target.value })} /></label>
-          {(selected.type === "text" || selected.type === "footer") && (
-            <label>{selected.id === "title" ? "自定义标题" : "显示文字"}<input data-testid={selected.id === "title" ? "print-title-input" : "print-value-input"} value={selected.value || ""} onChange={(event) => onChange({ value: event.target.value })} /></label>
+          {selected.type !== "table" && selected.type !== "line" && selected.type !== "pageNumber" && selected.type !== "barcode" && selected.type !== "qrcode" && (
+            <label>内容来源<select data-testid="print-content-mode-select" value={selected.contentMode || (selected.type === "field" ? "field" : "static")} onChange={(event) => onChange({ contentMode: event.target.value as "static" | "field" | "instance" })}>
+              <option value="static">模板固定内容</option><option value="field">业务数据</option><option value="instance">本次打印内容</option>
+            </select></label>
           )}
-          {(selected.type === "field" || (selected.type === "signature" && selected.field)) && (
+          {(["text", "comment", "terms", "footer", "signature"].includes(selected.type) && selected.contentMode !== "field") && (
+            <label>{selected.contentMode === "instance" ? "本次打印文字" : selected.id === "title" ? "自定义标题" : "显示文字"}
+              <textarea data-testid={selected.id === "title" ? "print-title-input" : "print-value-input"} rows={5} value={selected.contentMode === "instance" ? instanceValue || "" : selected.value || ""} placeholder={selected.placeholder} onChange={(event) => selected.contentMode === "instance" ? onInstanceValueChange(event.target.value) : onChange({ value: event.target.value })} />
+            </label>
+          )}
+          {(selected.contentMode === "field" || selected.type === "field") && (
             <label>字段绑定<select value={selected.field || ""} onChange={(event) => onChange({ field: event.target.value })}>
               {fieldOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}
             </select></label>
@@ -44,6 +53,7 @@ export default function PrintElementInspector({
             ))}
           </div>
           <label>字号<input data-testid="print-font-size-input" type="number" min={8} max={48} value={selected.style?.fontSize || 12} onChange={(event) => onChange({ style: { ...selected.style, fontSize: Number(event.target.value) } })} /></label>
+          <label>行高<input data-testid="print-line-height-input" type="number" min={1} max={3} step={0.1} value={selected.style?.lineHeight || 1.45} onChange={(event) => onChange({ style: { ...selected.style, lineHeight: Number(event.target.value) } })} /></label>
           <label>对齐<select data-testid="print-align-select" value={selected.style?.align || "left"} onChange={(event) => onChange({ style: { ...selected.style, align: event.target.value as "left" | "center" | "right" } })}>
             <option value="left">左对齐</option><option value="center">居中</option><option value="right">右对齐</option>
           </select></label>

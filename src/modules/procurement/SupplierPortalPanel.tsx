@@ -89,7 +89,7 @@ export default function SupplierPortalPanel() {
               <tr key={s.name} style={{ borderBottom: i < suppliers.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                 <td className="px-5 py-3 font-medium" style={{ color: A.label }}>
                   <div>{s.name}</div>
-                  <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>{s.category || "供应商"}{s.lastIssue ? ` · ${s.lastIssue}` : ""}</div>
+                  <div className="fc-caption mt-0.5" style={{ color: A.gray2 }}>{s.category || "供应商"}{s.lastIssue ? ` · ${s.lastIssue}` : ""}</div>
                 </td>
                 <td className="px-5 py-3 font-medium" style={{ color: s.rating >= 4.5 ? A.green : s.rating >= 4.0 ? A.blue : A.orange }}>{Number(s.rating || 0).toFixed(1)} ★</td>
                 <td className="px-5 py-3">
@@ -110,7 +110,7 @@ export default function SupplierPortalPanel() {
                 </td>
                 <td className="px-5 py-3">
                   <div className="font-medium" style={{ color: Number(s.exceptions || 0) > 0 ? A.red : A.green }}>{Number(s.exceptions || 0)} 起</div>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>拒收率 {Number(s.rejectRate || 0).toFixed(1)}%</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>拒收率 {Number(s.rejectRate || 0).toFixed(1)}%</div>
                 </td>
                 <td className="px-5 py-3" style={{ color: A.label }}>{s.po}</td>
                 <td className="px-5 py-3 font-medium" style={{ color: A.blue }}>{fmt(s.spend)}</td>

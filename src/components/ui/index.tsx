@@ -10,7 +10,7 @@ export { A } from "./tokens";
 
 export function Chip({ label, color, bg }: { label: string; color: string; bg: string }) {
   return (
-    <span className="inline-flex w-fit items-center whitespace-nowrap break-keep px-2 py-0.5 rounded-full text-[12px] leading-[18px] font-semibold"
+    <span className="fc-status-chip inline-flex w-fit items-center whitespace-nowrap break-keep"
       style={{ color, background: bg }}>
       {label}
     </span>
@@ -154,10 +154,10 @@ export function DocumentHistoryPanel({
         <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: A.label }}>
           <History size={12} /> {title}
         </div>
-        <span className="text-[10px]" style={{ color: A.gray2 }}>{loading ? "加载中" : `${entries.length} 条`}</span>
+        <span className="fc-caption" style={{ color: A.gray2 }}>{loading ? "加载中" : `${entries.length} 条`}</span>
       </div>
       {entries.length === 0 ? (
-        <div className="text-[10px] leading-4" style={{ color: A.sub }}>
+        <div className="fc-caption leading-4" style={{ color: A.sub }}>
           暂无历史记录。当前单据暂无操作记录，后续状态变更会自动记录。
         </div>
       ) : (
@@ -175,14 +175,14 @@ export function DocumentHistoryPanel({
                     <div className="text-[11px] font-semibold" style={{ color: entry.action === "system_validation_blocked" ? A.red : A.label }}>
                       {auditActionLabel(entry.action)}
                     </div>
-                    <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>
+                    <div className="fc-caption mt-0.5" style={{ color: A.gray2 }}>
                       {entry.timestamp ? new Date(entry.timestamp).toLocaleString("zh-CN") : "—"} · {entry.actor || "system"}
                     </div>
                   </div>
-                  <span className="text-[10px] shrink-0" style={{ color: A.blue }}>{statusChange}</span>
+                  <span className="fc-caption shrink-0" style={{ color: A.blue }}>{statusChange}</span>
                 </div>
                 {(entry.reason || metadataSummary) && (
-                  <div className="text-[10px] leading-4 mt-1" style={{ color: A.sub }}>
+                  <div className="fc-caption leading-4 mt-1" style={{ color: A.sub }}>
                     {entry.reason || metadataSummary}
                     {entry.reason && metadataSummary ? ` · ${metadataSummary}` : ""}
                   </div>
@@ -190,13 +190,13 @@ export function DocumentHistoryPanel({
                 {entry.metadata && Object.keys(entry.metadata).length > 0 && (
                   <>
                     <button onClick={() => setOpenDetailId(openDetailId === id ? null : id)}
-                      className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium"
+                      className="mt-1 inline-flex items-center gap-1 fc-caption font-medium"
                       style={{ color: A.gray1 }}>
                       <ChevronDown size={10} className={openDetailId === id ? "rotate-180 transition-transform" : "transition-transform"} />
                       查看细节
                     </button>
                     {openDetailId === id && (
-                      <div className="mt-1 rounded-md px-2 py-1.5 text-[10px] leading-4 break-words"
+                      <div className="mt-1 rounded-md px-2 py-1.5 fc-caption leading-4 break-words"
                         style={{ background: A.gray6, color: A.sub }}>
                         {Object.entries(entry.metadata).slice(0, 6).map(([key, value]) => (
                           <div key={key}>
@@ -251,9 +251,9 @@ export function KpiCard({ label, value, sub, delta, positive, icon: Icon, color 
         )}
       </div>
       <div>
-        <div className="text-[24px] font-semibold tracking-tight leading-none font-mono" style={{ color: A.label }}>{value}</div>
-        <div className="text-xs mt-0.5" style={{ color: A.sub }}>{label}</div>
-        {sub && <div className="text-[11px] mt-0.5" style={{ color: A.gray2 }}>{sub}</div>}
+        <div className="fc-kpi-value" style={{ color: A.label }}>{value}</div>
+        <div className="fc-label mt-0.5" style={{ color: A.sub }}>{label}</div>
+        {sub && <div className="fc-caption mt-0.5" style={{ color: A.gray2 }}>{sub}</div>}
       </div>
     </Card>
   );
@@ -306,12 +306,12 @@ export function SubTabs<T extends string>({ tabs, value, onChange }: {
         const isActive = value === t.id;
         return (
           <button key={t.id} onClick={() => onChange(t.id)}
-            className="px-4 py-2.5 text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors relative"
+            className="px-4 py-2.5 fc-body font-medium flex items-center gap-1.5 shrink-0 transition-colors relative"
             style={{ color: isActive ? A.blue : A.gray1, background: "transparent" }}>
             {Icon && <Icon size={12} strokeWidth={isActive ? 2 : 1.8} />}
             {t.label}
             {t.count !== undefined && (
-              <span className="text-[9px] px-1.5 py-px rounded-full font-semibold tabular-nums"
+              <span className="fc-caption px-1.5 py-px rounded-full font-semibold tabular-nums"
                 style={{ background: isActive ? "#f0f6ff" : A.gray6, color: isActive ? A.blue : A.gray1 }}>
                 {t.count}
               </span>
@@ -327,7 +327,7 @@ export function SubTabs<T extends string>({ tabs, value, onChange }: {
 export function SectionHeader({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <h2 className="text-sm font-semibold" style={{ color: A.label }}>{title}</h2>
+      <h2 className="fc-section-title" style={{ color: A.label }}>{title}</h2>
       {right}
     </div>
   );
@@ -353,15 +353,15 @@ export function Modal({ open, onClose, title, subtitle, width = 560, children, f
         style={{ width: `min(${width}px, calc(100vw - 32px))`, boxShadow: "0 24px 60px rgba(0,0,0,0.24), 0 0 0 0.5px rgba(0,0,0,0.08)" }}>
         <div className="px-6 pt-5 pb-4 flex items-start justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
-            <h3 className="text-base font-semibold tracking-tight" style={{ color: A.label }}>{title}</h3>
-            {subtitle && <p className="text-xs mt-0.5" style={{ color: A.sub }}>{subtitle}</p>}
+            <h3 className="fc-modal-title" style={{ color: A.label }}>{title}</h3>
+            {subtitle && <p className="fc-page-subtitle mt-0.5" style={{ color: A.sub }}>{subtitle}</p>}
           </div>
           <button aria-label="关闭" onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
             style={{ color: A.gray1 }}>
             <X size={15} />
           </button>
         </div>
-        <div className="flex-1 overflow-auto px-6 py-5">{children}</div>
+        <div className="fc-body flex-1 overflow-auto px-6 py-5">{children}</div>
         {footer && <div className="px-6 py-4 flex items-center justify-end gap-2"
           style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)", background: A.gray6 }}>{footer}</div>}
       </div>
@@ -380,6 +380,6 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 export const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 10px", borderRadius: 8, fontSize: 14, lineHeight: "22px", color: A.label,
+  width: "100%", padding: "8px 10px", borderRadius: 8, fontSize: 13, lineHeight: "20px", color: A.label,
   background: A.white, border: `0.5px solid ${A.gray4}`, outline: "none",
 };

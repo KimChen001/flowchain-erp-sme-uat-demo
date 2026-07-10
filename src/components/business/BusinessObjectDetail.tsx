@@ -55,7 +55,7 @@ export function CompactKpiStrip({ items }: { items: DetailField[] }) {
     <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
       {items.map((item) => (
         <div key={item.label} className="rounded-lg p-3" style={{ background: A.gray6 }}>
-          <div className="text-[10px]" style={{ color: A.gray2 }}>{item.label}</div>
+          <div className="fc-caption" style={{ color: A.gray2 }}>{item.label}</div>
           <div className="mt-1 text-sm font-semibold tabular-nums truncate" style={{ color: toneColor(item.tone) }}>
             {item.value ?? "待确认"}
           </div>
@@ -88,7 +88,7 @@ export function DetailFieldGrid({ fields, columns = 4 }: { fields: DetailField[]
     <div className={`grid ${grid} gap-2`}>
       {fields.map((field) => (
         <div key={field.label} className="rounded-lg p-2.5" style={{ background: A.white }}>
-          <div className="text-[10px]" style={{ color: A.gray2 }}>{field.label}</div>
+          <div className="fc-caption" style={{ color: A.gray2 }}>{field.label}</div>
           <div className="mt-1 text-xs font-semibold truncate" style={{ color: toneColor(field.tone) }}>
             {field.value ?? "待确认"}
           </div>
@@ -110,7 +110,7 @@ export function EvidenceSummaryPanel({
           <div key={item.label} className="flex items-start gap-2 rounded-lg p-2.5" style={{ background: A.white }}>
             <FileText size={13} className="mt-0.5 shrink-0" style={{ color: toneColor(item.tone || "info") }} />
             <div className="min-w-0">
-              <div className="text-[10px] font-semibold" style={{ color: A.gray1 }}>{item.label}</div>
+              <div className="fc-caption font-semibold" style={{ color: A.gray1 }}>{item.label}</div>
               <div className="mt-0.5 text-[11px] leading-5" style={{ color: A.sub }}>{item.value}</div>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { Toaster, toast } from "sonner";
 import {
   AlertTriangle,
@@ -11,18 +12,19 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { navGroups, navItems } from "./routes";
+import { routeById, routeByPath, routePathForId } from "./routeRegistry";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
 import { apiJson } from "../lib/api-client";
 import {
   navigationIntentFromGlobalSearchResult,
   navigationIntentFromModule,
-  splitNavigationId,
   type CanonicalFocusTarget,
   type CanonicalNavigationIntent,
 } from "../lib/evidenceLinks";
 import { fmt } from "../lib/format";
 import { A, Card, Field, inputStyle, Modal, RecoveryActions } from "../components/ui";
 import { BusinessBackLink } from "../components/navigation/BusinessBackLink";
+import { ModuleShell, NotFoundRecovery } from "../components/navigation/ModuleShell";
 import type { WorkflowContext } from "../lib/workflowContext";
 import { buildReturnContext } from "../lib/workflowContext";
 import { typography } from "../components/ui/typography";
@@ -145,7 +147,7 @@ function ReplenishmentRequestModal({
           { label: "MOQ/倍量", value: `${plan.moq}/${plan.batchMultiple}`, color: A.label },
         ].map((metric) => (
           <div key={metric.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-            <div className="text-[10px]" style={{ color: A.gray2 }}>{metric.label}</div>
+            <div className="fc-caption" style={{ color: A.gray2 }}>{metric.label}</div>
             <div className="text-sm font-semibold mt-1" style={{ color: metric.color }}>{metric.value}</div>
           </div>
         ))}
@@ -178,7 +180,7 @@ function ReplenishmentRequestModal({
           { label: "优先级", value: plan.priority },
         ].map((metric) => (
           <div key={metric.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-            <div className="text-[10px]" style={{ color: A.gray2 }}>{metric.label}</div>
+            <div className="fc-caption" style={{ color: A.gray2 }}>{metric.label}</div>
             <div className="text-sm font-semibold mt-1" style={{ color: metric.label === "优先级" && plan.priority === "高" ? A.red : A.label }}>{metric.value}</div>
           </div>
         ))}
@@ -218,13 +220,6 @@ function actionDraftErrorMessage(error: unknown) {
   }
   return message;
 }
-
-const PAGE_LABELS: Record<string, string> = {
-  overview: "首页", sales: "销售管理", inventory: "库存管理",
-  forecast: "预测与 MRP",
-  purchaseRequests: "采购申请", purchasing: "采购订单", rfq: "供应商报价", receiving: "收货",
-  procurement: "采购管理", finance: "结算管理", "master-data": "基础资料", srm: "基础资料", reports: "报表中心", imports: "数据接入与质量", "exception-cases": "异常处理工单", "collaboration-drafts": "协同通知草稿", "review-actions": "行动草稿与人工复核", "audit-history": "业务审计与历史", "pilot-readiness": "试点准备度", settings: "系统管理",
-};
 
 type GlobalSearchResult = {
   id: string;
@@ -343,7 +338,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: A.bg, fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif" }}>
+    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: A.bg, fontFamily: "var(--fc-font-family)" }}>
       <Toaster position="top-right" />
       <div className="w-full max-w-5xl grid grid-cols-[1.05fr_0.95fr] gap-8 items-center">
         <section className="space-y-8">
@@ -474,7 +469,8 @@ class PanelErrorBoundary extends React.Component<PanelErrorBoundaryProps, PanelE
 }
 
 export default function FlowChainApp() {
-  const [active, setActive] = useState("overview");
+  const location = useLocation();
+  const routerNavigate = useNavigate();
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(null);
   const [replenishmentSku, setReplenishmentSku] = useState<string | null>(null);
   const [draftShellOpen, setDraftShellOpen] = useState(false);
@@ -506,6 +502,18 @@ export default function FlowChainApp() {
     }
   });
 
+  useEffect(() => {
+    if (location.pathname === "/" || location.pathname === "/app") {
+      routerNavigate("/app/overview", { replace: true });
+    }
+  }, [location.pathname, routerNavigate]);
+
+  const activeRoute = routeByPath(location.pathname);
+  const active = activeRoute?.id || "not-found";
+  const activeModule = activeRoute?.moduleId || "overview";
+  const activeView = activeRoute?.viewId;
+  const panelModule = activeRoute?.panelId || activeModule;
+
   function prepareReplenishmentRequest(sku: string) {
     const item = inventoryItems.find((entry) => entry.sku === sku);
     if (!item) {
@@ -515,7 +523,7 @@ export default function FlowChainApp() {
     const plan = inventoryPlan(item);
     if (plan.suggestedQty <= 0) {
       toast("当前无需生成 PR", { description: `${item.sku} 仍高于再订货点，建议继续监控。` });
-      setActive("inventory");
+      routerNavigate(routePathForId("inventory"));
       return;
     }
     setReplenishmentSku(sku);
@@ -523,19 +531,14 @@ export default function FlowChainApp() {
 
   const replenishmentItem = replenishmentSku ? inventoryItems.find((item) => item.sku === replenishmentSku) ?? null : null;
 
-  const { moduleId: activeModule, viewId: activeView } = splitNavigationId(active);
-
   function navItemMatchesActive(item: typeof navItems[number]) {
-    const routeAliases = ("routeAliases" in item ? item.routeAliases : []) as readonly string[];
-    if (active === item.id || activeModule === item.id || routeAliases.includes(activeModule)) return true;
-    return Boolean(item.children?.some((child) => child.id === active));
+    return item.id === activeModule || Boolean(item.children?.some((child) => child.id === (activeRoute?.currentActiveMenuId || active)));
   }
 
-  const activeNavItem = navItems.find((item) => item.children?.some((child) => child.id === active))
-    || navItems.find(navItemMatchesActive);
-  const activeModuleLabel = activeNavItem?.label || PAGE_LABELS[activeModule] || activeModule;
-  const activeChildLabel = activeNavItem?.children?.find((item) => item.id === active)?.label;
-  const contentMaxWidthClass = activeModule === "srm"
+  const activeNavItem = navItems.find(navItemMatchesActive);
+  const activeModuleLabel = activeRoute?.moduleLabel || activeNavItem?.label || activeModule;
+  const activeChildLabel = activeRoute?.parentId ? activeRoute.label : undefined;
+  const contentMaxWidthClass = panelModule === "srm"
     ? "max-w-[1440px]"
     : ["overview", "reports", "imports", "review-actions", "collaboration-drafts", "audit-history", "pilot-readiness", "settings"].includes(activeModule)
       ? "max-w-[1360px]"
@@ -609,7 +612,7 @@ export default function FlowChainApp() {
   }
 
   function applyNavigationIntent(intent: CanonicalNavigationIntent, returnContext?: WorkflowContext | null) {
-    setActive(intent.activeId);
+    routerNavigate(routePathForId(intent.activeId));
     if (intent.returnTo) setFocusReturnActive(intent.returnTo);
     if (returnContext !== undefined) setFocusReturnContext(returnContext);
     setSearchFocus(intent.focusTarget
@@ -726,7 +729,7 @@ export default function FlowChainApp() {
 
   function returnFromFocus() {
     const context = focusReturnContext;
-    setActive(context?.sourceRoute || focusReturnActive || "overview");
+    routerNavigate(routePathForId(context?.sourceRoute || focusReturnActive || "overview"));
     setSearchFocus(context?.sourceEntityId && context.sourceEntityType
       ? {
           entityType: context.sourceEntityType,
@@ -768,7 +771,7 @@ export default function FlowChainApp() {
   const panels: Record<string, React.ReactNode> = {
     overview:    <OverviewPanel initialView={activeView} onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
     sales:       <SalesDemandPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onOpenAi={() => setAiOpenSignal(Date.now())} />,
-    inventory:   <InventoryPanel initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} onReviewActionDraft={openActionDraftReview} />,
+    inventory:   <InventoryPanel initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} onReviewActionDraft={openActionDraftReview} />,
     forecast:    <ForecastPanel initialView={activeView as any} onNavigate={navigateTo} onReviewActionDraft={openActionDraftReview} />,
     // Compatibility aliases for older dashboard/report actions; sidebar uses module:view ids.
     purchaseRequests: <ProcurementPanel view="requests" intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => navigateTo("procurement:rfq")} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
@@ -777,8 +780,8 @@ export default function FlowChainApp() {
     receiving:   <ReceivingPanel focus={searchFocus} onNavigate={navigateTo} />,
     procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => navigateTo("procurement:rfq")} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     srm: <SrmPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
-    "master-data": <MasterDataPage initialView={activeView as any} focus={searchFocus} onActiveContextChange={setAiActiveContext} />,
-    finance:     <FinanceWorkbench initialView={activeView as any} />,
+    "master-data": <MasterDataPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
+    finance:     <FinanceWorkbench initialView={activeView as any} onNavigate={navigateTo} />,
     reports:     <ReportsPanel initialView={activeView as any} onNavigate={navigateTo} />,
     imports:     <ImportsPanel initialView={activeView as any} onNavigate={navigateTo} />,
     "exception-cases": <ExceptionCasesPage onNavigate={navigateTo} />,
@@ -806,9 +809,9 @@ export default function FlowChainApp() {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden" style={{ background: A.bg, fontFamily: "Inter, -apple-system, BlinkMacSystemFont, sans-serif" }}>
+    <div className="h-screen flex overflow-hidden" style={{ background: A.bg, fontFamily: "var(--fc-font-family)" }}>
       <Toaster position="top-right" toastOptions={{
-        style: { borderRadius: 14, fontSize: 12, fontFamily: "Inter", boxShadow: "0 8px 24px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)" },
+        style: { borderRadius: 14, fontSize: 12, fontFamily: "var(--fc-font-family)", boxShadow: "0 8px 24px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)" },
       }} />
       <ReplenishmentRequestModal
         open={Boolean(replenishmentItem)}
@@ -833,7 +836,7 @@ export default function FlowChainApp() {
             </div>
             <div>
               <div className="text-sm font-semibold leading-none text-white">{PRODUCT_NAME}</div>
-              <div className="text-[10px] mt-1" style={{ color: A.sidebarSub }}>{PRODUCT_TAGLINE}</div>
+              <div className="fc-caption mt-1" style={{ color: A.sidebarSub }}>{PRODUCT_TAGLINE}</div>
             </div>
           </div>
         </div>
@@ -849,7 +852,7 @@ export default function FlowChainApp() {
                     type="button"
                     aria-expanded={Boolean(isExpanded)}
                     onClick={() => setExpandedNavGroups((current) => ({ ...current, [group.label]: !current[group.label] }))}
-                    className="w-full flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-widest px-2 mb-2"
+                    className="w-full flex items-center justify-between gap-2 fc-caption font-semibold uppercase tracking-widest px-2 mb-2"
                     style={{ color: "rgba(148,163,184,0.58)" }}
                   >
                     <span>{group.label}</span>
@@ -860,7 +863,7 @@ export default function FlowChainApp() {
                     />
                   </button>
                 ) : (
-                  <div className="text-[10px] font-semibold uppercase tracking-widest px-2 mb-2" style={{ color: "rgba(148,163,184,0.58)" }}>{group.label}</div>
+                  <div className="fc-caption font-semibold uppercase tracking-widest px-2 mb-2" style={{ color: "rgba(148,163,184,0.58)" }}>{group.label}</div>
                 )}
                 {isExpanded && (
                   <div className="space-y-0.5">
@@ -881,7 +884,7 @@ export default function FlowChainApp() {
                           {isActive && item.children && (
                             <div className="ml-4 pl-3 py-1 space-y-0.5" style={{ borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
                               {item.children.map((child) => {
-                                const childActive = active === child.id || (active === item.id && child.id === item.id);
+                                const childActive = (activeRoute?.currentActiveMenuId || active) === child.id;
                                 return (
                                   <button key={child.id} onClick={() => navigateTo(child.id)}
                                     className="w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors"
@@ -923,16 +926,7 @@ export default function FlowChainApp() {
             borderBottom: `1px solid ${A.border}`,
           }}>
           <div className="flex items-center gap-2 text-sm">
-            <span style={{ color: A.gray2 }}>{PRODUCT_NAME}</span>
-            <span style={{ color: A.gray3 }}>/</span>
-            <span className="font-medium" style={{ color: A.label }}>{activeModuleLabel}</span>
-            {activeChildLabel && activeChildLabel !== activeModuleLabel && (
-              <>
-                <span style={{ color: A.gray3 }}>/</span>
-                <span className="font-medium" style={{ color: A.label }}>{activeChildLabel}</span>
-              </>
-            )}
-            <span className="text-xs ml-2" style={{ color: A.gray2 }}>{user.company}</span>
+            <span className="fc-label font-medium" style={{ color: A.label }}>{user.company}</span>
           </div>
           <div className="flex items-center gap-2">
             <form ref={searchRef} onSubmit={(event) => { event.preventDefault(); runGlobalSearch(); }}
@@ -1008,7 +1002,7 @@ export default function FlowChainApp() {
                       let rowIndex = -1;
                       return searchGroups.map((group) => (
                         <div key={group.type}>
-                          <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-normal" style={{ color: A.gray2 }}>
+                          <div className="px-3 pt-3 pb-1 fc-caption font-semibold uppercase tracking-normal" style={{ color: A.gray2 }}>
                             {group.label}
                           </div>
                           {group.results.map((result) => {
@@ -1028,7 +1022,7 @@ export default function FlowChainApp() {
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold" style={{ background: activeResult ? A.white : "#eef4ff", color: A.blue }}>
+                                      <span className="fc-caption px-1.5 py-0.5 rounded font-semibold" style={{ background: activeResult ? A.white : "#eef4ff", color: A.blue }}>
                                         {SEARCH_TYPE_LABELS[result.type] || result.type}
                                       </span>
                                       <span className={`${typography.searchResultTitle} truncate`} style={{ color: A.label }}>{result.label}</span>
@@ -1039,7 +1033,7 @@ export default function FlowChainApp() {
                                     )}
                                   </div>
                                   {result.status && (
-                                    <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: A.gray6, color: A.gray1 }}>
+                                    <span className="shrink-0 fc-caption px-2 py-0.5 rounded-full font-medium" style={{ background: A.gray6, color: A.gray1 }}>
                                       {result.status}
                                     </span>
                                   )}
@@ -1078,7 +1072,7 @@ export default function FlowChainApp() {
                 </div>
                 <div className="hidden sm:block text-left">
                   <div className="text-[12px] font-medium leading-tight" style={{ color: A.label }}>{user.name}</div>
-                  <div className="text-[10px] leading-tight" style={{ color: A.gray2 }}>{user.role}</div>
+                  <div className="fc-caption leading-tight" style={{ color: A.gray2 }}>{user.role}</div>
                 </div>
               </button>
 
@@ -1114,6 +1108,7 @@ export default function FlowChainApp() {
         <div className="flex-1 flex overflow-hidden">
           <main className="flex-1 overflow-auto p-6" data-testid="app-main">
             <div id="module-export-scope" data-testid="module-export-scope" className={`mx-auto w-full ${contentMaxWidthClass}`}>
+              {activeRoute ? <ModuleShell route={activeRoute}>
               {searchFocus && (
                 <div className="mb-4 rounded-xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
                   data-testid="focus-banner"
@@ -1127,16 +1122,17 @@ export default function FlowChainApp() {
                     className="shrink-0"
                     actions={[
                       { key: "previous", label: "返回上一层", onClick: returnFromFocus, kind: "previous", tone: "primary" },
-                      { key: "module", label: "返回列表", onClick: () => navigateTo(activeModule), kind: "module" },
+                      { key: "module", label: "返回列表", onClick: () => routerNavigate(routeById(activeRoute.defaultChildId || activeRoute.parentId || activeModule)?.path || "/app/overview"), kind: "module" },
                       { key: "clear", label: "清除聚焦", onClick: clearFocus, kind: "clear", tone: "subtle" },
                     ]}
                   />
                   <BusinessBackLink context={focusReturnContext} onReturn={returnFromFocus} />
                 </div>
               )}
-              <PanelErrorBoundary key={active} moduleLabel={activeChildLabel || activeModuleLabel}>
-                {panels[activeModule] || panels[active] || panels.overview}
+              <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
+                {panels[panelModule] || panels[activeModule] || panels.overview}
               </PanelErrorBoundary>
+              </ModuleShell> : <NotFoundRecovery pathname={location.pathname} />}
             </div>
           </main>
         </div>

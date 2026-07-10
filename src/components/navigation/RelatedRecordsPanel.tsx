@@ -47,10 +47,10 @@ export function RelatedRecordsPanel({
                       </div>
                       {record.status ? <Chip label={record.status} color={A.gray1} bg={A.gray6} /> : null}
                     </div>
-                    <div className="mt-0.5 truncate text-[10px]" style={{ color: A.gray2 }}>
+                    <div className="mt-0.5 truncate fc-caption" style={{ color: A.gray2 }}>
                       {entityLabels[record.entityType] || "业务记录"}
                     </div>
-                    <div className="mt-1 text-[10px] leading-4" style={{ color: record.disabledReason ? A.orange : A.sub }}>
+                    <div className="mt-1 fc-caption leading-4" style={{ color: record.disabledReason ? A.orange : A.sub }}>
                       {record.disabledReason || record.relationshipReason || "已找到关联依据。"}
                     </div>
                   </>

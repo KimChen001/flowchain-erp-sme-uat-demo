@@ -51,7 +51,7 @@ test('R195-R196 GRN and invoice contextual actions do not auto-post approve or p
 
 test('R198 AI insight panel is embedded and not a standalone left navigation module', () => {
   const panel = source('src', 'components', 'ai', 'ContextualAIInsightPanel.tsx')
-  const routes = source('src', 'app', 'routes.tsx')
+  const routes = source('src', 'app', 'routeRegistry.tsx')
   const app = source('src', 'app', 'FlowChainApp.tsx')
   const floating = source('src', 'modules', 'ai-assistant', 'Panel.tsx')
   assert.match(panel, /上下文洞察/)
@@ -69,7 +69,7 @@ test('R198 AI insight panel is embedded and not a standalone left navigation mod
 })
 
 test('R200 business modules remain navigable and provider keys are not introduced', () => {
-  const routes = source('src', 'app', 'routes.tsx')
+  const routes = source('src', 'app', 'routeRegistry.tsx')
   const allChangedSources = [
     source('src', 'domain', 'contextual-ai', 'actions.ts'),
     source('src', 'domain', 'contextual-ai', 'readiness.ts'),
@@ -79,8 +79,9 @@ test('R200 business modules remain navigable and provider keys are not introduce
     source('src', 'modules', 'receiving', 'Page.tsx'),
     source('src', 'modules', 'procurement', 'SupplierInvoiceRegister.tsx'),
   ].join('\n')
-  for (const id of ['procurement', 'inventory', 'srm', 'finance', 'imports']) {
+  for (const id of ['procurement', 'inventory', 'master-data', 'finance', 'imports']) {
     assert.match(routes, new RegExp(`id:\\s*["']${id}`))
   }
+  assert.match(routes, /legacyIds:\s*\["srm",\s*"srm:master"\]/)
   assert.doesNotMatch(allChangedSources, /OPENAI_API_KEY|ARK_API_KEY|DOUBAO_API_KEY|AI_PROVIDER_ENABLED/)
 })

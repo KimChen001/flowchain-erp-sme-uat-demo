@@ -742,7 +742,7 @@ export default function PurchasingOrdersPage({
               ["来源说明", selectedPO.reason || "当前 PO 来源关系用于解释从申请、寻源到订单的业务链路。", A.label],
             ].map(([label, value, color]) => (
               <div key={String(label)} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
-                <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                 <div className="text-xs font-semibold mt-1 truncate" style={{ color: String(color) }}>{value}</div>
               </div>
             ))}
@@ -876,7 +876,7 @@ export default function PurchasingOrdersPage({
               ["数据限制 / 不确定性", "结论基于当前工作区可见记录，需业务负责人确认"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
-                <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                 <div className="text-[11px] leading-5 mt-1" style={{ color: A.label }}>{value}</div>
               </div>
             ))}

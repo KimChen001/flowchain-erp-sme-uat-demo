@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Database, FileSpreadsheet, Package, Printer, Search, Tags, Truck, Users, Warehouse } from "lucide-react";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
-import { A, Card, KpiCard, SubTabs } from "../../components/ui";
+import { A, Card, KpiCard } from "../../components/ui";
 import { ITEM_MASTER, PAYMENT_TERMS, SUPPLIER_MASTER, TAX_CODES, WAREHOUSE_BINS } from "../../data/master-data";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import MasterDataDetailModal, { type DetailRecord } from "./MasterDataDetailModal";
@@ -37,10 +37,12 @@ const fallbackMasterData: MasterDataSnapshot = {
 export default function MasterDataPage({
   initialView = "overview",
   focus,
+  onNavigate,
   onActiveContextChange,
 }: {
   initialView?: MasterDataTab;
   focus?: { entityType: string; entityId: string; at: number } | null;
+  onNavigate?: (routeId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [tab, setTab] = useState<MasterDataTab>(initialView);
@@ -48,6 +50,12 @@ export default function MasterDataPage({
   const [detail, setDetail] = useState<DetailRecord | null>(null);
   const [masterData, setMasterData] = useState<MasterDataSnapshot>(fallbackMasterData);
   const [templateCatalog, setTemplateCatalog] = useState<PrintTemplateCatalogItem[]>(PRINT_TEMPLATE_CATALOG);
+
+  function openTab(next: MasterDataTab) {
+    const routeId = next === "overview" ? "master-data" : `master-data:${next}`;
+    if (onNavigate) onNavigate(routeId);
+    else setTab(next);
+  }
 
   useEffect(() => {
     if (initialView) setTab(initialView);
@@ -161,18 +169,6 @@ export default function MasterDataPage({
   return (
     <div className="space-y-4">
       <MasterDataDetailModal detail={detail} onClose={() => setDetail(null)} />
-      <Card className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>基础资料</h1>
-            <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
-              统一维护商品、客户、供应商、仓库库位、税码、付款条款与打印模板。
-            </p>
-          </div>
-          <ContextualImportActions entityLabel={entityLabel} templateName={templateName} compact />
-        </div>
-      </Card>
-
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="物料资料" value={String(masterData.items.length)} sub={`${masterData.items.filter((item) => item.status === "待完善").length} 条待完善`} icon={Package} color={A.blue} />
         <KpiCard label="供应商资料" value={String(masterData.suppliers.length)} sub={`${masterData.suppliers.filter((item) => item.riskStatus === "高").length} 个高风险`} icon={Truck} color={A.purple} />
@@ -181,8 +177,8 @@ export default function MasterDataPage({
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <SubTabs tabs={tabs as any} value={tab} onChange={(value) => setTab(value as MasterDataTab)} />
         <div className="flex items-center gap-2">
+          <ContextualImportActions entityLabel={entityLabel} templateName={templateName} compact />
           <div className="h-8 px-2 rounded-lg flex items-center gap-1.5" style={{ background: A.white, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
             <Search size={12} style={{ color: A.gray2 }} />
             <input value={search} onChange={(event) => setSearch(event.target.value)}
@@ -200,7 +196,7 @@ export default function MasterDataPage({
 
       <Card>
         {tab === "overview" ? (
-          <MasterDataOverview data={masterData} onOpenTab={setTab} />
+          <MasterDataOverview data={masterData} onOpenTab={openTab} />
         ) : tab === "customers" ? (
           <CustomerTable customers={filteredCustomers} />
         ) : tab === "print-templates" ? (

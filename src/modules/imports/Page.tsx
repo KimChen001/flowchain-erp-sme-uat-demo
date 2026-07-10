@@ -1625,14 +1625,14 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             </div>
 
             <div className="rounded-xl p-3" style={{ background: "#f0f6ff" }}>
-              <div className="text-[10px] font-semibold mb-1" style={{ color: A.blue }}>数据快照</div>
-              <div className="grid grid-cols-2 gap-2 text-[10px] leading-5">
+              <div className="fc-caption font-semibold mb-1" style={{ color: A.blue }}>数据快照</div>
+              <div className="grid grid-cols-2 gap-2 fc-caption leading-5">
                 <span style={{ color: A.gray1 }}>预览编号：{userPreview?.normalizedSnapshot?.previewId || "—"}</span>
                 <span style={{ color: A.gray1 }}>数据集编号：{userPreview?.normalizedSnapshot?.datasetId || "—"}</span>
                 <span style={{ color: A.gray1 }}>当前工作区：{userPreview?.normalizedSnapshot?.scope?.tenantId ? "已识别" : "—"}</span>
                 <span style={{ color: A.gray1 }}>当前用户范围：{userPreview?.normalizedSnapshot?.scope?.userId ? "已识别" : "—"}</span>
               </div>
-              <div data-testid="user-data-snapshot-hash" className="mt-2 text-[10px] font-mono break-all" style={{ color: A.label }}>
+              <div data-testid="user-data-snapshot-hash" className="mt-2 fc-caption font-mono break-all" style={{ color: A.label }}>
                 快照校验码：{userPreview?.normalizedSnapshot?.normalizedSnapshotHash || "—"}
               </div>
             </div>
@@ -1654,7 +1654,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             </div>
 
             <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
-              <div className="text-[10px] font-semibold mb-2" style={{ color: A.label }}>记录计数</div>
+              <div className="fc-caption font-semibold mb-2" style={{ color: A.label }}>记录计数</div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(userPreview?.recordCounts || {}).filter(([, count]) => count > 0).map(([key, count]) => (
                   <Chip key={key} label={`${key}: ${count}`} color={A.blue} bg={A.white} />
@@ -1664,8 +1664,8 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             </div>
 
             <div className="rounded-xl p-3" style={{ background: A.gray6 }}>
-              <div className="text-[10px] font-semibold mb-1" style={{ color: A.label }}>审计预览</div>
-              <div className="text-[10px] leading-5" style={{ color: A.sub }}>
+              <div className="fc-caption font-semibold mb-1" style={{ color: A.label }}>审计预览</div>
+              <div className="fc-caption leading-5" style={{ color: A.sub }}>
                 复核动作：{String(userPreview?.auditPreview?.action || "—")} · 业务对象：{String((userPreview?.auditPreview?.entity as { id?: string } | undefined)?.id || "—")}
               </div>
             </div>
@@ -1694,7 +1694,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               style={{ background: userCanCommit ? A.blue : A.gray5, color: userCanCommit ? A.white : A.gray2 }}>
               {hasBlockingErrors(userPreview) ? "存在阻塞错误，无法提交" : "复核后提交"}
             </button>
-            <div data-testid="user-data-commit-status" className="mt-3 text-[10px] leading-5" style={{ color: userCommitResponse?.commitAccepted ? A.green : A.gray1 }}>
+            <div data-testid="user-data-commit-status" className="mt-3 fc-caption leading-5" style={{ color: userCommitResponse?.commitAccepted ? A.green : A.gray1 }}>
               {userCommitResponse
                 ? userCommitResponse.commitAccepted
                   ? `已提交 ${userCommitResponse.importBatchId || "导入批次"} · 审计 ${userCommitResponse.auditEventId || "—"}`
@@ -1711,7 +1711,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             <div className="text-[11px] leading-5" style={{ color: A.sub }}>
               {userDatasetStatusMessage(userDatasetStatus, userDatasetStatusState)}
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] leading-5">
+            <div className="mt-3 grid grid-cols-2 gap-2 fc-caption leading-5">
               <span style={{ color: A.gray1 }}>数据集编号：{userDatasetStatus?.dataset?.datasetId || "—"}</span>
               <span style={{ color: A.gray1 }}>批次：{userDatasetStatus?.dataset?.importBatchId || "—"}</span>
               <span style={{ color: A.gray1 }}>当前工作区：{userDatasetStatus?.scope?.tenantId ? "已识别" : "—"}</span>
@@ -1731,7 +1731,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
                 ? `数据来源：已保存用户数据集 · ${userDatasetStatus.dataset?.datasetId || "数据集"} · 批次 ${userDatasetStatus.dataset?.importBatchId || "—"}`
                 : "数据限制：未找到当前用户数据集。"}
             </div>
-            <div className="mt-3 rounded-lg p-2 text-[10px] leading-5" style={{ background: A.white, color: A.gray1 }}>
+            <div className="mt-3 rounded-lg p-2 fc-caption leading-5" style={{ background: A.white, color: A.gray1 }}>
               智能助手保持只读。它可以整理依据、影响、先复核后确认的建议动作和关联记录，但不能提交、审批、付款、过账、发送或修改业务记录。
             </div>
           </div>
@@ -1758,7 +1758,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
                 style={{ background: activeImportBatchId && confirmDeactivate ? A.red : A.gray5, color: activeImportBatchId && confirmDeactivate ? A.white : A.gray2 }}>
                 停用当前数据集
               </button>
-              <div className="mt-2 text-[10px] leading-5" style={{ color: userDeactivateResponse?.deactivated ? A.green : A.gray1 }}>
+              <div className="mt-2 fc-caption leading-5" style={{ color: userDeactivateResponse?.deactivated ? A.green : A.gray1 }}>
                 {userDeactivateResponse
                   ? userDeactivateResponse.deactivated
                     ? `已停用 ${userDeactivateResponse.importBatchId || activeImportBatchId} · 审计 ${userDeactivateResponse.auditEventId || "—"} · 保存到业务数据集：${userDeactivateResponse.writesDb ? "是" : "否"}`
@@ -1792,7 +1792,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
                 <span className="text-xs font-semibold truncate" style={{ color: selected.id === config.id ? A.blue : A.label }}>{config.label}</span>
                 <Chip label={config.module} color={selected.id === config.id ? A.blue : A.gray1} bg={A.white} />
               </div>
-              <div className="text-[10px] leading-4 mt-2" style={{ color: A.sub }}>{config.description}</div>
+              <div className="fc-caption leading-4 mt-2" style={{ color: A.sub }}>{config.description}</div>
             </button>
           ))}
         </div>
@@ -1813,12 +1813,12 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Field label="必填字段">
-                <div className="min-h-20 rounded-xl p-2 text-[10px] leading-5" style={{ background: A.gray6, color: A.gray1 }}>
+                <div className="min-h-20 rounded-xl p-2 fc-caption leading-5" style={{ background: A.gray6, color: A.gray1 }}>
                   {selected.requiredFields.join("、")}
                 </div>
               </Field>
               <Field label="可选字段">
-                <div className="min-h-20 rounded-xl p-2 text-[10px] leading-5" style={{ background: A.gray6, color: A.gray1 }}>
+                <div className="min-h-20 rounded-xl p-2 fc-caption leading-5" style={{ background: A.gray6, color: A.gray1 }}>
                   {selected.optionalFields.join("、") || "—"}
                 </div>
               </Field>
@@ -1826,7 +1826,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             <div className="rounded-xl p-3" style={{ background: "#fff8f0" }}>
               <div className="text-[11px] font-semibold mb-1" style={{ color: A.orange }}>适用场景 / 注意事项</div>
               {selected.notes.map((note) => (
-                <div key={note} className="text-[10px] leading-5" style={{ color: A.sub }}>· {note}</div>
+                <div key={note} className="fc-caption leading-5" style={{ color: A.sub }}>· {note}</div>
               ))}
             </div>
           </div>
@@ -1834,7 +1834,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
 
         <Card className="p-5">
           <SectionHeader title="导入任务校验"
-            right={fileName ? <span className="text-[10px]" style={{ color: A.gray2 }}>{fileName}</span> : null} />
+            right={fileName ? <span className="fc-caption" style={{ color: A.gray2 }}>{fileName}</span> : null} />
           <div className="rounded-xl p-4 flex items-center gap-4" style={{ background: A.gray6, border: "1px dashed rgba(0,0,0,0.14)" }}>
             <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: A.white, color: A.blue }}>
               <Upload size={18} />
@@ -1942,7 +1942,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
               <div key={config.id} className="flex items-center justify-between rounded-lg p-2.5" style={{ background: A.gray6 }}>
                 <div>
                   <div className="text-xs font-medium" style={{ color: A.label }}>{config.label}</div>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{config.module}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{config.module}</div>
                 </div>
                 <div className="text-sm font-semibold tabular-nums" style={{ color: (applied[config.id] || []).length ? A.green : A.gray2 }}>
                   {(applied[config.id] || []).length}
@@ -1962,7 +1962,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
 
         <Card className="p-5">
           <SectionHeader title="导入任务记录"
-            right={<span className="text-[10px]" style={{ color: A.gray2 }}>当前会话</span>} />
+            right={<span className="fc-caption" style={{ color: A.gray2 }}>当前会话</span>} />
           {batches.length === 0 ? (
             <div className="text-xs py-8 text-center" style={{ color: A.gray2 }}>尚未应用任何导入批次。</div>
           ) : (
@@ -1973,14 +1973,14 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
                     <div className="text-xs font-semibold" style={{ color: A.blue }}>{batch.batchId}</div>
                     <Chip label={batch.status} color={A.green} bg="#f0faf4" />
                   </div>
-                  <div className="text-[10px] mt-1" style={{ color: A.sub }}>{batch.importType} · {batch.fileName}</div>
-                  <div className="grid grid-cols-4 gap-2 mt-2 text-[10px]">
+                  <div className="fc-caption mt-1" style={{ color: A.sub }}>{batch.importType} · {batch.fileName}</div>
+                  <div className="grid grid-cols-4 gap-2 mt-2 fc-caption">
                     <span style={{ color: A.gray1 }}>总 {batch.totalRows}</span>
                     <span style={{ color: A.green }}>有效 {batch.validRows}</span>
                     <span style={{ color: A.orange }}>警告 {batch.warningRows}</span>
                     <span style={{ color: A.red }}>错误 {batch.errorRows}</span>
                   </div>
-                  <div className="text-[10px] mt-2" style={{ color: A.gray2 }}>{batch.appliedAt} · {batch.operator}</div>
+                  <div className="fc-caption mt-2" style={{ color: A.gray2 }}>{batch.appliedAt} · {batch.operator}</div>
                 </div>
               ))}
             </div>

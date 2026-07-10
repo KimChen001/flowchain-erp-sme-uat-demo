@@ -95,11 +95,11 @@ export function ContextualAIInsightPanel({
             {(insight.riskLevel || insight.reason) && (
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <div className="rounded-lg px-2.5 py-2" style={{ background: A.white }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>风险等级</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>风险等级</div>
                   <div className="text-[11px] font-semibold" style={{ color: insight.riskLevel === "高" ? A.red : A.label }}>{insight.riskLevel || "未标注"}</div>
                 </div>
                 <div className="rounded-lg px-2.5 py-2" style={{ background: A.white }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>原因</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>原因</div>
                   <div className="text-[11px] font-semibold truncate" style={{ color: A.label }}>{insight.reason || "当前数据未提供明确原因，建议复核相关记录。"}</div>
                 </div>
               </div>
@@ -126,7 +126,7 @@ export function ContextualAIInsightPanel({
                     style={{ background: A.white, color: tone.color, boxShadow: `0 0 0 0.5px ${A.border}` }}
                   >
                     <div className="text-[11px] font-semibold">{action.label}</div>
-                    <div className="mt-0.5 text-[10px]" style={{ color: A.gray2 }}>
+                    <div className="mt-0.5 fc-caption" style={{ color: A.gray2 }}>
                       仅生成可复核内容 · 需要人工确认 · 不自动修改业务记录
                     </div>
                   </button>
@@ -189,9 +189,9 @@ function LinkedRecords({
           const clickable = record.routeAvailable && record.focusTarget && onNavigateRecord;
           const body = (
             <>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>{businessEntityLabel(record.entityType)}</div>
+              <div className="fc-caption" style={{ color: A.gray2 }}>{businessEntityLabel(record.entityType)}</div>
               <div className="text-[11px] font-semibold truncate" style={{ color: clickable ? A.blue : A.label }}>{record.displayLabel}</div>
-              {record.disabledReason ? <div className="mt-0.5 text-[10px] leading-4" style={{ color: A.orange }}>{record.disabledReason}</div> : null}
+              {record.disabledReason ? <div className="mt-0.5 fc-caption leading-4" style={{ color: A.orange }}>{record.disabledReason}</div> : null}
             </>
           );
           return clickable ? (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Calendar, ChevronRight, ClipboardCheck, FileSpreadsheet, FileText, Handshake, PackageCheck, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
-import { A, Card, Chip, KpiCard, SubTabs } from "../../components/ui";
+import { A, Card, Chip, KpiCard } from "../../components/ui";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { CONTRACTS, PURCHASE_RETURNS, RFQS, SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/demo-data";
 import { isReturnException } from "../../domain/procurement/returns";
@@ -14,8 +14,9 @@ import PurchasingOrders from "../purchasing/Page";
 import PurchasingRFQ from "../rfq/Page";
 import ReceivingPanel from "../receiving/Page";
 import type { ActiveContext } from "../ai-assistant/Panel";
+import { BusinessDocumentForm } from "../../components/business/BusinessDocumentForm";
 
-type PurTab = "overview" | "requests" | "rfq" | "orders" | "contracts" | "receiving" | "invoices" | "match" | "returns";
+type PurTab = "overview" | "requests" | "rfq" | "orders" | "contracts" | "receiving" | "receiving-new" | "receiving-edit" | "invoices" | "match" | "returns";
 type WorkbenchFilter = "all" | "approval" | "overdue" | "tracking";
 
 type ProcurementPanelProps = {
@@ -28,6 +29,8 @@ type ProcurementPanelProps = {
 };
 
 export default function ProcurementPanel({ intent = null, onOpenRfq, view, onNavigate, onActiveContextChange, focus }: ProcurementPanelProps) {
+  if (view === "receiving-new") return <BusinessDocumentForm documentLabel="采购收货单" listPath="/app/procurement/receiving" />;
+  if (view === "receiving-edit") return <BusinessDocumentForm mode="edit" documentLabel="采购收货单" documentId={window.location.pathname.split("/").at(-2)} listPath="/app/procurement/receiving" />;
   if (view === "requests") return <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
   if (view === "orders") return <PurchasingOrders focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
   if (view === "rfq") return <PurchasingRFQ focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
@@ -67,13 +70,22 @@ function PurchasingPanel({
   ] as const;
 
   useEffect(() => {
-    if (intent) setTab("requests");
+    if (intent) onNavigate?.("procurement:requests");
   }, [intent?.createdAt]);
+
+  function openTab(next: PurTab) {
+    const routes: Partial<Record<PurTab, string>> = {
+      overview: "procurement", requests: "procurement:requests", rfq: "procurement:rfq",
+      orders: "procurement:orders", receiving: "procurement:receiving", returns: "procurement:returns",
+      invoices: "finance:invoices", match: "finance:three-way-match", contracts: "procurement:contracts",
+    };
+    if (onNavigate && routes[next]) onNavigate(routes[next]!);
+    else setTab(next);
+  }
 
   return (
     <div className="space-y-4">
-      {tab !== "overview" && <SubTabs tabs={tabs as any} value={tab} onChange={(v) => setTab(v as PurTab)} />}
-      {tab === "overview" && <ProcurementOverview onOpenTab={setTab} onOpenDetailViews={() => setTab("requests")} />}
+      {tab === "overview" && <ProcurementOverview onOpenTab={openTab} onOpenDetailViews={() => openTab("requests")} />}
       {tab === "requests"  && <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
       {tab === "orders"    && <PurchasingOrders focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
       {tab === "rfq"       && <PurchasingRFQ focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
@@ -264,7 +276,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
       <Card className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[26px] font-semibold tracking-tight" style={{ color: A.label }}>采购管理</h1>
+            <h2 className="fc-section-title" style={{ color: A.label }}>今日采购待办</h2>
             <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: A.gray1 }}>
               <Calendar size={13} />
               <span>{dateLabel} · 今日共 {queue.length} 项待办</span>
@@ -330,7 +342,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
                 }}
               >
                 {item.label}
-                <span className="min-w-[20px] rounded-full px-1.5 py-px text-[10px] font-semibold tabular-nums"
+                <span className="min-w-[20px] rounded-full px-1.5 py-px fc-caption font-semibold tabular-nums"
                   style={{ background: filter === item.id ? "rgba(255,255,255,0.14)" : A.white, color: filter === item.id ? A.white : A.blue }}>
                   {item.count}
                 </span>
@@ -364,7 +376,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
                   <td className="px-5 py-3 font-medium" style={{ color: A.gray1 }}>{row.docNo}</td>
                   <td className="px-5 py-3">
                     <div className="font-medium" style={{ color: A.label }}>{row.title}</div>
-                    <div className="text-[10px] mt-0.5" style={{ color: A.gray2 }}>{row.note}</div>
+                    <div className="fc-caption mt-0.5" style={{ color: A.gray2 }}>{row.note}</div>
                   </td>
                   <td className="px-5 py-3 font-semibold" style={{ color: A.label }}>{row.amount}</td>
                   <td className="px-5 py-3">
@@ -372,7 +384,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
                       <Chip label={row.due} color={dueTone(row.due).color} bg={dueTone(row.due).bg} />
                       <ChevronRight size={13} style={{ color: A.gray3 }} />
                     </div>
-                    <div className="text-[10px] mt-1" style={{ color: A.gray2 }}>{row.status}</div>
+                    <div className="fc-caption mt-1" style={{ color: A.gray2 }}>{row.status}</div>
                   </td>
                 </tr>
               ))}

@@ -1,0 +1,56 @@
+import React from "react";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router";
+import { defaultRouteForModule, moduleRoute, recoveryModuleForPath, routesForModule, type AppRouteDefinition } from "../../app/routeRegistry";
+import { A } from "../ui";
+import { AppBreadcrumb } from "./AppBreadcrumb";
+import { RecentPages } from "./RecentPages";
+
+export function ModuleShell({ route, children }: { route: AppRouteDefinition; children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const root = moduleRoute(route.moduleId) || route;
+  const subRoutes = routesForModule(route.moduleId);
+  const activeMenuId = route.currentActiveMenuId || route.id;
+  const showPageHeader = route.id !== root.id;
+  return (
+    <div className="fc-module-shell" data-testid="module-shell" data-route-id={route.id}>
+      <AppBreadcrumb route={route} />
+      <div className="fc-module-header">
+        <div>
+          <h1 className="fc-module-title" data-testid="module-title">{root.moduleLabel}</h1>
+          <p className="fc-page-subtitle mt-1">{root.description}</p>
+        </div>
+      </div>
+      {subRoutes.length > 0 && (
+        <nav className="fc-module-subnav" aria-label={`${root.moduleLabel}二级导航`} data-testid="module-subnav">
+          {subRoutes.map((item) => <a key={item.id} href={item.path} aria-current={activeMenuId === item.id ? "page" : undefined} className={activeMenuId === item.id ? "is-active" : ""} onClick={(event) => { event.preventDefault(); navigate(item.path); }}>{item.label}</a>)}
+        </nav>
+      )}
+      <RecentPages />
+      {showPageHeader && (
+        <div className="fc-page-header" data-testid="page-header">
+          <div className="min-w-0">
+            <h2 className="fc-page-title" data-testid="page-title">{route.label}</h2>
+            <p className="fc-page-subtitle mt-1">{route.description}</p>
+          </div>
+          <button type="button" className="fc-action-button fc-action-secondary" onClick={() => navigate(root.path)}><ArrowLeft size={14} />返回模块首页</button>
+        </div>
+      )}
+      <div className="fc-module-content">{children}</div>
+    </div>
+  );
+}
+
+export function NotFoundRecovery({ pathname }: { pathname: string }) {
+  const navigate = useNavigate();
+  const root = recoveryModuleForPath(pathname);
+  return <div className="mx-auto max-w-2xl rounded-2xl bg-white p-8 text-center" data-testid="not-found-recovery" style={{ border: `1px solid ${A.border}` }}>
+    <div className="fc-caption" style={{ color: A.gray2 }}>404</div>
+    <h1 className="fc-module-title mt-2">未找到页面</h1>
+    <p className="fc-body mt-2" style={{ color: A.sub }}>{root ? `“${root.moduleLabel}”中不存在这个子页面。` : "当前链接不存在或已被移除。"}</p>
+    <div className="mt-5 flex justify-center gap-2">
+      {root && <button className="fc-action-button fc-action-secondary" onClick={() => navigate(defaultRouteForModule(root.moduleId)?.path || root.path)}>返回{root.moduleLabel}默认页面</button>}
+      <button className="fc-action-button fc-action-primary" onClick={() => navigate("/app/overview")}>返回首页</button>
+    </div>
+  </div>;
+}

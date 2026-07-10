@@ -208,7 +208,7 @@ test('R230 end-to-end intake and UI/source guardrails keep provider disabled and
   for (const unsafe of ['Submit', 'Approve', 'Pay', 'Post', 'Send Email', 'Issue PO']) {
     assert.doesNotMatch(panel, new RegExp(`>${unsafe}<|label:\\s*["']${unsafe}["']`))
   }
-  const routes = source('src', 'app', 'routes.tsx')
+  const routes = source('src', 'app', 'routeRegistry.tsx')
   assert.doesNotMatch(routes, /label:\s*["']AI Assistant["']/)
   assert.doesNotMatch(routes, /label:\s*["']AI Command Center["']/)
   assert.doesNotMatch(routes, /label:\s*["']Ask AI["']/)

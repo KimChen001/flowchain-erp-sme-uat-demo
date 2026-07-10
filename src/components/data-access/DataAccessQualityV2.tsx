@@ -277,7 +277,7 @@ export function DataAccessQualityV2({ quality, loading, error = false, onNavigat
                 <Chip label="不自动写入" color={A.green} bg="#f0faf4" />
               </div>
               <div className="text-[11px] leading-5" style={{ color: A.sub }}>{fix.allowedNextStep}</div>
-              <div className="text-[10px] leading-5" style={{ color: A.gray2 }}>{joinValues(fix.prohibitedActions)}</div>
+              <div className="fc-caption leading-5" style={{ color: A.gray2 }}>{joinValues(fix.prohibitedActions)}</div>
             </div>
           ))}
         </div>
@@ -290,7 +290,7 @@ export function DataAccessQualityV2({ quality, loading, error = false, onNavigat
             <div key={item.label} className="rounded-lg p-3" style={{ background: "#fff8f0", border: `1px solid ${A.border}` }}>
               <div className="font-semibold text-xs" style={{ color: A.label }}>{item.label}</div>
               <div className="text-[11px] leading-5 mt-1" style={{ color: A.gray1 }}>{item.description}</div>
-              <div className="text-[10px] mt-2" style={{ color: A.orange }}>{joinValues(item.affectedModules)}</div>
+              <div className="fc-caption mt-2" style={{ color: A.orange }}>{joinValues(item.affectedModules)}</div>
             </div>
           ))}
         </div>

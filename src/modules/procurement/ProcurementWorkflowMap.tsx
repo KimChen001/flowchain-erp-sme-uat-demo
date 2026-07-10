@@ -69,7 +69,7 @@ export default function ProcurementWorkflowMap() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="hidden lg:grid grid-cols-3 gap-2 text-[10px] min-w-[260px]">
+          <div className="hidden lg:grid grid-cols-3 gap-2 fc-caption min-w-[260px]">
           <div className="rounded-lg p-2" style={{ background: A.gray6 }}>
             <div style={{ color: A.gray2 }}>证据链</div>
             <div className="font-semibold mt-0.5" style={{ color: A.label }}>关联单据</div>

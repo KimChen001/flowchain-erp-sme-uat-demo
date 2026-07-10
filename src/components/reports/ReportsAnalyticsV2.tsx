@@ -287,7 +287,7 @@ export function ReportsAnalyticsV2({ analytics, loading, error = false, onNaviga
             <div key={item.label} className="rounded-lg p-3" style={{ background: "#fff8f0", border: `1px solid ${A.border}` }}>
               <div className="font-semibold text-xs" style={{ color: A.label }}>{item.label}</div>
               <div className="text-[11px] leading-5 mt-1" style={{ color: A.gray1 }}>{item.description}</div>
-              <div className="text-[10px] mt-2" style={{ color: A.orange }}>{item.affectedMetrics.join("、")}</div>
+              <div className="fc-caption mt-2" style={{ color: A.orange }}>{item.affectedMetrics.join("、")}</div>
             </div>
           ))}
         </div>

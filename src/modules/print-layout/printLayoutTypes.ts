@@ -16,7 +16,7 @@ export type PrintTableColumn = {
   align?: "left" | "center" | "right";
 };
 
-export type PrintElementType = "text" | "field" | "table" | "barcode" | "qrcode" | "signature" | "line" | "footer" | "pageNumber";
+export type PrintElementType = "text" | "field" | "table" | "comment" | "terms" | "barcode" | "qrcode" | "signature" | "line" | "footer" | "pageNumber";
 
 export type PrintLayoutElement = {
   id: string;
@@ -24,6 +24,8 @@ export type PrintLayoutElement = {
   title: string;
   value?: string;
   field?: string;
+  placeholder?: string;
+  contentMode?: "static" | "field" | "instance";
   x: number;
   y: number;
   width: number;
@@ -62,6 +64,13 @@ export type PrintDocumentData = Record<string, unknown> & {
 };
 
 export type PrintFieldOption = { key: string; label: string };
+
+export type PrintInstanceOverrides = {
+  documentType: PrintDocumentType;
+  documentNo: string;
+  values: Record<string, string>;
+  updatedAt: string;
+};
 
 export const PAGE_SIZES = {
   portrait: { width: 794, height: 1123 },

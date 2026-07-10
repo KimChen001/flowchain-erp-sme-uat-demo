@@ -11,7 +11,7 @@ function readSource(...parts) {
 }
 
 test('Planning workbench exposes five distinct canonical subviews', () => {
-  const routes = readSource('src', 'app', 'routes.tsx')
+  const routes = readSource('src', 'app', 'routeRegistry.tsx')
   const forecast = readSource('src', 'modules', 'forecast', 'Page.tsx')
   const app = readSource('src', 'app', 'FlowChainApp.tsx')
 

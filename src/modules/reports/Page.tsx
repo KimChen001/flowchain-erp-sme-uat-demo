@@ -940,7 +940,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
                 <FileSpreadsheet size={17} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>报表中心</h1>
+                <h2 className="fc-section-title" style={{ color: A.label }}>标准经营报表</h2>
                 <p className="text-xs mt-0.5" style={{ color: A.sub }}>统一查看标准经营报表、数据来源与 CSV 导出入口 · {filterLabel}</p>
               </div>
             </div>
@@ -976,7 +976,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>标准报表目录</h2>
             <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>{visibleReports.length} 个报表 · {filterLabel}</p>
           </div>
-          <div className="flex items-center gap-3 text-[10px]" style={{ color: A.gray2 }}>
+          <div className="flex items-center gap-3 fc-caption" style={{ color: A.gray2 }}>
             <span className="flex items-center gap-1"><ClipboardList size={11} /> 采购</span>
             <span className="flex items-center gap-1"><Package size={11} /> 库存</span>
             <span className="flex items-center gap-1"><CreditCard size={11} /> 财务</span>
@@ -995,7 +995,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <Chip label={report.module} color={moduleColor(report.module)} bg={`${moduleColor(report.module)}16`} />
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ color: sourceBadge.color, background: sourceBadge.bg }}>
+                      <span className="fc-caption px-2 py-0.5 rounded-full font-medium" style={{ color: sourceBadge.color, background: sourceBadge.bg }}>
                         {report.sourceKind}
                       </span>
                     </div>
@@ -1004,7 +1004,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-[80px_1fr] gap-y-1 text-[10px] leading-4">
+                <div className="mt-3 grid grid-cols-[80px_1fr] gap-y-1 fc-caption leading-4">
                   <span style={{ color: A.gray2 }}>数据来源</span>
                   <span className="truncate" style={{ color: A.gray1 }}>{report.source}</span>
                   <span style={{ color: A.gray2 }}>更新时间</span>
@@ -1012,7 +1012,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
                 </div>
 
                 {report.comingLaterReason && (
-                  <div className="mt-3 rounded-lg px-3 py-2 text-[10px] leading-4" style={{ background: A.white, color: A.gray1 }}>
+                  <div className="mt-3 rounded-lg px-3 py-2 fc-caption leading-4" style={{ background: A.white, color: A.gray1 }}>
                     {report.comingLaterReason}
                   </div>
                 )}
@@ -1033,7 +1033,7 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
                       <Eye size={13} /> 打开模块
                     </button>
                   )}
-                  <span className="ml-auto text-[10px]" style={{ color: canExport ? A.green : A.orange }}>
+                  <span className="ml-auto fc-caption" style={{ color: canExport ? A.green : A.orange }}>
                     {canExport ? "可导出" : "模块内导出"}
                   </span>
                 </div>

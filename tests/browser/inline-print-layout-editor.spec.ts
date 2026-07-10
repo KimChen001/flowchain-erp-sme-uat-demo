@@ -20,3 +20,52 @@ test("receipt and receive-sheet open editors with current document data", async 
   await openLoggedInApp(page); const nav = page.locator("aside nav"); await nav.getByRole("button", { name: "销售管理", exact: true }).click(); await nav.getByRole("button", { name: "签收单", exact: true }).click(); await page.getByTestId("receipt-page").getByRole("button", { name: /打印签收单 SR-/ }).first().click(); await expect(page.getByTestId("print-canvas")).toContainText("SR-2026-0710-001"); await expect(page.getByTestId("print-canvas")).toContainText("张海峰"); await page.getByRole("button", { name: /返回单据/ }).click();
   await nav.getByRole("button", { name: "采购管理", exact: true }).click(); await nav.getByRole("button", { name: "采购收货单 / 入库单", exact: true }).click(); await page.getByRole("button", { name: /打印入库单 GRN-/ }).first().click(); await expect(page.getByTestId("print-layout-editor")).toBeVisible(); await expect(page.getByTestId("print-canvas")).toContainText(/GRN-2026/); await expect(page.getByTestId("print-canvas")).toContainText(/佛山标准件|广州化工耗材|江苏铝合金集团/);
 });
+
+test("multiline Comments are draggable, resizable, document-scoped and independently persisted", async ({ page }) => {
+  await openLoggedInApp(page); await openDeliveryEditor(page); const editor = page.getByTestId("print-layout-editor");
+  await editor.getByRole("button", { name: "添加 Comments" }).click();
+  const comments = editor.locator("[data-testid^='print-element-comment-']").last();
+  await editor.getByTestId("print-value-input").fill("客户要求周五前送达\n卸货前联系仓库");
+  await expect(comments).toContainText("客户要求周五前送达");
+  await expect(comments).toHaveCSS("white-space", "normal");
+  await expect(comments.locator(".print-multiline-content")).toHaveCSS("white-space", "pre-wrap");
+  const xBefore = Number(await editor.getByTestId("print-x-input").inputValue());
+  const box = await comments.boundingBox();
+  if (!box) throw new Error("Comments element has no bounding box");
+  await page.mouse.move(box.x + 12, box.y + 12); await page.mouse.down(); await page.mouse.move(box.x + 42, box.y + 32); await page.mouse.up();
+  expect(Number(await editor.getByTestId("print-x-input").inputValue())).not.toBe(xBefore);
+  await editor.getByTestId("print-width-input").fill("480"); await editor.getByTestId("print-height-input").fill("120");
+  await expect(editor.getByTestId("print-width-input")).toHaveValue("480");
+  await editor.getByRole("button", { name: "保存模板" }).click();
+  await editor.getByRole("button", { name: "保存本次打印内容" }).click();
+  await editor.getByRole("button", { name: "返回单据" }).click();
+  await page.getByTestId("delivery-page").getByRole("button", { name: /打印发货单 DN-/ }).first().click();
+  await expect(page.getByTestId("print-canvas")).toContainText("客户要求周五前送达");
+  await page.getByRole("button", { name: "返回单据" }).click();
+  await page.getByTestId("delivery-page").getByRole("button", { name: /打印发货单 DN-/ }).nth(1).click();
+  await expect(page.getByTestId("print-canvas")).not.toContainText("客户要求周五前送达");
+  await page.getByRole("button", { name: "返回单据" }).click();
+  await page.getByTestId("delivery-page").getByRole("button", { name: /打印发货单 DN-/ }).first().click();
+  await page.getByRole("button", { name: "清除本次打印内容" }).click();
+  await expect(page.getByTestId("print-canvas")).not.toContainText("客户要求周五前送达");
+  await page.getByRole("button", { name: "Comments", exact: true }).last().click();
+  await page.getByRole("button", { name: "删除元素" }).click();
+  await expect(page.getByTestId("print-canvas")).not.toContainText("输入本次打印 Comments");
+});
+
+test("unsaved print template or instance content blocks route and modal close", async ({ page }) => {
+  await openLoggedInApp(page); await openDeliveryEditor(page); const editor = page.getByTestId("print-layout-editor");
+  await editor.getByRole("button", { name: "添加 Comments" }).click();
+  await editor.getByTestId("print-value-input").fill("尚未保存的本次说明");
+  await page.evaluate(() => history.back());
+  await expect(page.getByTestId("unsaved-changes-dialog")).toBeVisible();
+  await page.getByTestId("unsaved-changes-dialog").getByRole("button", { name: "继续编辑" }).click();
+  await expect(editor).toBeVisible();
+  await editor.getByRole("button", { name: "返回单据" }).click();
+  await expect(page.getByTestId("print-unsaved-dialog")).toContainText("打印模板有未保存修改");
+  await expect(page.getByTestId("print-unsaved-dialog")).toContainText("本次打印内容有未保存修改");
+  await page.getByTestId("print-unsaved-dialog").getByRole("button", { name: "继续编辑" }).click();
+  await editor.getByRole("button", { name: "返回单据" }).click();
+  await page.getByTestId("print-unsaved-dialog").getByRole("button", { name: "放弃修改" }).click();
+  await expect(editor).toHaveCount(0);
+});

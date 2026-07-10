@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, CreditCard, FileSpreadsheet, FileText, HandCoins, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
-import { A, Card, Chip, KpiCard, SubTabs } from "../../components/ui";
+import { A, Card, Chip, KpiCard } from "../../components/ui";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import PayablesPanel from "../procurement/PayablesPanel";
 import SupplierInvoiceRegister from "../procurement/SupplierInvoiceRegister";
@@ -105,7 +105,7 @@ function CreditMemoOffsetPanel() {
   );
 }
 
-export default function FinanceWorkbench({ initialView = "overview" }: { initialView?: FinanceTab }) {
+export default function FinanceWorkbench({ initialView = "overview", onNavigate }: { initialView?: FinanceTab; onNavigate?: (routeId: string) => void }) {
   const [tab, setTab] = useState<FinanceTab>(initialView);
   const tabs = [
     { id: "overview", label: "结算总览", icon: CheckCircle2 },
@@ -119,37 +119,23 @@ export default function FinanceWorkbench({ initialView = "overview" }: { initial
     if (initialView) setTab(initialView);
   }, [initialView]);
 
+  function openTab(next: FinanceTab) {
+    if (onNavigate) onNavigate(next === "overview" ? "finance" : `finance:${next}`);
+    else setTab(next);
+  }
+
   return (
     <div className="space-y-4">
-      <Card className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight" style={{ color: A.label }}>结算管理</h1>
-            <p className="text-xs leading-5 mt-1" style={{ color: A.sub }}>
-              汇总供应商发票、费用/应付、贷项、对账单、结算单和三单匹配的复核状态。
-            </p>
-            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-              这里只展示可见性和复核证据：不执行付款、不做 GL 过账、不生成会计凭证、不做税务申报、不做发票过账。
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <div className="flex flex-wrap justify-end gap-2">
-              <ContextualImportActions entityLabel="供应商发票" templateName="供应商发票" compact={false} />
-              <ContextualImportActions entityLabel="对账单" templateName="对账单" compact={false} />
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: A.green }}>
-              <CheckCircle2 size={13} /> 只读协同边界
-            </div>
-          </div>
-        </div>
-      </Card>
+      <div className="flex flex-wrap justify-end gap-2">
+        <ContextualImportActions entityLabel="供应商发票" templateName="供应商发票" compact={false} />
+        <ContextualImportActions entityLabel="对账单" templateName="对账单" compact={false} />
+      </div>
       <div className="grid grid-cols-4 gap-3">
         {financeSummaryCards().map((item) => (
           <KpiCard key={item.label} {...item} />
         ))}
       </div>
-      <SubTabs tabs={tabs as any} value={tab} onChange={(value) => setTab(value as FinanceTab)} />
-      {tab === "overview" && <FinanceOverview onOpenTab={setTab} />}
+      {tab === "overview" && <FinanceOverview onOpenTab={openTab} />}
       {tab === "invoices" && <SupplierInvoiceRegister mode="finance" />}
       {tab === "payables" && <PayablesPanel />}
       {tab === "credits" && <CreditMemoOffsetPanel />}

@@ -37,7 +37,7 @@ test('navigation evidence surfaces share canonical helper names', () => {
   const cockpit = readSource('src', 'modules', 'overview', 'TodayCockpitPanel.tsx')
 
   assert.match(app, /navigationIntentFromGlobalSearchResult/)
-  assert.match(app, /splitNavigationId/)
+  assert.match(app, /routePathForId\(intent\.activeId\)/)
   assert.match(aiPanel, /normalizeEvidenceLinks\(\[raw\], \{ source: "ai" \}\)/)
   assert.match(aiPanel, /raw\.summary/)
   assert.match(aiPanel, /navigationIntentFromEvidenceLink/)

@@ -206,14 +206,14 @@ test('R237 route rejects missing confirmation and creates only exception case re
 })
 
 test('R238-R240 UI and integration guardrails keep case management business-facing and review-first', () => {
-  const routes = source('src', 'app', 'routes.tsx')
+  const routes = source('src', 'app', 'routeRegistry.tsx')
   const page = source('src', 'modules', 'exception-cases', 'Page.tsx')
   const app = source('src', 'app', 'FlowChainApp.tsx')
   const route = source('server', 'routes', 'exception-cases.routes.mjs')
   const planner = source('server', 'domain', 'business-action-draft-contract.mjs')
   const relationships = source('src', 'domain', 'relationships', 'resolver.ts')
 
-  assert.match(routes, /label:\s*"异常处理工单"/)
+  assert.match(routes, /moduleLabel:\s*"异常处理工单"/)
   assert.doesNotMatch(routes, /label:\s*["']AI Assistant["']|label:\s*["']AI Command Center["']|label:\s*["']Ask AI["']/)
   assert.match(app, /ExceptionCasesPage/)
   for (const text of ['暂无异常处理工单', '生成内部跟进草稿', '确认创建工单', '预览跟进备注', '确认后保存备注', '工单字段已更新', '工单状态已更新']) {

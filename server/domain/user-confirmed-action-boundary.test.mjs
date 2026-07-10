@@ -164,7 +164,7 @@ test('R258-R260 source guardrails expose route UI and preserve previous safety b
   const registry = source('server', 'repositories', 'adapter-registry.mjs')
   const shell = source('src', 'modules', 'action-drafts', 'ActionDraftReviewShell.tsx')
   const planPanel = source('src', 'modules', 'action-drafts', 'BusinessActionPlanPanel.tsx')
-  const routes = source('src', 'app', 'routes.tsx')
+  const routes = source('src', 'app', 'routeRegistry.tsx')
   const exceptionPage = source('src', 'modules', 'exception-cases', 'Page.tsx')
   const userDataRoutes = source('server', 'routes', 'user-data.routes.mjs')
   for (const expected of ['PR 复核记录', '供应商准入复核记录', 'RFQ 复核记录', '供应商跟进复核记录', '工单复核记录', '已复核内部记录']) {

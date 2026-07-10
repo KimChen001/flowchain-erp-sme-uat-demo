@@ -122,7 +122,7 @@ function RoleProfiles({ items, onNavigate }: { items: RoleProfile[]; onNavigate:
                 ["边界说明", <MiniList items={role.boundaryLabels} />],
               ].map(([label, value]) => (
                 <div key={label as string} className="rounded-lg px-2 py-1.5" style={{ background: A.white }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                   <div className="mt-1 text-[12px] leading-5" style={{ color: A.label }}>{value}</div>
                 </div>
               ))}

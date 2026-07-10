@@ -113,8 +113,8 @@ function ScoreBar({ label, score, compact = false }: { label: string; score: num
       <div>
         {compact && (
           <div className="flex justify-between mb-1">
-            <span className="text-[10px]" style={{ color: A.sub }}>{label}</span>
-            <span className="text-[10px] font-mono" style={{ color: scoreBarColor(score) }}>{score}</span>
+            <span className="fc-caption" style={{ color: A.sub }}>{label}</span>
+            <span className="fc-caption font-mono" style={{ color: scoreBarColor(score) }}>{score}</span>
           </div>
         )}
         <div className="h-1.5 rounded-full overflow-hidden" style={{ background: A.gray4 }}>

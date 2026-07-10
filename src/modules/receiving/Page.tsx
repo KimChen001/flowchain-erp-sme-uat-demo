@@ -572,13 +572,9 @@ function ReceivingOps({
 
   return (
     <div className="space-y-5">
-      <Card className="p-5 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold" style={{ color: A.label }}>采购收货单 / 入库单</h1>
-          <p className="text-xs mt-1" style={{ color: A.sub }}>管理采购到货、质检与入库记录。</p>
-        </div>
-        <button onClick={() => setScanOpen(true)} className="h-9 px-4 rounded-lg text-xs font-semibold text-white flex items-center gap-1" style={{ background: A.blue }}><Plus size={12} />新建收货单</button>
-      </Card>
+      <div className="flex justify-end">
+        <button onClick={() => onNavigate?.("procurement:receiving:new")} className="h-9 px-4 rounded-lg text-xs font-semibold text-white flex items-center gap-1" style={{ background: A.blue }}><Plus size={12} />新建收货单</button>
+      </div>
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="今日已入库" value={String(todayReceived)} sub={`${fmt(4820000)} 入库价值`} delta="+18%" positive icon={PackageCheck} color={A.green}  />
         <KpiCard label="待收货"     value={String(pending)}      sub="未来 24 小时"      delta="6 个月台" positive icon={Truck}        color={A.blue}   />
@@ -599,7 +595,7 @@ function ReceivingOps({
               style={{ background: A.gray6, color: A.label }}>
               <ScanLine size={11} /> 扫码收货
             </button>
-            <button onClick={() => setScanOpen(true)}
+            <button onClick={() => onNavigate?.("procurement:receiving:new")}
               className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md font-medium text-white hover:opacity-90 transition-opacity"
               style={{ background: A.blue }}>
               <Plus size={11} /> 新建收货单
@@ -748,7 +744,7 @@ function ReceivingOps({
                 ["行项目", lines.length],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
-                  <div className="text-[10px]" style={{ color: A.gray2 }}>{label}</div>
+                  <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
                   <div className="text-base font-semibold tabular-nums mt-0.5" style={{ color: label === "拒收数量" && Number(value) > 0 ? A.red : A.label }}>{Number(value).toLocaleString()}</div>
                 </div>
               ))}

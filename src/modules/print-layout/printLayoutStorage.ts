@@ -44,8 +44,6 @@ export function savePrintTemplateAs(template: PrintLayoutTemplate): PrintLayoutT
 }
 
 export function restoreDefaultTemplate(type: PrintDocumentType): PrintLayoutTemplate {
-  const all = readStored().filter((item) => item.documentType !== type);
-  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(all));
   const last = (() => { try { return JSON.parse(localStorage.getItem(LAST_KEY) || "{}"); } catch { return {}; } })();
   delete last[type];
   localStorage.setItem(LAST_KEY, JSON.stringify(last));
