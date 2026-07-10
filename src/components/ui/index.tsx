@@ -356,7 +356,7 @@ export function Modal({ open, onClose, title, subtitle, width = 560, children, f
             <h3 className="text-base font-semibold tracking-tight" style={{ color: A.label }}>{title}</h3>
             {subtitle && <p className="text-xs mt-0.5" style={{ color: A.sub }}>{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+          <button aria-label="关闭" onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
             style={{ color: A.gray1 }}>
             <X size={15} />
           </button>

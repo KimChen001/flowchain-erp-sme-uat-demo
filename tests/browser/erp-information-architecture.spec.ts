@@ -107,10 +107,11 @@ test.describe("ERP information architecture cleanup", () => {
 
     await page.getByRole("button", { name: "基础资料", exact: true }).click();
     const scope = page.getByTestId("module-export-scope");
-    for (const label of ["商品资料 / 物料资料", "仓库资料", "库位 / 货位", "供应商", "支付方式 / 付款条款"]) {
+    for (const label of ["商品资料 / 物料资料", "仓库资料", "库位 / 货位", "供应商", "客户", "支付方式 / 付款条款", "税码", "打印模板"]) {
       await expect(nav.getByRole("button", { name: label, exact: true })).toBeVisible();
     }
-    await expect(scope).toContainText("基础资料只维护业务对象基础记录，不做报表分析或业务审批。");
+    await expect(scope).toContainText("统一维护商品、客户、供应商、仓库库位、税码、付款条款与打印模板。");
+    await expect(scope).not.toContainText("基础资料只维护业务对象基础记录，不做报表分析或业务审批。");
     await expect(scope).not.toContainText("主数据");
 
     await page.getByRole("button", { name: "报表中心", exact: true }).click();
@@ -120,5 +121,25 @@ test.describe("ERP information architecture cleanup", () => {
     await page.getByRole("button", { name: "数据接入与质量" }).first().click();
     await expect(scope).toContainText("数据接入与质量用于集中处理导入任务、字段映射、校验结果和失败项");
     await expect(scope).toContainText("不承担业务审批");
+  });
+
+  test("sales and inventory navigation names match their real views", async ({ page }) => {
+    await openLoggedInApp(page);
+    const nav = page.locator("aside nav");
+
+    await nav.getByRole("button", { name: "销售管理", exact: true }).click();
+    for (const label of ["销售订单", "销售出库单 / 发货单", "签收单", "销售退货单", "交付风险", "订单证据链"]) {
+      await expect(nav.getByRole("button", { name: label, exact: true })).toBeVisible();
+    }
+    await nav.getByRole("button", { name: "交付风险", exact: true }).click();
+    await expect(page.getByTestId("module-export-scope").getByRole("heading", { name: "交付风险", exact: true })).toBeVisible();
+
+    await nav.getByRole("button", { name: "库存管理", exact: true }).click();
+    for (const label of ["库存查询", "库存流水", "库存调整单", "库存盘点", "库存预警", "仓库调拨", "批次 / 序列号", "库位管理", "库存异常"]) {
+      await expect(nav.getByRole("button", { name: label, exact: true })).toBeVisible();
+    }
+    await nav.getByRole("button", { name: "库存异常", exact: true }).click();
+    await expect(page.getByTestId("module-export-scope")).toContainText("库存异常单据");
+    await expect(page.getByTestId("module-export-scope")).not.toContainText("库存调整单详情");
   });
 });

@@ -33,8 +33,10 @@ export const navItems = [
       { id: "master-data:warehouses", label: "仓库资料" },
       { id: "inventory:bins", label: "库位 / 货位" },
       { id: "srm:master", label: "供应商" },
+      { id: "master-data:customers", label: "客户" },
       { id: "master-data:payment-terms", label: "支付方式 / 付款条款" },
-      { id: "master-data:tax-codes", label: "条款与税码" },
+      { id: "master-data:tax-codes", label: "税码" },
+      { id: "master-data:print-templates", label: "打印模板" },
     ],
   },
   {
@@ -51,8 +53,11 @@ export const navItems = [
     icon: ClipboardList, label: "销售管理", id: "sales",
     children: [
       { id: "sales", label: "销售订单" },
-      { id: "sales:risks", label: "销售出库单 / 发货单" },
-      { id: "sales:evidence", label: "销售单据关联" },
+      { id: "sales:delivery", label: "销售出库单 / 发货单" },
+      { id: "sales:receipts", label: "签收单" },
+      { id: "sales:returns", label: "销售退货单" },
+      { id: "sales:risks", label: "交付风险" },
+      { id: "sales:evidence", label: "订单证据链" },
     ],
   },
   {
@@ -60,10 +65,13 @@ export const navItems = [
     children: [
       { id: "inventory", label: "库存查询" },
       { id: "inventory:movements", label: "库存流水" },
-      { id: "inventory:exceptions", label: "库存调整" },
+      { id: "inventory:adjustments", label: "库存调整单" },
       { id: "inventory:count", label: "库存盘点" },
-      { id: "inventory:lots", label: "库存预警" },
+      { id: "inventory:warnings", label: "库存预警" },
       { id: "inventory:transfer", label: "仓库调拨" },
+      { id: "inventory:lots", label: "批次 / 序列号" },
+      { id: "inventory:bins", label: "库位管理" },
+      { id: "inventory:exceptions", label: "库存异常" },
     ],
   },
   {

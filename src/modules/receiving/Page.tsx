@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertCircle, AlertOctagon, AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck,
-  Clock, DollarSign, Inbox, MapPin, PackageCheck, Plus, ScanLine, ShieldCheck, Truck,
+  Clock, DollarSign, Inbox, PackageCheck, Plus, Printer, ScanLine, ShieldCheck, Truck,
   Undo2, XCircle,
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
-import { arrivalSchedule, purchaseOrders, qcExceptions, receivingDocs, SUPPLIER_INVOICES } from "../../data/demo-data";
+import { purchaseOrders, qcExceptions, receivingDocs, SUPPLIER_INVOICES } from "../../data/demo-data";
 import type { PurchaseOrder, ReceivingDoc, ReceivingDocLine, RecvStatus } from "../../types/scm";
 import { lineRemaining, poLinesOf, toNumber } from "../../domain/purchasing/helpers";
 import { grnLinesOf, isPostedGrn } from "../../domain/receiving/helpers";
@@ -41,6 +41,8 @@ import {
   tdWideNameClass,
   tdWideNowrapClass,
 } from "../../components/ui/workbenchTable";
+import PrintLayoutEditor from "../print-layout/PrintLayoutEditor";
+import { adaptReceiveSheet } from "../print-layout/printDataAdapters";
 
 const recvStatusMeta: Record<RecvStatus, { color: string; bg: string }> = {
   "待收货": { color: A.gray1, bg: A.gray6 },
@@ -449,6 +451,7 @@ function ReceivingOps({
   const [selectedGrnId, setSelectedGrnId] = useState(receivingDocs[0]?.grn ?? "");
   const [showGrnDetail, setShowGrnDetail] = useState(false);
   const [erpDocOpen, setErpDocOpen] = useState(false);
+  const [printGrn, setPrintGrn] = useState<ReceivingDoc | null>(null);
   const [grnInsight, setGrnInsight] = useState<ContextualAIInsight | null>(null);
 
   useEffect(() => {
@@ -569,6 +572,13 @@ function ReceivingOps({
 
   return (
     <div className="space-y-5">
+      <Card className="p-5 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold" style={{ color: A.label }}>采购收货单 / 入库单</h1>
+          <p className="text-xs mt-1" style={{ color: A.sub }}>管理采购到货、质检与入库记录。</p>
+        </div>
+        <button onClick={() => setScanOpen(true)} className="h-9 px-4 rounded-lg text-xs font-semibold text-white flex items-center gap-1" style={{ background: A.blue }}><Plus size={12} />新建收货单</button>
+      </Card>
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="今日已入库" value={String(todayReceived)} sub={`${fmt(4820000)} 入库价值`} delta="+18%" positive icon={PackageCheck} color={A.green}  />
         <KpiCard label="待收货"     value={String(pending)}      sub="未来 24 小时"      delta="6 个月台" positive icon={Truck}        color={A.blue}   />
@@ -576,94 +586,8 @@ function ReceivingOps({
         <KpiCard label="异常处理"   value={String(exceptions)}   sub="本月累计 12 起"    delta="较昨日 +1" positive={false} icon={AlertCircle} color={A.red}    />
       </div>
 
-      <Card className="p-5">
-        <SectionHeader
-          title="收货复核边界"
-          right={<Chip label="仅生成草稿" color={A.blue} bg="#eef6ff" />}
-        />
-        <div className="grid grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
-          {[
-            ["预览收货单草稿（GRN）", "仅已发出或部分到货的采购订单（PO）可作为来源，PO 草稿会被拦截。"],
-            ["复核后创建收货记录", "保存收货记录前必须由人工确认。"],
-            ["预览库存流水草稿", "仅展示暂存 / 收货流水意图，不自动库存过账，也不修改库存余额。"],
-            ["预览收货异常工单", "仅生成异常工单草稿，不自动关闭 PO，也不审批、不付款、不过账。"],
-          ].map(([title, body]) => (
-            <div key={title} className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-              <div className="font-semibold" style={{ color: A.label }}>{title}</div>
-              <div className="mt-1">{body}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
       {!showGrnDetail && (
       <>
-      {/* Schedule + dock */}
-      <div className="grid grid-cols-5 gap-3">
-        <Card className="col-span-3 p-5">
-          <SectionHeader title="今日到货排期"
-            right={<span className="text-[11px]" style={{ color: A.gray2 }}>{arrivalSchedule.length} 车 · 4 个月台</span>} />
-          <div className="space-y-0">
-            {arrivalSchedule.map((s, i) => {
-              const arrived = s.status === "已到达";
-              const enroute = s.status === "在途";
-              return (
-                <div key={i} className="flex items-center gap-4 py-2.5"
-                  style={{ borderBottom: i < arrivalSchedule.length - 1 ? "0.5px solid rgba(0,0,0,0.05)" : "none" }}>
-                  <div className="w-12 text-xs font-semibold tabular-nums shrink-0" style={{ color: A.label }}>{s.time}</div>
-                  <div className="w-2 h-2 rounded-full shrink-0"
-                    style={{ background: arrived ? A.green : enroute ? A.orange : A.gray3 }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium" style={{ color: A.label }}>{s.supplier}</div>
-                    <div className="text-[11px]" style={{ color: A.gray2 }}>{s.po} · {s.driver}</div>
-                  </div>
-                  <Chip label={s.dock} color={A.indigo} bg="#eef0ff" />
-                  <span className="text-[11px] font-medium w-14 text-right"
-                    style={{ color: arrived ? A.green : enroute ? A.orange : A.gray1 }}>{s.status}</span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        <Card className="col-span-2 p-5">
-          <SectionHeader title="月台利用率"
-            right={<span className="text-[11px]" style={{ color: A.gray2 }}>实时</span>} />
-          <div className="space-y-3.5">
-            {[
-              { dock: "月台-01", used: 78, jobs: 4, status: "占用中", color: A.green },
-              { dock: "月台-02", used: 62, jobs: 3, status: "占用中", color: A.green },
-              { dock: "月台-03", used: 51, jobs: 2, status: "等待",   color: A.orange },
-              { dock: "月台-04", used: 41, jobs: 2, status: "空闲",   color: A.gray2 },
-            ].map((d) => (
-              <div key={d.dock}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <MapPin size={11} style={{ color: A.gray2 }} />
-                    <span className="text-xs font-medium" style={{ color: A.label }}>{d.dock}</span>
-                    <span className="text-[10px] px-1.5 py-px rounded-full font-medium"
-                      style={{ background: `${d.color}18`, color: d.color }}>{d.status}</span>
-                  </div>
-                  <span className="text-[11px]" style={{ color: A.gray1 }}>{d.jobs} 单 · {d.used}%</span>
-                </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: A.gray5 }}>
-                  <div className="h-full rounded-full" style={{ width: `${d.used}%`, background: d.color }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-5 pt-4 flex items-center justify-between" style={{ borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div>
-              <div className="text-[10px]" style={{ color: A.gray2 }}>平均利用率</div>
-              <div className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>58%</div>
-            </div>
-            <button className="text-[11px] px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>
-              排程优化
-            </button>
-          </div>
-        </Card>
-      </div>
-
       {/* GRN list */}
       <Card>
         <div className="flex items-center px-5 py-3.5 gap-3" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.08)" }}>
@@ -727,11 +651,16 @@ function ReceivingOps({
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap" style={{ color: r.warehouse === "—" ? A.gray3 : A.label }}>{r.warehouse}</td>
                 <td className="px-4 py-3 whitespace-nowrap"><RecvStatusPill status={r.status} /></td>
-                <td className="px-4 py-3 whitespace-nowrap min-w-[150px]">
+                <td className="px-4 py-3 whitespace-nowrap min-w-[220px]">
                   <button onClick={(event) => { event.stopPropagation(); setSelectedGrnId(r.grn); setShowGrnDetail(true); }}
                     className="text-[11px] px-2 py-1 rounded-md font-medium hover:bg-gray-200 transition-colors mr-2"
                     style={{ background: A.gray6, color: A.label }}>
                     查看详情
+                  </button>
+                  <button aria-label={`打印入库单 ${r.grn}`} onClick={(event) => { event.stopPropagation(); setPrintGrn(r); }}
+                    className="text-[11px] px-2 py-1 rounded-md font-medium hover:bg-blue-100 transition-colors mr-2"
+                    style={{ background: "#f0f6ff", color: A.blue }}>
+                    打印
                   </button>
                   {r.status === "待收货" && (
                     <button onClick={(event) => { event.stopPropagation(); signIn(r); }}
@@ -806,6 +735,7 @@ function ReceivingOps({
                   </button>
                 )}
                 <button onClick={() => setErpDocOpen(true)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>查看 ERP 单据</button>
+                <button onClick={() => setPrintGrn(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1" style={{ background: "#f0f6ff", color: A.blue }}><Printer size={12} />打印入库单</button>
                 <button onClick={() => exportReceivingDetail(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
               </div>
             </div>
@@ -1051,6 +981,7 @@ function ReceivingOps({
                 <button onClick={() => toast("发票协同位于采购管理", { description: "可在发票协同视图查看 GRN 关联发票。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>打开发票</button>
                 <button onClick={() => toast("三单匹配位于采购管理", { description: "可在三单匹配视图查看 PO / GRN / 发票对比。" })} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>打开三单匹配</button>
                 <button onClick={() => exportReceivingDetail(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
+                <button onClick={() => setPrintGrn(selectedGrn)} className="text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1" style={{ background: "#f0f6ff", color: A.blue }}><Printer size={12} />打印入库单</button>
                 <button onClick={() => setErpDocOpen(false)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>关闭</button>
               </DocumentActionBar>
             </DocumentShell>
@@ -1058,6 +989,7 @@ function ReceivingOps({
         })()}
       </Modal>
       <QCModal open={qcOpen} onClose={() => setQcOpen(false)} grn={activeGrn} onComplete={completeQC} />
+      {printGrn && <PrintLayoutEditor open documentType="receive_sheet" documentNo={printGrn.grn} data={adaptReceiveSheet(printGrn)} onClose={() => setPrintGrn(null)} />}
     </div>
   );
 }

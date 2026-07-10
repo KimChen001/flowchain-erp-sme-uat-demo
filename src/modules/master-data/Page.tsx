@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Database, FileSpreadsheet, Package, Search, Tags, Truck, Warehouse } from "lucide-react";
+import { Database, FileSpreadsheet, Package, Printer, Search, Tags, Truck, Users, Warehouse } from "lucide-react";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { A, Card, KpiCard, SubTabs } from "../../components/ui";
 import { ITEM_MASTER, PAYMENT_TERMS, SUPPLIER_MASTER, TAX_CODES, WAREHOUSE_BINS } from "../../data/master-data";
@@ -9,17 +9,21 @@ import MasterDataOverview from "./MasterDataOverview";
 import MasterDataTables from "./MasterDataTables";
 import { fetchMasterDataSnapshot, type MasterDataSnapshot } from "./api";
 import { exportMasterDataCsv } from "./export";
+import { CustomerTable, PrintTemplateTable } from "./StandardMasterTables";
+import { CUSTOMER_MASTER, PRINT_TEMPLATE_CATALOG, type PrintTemplateCatalogItem } from "./standardData";
 
-export type MasterDataTab = "overview" | "items" | "suppliers" | "warehouses" | "tax-codes" | "payment-terms";
-export type MasterDataTableTab = Exclude<MasterDataTab, "overview">;
+export type MasterDataTab = "overview" | "items" | "suppliers" | "customers" | "warehouses" | "tax-codes" | "payment-terms" | "print-templates";
+export type MasterDataTableTab = Exclude<MasterDataTab, "overview" | "customers" | "print-templates">;
 
 const tabs = [
   { id: "overview", label: "基础资料总览", icon: Database },
   { id: "items", label: "物料资料", icon: Package },
   { id: "suppliers", label: "供应商资料", icon: Truck },
+  { id: "customers", label: "客户资料", icon: Users },
   { id: "warehouses", label: "仓库资料", icon: Warehouse },
   { id: "tax-codes", label: "条款与税码", icon: Tags },
   { id: "payment-terms", label: "付款条款", icon: FileSpreadsheet },
+  { id: "print-templates", label: "打印模板", icon: Printer },
 ] as const;
 
 const fallbackMasterData: MasterDataSnapshot = {
@@ -43,6 +47,7 @@ export default function MasterDataPage({
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<DetailRecord | null>(null);
   const [masterData, setMasterData] = useState<MasterDataSnapshot>(fallbackMasterData);
+  const [templateCatalog, setTemplateCatalog] = useState<PrintTemplateCatalogItem[]>(PRINT_TEMPLATE_CATALOG);
 
   useEffect(() => {
     if (initialView) setTab(initialView);
@@ -126,8 +131,11 @@ export default function MasterDataPage({
   const filteredPaymentTerms = useMemo(() => masterData.paymentTerms.filter((item) =>
     !query || [item.code, item.name, item.description].some((value) => value.toLowerCase().includes(query))
   ), [masterData.paymentTerms, query]);
+  const filteredCustomers = useMemo(() => CUSTOMER_MASTER.filter((item) => !query || [item.code, item.name, item.contact, item.phone, item.address, item.paymentTerms].some((value) => value.toLowerCase().includes(query))), [query]);
+  const filteredTemplates = useMemo(() => templateCatalog.filter((item) => !query || [item.name, item.documentType].some((value) => value.toLowerCase().includes(query))), [query, templateCatalog]);
 
   function exportCurrent() {
+    if (tab === "customers" || tab === "print-templates") return;
     exportMasterDataCsv(tab, {
       items: filteredItems,
       suppliers: filteredSuppliers,
@@ -141,9 +149,11 @@ export default function MasterDataPage({
     overview: ["基础资料", "基础资料"],
     items: ["物料资料", "物料"],
     suppliers: ["供应商资料", "供应商"],
+    customers: ["客户资料", "客户"],
     warehouses: ["仓库库位", "库位"],
     "tax-codes": ["税码", "税码"],
     "payment-terms": ["付款条款", "付款条款"],
+    "print-templates": ["打印模板", "打印模板"],
   } satisfies Record<MasterDataTab, [string, string]>;
 
   const [entityLabel, templateName] = importLabels[tab];
@@ -156,11 +166,8 @@ export default function MasterDataPage({
           <div>
             <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>基础资料</h1>
             <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
-              统一维护物料、供应商、仓库库位、税码与付款条款，为采购、库存、发票和 SRM 流程提供基础资料。
+              统一维护商品、客户、供应商、仓库库位、税码、付款条款与打印模板。
             </p>
-            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-              基础资料只维护业务对象基础记录，不做报表分析或业务审批。
-            </div>
           </div>
           <ContextualImportActions entityLabel={entityLabel} templateName={templateName} compact />
         </div>
@@ -170,7 +177,7 @@ export default function MasterDataPage({
         <KpiCard label="物料资料" value={String(masterData.items.length)} sub={`${masterData.items.filter((item) => item.status === "待完善").length} 条待完善`} icon={Package} color={A.blue} />
         <KpiCard label="供应商资料" value={String(masterData.suppliers.length)} sub={`${masterData.suppliers.filter((item) => item.riskStatus === "高").length} 个高风险`} icon={Truck} color={A.purple} />
         <KpiCard label="仓库 / 库位" value={String(masterData.warehouses.length)} sub={`${masterData.warehouses.filter((item) => item.available).length} 个可用`} icon={Warehouse} color={A.green} />
-        <KpiCard label="税码" value={String(masterData.taxCodes.length)} sub={`${masterData.taxCodes.filter((item) => item.status === "启用").length} 个启用`} icon={Tags} color={A.orange} />
+        <KpiCard label="客户资料" value={String(CUSTOMER_MASTER.length)} sub={`${CUSTOMER_MASTER.filter((item) => item.creditStatus !== "正常").length} 个需关注`} icon={Users} color={A.orange} />
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -194,6 +201,10 @@ export default function MasterDataPage({
       <Card>
         {tab === "overview" ? (
           <MasterDataOverview data={masterData} onOpenTab={setTab} />
+        ) : tab === "customers" ? (
+          <CustomerTable customers={filteredCustomers} />
+        ) : tab === "print-templates" ? (
+          <PrintTemplateTable templates={filteredTemplates} onCopy={(item) => setTemplateCatalog((current) => [...current, { ...item, id: `${item.id}-copy-${Date.now()}`, name: `${item.name} 副本`, isDefault: false, updatedAt: new Date().toLocaleString("zh-CN") }])} />
         ) : (
           <MasterDataTables
             tab={tab as MasterDataTableTab}

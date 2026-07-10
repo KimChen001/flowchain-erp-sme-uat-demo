@@ -14,6 +14,9 @@ import {
   ReviewActionPanel,
 } from "../../components/business/BusinessObjectDetail";
 import EvidenceGraphPanel, { type EvidenceGraphResponse, type EvidenceNavigate } from "../../components/evidence/EvidenceGraphPanel";
+import DeliveryPage from "./DeliveryPage";
+import ReceiptPage from "./ReceiptPage";
+import SalesReturnPage from "./SalesReturnPage";
 
 type SalesOrder = {
   salesOrderId: string;
@@ -99,7 +102,14 @@ function viewFromInitial(initialView?: string): SalesView {
   return "orders";
 }
 
-export default function SalesDemandPage({ initialView, focus, onNavigate, onOpenAi }: SalesDemandPageProps) {
+export default function SalesDemandPage(props: SalesDemandPageProps) {
+  if (props.initialView === "delivery") return <DeliveryPage />;
+  if (props.initialView === "receipts") return <ReceiptPage />;
+  if (props.initialView === "returns") return <SalesReturnPage />;
+  return <SalesDemandCore {...props} />;
+}
+
+function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDemandPageProps) {
   const view = viewFromInitial(initialView);
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [availability, setAvailability] = useState<InventoryAvailability[]>([]);
@@ -199,17 +209,13 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
               <ClipboardList size={17} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>销售管理</h1>
+              <h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>{view === "orders" ? "销售订单" : view === "risks" ? "交付风险" : "订单证据链"}</h1>
               <p className="text-xs mt-0.5" style={{ color: A.sub }}>
-                {view === "orders" ? "销售订单" : view === "risks" ? "销售出库单 / 发货单" : "销售单据关联"}
+                {view === "orders" ? "管理客户订单、数量、承诺日期与履约状态。" : view === "risks" ? "识别可能影响客户交付承诺的订单风险。" : "按销售订单查看库存、采购与收货关联。"}
               </p>
-              <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-                <span className="font-semibold">交付风险协同：</span>
-                整合客户订单、库存可用量、采购在途和供应商风险，识别交付风险并支撑履约决策。出库、确认与客户通知经复核后执行。
-              </div>
             </div>
           </div>
-          <ContextualImportActions entityLabel="客户订单" compact={false} />
+          {view === "orders" && <ContextualImportActions entityLabel="客户订单" compact={false} />}
         </div>
       </Card>
 
@@ -239,9 +245,6 @@ export default function SalesDemandPage({ initialView, focus, onNavigate, onOpen
 
       {!loadingOrders && !ordersError && orders.length > 0 && view === "orders" && (
         <div className="space-y-3">
-          <Card className="p-4 text-xs leading-5" style={{ color: A.sub }}>
-            选择一条客户订单查看库存影响、采购在途、证据链和复核动作。详情以独立业务对象面板打开，列表保持完整宽度。
-          </Card>
           <Card>
             <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${A.border}` }}>
               <SectionHeader title="客户订单列表" />

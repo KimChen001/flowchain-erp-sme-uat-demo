@@ -18,6 +18,8 @@ import {
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import InventoryMovementLedger from "./InventoryMovementLedger";
 import InventoryExceptionDocuments from "./InventoryExceptionDocuments";
+import InventoryAdjustmentPage from "./InventoryAdjustmentPage";
+import InventoryWarningPage from "./InventoryWarningPage";
 import { buildInventoryExceptionDocuments } from "../../domain/inventory/exceptions";
 import { ContextualAIInsightPanel, type ContextualAIInsight } from "../../components/ai/ContextualAIInsightPanel";
 import { makeSkuInsight, type ContextualAiAction } from "../../domain/contextual-ai";
@@ -1118,7 +1120,7 @@ function InventoryWarehouseMap() {
 }
 
 // ─── Inventory · Master Wrapper ───────────────────────────────────────────────
-type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins" | "exceptions";
+type InvTab = "overview" | "lots" | "transfer" | "count" | "abcxyz" | "movements" | "bins" | "exceptions" | "adjustments" | "warnings";
 
 function limitationText(code: string) {
   return ({
@@ -1345,14 +1347,16 @@ export default function InventoryPage({
     };
   }, []);
   const tabs = [
-    { id: "overview",  label: "库存总览",  icon: Package,         count: summary.itemCount || stockItems.length },
-    { id: "lots",      label: "批次/序列号", icon: Layers,          count: summary.lotCount || lots.length },
-    { id: "transfer",  label: "调拨影响预览",    icon: ArrowLeftRight,  count: TRANSFERS.length },
-    { id: "count",     label: "循环盘点",    icon: ClipboardCheck,  count: COUNT_PLANS.length },
+    { id: "overview",  label: "库存查询",  icon: Package,         count: summary.itemCount || stockItems.length },
+    { id: "movements", label: "库存流水",    icon: History,         count: summary.movementCount || INVENTORY_MOVEMENT_LEDGER.length },
+    { id: "adjustments", label: "库存调整单", icon: FileSpreadsheet, count: 4 },
+    { id: "warnings", label: "库存预警", icon: AlertTriangle, count: 5 },
+    { id: "lots",      label: "批次 / 序列号", icon: Layers,          count: summary.lotCount || lots.length },
+    { id: "transfer",  label: "仓库调拨",    icon: ArrowLeftRight,  count: TRANSFERS.length },
+    { id: "count",     label: "库存盘点",    icon: ClipboardCheck,  count: COUNT_PLANS.length },
     { id: "abcxyz",    label: "ABC/XYZ 分类", icon: Boxes,           count: "10" },
-    { id: "movements", label: "事务流水",    icon: History,         count: summary.movementCount || INVENTORY_MOVEMENT_LEDGER.length },
-    { id: "exceptions", label: "库存异常单据", icon: AlertTriangle,   count: summary.exceptionCount || exceptionCount },
-    { id: "bins",      label: "库位地图",    icon: Grid3x3,         count: "60" },
+    { id: "exceptions", label: "库存异常", icon: AlertTriangle,   count: summary.exceptionCount || exceptionCount },
+    { id: "bins",      label: "库位管理",    icon: Grid3x3,         count: "60" },
   ] as const;
   useEffect(() => {
     if (initialView) setTab(initialView);
@@ -1382,6 +1386,8 @@ export default function InventoryPage({
       {tab === "count"     && <InventoryCycleCount />}
       {tab === "abcxyz"    && <InventoryABCXYZ />}
       {tab === "movements" && <InventoryMovementLedger />}
+      {tab === "adjustments" && <InventoryAdjustmentPage />}
+      {tab === "warnings" && <InventoryWarningPage />}
       {tab === "exceptions" && <InventoryExceptionDocuments />}
       {tab === "bins"      && <InventoryWarehouseMap />}
     </div>
@@ -1430,7 +1436,6 @@ function InventoryLanding({
   const selectedRiskReason = selectedPlannedItem
     ? `可用库存 ${selectedPlannedItem.plan.projectedAvailable}，安全库存 ${selectedPlannedItem.min}，ROP ${selectedPlannedItem.plan.reorderPoint}，建议补货 ${selectedPlannedItem.plan.suggestedQty} ${selectedPlannedItem.plan.unit}`
     : "";
-  const transferExceptions = TRANSFERS.filter((transfer) => ["在途", "待审批"].includes(transfer.status));
   const frozenCount = lots.filter((lot) => lot.status === "冻结").length;
 
   useEffect(() => {
@@ -1501,9 +1506,6 @@ function InventoryLanding({
             <p className="text-xs leading-5 mt-1 max-w-3xl" style={{ color: A.sub }}>
               查看库存健康、事务流水、异常单据、批次序列号、调拨、盘点和库位状态。
             </p>
-            <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-              先看风险 SKU、异常单据和冻结批次，其余明细放在事务流水、盘点和库位子页里。
-            </div>
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
             <div className="flex flex-wrap justify-end gap-2">
@@ -1516,6 +1518,8 @@ function InventoryLanding({
           </div>
         </div>
       </Card>
+
+      <InventoryOverview items={items} onReviewActionDraft={onReviewActionDraft} />
 
       <InventoryAllocationPanel
         availability={availability}
@@ -1605,11 +1609,10 @@ function InventoryLanding({
         </Card>
       )}
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <KpiCard label="风险 SKU" value={String(riskItems.length)} sub={topRisk?.sku || "稳定"} icon={Package} color={A.red} />
         <KpiCard label="库存异常单据" value={String(exceptionDocs.length)} sub="待复核/处理中" icon={AlertTriangle} color={A.orange} />
         <KpiCard label="冻结库存" value={String(frozenCount)} sub="QA 或锁定状态" icon={ShieldCheck} color={A.purple} />
-        <KpiCard label="调拨差异" value={String(transferExceptions.length)} sub="待复核/影响预览" icon={ArrowLeftRight} color={A.indigo} />
         <KpiCard label="盘点差异" value={String(VARIANCES.length)} sub="待复核关闭" icon={ClipboardCheck} color={A.teal} />
       </div>
 
@@ -1692,7 +1695,6 @@ function InventoryLanding({
           </button>
         ))}
       </div>
-      <InventoryOverview items={items} onReviewActionDraft={onReviewActionDraft} />
     </div>
   );
 }
