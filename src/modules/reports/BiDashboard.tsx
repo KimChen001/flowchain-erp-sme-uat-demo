@@ -1,68 +1,75 @@
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Boxes, CreditCard, FileSpreadsheet, Handshake, ShoppingCart, Truck, Users } from "lucide-react";
+import { BarChart3, BookmarkPlus, ChevronDown, ChevronUp, Download, Info, RefreshCw, RotateCcw, Save, SlidersHorizontal } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { A, Card, KpiCard, SectionHeader } from "../../components/ui";
-import { ReportsAnalyticsV2 } from "../../components/reports/ReportsAnalyticsV2";
-import { fetchReportsAnalyticsV2, type ReportsAnalyticsV2 as ReportsAnalyticsPayload } from "./reportsAnalytics";
-import { inventoryItems, procurementTrend, purchaseOrders, salesData, supplierData, SUPPLIER_INVOICES, SKU_CATALOG } from "../../data/demo-data";
-import { THREE_WAY_MATCHES, SETTLEMENT_DOCUMENTS } from "../../data/standard-business-scenario";
-import { fmt } from "../../lib/format";
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { toast } from "sonner";
+import { A, Card, Chip } from "../../components/ui";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
+import { exportRowsToWorkbook } from "../../lib/excel/excelWorkbookService";
+import { supplierData } from "../../data/demo-data";
+import { createSavedReportView, fetchGovernedReport, type DashboardView, type GovernedReport, type ReportChart } from "./governedReports";
 
-type View = "overview" | "procurement" | "sales" | "inventory" | "finance" | "suppliers";
 type NavigateFn = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
-const VIEW_LABELS: Record<View, string> = { overview: "经营总览", procurement: "采购分析", sales: "销售分析", inventory: "库存分析", finance: "结算分析", suppliers: "供应商分析" };
-const COLORS = ["#2563eb", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444"];
+const VIEW_COPY: Record<DashboardView, { label: string; subtitle: string; detailTitle: string }> = {
+  overview: { label: "经营总览", subtitle: "查看销售、采购、库存、供应商和应付的核心经营状态", detailTitle: "待处理经营事项" },
+  procurement: { label: "采购分析", subtitle: "识别采购支出、逾期订单、价格与供应商履约风险", detailTitle: "逾期采购订单" },
+  sales: { label: "销售分析", subtitle: "跟踪销售增长、订单履约和受影响客户", detailTitle: "风险销售订单" },
+  inventory: { label: "库存分析", subtitle: "识别短缺、积压、库龄与仓库库存风险", detailTitle: "风险库存" },
+  finance: { label: "结算分析", subtitle: "跟踪应付、发票差异、三单匹配与结算状态", detailTitle: "待处理发票" },
+  suppliers: { label: "供应商分析", subtitle: "比较采购集中度、OTIF、质量与发票差异风险", detailTitle: "供应商绩效" },
+};
+const OPTIONS = {
+  company: ["全部公司", "新辰智能制造"], warehouse: ["全部仓库", "上海总仓", "苏州分仓", "A 区", "C 区"],
+  supplier: ["全部供应商", ...supplierData.map((item) => item.name)], customer: ["全部客户", "华南自动化设备有限公司", "苏州精工系统集成有限公司"],
+  category: ["全部品类", "工业自动化", "机械部件", "电气元件", "原材料", "耗材"], currency: ["CNY", "USD", "EUR"],
+};
+const COLORS = ["#2563eb", "#10b981", "#f59e0b", "#8b5cf6"];
 
-function FilterBar() {
-  const [params, setParams] = useSearchParams();
-  const fields = [
-    { key: "from", label: "开始日期", type: "date", fallback: "2026-01-01" }, { key: "to", label: "结束日期", type: "date", fallback: "2026-07-11" },
-    { key: "company", label: "公司", options: ["全部公司", "新辰智能制造"] }, { key: "warehouse", label: "仓库", options: ["全部仓库", "上海总仓", "苏州分仓"] },
-    { key: "supplier", label: "供应商", options: ["全部供应商", ...supplierData.map((item) => item.name)] }, { key: "customer", label: "客户", options: ["全部客户", "华南自动化设备有限公司", "苏州精工系统集成有限公司"] },
-    { key: "category", label: "品类", options: ["全部品类", "机械部件", "电气元件", "原材料", "耗材"] }, { key: "currency", label: "币种", options: ["CNY", "USD", "EUR"] },
-  ];
-  const set = (key: string, value: string, fallback?: string) => { const next = new URLSearchParams(params); if (!value || value === fallback || value.startsWith("全部")) next.delete(key); else next.set(key, value); setParams(next, { replace: true }); };
-  return <Card className="p-4" data-testid="bi-global-filters"><div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">{fields.map((field) => <label key={field.key} className="text-[11px] font-medium" style={{ color: A.gray1 }}>{field.label}{field.type === "date" ? <input aria-label={field.label} type="date" value={params.get(field.key) || field.fallback} onChange={(event) => set(field.key, event.target.value, field.fallback)} className="mt-1 h-9 w-full rounded-lg px-2" style={{ background: A.gray6, color: A.label }} /> : <select aria-label={field.label} value={params.get(field.key) || field.options?.[0]} onChange={(event) => set(field.key, event.target.value)} className="mt-1 h-9 w-full rounded-lg px-2" style={{ background: A.gray6, color: A.label }}>{field.options?.map((option) => <option key={option}>{option}</option>)}</select>}</label>)}</div><div className="mt-3 flex justify-end"><button onClick={() => setParams({}, { replace: true })} className="text-xs font-semibold text-blue-600 hover:underline">清除筛选</button></div></Card>;
+function formatMetric(value: number, unit: string) {
+  if (unit === "currency") return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 0 }).format(value);
+  if (unit === "percentage") return `${value.toFixed(1)}%`;
+  if (unit === "days") return `${value.toFixed(1)} 天`;
+  return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value);
+}
+function chartRows(chart: ReportChart) {
+  if (chart.series?.length) {
+    const periods = [...new Set(chart.series.flatMap((series) => series.data.map((row) => row.period)))];
+    return periods.map((period) => Object.fromEntries([["name", period], ...chart.series.map((series) => [series.label, series.data.find((row) => row.period === period)?.value || 0]) ]));
+  }
+  return (chart.data || []).map((row) => ({ name: row.name || row.period || "未分类", value: row.value }));
 }
 
-function ChartCard({ title, children, onClick }: { title: string; children: React.ReactNode; onClick?: () => void }) {
-  return <Card className="p-5" data-chart-title={title}><SectionHeader title={title} /><div className="h-64 cursor-pointer" onClick={onClick}>{children}</div></Card>;
+function ChartPanel({ chart, onDrill }: { chart: ReportChart; onDrill: (path: string) => void }) {
+  const rows = chartRows(chart); const keys = Object.keys(rows[0] || {}).filter((key) => key !== "name");
+  return <Card className="p-4 min-w-0" data-chart-title={chart.title}><div className="flex items-center justify-between"><h2 className="text-sm font-semibold" style={{ color: A.label }}>{chart.title}</h2><button onClick={() => onDrill(chart.drilldownPath)} className="text-[11px] font-medium" style={{ color: A.blue }}>查看明细</button></div><div className="mt-3 h-56" tabIndex={0} aria-label={`${chart.title} 图表，可使用查看明细按钮访问等价数据`}><ResponsiveContainer width="100%" height="100%">{chart.type === "line" ? <LineChart data={rows}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend />{keys.map((key, index) => <Line key={key} type="monotone" dataKey={key} stroke={COLORS[index % COLORS.length]} strokeWidth={2} />)}</LineChart> : <BarChart data={rows}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend />{keys.map((key, index) => <Bar key={key} dataKey={key} fill={COLORS[index % COLORS.length]} />)}</BarChart>}</ResponsiveContainer></div></Card>;
 }
 
-export function BiDashboard({ view, onNavigate }: { view: View; onNavigate?: NavigateFn }) {
-  const navigate = useNavigate();
-  const [analytics, setAnalytics] = useState<ReportsAnalyticsPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  useEffect(() => { let active = true; fetchReportsAnalyticsV2().then((value) => { if (active) { setAnalytics(value); setError(false); } }).catch(() => { if (active) setError(true); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
-  const inventoryValue = inventoryItems.reduce((sum, item) => sum + item.qty * (SKU_CATALOG.find((sku) => sku.sku === item.sku)?.price || 0), 0);
-  const purchaseAmount = purchaseOrders.reduce((sum, item) => sum + item.amount, 0);
-  const invoiceAmount = SUPPLIER_INVOICES.reduce((sum, item) => sum + item.total, 0);
-  const matchRate = THREE_WAY_MATCHES.length ? Math.round(THREE_WAY_MATCHES.filter((item) => item.totalVariance === 0).length / THREE_WAY_MATCHES.length * 100) : 0;
-  const atRiskSku = inventoryItems.filter((item) => item.qty < item.min).length;
-  const supplierChart = supplierData.slice(0, 5).map((item) => ({ name: item.name.slice(0, 6), 采购金额: item.amount / 10000, OTIF: item.ontime, 质量: item.quality }));
-  const inventoryRisk = [{ name: "正常", value: inventoryItems.length - atRiskSku }, { name: "低于安全库存", value: atRiskSku }, { name: "呆滞", value: 1 }];
-  const financeTrend = SUPPLIER_INVOICES.map((item) => ({ date: item.invoiceDate.slice(5), 发票金额: item.total / 10000, 差异金额: item.varianceAmount / 10000 }));
-  const kpis = useMemo(() => ({
-    overview: [["销售订单金额", fmt(salesData.reduce((sum, row) => sum + row.revenue, 0)), "年度销售", ShoppingCart, A.blue], ["采购订单金额", fmt(purchaseAmount), "采购承诺", Handshake, A.purple], ["库存金额", fmt(inventoryValue), "现有库存", Boxes, A.green], ["到期应付", fmt(invoiceAmount), "供应商发票", CreditCard, A.orange], ["准时交付率", "96.4%", "销售履约", Truck, A.green], ["三单匹配率", `${matchRate}%`, "无差异记录", BarChart3, A.blue], ["库存风险 SKU", String(atRiskSku), "低于安全库存", Boxes, A.red], ["未关闭异常", String(THREE_WAY_MATCHES.filter((item) => item.totalVariance > 0).length), "需业务关注", BarChart3, A.orange]],
-    procurement: [["采购金额", fmt(purchaseAmount), "当前订单", Handshake, A.blue], ["开放 PO", String(purchaseOrders.filter((item) => !["已完成", "已取消"].includes(item.status)).length), "履约中", FileSpreadsheet, A.orange], ["逾期 PO", "2", "需跟进", Truck, A.red], ["RFQ 响应率", "84%", "有效报价", Users, A.green]],
-    sales: [["销售订单金额", fmt(salesData.reduce((sum, row) => sum + row.revenue, 0)), "年度", ShoppingCart, A.blue], ["发货完成率", "94.8%", "已发运", Truck, A.green], ["准时交付率", "96.4%", "按承诺日期", Truck, A.green], ["异常签收", "2", "需处理", BarChart3, A.red]],
-    inventory: [["库存金额", fmt(inventoryValue), "当前结存", Boxes, A.blue], ["库存周转率", "7.2", "年化", BarChart3, A.green], ["覆盖天数", "38 天", "平均", Boxes, A.purple], ["风险 SKU", String(atRiskSku), "安全库存", Boxes, A.red]],
-    finance: [["发票总额", fmt(invoiceAmount), "供应商发票", CreditCard, A.blue], ["三单匹配率", `${matchRate}%`, "自动/无差异", BarChart3, A.green], ["差异金额", fmt(THREE_WAY_MATCHES.reduce((sum, row) => sum + row.totalVariance, 0)), "待处理", CreditCard, A.red], ["已结算金额", fmt(SETTLEMENT_DOCUMENTS.reduce((sum, row) => sum + row.actualSettlementAmount, 0)), "结算单", CreditCard, A.purple]],
-    suppliers: [["采购金额", fmt(supplierData.reduce((sum, row) => sum + row.amount, 0)), "供应商采购", Handshake, A.blue], ["RFQ 响应率", "84%", "有效报价", Users, A.green], ["准时交付率", "94.7%", "OTIF", Truck, A.green], ["风险供应商", String(supplierData.filter((item) => item.grade === "B").length), "需整改", Users, A.red]],
-  })[view] as Array<[string, string, string, typeof ShoppingCart, string]>, [view, purchaseAmount, inventoryValue, invoiceAmount, matchRate, atRiskSku]);
-  const drill = (path: string) => navigate(`${path}${window.location.search}`);
-  return <div className="space-y-5" data-testid="bi-dashboard" data-view={view}>
-    <Card className="p-5"><div className="flex items-center justify-between gap-4"><div><h1 className="text-xl font-semibold" style={{ color: A.label }}>{VIEW_LABELS[view]}</h1><p className="mt-1 text-xs" style={{ color: A.sub }}>基于标准业务数据计算，筛选状态保存在 URL，可刷新和分享。</p></div><span className="text-xs" style={{ color: A.green }}>数据口径已统一</span></div></Card>
-    <FilterBar />
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{kpis.map(([label, value, sub, icon, color]) => <KpiCard key={label} label={label} value={value} sub={sub} icon={icon} color={color} />)}</div>
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <ChartCard title={view === "sales" ? "客户订单趋势" : view === "finance" ? "发票金额趋势" : "销售与采购金额趋势"} onClick={() => drill(view === "finance" ? "/app/finance/invoices" : view === "sales" ? "/app/sales/orders" : "/app/procurement/orders")}><ResponsiveContainer width="100%" height="100%"><LineChart data={view === "finance" ? financeTrend : salesData.slice(0, 8).map((row, index) => ({ month: row.month, 销售金额: row.revenue / 10000, 采购金额: (procurementTrend[index % procurementTrend.length]?.amount || 0) / 10 }))}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey={view === "finance" ? "date" : "month"} /><YAxis /><Tooltip formatter={(value) => `${value} 万元`} /><Legend /><Line type="monotone" dataKey={view === "finance" ? "发票金额" : "销售金额"} stroke={COLORS[0]} /><Line type="monotone" dataKey={view === "finance" ? "差异金额" : "采购金额"} stroke={COLORS[2]} /></LineChart></ResponsiveContainer></ChartCard>
-      <ChartCard title={view === "inventory" ? "库存风险分布" : "供应商排名"} onClick={() => drill(view === "inventory" ? "/app/inventory/warnings" : "/app/reports/suppliers")}><ResponsiveContainer width="100%" height="100%">{view === "inventory" ? <PieChart><Pie data={inventoryRisk} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} label>{inventoryRisk.map((_, index) => <Cell key={index} fill={COLORS[index]} />)}</Pie><Tooltip /><Legend /></PieChart> : <BarChart data={supplierChart}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="采购金额" fill={COLORS[0]} /></BarChart>}</ResponsiveContainer></ChartCard>
-      <ChartCard title={view === "finance" ? "AP Aging" : "收货与发货趋势"} onClick={() => drill(view === "finance" ? "/app/finance/invoices?aging=overdue" : "/app/inventory/movements")}><ResponsiveContainer width="100%" height="100%"><AreaChart data={procurementTrend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" /><YAxis /><Tooltip /><Legend /><Area type="monotone" dataKey="po" name="收货" stroke={COLORS[1]} fill="#d1fae5" /><Area type="monotone" dataKey="amount" name="发货/金额" stroke={COLORS[0]} fill="#dbeafe" /></AreaChart></ResponsiveContainer></ChartCard>
-      <ChartCard title={view === "suppliers" ? "供应商 OTIF 与质量" : "异常趋势"} onClick={() => drill(view === "suppliers" ? "/app/master-data/suppliers" : "/app/finance/three-way-match")}><ResponsiveContainer width="100%" height="100%"><BarChart data={view === "suppliers" ? supplierChart : financeTrend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey={view === "suppliers" ? "name" : "date"} /><YAxis /><Tooltip /><Legend /><Bar dataKey={view === "suppliers" ? "OTIF" : "差异金额"} fill={COLORS[2]} /><Bar dataKey={view === "suppliers" ? "质量" : "发票金额"} fill={COLORS[1]} /></BarChart></ResponsiveContainer></ChartCard>
-    </div>
-    {view === "overview" && <ReportsAnalyticsV2 analytics={analytics} loading={loading} error={error} onNavigate={onNavigate} />}
+export function BiDashboard({ view, onNavigate: _onNavigate }: { view: DashboardView; onNavigate?: NavigateFn }) {
+  const navigate = useNavigate(); const [params, setParams] = useSearchParams();
+  const [report, setReport] = useState<GovernedReport | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  const [more, setMore] = useState(false); const [methodOpen, setMethodOpen] = useState(false);
+  const filters = useMemo(() => Object.fromEntries(params.entries()), [params]);
+  const queryKey = params.toString();
+  const load = () => { setLoading(true); setError(""); fetchGovernedReport(view, filters).then(setReport).catch((reason) => setError(reason instanceof Error ? reason.message : "加载失败")).finally(() => setLoading(false)); };
+  useEffect(load, [view, queryKey]);
+  const setFilter = (key: string, value: string, fallback?: string) => { const next = new URLSearchParams(params); if (!value || value === fallback || value.startsWith("全部")) next.delete(key); else next.set(key, value); setParams(next, { replace: true }); };
+  const drill = (path: string) => { const separator = path.includes("?") ? "&" : "?"; navigate(`${path}${separator}${params.toString()}&returnTo=${encodeURIComponent(`/app/reports/${view}?${params}`)}&returnLabel=${encodeURIComponent(VIEW_COPY[view].label)}`); };
+  const saveView = async () => { const name = window.prompt("保存当前视图名称", `${VIEW_COPY[view].label} · ${new Date().toLocaleDateString("zh-CN")}`); if (!name || !report) return; try { const result = await createSavedReportView({ name, description: VIEW_COPY[view].subtitle, subject: view === "overview" ? "purchase_orders" : view === "finance" ? "supplier_invoices" : view === "sales" ? "sales_orders" : view === "inventory" ? "inventory_balances" : view === "suppliers" ? "suppliers" : "purchase_orders", sourceRoute: `/app/reports/${view}`, columns: Object.keys(report.details[0] || {}), filters, measures: report.kpis.map((item) => item.id), visualization: "dashboard", visibility: "private" }); toast.success("视图已保存", { description: result.view.name }); } catch (reason) { toast.error("保存视图失败", { description: reason instanceof Error ? reason.message : "请重试" }); } };
+  const exportCurrent = async () => { if (!report?.exportRows.length) return toast.warning("当前筛选无可导出明细"); const filename = await exportRowsToWorkbook(`${VIEW_COPY[view].label}-${report.dataScope.from}-${report.dataScope.to}`, report.exportRows, "筛选后明细"); toast.success("筛选后报表已导出", { description: filename }); };
+
+  return <div className="space-y-3" data-testid="bi-dashboard" data-view={view}>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-xl font-semibold tracking-tight" style={{ color: A.label }}>{VIEW_COPY[view].label}</h1><p className="mt-1 text-xs" style={{ color: A.sub }}>{VIEW_COPY[view].subtitle}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => setMethodOpen((value) => !value)} className="h-8 px-3 rounded-lg text-xs font-medium" style={{ background: A.gray6, color: A.gray1 }}><Info size={13} className="inline mr-1" />指标口径</button><button onClick={exportCurrent} className="h-8 px-3 rounded-lg text-xs font-medium" style={{ background: A.gray6, color: A.blue }}><Download size={13} className="inline mr-1" />导出</button><button onClick={saveView} className="h-8 px-3 rounded-lg text-xs font-medium text-white" style={{ background: A.blue }}><BookmarkPlus size={13} className="inline mr-1" />保存视图</button></div></div>
+    <Card className="p-3" data-testid="bi-global-filters"><div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"><label className="text-[11px] font-medium" style={{ color: A.gray1 }}>开始日期<input aria-label="开始日期" type="date" value={params.get("from") || "2026-01-01"} onChange={(event) => setFilter("from", event.target.value, "2026-01-01")} className="mt-1 h-8 w-full rounded-lg px-2" style={{ background: A.gray6 }} /></label><label className="text-[11px] font-medium" style={{ color: A.gray1 }}>结束日期<input aria-label="结束日期" type="date" value={params.get("to") || "2026-07-11"} onChange={(event) => setFilter("to", event.target.value, "2026-07-11")} className="mt-1 h-8 w-full rounded-lg px-2" style={{ background: A.gray6 }} /></label><label className="text-[11px] font-medium" style={{ color: A.gray1 }}>公司<select aria-label="公司" value={params.get("company") || OPTIONS.company[0]} onChange={(event) => setFilter("company", event.target.value)} className="mt-1 h-8 w-full rounded-lg px-2" style={{ background: A.gray6 }}>{OPTIONS.company.map((option) => <option key={option}>{option}</option>)}</select></label><button onClick={() => setMore((value) => !value)} className="mt-5 h-8 px-3 rounded-lg text-xs font-medium" style={{ background: A.gray6, color: A.blue }}><SlidersHorizontal size={13} className="inline mr-1" />更多筛选 {more ? <ChevronUp size={12} className="inline" /> : <ChevronDown size={12} className="inline" />}</button></div>{more && <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-5">{(["warehouse", "supplier", "customer", "category", "currency"] as const).map((key) => <label key={key} className="text-[11px] font-medium" style={{ color: A.gray1 }}>{({ warehouse: "仓库", supplier: "供应商", customer: "客户", category: "品类", currency: "币种" })[key]}<select aria-label={({ warehouse: "仓库", supplier: "供应商", customer: "客户", category: "品类", currency: "币种" })[key]} value={params.get(key) || OPTIONS[key][0]} onChange={(event) => setFilter(key, event.target.value)} className="mt-1 h-8 w-full rounded-lg px-2" style={{ background: A.gray6 }}>{OPTIONS[key].map((option) => <option key={option}>{option}</option>)}</select></label>)}</div>}<div className="mt-2 flex flex-wrap items-center gap-1.5">{[...params.entries()].map(([key, value]) => <Chip key={key} label={`${({ from: "开始", to: "结束", company: "公司", warehouse: "仓库", supplier: "供应商", customer: "客户", category: "品类", currency: "币种" } as Record<string, string>)[key] || key}：${value} ×`} color={A.blue} bg="#f0f6ff" />)}<button onClick={() => setParams({}, { replace: true })} className="ml-auto text-[11px] font-medium" style={{ color: A.blue }}><RotateCcw size={11} className="inline mr-1" />清除筛选</button></div></Card>
+    {methodOpen && <Card className="p-4" data-testid="metric-definitions"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold">指标口径</h2><span className="text-[11px]" style={{ color: A.sub }}>版本 2.0 · 当前筛选范围</span></div><div className="mt-3 grid gap-2 md:grid-cols-2">{report?.kpis.map((item) => <div key={item.id} className="rounded-lg p-3" style={{ background: A.gray6 }}><div className="text-xs font-semibold">{item.label}</div><div className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>{item.description}<br />计算：{item.aggregation}<br />时间字段：{item.dateField} · 版本：{item.version}</div></div>)}</div></Card>}
+    {loading && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="报表加载中">{[0, 1, 2, 3].map((item) => <Card key={item} className="h-24 animate-pulse" style={{ background: A.gray5 }}><span className="sr-only">加载指标 {item + 1}</span></Card>)}</div>}
+    {error && <Card className="p-6 text-center"><div className="text-sm font-semibold" style={{ color: A.red }}>报表加载失败</div><div className="mt-1 text-xs" style={{ color: A.sub }}>{error}</div><button onClick={load} className="mt-3 px-3 py-2 rounded-lg text-xs" style={{ background: A.gray6, color: A.blue }}><RefreshCw size={12} className="inline mr-1" />重试</button></Card>}
+    {!loading && !error && report && <>
+      <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: A.sub }}><span>更新于 {new Date(report.generatedAt).toLocaleString("zh-CN")}</span><span>·</span><span>范围：{report.dataScope.from} — {report.dataScope.to}</span><span>·</span><span>公司：{report.dataScope.company}</span><span>·</span><span>币种：{report.dataScope.currency}</span><span>·</span><span>{report.dataScope.activeFilterCount} 个业务筛选</span></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{report.kpis.slice(0, 4).map((item) => <button key={item.id} onClick={() => drill(item.drilldownPath)} className="text-left"><Card className="p-4 h-full hover:shadow-sm"><div className="flex items-center justify-between"><span className="text-[11px] font-medium" style={{ color: A.gray1 }}>{item.label}</span><BarChart3 size={14} color={A.blue} /></div><div className="mt-2 text-xl font-semibold tabular-nums" style={{ color: A.label }}>{formatMetric(item.value, item.unit)}</div><div className="mt-1 text-[11px]" style={{ color: A.sub }}>{item.aggregation} · 点击下钻</div></Card></button>)}</div>
+      {report.kpis.length > 4 && <Card className="px-4 py-3"><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{report.kpis.slice(4).map((item) => <button key={item.id} onClick={() => drill(item.drilldownPath)} className="text-left"><div className="text-[11px]" style={{ color: A.sub }}>{item.label}</div><div className="mt-1 text-sm font-semibold">{formatMetric(item.value, item.unit)}</div></button>)}</div></Card>}
+      {report.warnings.map((warning) => <div key={warning} className="rounded-lg px-3 py-2 text-[11px]" style={{ background: "#fff8f0", color: A.orange }}>{warning}</div>)}
+      {report.charts.length ? <div className={`grid grid-cols-1 gap-3 ${view === "overview" ? "xl:grid-cols-12" : "xl:grid-cols-2"}`}>{report.charts.map((chart, index) => <div key={chart.id} className={view === "overview" ? index === 0 ? "xl:col-span-8" : index === 1 ? "xl:col-span-4" : "xl:col-span-4" : ""}><ChartPanel chart={chart} onDrill={drill} /></div>)}</div> : <Card className="p-8 text-center"><div className="text-sm font-semibold">当前筛选无数据</div><button onClick={() => setParams({}, { replace: true })} className="mt-2 text-xs" style={{ color: A.blue }}>清除筛选</button></Card>}
+      <Card><div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${A.border}` }}><div><h2 className="text-sm font-semibold">{VIEW_COPY[view].detailTitle}</h2><p className="mt-1 text-[11px]" style={{ color: A.sub }}>{report.details.length} 条筛选后明细，与 KPI、图表和导出口径一致</p></div><button onClick={exportCurrent} className="text-xs" style={{ color: A.blue }}><Download size={12} className="inline mr-1" />导出当前明细</button></div>{report.details.length ? <div className="overflow-x-auto"><table className="w-full min-w-[880px] text-xs"><thead><tr>{Object.keys(report.details[0]).slice(0, 9).map((key) => <th key={key} className="px-4 py-2 text-left" style={{ color: A.gray1 }}>{key}</th>)}</tr></thead><tbody>{report.details.slice(0, 15).map((row, index) => <tr key={String(row.id || index)} style={{ borderTop: `1px solid ${A.border}` }}>{Object.keys(report.details[0]).slice(0, 9).map((key) => <td key={key} className="px-4 py-2 whitespace-nowrap">{key === "id" ? <BusinessEntityLink entityType={view === "sales" ? "sales_order" : view === "inventory" ? "item" : view === "finance" ? "supplier_invoice" : "purchase_order"} entityId={String(row[key] || "")}>{String(row[key] || "—")}</BusinessEntityLink> : String(row[key] ?? "—")}</td>)}</tr>)}</tbody></table></div> : <div className="p-8 text-center text-xs" style={{ color: A.sub }}>当前筛选无明细；可清除筛选后重试。</div>}</Card>
+    </>}
   </div>;
 }

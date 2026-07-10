@@ -5,6 +5,7 @@ export type ImportTask = {
   importTaskId: string; originalFileName: string; sheetName: string; businessObject: string; sourcePage: string; uploadedBy: string; uploadedAt: string;
   totalRows: number; validRows: number; warningRows: number; errorRows: number; status: ImportTaskStatus; fieldMapping: Record<string, string>;
   validationErrors: ImportValidationIssue[]; validationWarnings: ImportValidationIssue[]; completedAt?: string;
+  previewId?: string; snapshotHash?: string; importBatchId?: string; auditEventId?: string; inserted?: number; updated?: number; skipped?: number; rollbackAvailable?: boolean;
 };
 const STORAGE_KEY = "flowchain:import-tasks:v2";
 

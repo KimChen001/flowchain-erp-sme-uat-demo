@@ -115,8 +115,8 @@ export const appRouteRegistry: AppRouteDefinition[] = [
   page({ id: "reports:overview", path: "/app/reports/overview", moduleId: "reports", moduleLabel: "报表中心", label: "经营总览", parentId: "reports", pageType: "analysis", viewId: "overview", order: 70.1 }),
   page({ id: "reports:procurement", path: "/app/reports/procurement", moduleId: "reports", moduleLabel: "报表中心", label: "采购分析", parentId: "reports", pageType: "analysis", viewId: "procurement", order: 71 }),
   page({ id: "reports:sales", path: "/app/reports/sales", moduleId: "reports", moduleLabel: "报表中心", label: "销售分析", parentId: "reports", pageType: "analysis", viewId: "sales", legacyIds: ["reports:delivery"], order: 72 }),
-  page({ id: "reports:inventory", path: "/app/reports/inventory", moduleId: "reports", moduleLabel: "报表中心", label: "库存报表", parentId: "reports", pageType: "analysis", viewId: "inventory", order: 73 }),
-  page({ id: "reports:finance", path: "/app/reports/finance", moduleId: "reports", moduleLabel: "报表中心", label: "结算报表", parentId: "reports", pageType: "analysis", viewId: "finance", order: 74 }),
+  page({ id: "reports:inventory", path: "/app/reports/inventory", moduleId: "reports", moduleLabel: "报表中心", label: "库存分析", parentId: "reports", pageType: "analysis", viewId: "inventory", order: 73 }),
+  page({ id: "reports:finance", path: "/app/reports/finance", moduleId: "reports", moduleLabel: "报表中心", label: "结算分析", parentId: "reports", pageType: "analysis", viewId: "finance", order: 74 }),
   page({ id: "reports:suppliers", path: "/app/reports/suppliers", moduleId: "reports", moduleLabel: "报表中心", label: "供应商分析", parentId: "reports", pageType: "analysis", viewId: "suppliers", order: 75 }),
   page({ id: "reports:library", path: "/app/reports/library", moduleId: "reports", moduleLabel: "报表中心", label: "报表库", parentId: "reports", pageType: "list", viewId: "library", legacyIds: ["reports:quality"], order: 76 }),
 

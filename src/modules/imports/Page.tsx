@@ -28,6 +28,7 @@ import { DataAccessQualityV2 } from "../../components/data-access/DataAccessQual
 import { fetchDataAccessQualityV2, type DataAccessQualityV2 as DataAccessQualityV2Payload } from "./dataAccessQuality";
 import { readImportTasks, type ImportTask } from "../../lib/excel/importTaskService";
 import { exportRowsToWorkbook } from "../../lib/excel/excelWorkbookService";
+import { fetchImportBatches, rollbackImportBatch, type ImportBatch as PersistedImportBatch } from "../../lib/excel/importPersistenceApi";
 
 type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "supplierPerformance" | "supplierCertification" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "contractPrices" | "forecastDemand" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
@@ -247,6 +248,8 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
   const [qualityV2Loading, setQualityV2Loading] = useState(true);
   const [qualityV2Error, setQualityV2Error] = useState(false);
   const [liveTasks, setLiveTasks] = useState<ImportTask[]>(readImportTasks);
+  const [persistedBatches, setPersistedBatches] = useState<PersistedImportBatch[]>([]);
+  const refreshPersistedBatches = () => fetchImportBatches().then((response) => setPersistedBatches(response.batches)).catch(() => setPersistedBatches([]));
 
   useEffect(() => {
     setView(initialBusinessView(initialView));
@@ -280,10 +283,12 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
     window.addEventListener("flowchain:import-task-created", refresh);
     return () => window.removeEventListener("flowchain:import-task-created", refresh);
   }, []);
+  useEffect(() => { refreshPersistedBatches(); }, [liveTasks.length]);
 
-  type DisplayTask = typeof BUSINESS_IMPORT_TASKS[number] & { importTaskId?: string; raw?: ImportTask };
+  type DisplayTask = typeof BUSINESS_IMPORT_TASKS[number] & { importTaskId?: string; raw?: ImportTask; batch?: PersistedImportBatch };
   const displayTasks: DisplayTask[] = [
-    ...liveTasks.map((task) => ({ importTaskId: task.importTaskId, name: `${task.businessObject} Excel 导入`, module: task.sourcePage, type: task.businessObject, file: task.originalFileName, records: task.totalRows, passed: task.validRows, warnings: task.warningRows, errors: task.errorRows, status: task.status === "completed" ? "校验通过" : task.status === "completed_with_warnings" ? "有警告" : "有错误", owner: task.uploadedBy, time: new Date(task.uploadedAt).toLocaleString("zh-CN"), nextStep: task.errorRows ? "下载失败行并重新上传" : "校验完成，可由业务负责人复核", raw: task })),
+    ...persistedBatches.filter((batch) => !liveTasks.some((task) => task.importBatchId === batch.importBatchId)).map((batch) => ({ importTaskId: batch.importBatchId, name: `${batch.businessObject} Excel 导入`, module: "正式导入 API", type: batch.businessObject, file: batch.originalFileName || "—", records: batch.inserted + batch.updated + batch.skipped, passed: batch.inserted + batch.updated, warnings: batch.warnings?.length || 0, errors: batch.failed, status: batch.status === "rolled_back" ? "已回滚" : "已提交", owner: "当前用户", time: new Date(batch.committedAt).toLocaleString("zh-CN"), nextStep: batch.status === "committed" ? "可审计、可在回滚窗口内回滚" : "业务变更已反向撤销，审计保留", batch })),
+    ...liveTasks.map((task) => { const batch = persistedBatches.find((item) => item.importBatchId === task.importBatchId); return { importTaskId: task.importTaskId, name: `${task.businessObject} Excel 导入`, module: task.sourcePage, type: task.businessObject, file: task.originalFileName, records: task.totalRows, passed: task.validRows, warnings: task.warningRows, errors: task.errorRows, status: batch?.status === "rolled_back" ? "已回滚" : task.importBatchId ? "已提交" : task.status === "completed" ? "校验通过" : task.status === "completed_with_warnings" ? "有警告" : "有错误", owner: task.uploadedBy, time: new Date(task.uploadedAt).toLocaleString("zh-CN"), nextStep: task.importBatchId ? `批次 ${task.importBatchId} · 审计 ${task.auditEventId || "—"}` : task.errorRows ? "下载失败行并重新上传" : "校验完成，可由业务负责人复核", raw: task, batch }; }),
     ...BUSINESS_IMPORT_TASKS,
   ];
 
@@ -314,7 +319,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
               数据接入与质量用于集中处理导入任务、字段映射、校验结果和失败项。业务页面可发起 Excel / CSV 导入，本页面负责导入历史与数据质量复核。
             </p>
             <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
-              当前页面仅展示导入前校验与质量复核结果；不会直接覆盖当前工作区数据。
+              预览阶段不写业务数据；只有人工确认且后端复核快照后，才会创建正式导入批次并写入受治理业务 repository。
             </div>
             <div className="mt-2 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0faf4", color: A.green }}>
               用户数据导入采用预览模式：先运行导入预览，人工确认后再进入后续处理；预览阶段不保存业务数据。
@@ -348,7 +353,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
             value={view}
             onChange={(value) => setView(value as BusinessImportView)}
           />
-          <Chip label="仅导入前校验" color={A.blue} bg="#f0f6ff" />
+          <Chip label="预览优先 · 正式写入可审计" color={A.blue} bg="#f0f6ff" />
         </div>
       </Card>
 
@@ -391,6 +396,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
                           <button onClick={() => setView("failed")} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.red }}>查看失败项</button>
                           {task.raw ? <button onClick={() => { const rows = task.raw!.validationErrors.map((issue) => ({ 原始行号: issue.rowNumber, 错误字段: issue.field, 错误原因: issue.reason, 修复建议: issue.suggestion })); rows.length ? exportRowsToWorkbook(`${task.raw!.businessObject}-failed-rows`, rows, "失败行") : toast.warning("当前任务没有失败行"); }} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.red }}>下载失败项</button> : <DisabledActionButton>下载失败项</DisabledActionButton>}
                           {task.raw ? <button onClick={() => window.location.assign(task.raw!.sourcePage)} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>重新上传</button> : <DisabledActionButton>重新上传</DisabledActionButton>}
+                          {task.batch?.status === "committed" && task.batch.rollbackAvailable ? <button onClick={async () => { if (!window.confirm(`确认回滚导入批次 ${task.batch!.importBatchId}？审计历史会保留。`)) return; try { await rollbackImportBatch(task.batch!.importBatchId); toast.success("导入批次已回滚"); refreshPersistedBatches(); } catch (error) { toast.error("无法回滚", { description: error instanceof Error ? error.message : "请检查权限和后续引用" }); } }} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#fff1f0", color: A.red }}>回滚批次</button> : null}
                         </div>
                       </td>
                     </tr>

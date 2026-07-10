@@ -47,8 +47,6 @@ import SrmPage from "../modules/srm/Page";
 import MasterDataPage from "../modules/master-data/Page";
 import AiPanel, { type ActiveContext } from "../modules/ai-assistant/Panel";
 import { ActionDraftReviewShell, type ActionDraftPreview, type ActionDraftPreviewRequest, type ConfirmedActionResult } from "../modules/action-drafts/ActionDraftReviewShell";
-import ReportsPanel from "../modules/reports/Page";
-import ImportsPanel from "../modules/imports/Page";
 import ExceptionCasesPage from "../modules/exception-cases/Page";
 import SalesDemandPage from "../modules/sales/Page";
 import CollaborationDraftsPage from "../modules/collaboration-drafts/Page";
@@ -57,6 +55,9 @@ import AuditHistoryPage from "../modules/audit-history/Page";
 import PilotReadinessPage from "../modules/pilot-readiness/Page";
 import { ReviewFirstActionWorkflowV2 } from "../components/actions/ReviewFirstActionWorkflowV2";
 import { BusinessEntityDetailPage } from "../components/business/BusinessEntityDetailPage";
+
+const ReportsPanel = React.lazy(() => import("../modules/reports/Page"));
+const ImportsPanel = React.lazy(() => import("../modules/imports/Page"));
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
@@ -1117,9 +1118,11 @@ export default function FlowChainApp() {
                 </div>
               )}
               <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
+                <React.Suspense fallback={<div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="模块加载中">{[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl" style={{ background: A.gray5 }} />)}</div>}>
                 {activeRoute.pageType === "detail" && activeRoute.entityType
                   ? <BusinessEntityDetailPage route={activeRoute} />
                   : panels[panelModule] || panels[activeModule] || panels.overview}
+                </React.Suspense>
               </PanelErrorBoundary>
               </ModuleShell> : <NotFoundRecovery pathname={location.pathname} />}
             </div>

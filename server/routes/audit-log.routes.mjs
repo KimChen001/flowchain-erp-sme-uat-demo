@@ -1,4 +1,6 @@
 import { createAuditLogRepository } from '../repositories/audit-log-repository.mjs'
+import { listImportAuditEvents } from '../repositories/import-persistence-repository.mjs'
+import { listReportViewAuditEvents } from '../repositories/report-view-repository.mjs'
 
 function auditLogRepository(ctx) {
   return ctx.repositories?.auditLog || createAuditLogRepository(ctx.db)
@@ -13,7 +15,7 @@ export async function handleAuditLogRoute(ctx) {
     const entityId = url.searchParams.get('entityId') || ''
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') || 100)))
     const entries = await repository.listAuditEntries({ entityType, entityId, limit })
-    send(res, 200, entries)
+    send(res, 200, [...listImportAuditEvents(), ...listReportViewAuditEvents(), ...entries].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, limit))
     return true
   }
 

@@ -9,9 +9,9 @@ import { SETTLEMENT_DOCUMENTS } from "../../data/standard-business-scenario";
 export default function SettlementPreparation() {
   const rows = SETTLEMENT_DOCUMENTS;
 
-  function exportExcel() {
+  async function exportExcel() {
     if (!rows.length) return toast.warning("暂无可导出的数据");
-    const filename = exportRowsToWorkbook("settlement-documents", rows.map((row) => ({
+    const filename = await exportRowsToWorkbook("settlement-documents", rows.map((row) => ({
       结算单号: row.settlementNo, 供应商: row.supplier, 结算日期: row.settlementDate, 币种: row.currency,
       发票金额: row.invoiceAmount, 贷项金额: row.creditAmount, 调整金额: row.adjustmentAmount,
       实际结算金额: row.actualSettlementAmount, 对账单: row.reconciliationStatement, 发票列表: row.invoices.join("、"), 状态: row.status,

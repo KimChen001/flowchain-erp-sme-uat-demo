@@ -11,7 +11,7 @@ export function ModuleShell({ route, children }: { route: AppRouteDefinition; ch
   const subRoutes = routesForModule(route.moduleId);
   const activeMenuId = route.currentActiveMenuId || route.id;
   const showModuleHeader = route.id === root.id;
-  const showPageHeader = route.id !== root.id && route.pageType !== "detail";
+  const showPageHeader = route.id !== root.id && route.pageType !== "detail" && route.moduleId !== "reports";
   return (
     <div className="fc-module-shell" data-testid="module-shell" data-route-id={route.id}>
       <AppBreadcrumb route={route} />

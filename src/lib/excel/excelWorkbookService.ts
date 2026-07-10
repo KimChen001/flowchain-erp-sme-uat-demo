@@ -1,24 +1,28 @@
-import * as XLSX from "xlsx";
 import type { ExcelBusinessSchema } from "./excelSchemas";
+type XlsxModule = typeof import("xlsx");
+const loadXlsx = () => import("xlsx");
 
 export type ParsedWorkbook = { fileName: string; fileSize: number; sheetNames: string[]; sheets: Record<string, Record<string, unknown>[]>; headers: Record<string, string[]> };
 
 export async function parseExcelFile(file: File): Promise<ParsedWorkbook> {
-  const data = await file.arrayBuffer();
-  const workbook = XLSX.read(data, { type: "array", cellDates: true });
+  const XLSX = await loadXlsx();
+  const isCsv = /\.csv$/i.test(file.name);
+  const data = isCsv ? await file.text() : await file.arrayBuffer();
+  const workbook = XLSX.read(data, { type: isCsv ? "string" : "array", cellDates: true });
   const sheets: ParsedWorkbook["sheets"] = {};
   const headers: ParsedWorkbook["headers"] = {};
+  const normalizeCell = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : value;
   workbook.SheetNames.forEach((name) => {
     const sheet = workbook.Sheets[name];
-    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: false });
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: true });
     const header = (matrix[0] || []).map((value) => String(value).trim()).filter(Boolean);
     headers[name] = header;
-    sheets[name] = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: false });
+    sheets[name] = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: true }).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, normalizeCell(value)])));
   });
   return { fileName: file.name, fileSize: file.size, sheetNames: workbook.SheetNames, sheets, headers };
 }
 
-function downloadWorkbook(workbook: XLSX.WorkBook, filename: string) {
+function downloadWorkbook(XLSX: XlsxModule, workbook: import("xlsx").WorkBook, filename: string) {
   XLSX.writeFile(workbook, filename, { compression: true });
   return filename;
 }
@@ -27,7 +31,8 @@ function fitColumns(rows: Record<string, unknown>[], headers: string[]) {
   return headers.map((header) => ({ wch: Math.min(36, Math.max(12, header.length * 2 + 2, ...rows.slice(0, 50).map((row) => String(row[header] ?? "").length + 2))) }));
 }
 
-export function downloadExcelTemplate(schema: ExcelBusinessSchema) {
+export async function downloadExcelTemplate(schema: ExcelBusinessSchema) {
+  const XLSX = await loadXlsx();
   const dataRow = Object.fromEntries(schema.fields.map((item) => [item.label, item.example]));
   const dataSheet = XLSX.utils.json_to_sheet([dataRow], { header: schema.fields.map((item) => item.label) });
   dataSheet["!cols"] = fitColumns([dataRow], schema.fields.map((item) => item.label));
@@ -48,10 +53,11 @@ export function downloadExcelTemplate(schema: ExcelBusinessSchema) {
   XLSX.utils.book_append_sheet(workbook, dataSheet, "导入数据");
   XLSX.utils.book_append_sheet(workbook, definitionSheet, "字段说明");
   XLSX.utils.book_append_sheet(workbook, guideSheet, "导入说明");
-  return downloadWorkbook(workbook, schema.filename);
+  return downloadWorkbook(XLSX, workbook, schema.filename);
 }
 
-export function exportRowsToWorkbook(businessObject: string, rows: Record<string, unknown>[], sheetName = "当前结果") {
+export async function exportRowsToWorkbook(businessObject: string, rows: Record<string, unknown>[], sheetName = "当前结果") {
+  const XLSX = await loadXlsx();
   const headers = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
   const sheet = XLSX.utils.json_to_sheet(rows, { header: headers, cellDates: true });
   sheet["!cols"] = fitColumns(rows, headers);
@@ -60,5 +66,5 @@ export function exportRowsToWorkbook(businessObject: string, rows: Record<string
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, sheet, sheetName.slice(0, 31));
   const date = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
-  return downloadWorkbook(workbook, `${businessObject}-${date}.xlsx`);
+  return downloadWorkbook(XLSX, workbook, `${businessObject}-${date}.xlsx`);
 }
