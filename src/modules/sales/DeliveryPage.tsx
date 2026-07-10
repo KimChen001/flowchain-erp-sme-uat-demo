@@ -7,6 +7,7 @@ import { adaptDeliveryNote } from "../print-layout/printDataAdapters";
 import { DELIVERY_NOTES, deliveryCustomers } from "./deliveryData";
 import type { DeliveryNote, DeliveryStatus } from "./deliveryTypes";
 import { useNavigate } from "react-router";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
 
 const statuses: Array<"全部" | DeliveryStatus> = ["全部", "待拣货", "待发货", "运输中", "已送达", "已签收", "异常"];
 const statusColor = (status: DeliveryStatus) => status === "异常" ? A.red : status === "已签收" ? A.green : status === "运输中" || status === "已送达" ? A.blue : A.orange;
@@ -49,7 +50,7 @@ export default function DeliveryPage() {
         <div className="overflow-x-auto"><table className="w-full min-w-[1060px] text-xs">
           <thead><tr style={{ borderBottom: `1px solid ${A.border}` }}>{["发货单号", "销售订单号", "发货日期", "客户", "仓库", "发货数量", "物流状态", "预计到达", "操作"].map((header) => <th key={header} className="px-3 py-3 text-left font-semibold" style={{ color: A.gray1 }}>{header}</th>)}</tr></thead>
           <tbody>{rows.map((note) => <tr key={note.id} data-testid={`delivery-row-${note.deliveryNo}`} style={{ borderBottom: `1px solid ${A.border}` }}>
-            <td className="px-3 py-3 font-semibold" style={{ color: A.blue }}>{note.deliveryNo}</td><td className="px-3 py-3">{note.salesOrderNo}</td><td className="px-3 py-3">{note.deliveryDate}</td>
+            <td className="px-3 py-3 font-semibold"><BusinessEntityLink entityType="delivery_note" entityId={note.deliveryNo}>{note.deliveryNo}</BusinessEntityLink></td><td className="px-3 py-3"><BusinessEntityLink entityType="sales_order" entityId={note.salesOrderNo}>{note.salesOrderNo}</BusinessEntityLink></td><td className="px-3 py-3">{note.deliveryDate}</td>
             <td className="px-3 py-3 font-medium">{note.customerName}</td><td className="px-3 py-3">{note.warehouse}</td><td className="px-3 py-3 tabular-nums">{note.totalQuantity.toLocaleString()}</td>
             <td className="px-3 py-3"><Chip label={note.status} color={statusColor(note.status)} bg={`${statusColor(note.status)}16`} /></td><td className="px-3 py-3">{note.expectedArrivalDate || "—"}</td>
             <td className="px-3 py-3"><div className="flex gap-2"><button onClick={() => setSelectedId(note.id)} className="px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看详情</button><button aria-label={`打印发货单 ${note.deliveryNo}`} onClick={() => setPrintNote(note)} className="px-2.5 py-1.5 rounded-md font-medium flex items-center gap-1" style={{ background: "#f0f6ff", color: A.blue }}><Printer size={12} />打印</button></div></td>

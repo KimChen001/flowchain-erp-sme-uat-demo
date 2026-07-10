@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
 import { fmt } from "../../lib/format";
 import { purchaseOrders, qcExceptions, receivingDocs, SUPPLIER_INVOICES } from "../../data/demo-data";
 import type { PurchaseOrder, ReceivingDoc, ReceivingDocLine, RecvStatus } from "../../types/scm";
@@ -618,22 +619,21 @@ function ReceivingOps({
               const acceptedQty = lines.reduce((sum, line) => sum + toNumber(line.acceptedQty), 0);
               const rejectedQty = lines.reduce((sum, line) => sum + toNumber(line.rejectedQty), 0);
               return (
-              <tr key={r.grn} onClick={() => { setSelectedGrnId(r.grn); setShowGrnDetail(true); }}
-                className="cursor-pointer hover:bg-blue-50/40 transition-colors"
+              <tr key={r.grn} className="hover:bg-blue-50/40 transition-colors"
                 style={{
                   borderBottom: i < docs.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none",
                   background: selectedGrn?.grn === r.grn ? "rgba(0,113,227,0.06)" : "transparent",
                 }}>
                 <td className="px-4 py-3 whitespace-nowrap font-medium tabular-nums" style={{ color: A.blue }}>
-                  <div>{r.grn}</div>
+                  <div><BusinessEntityLink entityType="receiving_doc" entityId={r.grn}>{r.grn}</BusinessEntityLink></div>
                   {isPostedGrn(r) && (
                     <div className="text-[9px] font-normal truncate" style={{ color: A.gray2 }}>
                       {r.postedAt ? `posted ${new Date(r.postedAt).toLocaleString("zh-CN")}` : "posted"}
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap tabular-nums" style={{ color: A.indigo }}>{r.po}</td>
-                <td className="px-4 py-3 max-w-[190px] truncate font-medium" style={{ color: A.label }}>{r.supplier}</td>
+                <td className="px-4 py-3 whitespace-nowrap tabular-nums"><BusinessEntityLink entityType="purchase_order" entityId={r.po}>{r.po}</BusinessEntityLink></td>
+                <td className="px-4 py-3 max-w-[190px] truncate font-medium"><BusinessEntityLink entityType="supplier" entityId={r.supplier}>{r.supplier}</BusinessEntityLink></td>
                 <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.sub }}>{r.arrived}</td>
                 <td className="px-4 py-3 whitespace-nowrap"><Chip label={r.dock} color={A.indigo} bg="#eef0ff" /></td>
                 <td className="px-4 py-3 whitespace-nowrap" style={{ color: A.label }}>{r.receiver}</td>

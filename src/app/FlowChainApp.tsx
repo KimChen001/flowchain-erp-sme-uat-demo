@@ -56,6 +56,7 @@ import SettingsPage from "../modules/settings/Page";
 import AuditHistoryPage from "../modules/audit-history/Page";
 import PilotReadinessPage from "../modules/pilot-readiness/Page";
 import { ReviewFirstActionWorkflowV2 } from "../components/actions/ReviewFirstActionWorkflowV2";
+import { BusinessEntityDetailPage } from "../components/business/BusinessEntityDetailPage";
 
 function supplierRecommendation(name: string) {
   const supplier = supplierData.find((item) => item.name === name);
@@ -505,6 +506,8 @@ export default function FlowChainApp() {
   useEffect(() => {
     if (location.pathname === "/" || location.pathname === "/app") {
       routerNavigate("/app/overview", { replace: true });
+    } else if (location.pathname === "/app/reports") {
+      routerNavigate("/app/reports/overview", { replace: true });
     }
   }, [location.pathname, routerNavigate]);
 
@@ -873,7 +876,7 @@ export default function FlowChainApp() {
                       const isActive = activeNavItem?.id === item.id;
                       return (
                         <div key={item.id} className="space-y-0.5">
-                          <button onClick={() => navigateTo(item.id)}
+                          <button aria-label={item.id === "reports" ? "报表与分析" : undefined} onClick={() => navigateTo(item.id)}
                             className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-medium transition-colors duration-150"
                             style={isActive
                               ? { background: A.sidebarAccent, color: "#f8fafc" }
@@ -881,22 +884,6 @@ export default function FlowChainApp() {
                             <item.icon size={15} strokeWidth={isActive ? 2 : 1.8} />
                             <span className="truncate">{item.label}</span>
                           </button>
-                          {isActive && item.children && (
-                            <div className="ml-4 pl-3 py-1 space-y-0.5" style={{ borderLeft: "1px solid rgba(255,255,255,0.08)" }}>
-                              {item.children.map((child) => {
-                                const childActive = (activeRoute?.currentActiveMenuId || active) === child.id;
-                                return (
-                                  <button key={child.id} onClick={() => navigateTo(child.id)}
-                                    className="w-full text-left px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors"
-                                    style={childActive
-                                      ? { background: "rgba(37,99,235,0.16)", color: "#bfdbfe" }
-                                      : { background: "transparent", color: A.sidebarSub }}>
-                                    {child.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
                         </div>
                       );
                     })}
@@ -1130,7 +1117,9 @@ export default function FlowChainApp() {
                 </div>
               )}
               <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
-                {panels[panelModule] || panels[activeModule] || panels.overview}
+                {activeRoute.pageType === "detail" && activeRoute.entityType
+                  ? <BusinessEntityDetailPage route={activeRoute} />
+                  : panels[panelModule] || panels[activeModule] || panels.overview}
               </PanelErrorBoundary>
               </ModuleShell> : <NotFoundRecovery pathname={location.pathname} />}
             </div>

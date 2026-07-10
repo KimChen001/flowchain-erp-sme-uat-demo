@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { exportRowsToCsv } from "../../lib/data-export";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
 import { fmt } from "../../lib/format";
 import { purchaseOrders, receivingDocs, SUPPLIER_INVOICES } from "../../data/demo-data";
 import type { PurchaseOrder, ReceivingDoc, SupplierInvoice } from "../../types/scm";
@@ -1108,7 +1109,7 @@ export default function PurchasingOrdersPage({
                     className="transition-colors hover:bg-blue-50/40"
                     style={{ borderBottom: index < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
                     <td className={tdIdClass}>
-                      <button onClick={() => openDetail(order.po)} className={tableLinkClass} style={{ color: A.blue }}>{order.po}</button>
+                      <BusinessEntityLink entityType="purchase_order" entityId={order.po} className={tableLinkClass}>{order.po}</BusinessEntityLink>
                     </td>
                     <td className={tdNowrapClass} style={{ color: order.sourceRequest ? A.blue : A.orange }}>{order.sourceRequest || "待补齐"}</td>
                     <td className={tdNowrapClass} style={{ color: order.sourceRfq ? A.blue : A.orange }}>{order.sourceRfq || "待补齐"}</td>

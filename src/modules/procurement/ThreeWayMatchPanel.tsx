@@ -7,6 +7,7 @@ import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import { invoiceToMatchQueueItem, type InvoiceMatchQueueItem } from "../../domain/procurement/invoice-matching";
 import { matchStatusStyle } from "./shared";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
 import {
   tableMinLgClass,
   tableScrollClass,
@@ -68,12 +69,11 @@ export default function ThreeWayMatchPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="匹配队列" value={String(queue.length)} sub="PO / GRN / 发票" icon={ShieldCheck} color={A.blue} />
         <KpiCard label="自动匹配率" value={`${autoMatched}%`} sub="容差内通过" icon={CheckCircle2} color={A.green} />
         <KpiCard label="差异总额" value={fmt(varianceTotal)} sub="待处理" icon={AlertOctagon} color={A.red} />
         <KpiCard label="缺少收货" value={String(missingGrn)} sub="GRN 未完成" icon={Package} color={A.orange} />
-        <KpiCard label="重复风险" value={String(duplicateRisk)} sub="供应商+发票号" icon={AlertCircle} color={A.purple} />
       </div>
 
       <Card className="p-5">
@@ -117,11 +117,11 @@ export default function ThreeWayMatchPanel() {
             <tbody>
               {queue.map((q, i) => (
                 <tr key={q.id} style={{ borderBottom: i < queue.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                  <td className={tdWideIdClass} style={{ color: A.blue }}>{q.id}</td>
-                  <td className={tdWideNowrapClass} style={{ color: A.sub }}>{q.po}</td>
-                  <td className={tdWideNowrapClass} style={{ color: A.sub }}>{q.grn}</td>
-                  <td className={tdWideNowrapClass} style={{ color: A.sub }}>{q.invoiceNumber}</td>
-                  <td className={`${tdWideNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{q.supplier}</td>
+                  <td className={tdWideIdClass}><BusinessEntityLink entityType="three_way_match" entityId={q.id}>{q.id}</BusinessEntityLink></td>
+                  <td className={tdWideNowrapClass}><BusinessEntityLink entityType="purchase_order" entityId={q.po}>{q.po}</BusinessEntityLink></td>
+                  <td className={tdWideNowrapClass}><BusinessEntityLink entityType="receiving_doc" entityId={q.grn} exists={Boolean(q.grn && q.grn !== "—")}>{q.grn || "—"}</BusinessEntityLink></td>
+                  <td className={tdWideNowrapClass}><BusinessEntityLink entityType="supplier_invoice" entityId={q.invoiceNumber}>{q.invoiceNumber}</BusinessEntityLink></td>
+                  <td className={`${tdWideNameClass} max-w-[180px] truncate`}><BusinessEntityLink entityType="supplier" entityId={q.supplier}>{q.supplier}</BusinessEntityLink></td>
                   <td className={tdWideNumericClass} style={{ color: A.label }}>{fmt(q.poAmt)}</td>
                   <td className={tdWideNumericClass} style={{ color: A.label }}>{fmt(q.grnAmt)}</td>
                   <td className={tdWideNumericClass} style={{ color: A.label }}>{fmt(q.invAmt)}</td>

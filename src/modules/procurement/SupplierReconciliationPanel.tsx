@@ -9,6 +9,8 @@ import { getReconciliationStatusTone, getReconciliationSummary, isStatementExcep
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
 import type { SupplierReconciliationStatement } from "../../types/scm";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
+import ContextualImportActions from "../../components/import/ContextualImportActions";
 
 function statementPeriod(statement: SupplierReconciliationStatement) {
   return `${statement.periodStart} ~ ${statement.periodEnd}`;
@@ -115,7 +117,7 @@ export default function SupplierReconciliationPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="对账单数" value={String(statements.length)} sub="对账期间" icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="待确认" value={String(pending)} sub="供应商确认" icon={Clock} color={A.orange} />
         <KpiCard label="差异对账" value={String(exceptions)} sub="含逾期/驳回" icon={AlertOctagon} color={A.red} />
@@ -133,6 +135,7 @@ export default function SupplierReconciliationPanel() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <ContextualImportActions entityLabel="对账单" templateName="对账单" compact />
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}
               className="h-8 rounded-lg px-2 text-xs outline-none" style={{ background: A.gray6, color: A.label }}>
               {["全部", "待确认", "存在差异", "已确认", "已驳回", "已关闭"].map((item) => <option key={item}>{item}</option>)}
@@ -167,8 +170,8 @@ export default function SupplierReconciliationPanel() {
             <tbody>
               {visibleStatements.map((statement, index) => (
                 <tr key={statement.id} style={{ borderBottom: index < visibleStatements.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                  <td className="px-5 py-3 font-semibold whitespace-nowrap" style={{ color: A.blue }}>{statement.statementNo}</td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.label }}>{statement.supplier}</td>
+                  <td className="px-5 py-3 font-semibold whitespace-nowrap"><BusinessEntityLink entityType="reconciliation_statement" entityId={statement.statementNo}>{statement.statementNo}</BusinessEntityLink></td>
+                  <td className="px-5 py-3 whitespace-nowrap"><BusinessEntityLink entityType="supplier" entityId={statement.supplierCode || statement.supplier}>{statement.supplier}</BusinessEntityLink></td>
                   <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{statementPeriod(statement)}</td>
                   <td className="px-5 py-3" style={{ color: A.label }}>{statement.invoiceCount}</td>
                   <td className="px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.label }}>{fmt(statement.totalPayableAmount)}</td>

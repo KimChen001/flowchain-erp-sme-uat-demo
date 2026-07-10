@@ -6,7 +6,7 @@ import path from 'node:path'
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
 
 const SCAN_ROOTS = ['README.md', 'docs', 'src', 'server', 'tests', 'package.json']
-const SKIP_DIRS = new Set(['.git', '.claude', 'node_modules', 'dist', 'coverage', 'test-results', 'playwright-report', 'blob-report'])
+const SKIP_DIRS = new Set(['.git', '.claude', 'design-preview', 'node_modules', 'dist', 'coverage', 'test-results', 'playwright-report', 'blob-report'])
 const SCAN_EXTENSIONS = new Set(['.md', '.js', '.mjs', '.ts', '.tsx', '.json'])
 const FORBIDDEN_PRODUCT_POSITIONING = /\b(demo|uat|mock|fake)\b|sample data|demo data|mock data|fake data|演示|样例|示例|测试数据|演示数据|样例数据|示例数据|presentation-only|prototype-only/iu
 
@@ -94,6 +94,7 @@ const TECHNICAL_LINE_PATTERNS = [
   /\bsample(Row|Rows|Response|Item|Supplier|Key|Payload|Code|Size|Response|Price|Rate|sku|supplier|item)\b/,
   /edi-sample/i,
   /hasFakeCaret/i,
+  /中文字段名.*示例值/,
   /dry-run/i,
 ]
 

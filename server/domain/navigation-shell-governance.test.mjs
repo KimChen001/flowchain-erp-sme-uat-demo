@@ -32,7 +32,8 @@ test("module shell owns breadcrumb, secondary navigation, page title and recover
   assert.match(shell, /NotFoundRecovery/);
   assert.match(breadcrumb, /breadcrumbRoutes\(route\)/);
   assert.match(breadcrumb, /aria-current="page"/);
-  assert.match(breadcrumb, /navigate\(item\.path\)/);
+  assert.match(breadcrumb, /<Link[^>]+to=\{item\.path\}/);
+  assert.doesNotMatch(breadcrumb, /preventDefault/);
 });
 
 test("business-level inventory, master-data, procurement and finance tabs navigate by route", () => {

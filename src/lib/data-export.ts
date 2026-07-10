@@ -22,12 +22,8 @@ export function csvEscape(value: ExportCellValue): string {
 }
 
 export function exportRowsToCsv(filename: string, rows: Record<string, unknown>[]) {
-  const { headers, rows: normalizedRows } = normalizeCsvRows(rows);
-  const lines = [
-    headers.map(csvEscape).join(","),
-    ...normalizedRows.map((row) => headers.map((header) => csvEscape(row[header])).join(",")),
-  ];
-  downloadTextFile(filename, `\ufeff${lines.join("\r\n")}`, "text/csv;charset=utf-8");
+  const businessObject = filename.replace(/\.(csv|xlsx)$/i, "").replace(/-export$/i, "");
+  exportRowsToWorkbook(businessObject, rows);
 }
 
 export function downloadTextFile(filename: string, content: string, mimeType = "text/plain;charset=utf-8") {
@@ -64,3 +60,4 @@ function safeJsonStringify(value: unknown): string {
     return String(value);
   }
 }
+import { exportRowsToWorkbook } from "./excel/excelWorkbookService";

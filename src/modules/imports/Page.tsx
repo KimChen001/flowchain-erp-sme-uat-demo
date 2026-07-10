@@ -26,6 +26,8 @@ import {
 import { A, Card, Chip, Field, inputStyle, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 import { DataAccessQualityV2 } from "../../components/data-access/DataAccessQualityV2";
 import { fetchDataAccessQualityV2, type DataAccessQualityV2 as DataAccessQualityV2Payload } from "./dataAccessQuality";
+import { readImportTasks, type ImportTask } from "../../lib/excel/importTaskService";
+import { exportRowsToWorkbook } from "../../lib/excel/excelWorkbookService";
 
 type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "supplierPerformance" | "supplierCertification" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "contractPrices" | "forecastDemand" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
@@ -244,6 +246,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
   const [qualityV2, setQualityV2] = useState<DataAccessQualityV2Payload | null>(null);
   const [qualityV2Loading, setQualityV2Loading] = useState(true);
   const [qualityV2Error, setQualityV2Error] = useState(false);
+  const [liveTasks, setLiveTasks] = useState<ImportTask[]>(readImportTasks);
 
   useEffect(() => {
     setView(initialBusinessView(initialView));
@@ -272,6 +275,17 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
       alive = false;
     };
   }, []);
+  useEffect(() => {
+    const refresh = () => setLiveTasks(readImportTasks());
+    window.addEventListener("flowchain:import-task-created", refresh);
+    return () => window.removeEventListener("flowchain:import-task-created", refresh);
+  }, []);
+
+  type DisplayTask = typeof BUSINESS_IMPORT_TASKS[number] & { importTaskId?: string; raw?: ImportTask };
+  const displayTasks: DisplayTask[] = [
+    ...liveTasks.map((task) => ({ importTaskId: task.importTaskId, name: `${task.businessObject} Excel 导入`, module: task.sourcePage, type: task.businessObject, file: task.originalFileName, records: task.totalRows, passed: task.validRows, warnings: task.warningRows, errors: task.errorRows, status: task.status === "completed" ? "校验通过" : task.status === "completed_with_warnings" ? "有警告" : "有错误", owner: task.uploadedBy, time: new Date(task.uploadedAt).toLocaleString("zh-CN"), nextStep: task.errorRows ? "下载失败行并重新上传" : "校验完成，可由业务负责人复核", raw: task })),
+    ...BUSINESS_IMPORT_TASKS,
+  ];
 
   const currentViewLabel = BUSINESS_VIEW_OPTIONS.find((item) => item.id === view)?.label || "导入任务";
 
@@ -297,7 +311,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
               </div>
             </div>
             <p className="text-xs leading-5 max-w-3xl" style={{ color: A.gray1 }}>
-              数据接入与质量用于集中处理导入任务、字段映射、校验结果和失败项。业务页面可发起 CSV 导入，本页面负责导入前校验和数据质量复核，不承担业务审批或自动写入。
+              数据接入与质量用于集中处理导入任务、字段映射、校验结果和失败项。业务页面可发起 Excel / CSV 导入，本页面负责导入历史与数据质量复核。
             </p>
             <div className="mt-3 rounded-xl px-3 py-2 text-[11px] leading-5" style={{ background: "#f0f6ff", color: A.blue }}>
               当前页面仅展示导入前校验与质量复核结果；不会直接覆盖当前工作区数据。
@@ -321,7 +335,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
       </Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label="导入任务" value={String(BUSINESS_IMPORT_TASKS.length)} sub="等待业务复核" icon={Upload} color={A.blue} />
+        <KpiCard label="导入任务" value={String(displayTasks.length)} sub="历史与当前任务" icon={Upload} color={A.blue} />
         <KpiCard label="字段映射" value={String(BUSINESS_MAPPING_ROWS.length)} sub="外部字段到系统字段" icon={FileSpreadsheet} color={A.purple} />
         <KpiCard label="质量检查" value={String(BUSINESS_QUALITY_ISSUES.length)} sub="跨模块问题" icon={ShieldCheck} color={A.orange} />
         <KpiCard label="失败项处理" value={String(BUSINESS_FAILED_ROWS.length)} sub="需人工复核" icon={AlertCircle} color={A.red} />
@@ -342,7 +356,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
         <Card>
           <div className="px-5 py-4" style={{ borderBottom: `1px solid ${A.border}` }}>
             <SectionHeader title="导入任务" />
-            <p className="text-[11px] leading-5" style={{ color: A.sub }}>从销售、采购、库存、供应商和财务页面发起的 CSV 导入会先进入这里复核。</p>
+            <p className="text-[11px] leading-5" style={{ color: A.sub }}>从销售、采购、库存、供应商和财务页面完成确认的 Excel / CSV 导入任务会进入这里复核。</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] text-xs">
@@ -354,10 +368,10 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
                 </tr>
               </thead>
               <tbody>
-                {BUSINESS_IMPORT_TASKS.map((task, index) => {
+                {displayTasks.map((task, index) => {
                   const tone = statusTone(task.status);
                   return (
-                    <tr key={task.name} style={{ borderBottom: index < BUSINESS_IMPORT_TASKS.length - 1 ? `1px solid ${A.border}` : "none" }}>
+                    <tr key={task.importTaskId || `${task.name}-${index}`} style={{ borderBottom: index < displayTasks.length - 1 ? `1px solid ${A.border}` : "none" }}>
                       <td className="px-4 py-3 font-semibold" style={{ color: A.label }}>{task.name}</td>
                       <td className="px-4 py-3" style={{ color: A.sub }}>{task.module}</td>
                       <td className="px-4 py-3" style={{ color: A.sub }}>{task.type}</td>
@@ -375,8 +389,8 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
                           <button onClick={() => setView("quality")} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#f0f6ff", color: A.blue }}>查看校验结果</button>
                           <button onClick={() => setView("mapping")} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>查看字段映射</button>
                           <button onClick={() => setView("failed")} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.red }}>查看失败项</button>
-                          <DisabledActionButton>下载失败项</DisabledActionButton>
-                          <DisabledActionButton>重新上传</DisabledActionButton>
+                          {task.raw ? <button onClick={() => { const rows = task.raw!.validationErrors.map((issue) => ({ 原始行号: issue.rowNumber, 错误字段: issue.field, 错误原因: issue.reason, 修复建议: issue.suggestion })); rows.length ? exportRowsToWorkbook(`${task.raw!.businessObject}-failed-rows`, rows, "失败行") : toast.warning("当前任务没有失败行"); }} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.red }}>下载失败项</button> : <DisabledActionButton>下载失败项</DisabledActionButton>}
+                          {task.raw ? <button onClick={() => window.location.assign(task.raw!.sourcePage)} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>重新上传</button> : <DisabledActionButton>重新上传</DisabledActionButton>}
                         </div>
                       </td>
                     </tr>

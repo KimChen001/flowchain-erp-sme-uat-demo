@@ -1517,7 +1517,6 @@ function InventoryLanding({
           <div className="flex flex-col items-end gap-2">
             <div className="flex flex-wrap justify-end gap-2">
               <ContextualImportActions entityLabel="库存余额" templateName="库存余额" compact={false} />
-              <ContextualImportActions entityLabel="库存流水" templateName="库存流水" compact={false} />
             </div>
             <button onClick={() => onOpenTab("exceptions")} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>
               处理异常

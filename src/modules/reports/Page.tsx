@@ -67,6 +67,7 @@ import type { AuditEntry, PurchaseRequest } from "../../types/scm";
 import { A, Card, Chip, KpiCard, SectionHeader, SegmentedControl } from "../../components/ui";
 import { ReportsAnalyticsV2 } from "../../components/reports/ReportsAnalyticsV2";
 import { fetchReportsAnalyticsV2, type ReportsAnalyticsV2 as ReportsAnalyticsV2Payload } from "./reportsAnalytics";
+import { BiDashboard } from "./BiDashboard";
 
 type ReportModule = "采购" | "库存" | "基础资料" | "财务" | "预测/MRP" | "供应商" | "审计";
 type SourceKind = "Core" | "Computed" | "API" | "API supplement" | "Module";
@@ -89,7 +90,7 @@ type ReportEntry = {
 
 type ReportsPanelProps = {
   onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
-  initialView?: "procurement" | "inventory" | "finance";
+  initialView?: "overview" | "procurement" | "sales" | "inventory" | "finance" | "suppliers" | "library";
 };
 
 const FILTERS = ["全部", "采购", "库存", "基础资料", "财务", "预测/MRP", "供应商", "审计"] as const;
@@ -307,8 +308,8 @@ function reportFilterFromView(view?: ReportsPanelProps["initialView"]): typeof F
   return "全部";
 }
 
-export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelProps) {
-  const [filter, setFilter] = useState<typeof FILTERS[number]>(() => reportFilterFromView(initialView));
+function ReportsLibraryPanel({ onNavigate }: ReportsPanelProps) {
+  const [filter, setFilter] = useState<typeof FILTERS[number]>("全部");
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [savedPlans, setSavedPlans] = useState<any[]>([]);
   const [mrpPlan, setMrpPlan] = useState<MrpPlan | null>(null);
@@ -333,9 +334,6 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       })
       .finally(() => setReportsAnalyticsLoading(false));
   }, []);
-  useEffect(() => {
-    setFilter(reportFilterFromView(initialView));
-  }, [initialView]);
 
   const reports = useMemo<ReportEntry[]>(() => [
     {
@@ -925,13 +923,6 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
 
   return (
     <div className="space-y-5">
-      <ReportsAnalyticsV2
-        analytics={reportsAnalytics}
-        loading={reportsAnalyticsLoading}
-        error={reportsAnalyticsError}
-        onNavigate={onNavigate}
-      />
-
       <Card className="p-5">
         <div className="flex items-start justify-between gap-6">
           <div>
@@ -1044,4 +1035,9 @@ export default function ReportsPanel({ onNavigate, initialView }: ReportsPanelPr
       </Card>
     </div>
   );
+}
+
+export default function ReportsPanel({ onNavigate, initialView = "overview" }: ReportsPanelProps) {
+  if (initialView === "library") return <ReportsLibraryPanel onNavigate={onNavigate} initialView="library" />;
+  return <BiDashboard view={initialView} onNavigate={onNavigate} />;
 }

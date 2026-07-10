@@ -1,74 +1,45 @@
 import { FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
-import { A, Card, Chip } from "../../components/ui";
-import { exportRowsToCsv } from "../../lib/data-export";
+import { A, Card, Chip, KpiCard } from "../../components/ui";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
+import { exportRowsToWorkbook } from "../../lib/excel/excelWorkbookService";
 import { fmt } from "../../lib/format";
-import { readinessStyle, settlementRows } from "./finance-summary";
+import { SETTLEMENT_DOCUMENTS } from "../../data/standard-business-scenario";
 
 export default function SettlementPreparation() {
-  const rows = settlementRows();
+  const rows = SETTLEMENT_DOCUMENTS;
 
-  function exportCsv() {
-    if (rows.length === 0) {
-      toast.warning("暂无可导出的数据");
-      return;
-    }
-    exportRowsToCsv("finance-settlement-readiness-export.csv", rows.map((row) => ({
-      供应商: row.supplier,
-      发票金额: row.invoiceAmount,
-      贷项冲减: row.creditAmount,
-      未结应付: row.openPayable,
-      对账状态: row.reconciliationStatus,
-      结算准备: row.readiness,
-      负责人: row.owner,
-      下一步: row.nextStep,
+  function exportExcel() {
+    if (!rows.length) return toast.warning("暂无可导出的数据");
+    const filename = exportRowsToWorkbook("settlement-documents", rows.map((row) => ({
+      结算单号: row.settlementNo, 供应商: row.supplier, 结算日期: row.settlementDate, 币种: row.currency,
+      发票金额: row.invoiceAmount, 贷项金额: row.creditAmount, 调整金额: row.adjustmentAmount,
+      实际结算金额: row.actualSettlementAmount, 对账单: row.reconciliationStatement, 发票列表: row.invoices.join("、"), 状态: row.status,
     })));
-    toast.success("导出文件已生成", { description: "结算资料准备清单" });
+    toast.success("Excel 已下载", { description: filename });
   }
 
-  return (
+  return <div className="space-y-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <KpiCard label="结算单" value={String(rows.length)} sub="标准业务链" icon={FileSpreadsheet} color={A.blue} />
+      <KpiCard label="发票金额" value={fmt(rows.reduce((sum, row) => sum + row.invoiceAmount, 0))} sub="结算范围" icon={FileSpreadsheet} color={A.purple} />
+      <KpiCard label="已结算金额" value={fmt(rows.reduce((sum, row) => sum + row.actualSettlementAmount, 0))} sub="实际核销" icon={FileSpreadsheet} color={A.green} />
+      <KpiCard label="调整金额" value={fmt(rows.reduce((sum, row) => sum + row.adjustmentAmount, 0))} sub="差异复核" icon={FileSpreadsheet} color={A.orange} />
+    </div>
     <Card>
-      <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-        <div>
-          <h2 className="text-sm font-semibold" style={{ color: A.label }}>结算资料准备</h2>
-          <p className="text-[11px] leading-5 mt-1 max-w-2xl" style={{ color: A.sub }}>
-            汇总供应商发票、应付可见性、贷项冲减和供应商对账状态，形成付款前的资料复核清单；不执行付款或会计过账。
-          </p>
-        </div>
-        <button onClick={exportCsv}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all hover:opacity-90"
-          style={{ background: A.gray6, color: A.blue }}>
-          <FileSpreadsheet size={13} /> 导出当前结果
-        </button>
+      <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ borderBottom: `1px solid ${A.border}` }}>
+        <div><h2 className="text-sm font-semibold" style={{ color: A.label }}>结算单</h2><p className="text-[11px] mt-1" style={{ color: A.sub }}>从已确认对账单形成的结算业务单据，可继续下钻发票、对账单和供应商。</p></div>
+        <button onClick={exportExcel} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.gray6, color: A.blue }}><FileSpreadsheet size={13} /> 导出当前结果</button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-              {["供应商", "发票金额", "贷项冲减", "未结应付", "对账状态", "资料准备", "负责人", "下一步"].map((header) => (
-                <th key={header} className="text-left px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => {
-              const style = readinessStyle(row.readiness);
-              return (
-                <tr key={row.supplier} style={{ borderBottom: index < rows.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                  <td className="px-5 py-3 font-medium whitespace-nowrap" style={{ color: A.label }}>{row.supplier}</td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{fmt(row.invoiceAmount)}</td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.green }}>{fmt(row.creditAmount)}</td>
-                  <td className="px-5 py-3 font-semibold whitespace-nowrap" style={{ color: row.openPayable > 0 ? A.orange : A.label }}>{fmt(row.openPayable)}</td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{row.reconciliationStatus}</td>
-                  <td className="px-5 py-3 whitespace-nowrap"><Chip label={row.readiness} color={style.color} bg={style.bg} /></td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.sub }}>{row.owner}</td>
-                  <td className="px-5 py-3 whitespace-nowrap" style={{ color: A.blue }}>{row.nextStep}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-xs"><thead><tr style={{ borderBottom: `1px solid ${A.border}` }}>{["结算单号", "供应商", "结算日期", "币种", "发票金额", "贷项金额", "调整金额", "实际结算金额", "对账单", "发票", "状态"].map((header) => <th key={header} className="px-5 py-3 text-left font-medium whitespace-nowrap" style={{ color: A.gray1 }}>{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={row.settlementNo} style={{ borderBottom: index < rows.length - 1 ? `1px solid ${A.border}` : "none" }}>
+        <td className="px-5 py-3"><BusinessEntityLink entityType="settlement_document" entityId={row.settlementNo}>{row.settlementNo}</BusinessEntityLink></td>
+        <td className="px-5 py-3"><BusinessEntityLink entityType="supplier" entityId={row.supplierCode}>{row.supplier}</BusinessEntityLink></td>
+        <td className="px-5 py-3 whitespace-nowrap">{row.settlementDate}</td><td className="px-5 py-3">{row.currency}</td>
+        <td className="px-5 py-3 text-right">{fmt(row.invoiceAmount)}</td><td className="px-5 py-3 text-right">{fmt(row.creditAmount)}</td><td className="px-5 py-3 text-right">{fmt(row.adjustmentAmount)}</td><td className="px-5 py-3 text-right font-semibold">{fmt(row.actualSettlementAmount)}</td>
+        <td className="px-5 py-3"><BusinessEntityLink entityType="reconciliation_statement" entityId={row.reconciliationStatement}>{row.reconciliationStatement}</BusinessEntityLink></td>
+        <td className="px-5 py-3">{row.invoices.slice(0, 2).map((invoice) => <div key={invoice}><BusinessEntityLink entityType="supplier_invoice" entityId={invoice}>{invoice}</BusinessEntityLink></div>)}</td>
+        <td className="px-5 py-3"><Chip label={row.status} color={A.green} bg="#f0faf4" /></td>
+      </tr>)}</tbody></table></div>
     </Card>
-  );
+  </div>;
 }

@@ -8,6 +8,7 @@ import { RFQS, purchaseOrders } from "../../data/demo-data";
 import type { RfqRecord } from "../../types/scm";
 import { A, Card, Chip, DocumentHistoryPanel, Field, inputStyle, KpiCard, RecoveryActions, SectionHeader } from "../../components/ui";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   defaultRfqWorkbenchFilters,
@@ -820,7 +821,7 @@ export default function PurchasingRFQPage({
                   <tr key={r.id}
                     className="hover:bg-blue-50/40 transition-colors"
                     style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className={tdIdClass}><button onClick={() => openDetail(r.id)} className={tableLinkClass} style={{ color: A.blue }}>{r.id}</button></td>
+                    <td className={tdIdClass}><BusinessEntityLink entityType="rfq" entityId={r.id} className={tableLinkClass}>{r.id}</BusinessEntityLink></td>
                     <td className={`${tdNameClass} max-w-[260px] font-medium`} style={{ color: A.label }}>
                       <div className="truncate">{r.title}</div>
                       <div className="fc-caption mt-0.5 truncate" style={{ color: A.gray2 }}>{source.sku} · {source.name}</div>

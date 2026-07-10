@@ -16,6 +16,7 @@ import { fmt } from "../../lib/format";
 import type { SupplierInvoice, SupplierInvoiceStatus } from "../../types/scm";
 import { matchStatusStyle } from "./shared";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   tableMinXlClass,
@@ -260,7 +261,7 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label={isProcurementMode ? "协同发票" : "发票总数"} value={String(invoices.length)} sub={isProcurementMode ? "PO / GRN 协同" : "发票台账"} icon={FileText} color={A.blue} />
         <KpiCard label="待匹配" value={String(pendingMatch)} sub="需补齐 PO/GRN" icon={Search} color={A.orange} />
         <KpiCard label="差异发票" value={String(varianceInvoices.length)} sub={fmt(varianceInvoices.reduce((sum, invoice) => sum + invoice.varianceAmount, 0))} icon={AlertOctagon} color={A.red} />
@@ -330,10 +331,10 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
                 const matchStyle = matchStatusStyle(invoice.matchStatus);
                 return (
                   <tr key={invoice.id} style={{ borderBottom: index < visibleInvoices.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className={tdIdClass} style={{ color: A.blue }}>{invoice.invoiceNumber}</td>
-                    <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{invoice.supplier}</td>
-                    <td className={tdNowrapClass} style={{ color: A.sub }}>{invoice.relatedPo || "—"}</td>
-                    <td className={tdNowrapClass} style={{ color: invoice.relatedGrn ? A.sub : A.orange }}>{invoice.relatedGrn || "缺少"}</td>
+                    <td className={tdIdClass}><BusinessEntityLink entityType="supplier_invoice" entityId={invoice.invoiceNumber}>{invoice.invoiceNumber}</BusinessEntityLink></td>
+                    <td className={`${tdNameClass} max-w-[180px] truncate font-medium`}><BusinessEntityLink entityType="supplier" entityId={invoice.supplierCode || invoice.supplier}>{invoice.supplier}</BusinessEntityLink></td>
+                    <td className={tdNowrapClass}><BusinessEntityLink entityType="purchase_order" entityId={invoice.relatedPo} exists={Boolean(invoice.relatedPo)}>{invoice.relatedPo || "—"}</BusinessEntityLink></td>
+                    <td className={tdNowrapClass}><BusinessEntityLink entityType="receiving_doc" entityId={invoice.relatedGrn} exists={Boolean(invoice.relatedGrn)}>{invoice.relatedGrn || "缺少"}</BusinessEntityLink></td>
                     <td className={tdNowrapClass} style={{ color: A.sub }}>{invoice.invoiceDate}</td>
                     <td className={tdNowrapClass} style={{ color: A.sub }}>{invoice.dueDate}</td>
                     <td className={tdNumericClass} style={{ color: A.sub }}>{fmt(invoice.subtotal)}</td>

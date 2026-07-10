@@ -18,7 +18,7 @@ test("deep links, refresh, browser history and registry-driven shell stay synchr
   await expect(page.getByTestId("app-breadcrumb").locator("[aria-current='page']")).toHaveText("库存预警");
   await page.reload();
   await expect(page).toHaveURL(/\/app\/inventory\/warnings$/);
-  await page.locator("aside nav").getByRole("button", { name: "库存调整单", exact: true }).click();
+  await page.getByTestId("module-subnav").getByRole("link", { name: "库存调整单", exact: true }).click();
   await expect(page).toHaveURL(/\/app\/inventory\/adjustments$/);
   await page.goBack();
   await expect(page).toHaveURL(/\/app\/inventory\/warnings$/);
@@ -30,11 +30,11 @@ test("breadcrumb parents are links while current page is not a link", async ({ p
   await authenticate(page);
   await page.goto("/app/sales/deliveries");
   const breadcrumb = page.getByTestId("app-breadcrumb");
-  await expect(breadcrumb.getByRole("button", { name: "首页" })).toBeVisible();
-  await expect(breadcrumb.getByRole("button", { name: "销售管理" })).toBeVisible();
+  await expect(breadcrumb.getByRole("link", { name: "首页" })).toBeVisible();
+  await expect(breadcrumb.getByRole("link", { name: "销售管理" })).toBeVisible();
   await expect(breadcrumb.locator("[aria-current='page']")).toHaveText("销售出库单 / 发货单");
-  await expect(breadcrumb.getByRole("button", { name: "销售出库单 / 发货单" })).toHaveCount(0);
-  await breadcrumb.getByRole("button", { name: "销售管理" }).click();
+  await expect(breadcrumb.getByRole("link", { name: "销售出库单 / 发货单" })).toHaveCount(0);
+  await breadcrumb.getByRole("link", { name: "销售管理" }).click();
   await expect(page).toHaveURL(/\/app\/sales$/);
 });
 

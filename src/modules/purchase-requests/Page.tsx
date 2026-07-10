@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
   Activity, AlertCircle, CheckCircle2, ClipboardCheck, FileCheck2, FileSpreadsheet, FileText, Filter, GitBranch,
@@ -22,6 +23,7 @@ import {
   type TimelineStep,
 } from "../../components/document/DocumentShell";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
 import {
   CompactKpiStrip,
   DataLimitationsPanel,
@@ -201,51 +203,11 @@ function buildPrLines(pr: PurchaseRequest): PrLineView[] {
       amount: Number(pr.amount || baseQty * basePrice),
       sourceDemand: pr.source === "inventory" ? "来源于库存缺口" : purchaseRequestSourceMeta(pr.source).label,
       sourceShortage: pr.forecastBasis?.peakGap ? `缺口 ${pr.forecastBasis.peakGap}` : "安全库存低于再订货点",
-      customerOrder: "待关联",
-      linkedRfqLine: linkedRfq ? `${linkedRfq}-L1` : "待生成",
-      linkedPoLine: linkedPo ? `${linkedPo}-L1` : "待生成",
+      customerOrder: pr.source === "sales-risk" ? pr.reason.match(/SO-[\w-]+/)?.[0] || "—" : "—",
+      linkedRfqLine: linkedRfq && !linkedRfq.startsWith("RFQ-DRAFT") ? `${linkedRfq}-L1` : "—",
+      linkedPoLine: linkedPo ? `${linkedPo}-L1` : "—",
       status: pr.status === "已转PO" ? "已转 PO 草稿" : pr.status === "已批准" ? "已转 RFQ 草稿" : "仍待复核",
       risk: pr.priority === "高" ? "高优先级，需复核需求日期" : "需确认供应商与价格",
-    },
-    {
-      lineId: `${pr.pr}-L2`,
-      sku: pr.sourceSku ? `${pr.sourceSku}-KIT` : "SKU-SALES-RISK",
-      itemName: `${pr.sourceName || "采购物料"} 配套件`,
-      quantity: Math.max(1, Math.round(baseQty * 0.35)),
-      unit: pr.unit || "件",
-      needByDate: pr.requiredDate,
-      warehouse: "华东成品仓",
-      supplier: pr.supplier || "待推荐",
-      category: "配套件",
-      unitPrice: Math.round(basePrice * 0.62),
-      amount: Math.round(Math.max(1, baseQty * 0.35) * basePrice * 0.62),
-      sourceDemand: "来源于客户订单交付风险",
-      sourceShortage: "关联订单缺口",
-      customerOrder: "SO-2026-0718",
-      linkedRfqLine: "待生成",
-      linkedPoLine: linkedPo ? `${linkedPo}-L2` : "PO 草稿预览待生成",
-      status: linkedPo ? "已转 PO 草稿" : "仍待复核",
-      risk: "客户承诺日期接近，需确认到货节奏",
-    },
-    {
-      lineId: `${pr.pr}-L3`,
-      sku: "SKU-MRO-REVIEW",
-      itemName: "安装辅料包",
-      quantity: 12,
-      unit: "包",
-      needByDate: pr.requiredDate,
-      warehouse: "MRO 备件仓",
-      supplier: "待推荐",
-      category: "MRO",
-      unitPrice: 180,
-      amount: 2160,
-      sourceDemand: "手工补充需求",
-      sourceShortage: "无库存缺口证据",
-      customerOrder: "不适用",
-      linkedRfqLine: "待生成",
-      linkedPoLine: "待生成",
-      status: "仍待复核",
-      risk: "缺少完整供应商报价，建议先生成 RFQ 草稿预览",
     },
   ];
 }
@@ -383,9 +345,14 @@ export default function PurchaseRequestsPage({
   onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
+  const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<PurchaseRequestWorkbenchFilters>(defaultPurchaseRequestWorkbenchFilters);
+  const [filters, setFilters] = useState<PurchaseRequestWorkbenchFilters>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return Object.fromEntries(Object.entries(defaultPurchaseRequestWorkbenchFilters).map(([key, fallback]) => [key, params.get(key) || fallback])) as PurchaseRequestWorkbenchFilters;
+  });
   const [selectedId, setSelectedId] = useState("");
   const [viewMode, setViewMode] = useState<PurchaseRequestViewMode>("list");
   const [supplierRecommendationResult, setSupplierRecommendationResult] = useState<SupplierRecommendationResult | null>(null);
@@ -525,15 +492,18 @@ export default function PurchaseRequestsPage({
 
   function updateFilter<K extends keyof PurchaseRequestWorkbenchFilters>(key: K, value: PurchaseRequestWorkbenchFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
+    const next = new URLSearchParams(window.location.search);
+    if (value === defaultPurchaseRequestWorkbenchFilters[key]) next.delete(key); else next.set(key, String(value));
+    setSearchParams(next, { replace: true });
   }
 
   function resetFilters() {
     setFilters(defaultPurchaseRequestWorkbenchFilters);
+    setSearchParams({}, { replace: true });
   }
 
   function openDetail(pr: string) {
-    setSelectedId(pr);
-    setViewMode("detail");
+    navigate(`/app/procurement/requests/${encodeURIComponent(pr)}?returnTo=${encodeURIComponent(`/app/procurement/requests${window.location.search}`)}&returnLabel=${encodeURIComponent("所有采购申请")}`);
   }
 
   function returnToList() {
@@ -839,9 +809,9 @@ export default function PurchaseRequestsPage({
           <Field label="物料 / SKU"><input value={filters.skuOrItem} onChange={(event) => updateFilter("skuOrItem", event.target.value)} placeholder="SKU 或品名" style={inputStyle} /></Field>
           <Field label="申请人"><input value={filters.requester} onChange={(event) => updateFilter("requester", event.target.value)} placeholder="Requester" style={inputStyle} /></Field>
           <Field label="采购负责人"><input value={filters.buyer} onChange={(event) => updateFilter("buyer", event.target.value)} placeholder="Buyer" style={inputStyle} /></Field>
-          <Field label="状态"><select value={filters.status} onChange={(event) => updateFilter("status", event.target.value as PurchaseRequestWorkbenchFilters["status"])} style={inputStyle}>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></Field>
-          <Field label="优先级"><select value={filters.priority} onChange={(event) => updateFilter("priority", event.target.value as PurchaseRequestWorkbenchFilters["priority"])} style={inputStyle}>{priorityOptions.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></Field>
-          <Field label="来源"><select value={filters.source} onChange={(event) => updateFilter("source", event.target.value)} style={inputStyle}><option value="全部">全部</option>{sourceOptions.map((source) => <option key={source} value={source}>{purchaseRequestSourceMeta(source).label}</option>)}</select></Field>
+          <Field label="状态"><select aria-label="状态" value={filters.status} onChange={(event) => updateFilter("status", event.target.value as PurchaseRequestWorkbenchFilters["status"])} style={inputStyle}>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></Field>
+          <Field label="优先级"><select aria-label="优先级" value={filters.priority} onChange={(event) => updateFilter("priority", event.target.value as PurchaseRequestWorkbenchFilters["priority"])} style={inputStyle}>{priorityOptions.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></Field>
+          <Field label="来源"><select aria-label="来源" value={filters.source} onChange={(event) => updateFilter("source", event.target.value)} style={inputStyle}><option value="全部">全部</option>{sourceOptions.map((source) => <option key={source} value={source}>{purchaseRequestSourceMeta(source).label}</option>)}</select></Field>
           <Field label="需求起始"><input value={filters.requiredFrom} onChange={(event) => updateFilter("requiredFrom", event.target.value)} placeholder="2026-06-01" style={inputStyle} /></Field>
           <Field label="需求结束"><input value={filters.requiredTo} onChange={(event) => updateFilter("requiredTo", event.target.value)} placeholder="2026-06-30" style={inputStyle} /></Field>
         </div>
@@ -875,7 +845,7 @@ export default function PurchaseRequestsPage({
                   const SourceIcon = sourceMeta.icon;
                   return (
                     <tr key={item.pr} className="hover:bg-blue-50/40 transition-colors" style={{ borderBottom: idx < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                      <td className={tdIdClass}><button onClick={() => openDetail(item.pr)} className={tableLinkClass} style={{ color: A.blue }}>{item.pr}</button></td>
+                      <td className={tdIdClass}><BusinessEntityLink entityType="purchase_request" entityId={item.pr} className={tableLinkClass}>{item.pr}</BusinessEntityLink></td>
                       <td className={tdNowrapClass} style={{ color: A.sub }}>{item.requester}</td>
                       <td className={tdNowrapClass} style={{ color: A.sub }}>{requesterDepartment(item.requester)}</td>
                       <td className={tdNowrapClass} style={{ color: A.sub }}>{item.created}</td>

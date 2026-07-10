@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, CreditCard, FileSpreadsheet, FileText, HandCoins, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import { A, Card, Chip, KpiCard } from "../../components/ui";
-import ContextualImportActions from "../../components/import/ContextualImportActions";
 import PayablesPanel from "../procurement/PayablesPanel";
 import SupplierInvoiceRegister from "../procurement/SupplierInvoiceRegister";
 import SupplierReconciliationPanel from "../procurement/SupplierReconciliationPanel";
@@ -126,15 +125,11 @@ export default function FinanceWorkbench({ initialView = "overview", onNavigate 
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap justify-end gap-2">
-        <ContextualImportActions entityLabel="供应商发票" templateName="供应商发票" compact={false} />
-        <ContextualImportActions entityLabel="对账单" templateName="对账单" compact={false} />
-      </div>
-      <div className="grid grid-cols-4 gap-3">
+      {tab === "overview" && <div className="grid grid-cols-4 gap-3">
         {financeSummaryCards().map((item) => (
           <KpiCard key={item.label} {...item} />
         ))}
-      </div>
+      </div>}
       {tab === "overview" && <FinanceOverview onOpenTab={openTab} />}
       {tab === "invoices" && <SupplierInvoiceRegister mode="finance" />}
       {tab === "payables" && <PayablesPanel />}

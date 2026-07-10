@@ -15,6 +15,7 @@ import {
 import type { ItemMaster, PaymentTerm, SupplierMaster, TaxCode, WarehouseBin } from "../../types/scm";
 import type { DetailRecord } from "./MasterDataDetailModal";
 import type { MasterDataTableTab } from "./Page";
+import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
 
 function statusStyle(status: string) {
   if (["启用", "已认证", "可用"].includes(status)) return { color: A.green, bg: "#f0faf4" };
@@ -52,7 +53,7 @@ export default function MasterDataTables({
             const style = statusStyle(item.status);
             return (
               <tr key={item.sku} style={{ borderBottom: index < items.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className={tdIdClass} style={{ color: A.blue }}>{item.sku}</td>
+                <td className={tdIdClass}><BusinessEntityLink entityType="item" entityId={item.sku}>{item.sku}</BusinessEntityLink></td>
                 <td className={`${tdNameClass} max-w-[220px] truncate font-medium`} style={{ color: A.label }}>{item.name}</td>
                 <td className={tdNowrapClass} style={{ color: A.sub }}>{item.category}</td>
                 <td className={tdNowrapClass} style={{ color: A.sub }}>{item.unit}</td>
@@ -84,8 +85,8 @@ export default function MasterDataTables({
             const riskStyle = statusStyle(item.riskStatus);
             return (
               <tr key={item.code} style={{ borderBottom: index < suppliers.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className={tdIdClass} style={{ color: A.blue }}>{item.code}</td>
-                <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{item.name}</td>
+                <td className={tdIdClass}><BusinessEntityLink entityType="supplier" entityId={item.code}>{item.code}</BusinessEntityLink></td>
+                <td className={`${tdNameClass} max-w-[180px] truncate font-medium`}><BusinessEntityLink entityType="supplier" entityId={item.code}>{item.name}</BusinessEntityLink></td>
                 <td className={tdNowrapClass} style={{ color: A.sub }}>{item.category}</td>
                 <td className={`${tdNameClass} max-w-[140px] truncate`} style={{ color: A.sub }}>{item.contact}</td>
                 <td className={tdNowrapClass} style={{ color: A.sub }}>{item.paymentTerms}</td>

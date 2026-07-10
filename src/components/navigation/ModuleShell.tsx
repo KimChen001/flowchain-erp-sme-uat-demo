@@ -1,6 +1,5 @@
 import React from "react";
-import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { defaultRouteForModule, moduleRoute, recoveryModuleForPath, routesForModule, type AppRouteDefinition } from "../../app/routeRegistry";
 import { A } from "../ui";
 import { AppBreadcrumb } from "./AppBreadcrumb";
@@ -11,19 +10,21 @@ export function ModuleShell({ route, children }: { route: AppRouteDefinition; ch
   const root = moduleRoute(route.moduleId) || route;
   const subRoutes = routesForModule(route.moduleId);
   const activeMenuId = route.currentActiveMenuId || route.id;
-  const showPageHeader = route.id !== root.id;
+  const showModuleHeader = route.id === root.id;
+  const showPageHeader = route.id !== root.id && route.pageType !== "detail";
   return (
     <div className="fc-module-shell" data-testid="module-shell" data-route-id={route.id}>
       <AppBreadcrumb route={route} />
-      <div className="fc-module-header">
+      {!showModuleHeader && <span className="sr-only" data-testid="module-title">{root.moduleLabel}</span>}
+      {showModuleHeader && <div className="fc-module-header">
         <div>
           <h1 className="fc-module-title" data-testid="module-title">{root.moduleLabel}</h1>
           <p className="fc-page-subtitle mt-1">{root.description}</p>
         </div>
-      </div>
+      </div>}
       {subRoutes.length > 0 && (
         <nav className="fc-module-subnav" aria-label={`${root.moduleLabel}二级导航`} data-testid="module-subnav">
-          {subRoutes.map((item) => <a key={item.id} href={item.path} aria-current={activeMenuId === item.id ? "page" : undefined} className={activeMenuId === item.id ? "is-active" : ""} onClick={(event) => { event.preventDefault(); navigate(item.path); }}>{item.label}</a>)}
+          {subRoutes.map((item) => <Link key={item.id} to={item.path} aria-current={activeMenuId === item.id ? "page" : undefined} className={activeMenuId === item.id ? "is-active" : ""}>{item.label}</Link>)}
         </nav>
       )}
       <RecentPages />
@@ -33,7 +34,6 @@ export function ModuleShell({ route, children }: { route: AppRouteDefinition; ch
             <h2 className="fc-page-title" data-testid="page-title">{route.label}</h2>
             <p className="fc-page-subtitle mt-1">{route.description}</p>
           </div>
-          <button type="button" className="fc-action-button fc-action-secondary" onClick={() => navigate(root.path)}><ArrowLeft size={14} />返回模块首页</button>
         </div>
       )}
       <div className="fc-module-content">{children}</div>

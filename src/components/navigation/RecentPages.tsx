@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Clock3, X } from "lucide-react";
+import { ChevronDown, Clock3, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import { appRouteRegistry, routeByPath } from "../../app/routeRegistry";
 import { A } from "../ui";
@@ -41,17 +41,22 @@ export function RecentPages() {
   }
 
   return (
-    <div className="fc-recent-pages" data-testid="recent-pages" aria-label="最近访问">
-      <Clock3 size={13} className="shrink-0" style={{ color: A.gray2 }} />
-      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-        {visible.map((item) => {
+    <div className="mb-3 flex items-center justify-end gap-1" data-testid="recent-pages">
+      <details className="relative group">
+        <summary aria-current="page" className="list-none cursor-pointer inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium" style={{ background: A.gray6, color: A.gray1 }} aria-label="最近访问">
+          <Clock3 size={13} /><span>最近访问</span><ChevronDown size={12} />
+        </summary>
+        <div className="absolute right-0 z-20 mt-1 w-64 overflow-hidden rounded-xl bg-white p-1 shadow-xl" style={{ border: `1px solid ${A.border}` }}>
+        {visible.slice().reverse().map((item) => {
           const active = item.path === location.pathname;
-          return <button key={item.routeId} type="button" aria-current={active ? "page" : undefined} className={`fc-recent-page ${active ? "is-active" : ""}`} onClick={() => navigate(item.path)}>
+          return <button key={item.routeId} type="button" className="fc-recent-page flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs hover:bg-slate-50" style={{ color: active ? A.blue : A.label }} onClick={() => navigate(item.path)}>
             <span className="truncate">{item.label}</span>
-            {item.routeId !== "overview" && <X size={11} aria-label={`关闭 ${item.label}`} onClick={(event) => close(event, item)} />}
+            {item.routeId !== "overview" && <X size={11} aria-label={`移除 ${item.label}`} onClick={(event) => close(event, item)} />}
           </button>;
         })}
-      </div>
+        </div>
+      </details>
+      {current && current.id !== "overview" && visible.some((item) => item.routeId === current.id) && <button type="button" aria-label={`关闭 ${current.label}`} onClick={(event) => close(event, visible.find((item) => item.routeId === current.id)!)} className="rounded-lg p-2" style={{ background: A.gray6, color: A.gray2 }}><X size={12} /></button>}
     </div>
   );
 }

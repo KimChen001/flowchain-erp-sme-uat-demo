@@ -1,0 +1,20 @@
+{
+  "distribution": { "normal": 80, "attention": 15, "exception": 5 },
+  "suppliers": ["SUP-SZ-ELEC", "SUP-HD-MECH", "SUP-FS-STD"],
+  "items": ["SKU-00412", "SKU-00623", "SKU-00558"],
+  "customers": ["CUS-001", "CUS-002"],
+  "warehouses": ["WH-SH-01", "WH-SZ-01"],
+  "purchaseChains": [
+    { "pr": "PR-2026-2401", "rfq": "RFQ-26-0044", "po": "PO-2026-1283", "grn": "GRN-202605-0422", "invoice": "INV-SZ-260422", "match": "MATCH-INV-SZ-260422", "reconciliation": "REC-2026-05-SZ-001", "settlement": "SET-2026-0002", "supplier": "SUP-SZ-ELEC", "sku": "SKU-00623", "orderedQty": 6, "receivedQty": 6, "invoicedQty": 6, "poAmount": 1280000, "grnAmount": 1280000, "invoiceSubtotal": 1280000, "prDate": "2026-05-10", "poDate": "2026-05-19", "grnDate": "2026-05-26", "invoiceDate": "2026-05-27", "status": "completed" },
+    { "pr": "PR-2026-2402", "rfq": "RFQ-26-0043", "po": "PO-2026-1284", "grn": "GRN-202605-0418", "invoice": "INV-FO-260418", "match": "MATCH-INV-FO-260418", "reconciliation": "REC-2026-05-FO-001", "settlement": "SET-2026-0001", "supplier": "SUP-FS-STD", "sku": "SKU-00558", "orderedQty": 120000, "receivedQty": 120000, "invoicedQty": 120000, "poAmount": 380000, "grnAmount": 380000, "invoiceSubtotal": 380000, "prDate": "2026-05-09", "poDate": "2026-05-22", "grnDate": "2026-05-27", "invoiceDate": "2026-05-27", "status": "completed" },
+    { "pr": "PR-2026-2403", "rfq": "RFQ-26-0046", "po": "PO-2026-1281", "grn": "GRN-202605-0423", "invoice": "INV-HD-260423", "match": "MATCH-INV-HD-260423", "reconciliation": "REC-2026-05-HD-001", "settlement": "SET-2026-0003", "supplier": "SUP-HD-MECH", "sku": "SKU-00412", "orderedQty": 7, "receivedQty": 7, "invoicedQty": 7, "poAmount": 1920000, "grnAmount": 1920000, "invoiceSubtotal": 1920000, "prDate": "2026-05-08", "poDate": "2026-05-16", "grnDate": "2026-05-26", "invoiceDate": "2026-05-26", "status": "completed" }
+  ],
+  "salesChains": [
+    { "salesOrder": "SO-2026-0628-052", "delivery": "DN-2026-0709-006", "receipt": "SR-2026-0710-001", "customer": "CUS-002", "sku": "SKU-00412", "orderedQty": 18, "deliveredQty": 18, "receivedQty": 18, "status": "completed" }
+  ],
+  "inventoryMovements": [
+    { "movement": "IM-20260710-0041", "source": "ADJ-2026-0710-001", "warehouse": "WH-SH-01", "sku": "SKU-00412", "quantity": -2 },
+    { "movement": "IM-20260526-0422", "source": "GRN-202605-0422", "warehouse": "WH-SH-01", "sku": "SKU-00623", "quantity": 6 },
+    { "movement": "IM-20260709-0006", "source": "DN-2026-0709-006", "warehouse": "WH-SH-01", "sku": "SKU-00412", "quantity": -18 }
+  ]
+}
