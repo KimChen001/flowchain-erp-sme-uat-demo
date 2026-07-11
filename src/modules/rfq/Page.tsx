@@ -10,6 +10,7 @@ import type { RfqRecord } from "../../types/scm";
 import { A, Card, Chip, DocumentHistoryPanel, Field, inputStyle, KpiCard, RecoveryActions, SectionHeader } from "../../components/ui";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
+import { WorkbenchMoreMenu } from "../../components/ui/WorkbenchMoreMenu";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   defaultRfqWorkbenchFilters,
@@ -669,38 +670,17 @@ export default function PurchasingRFQPage({
             { label: "需要人工复核的问题", value: awardDraft.reviewQuestions, tone: "warning" },
             { label: "是否建议拆分分配", value: awardDraft.splitAllocation },
             { label: "是否建议先补充报价", value: awardDraft.quoteSupplement, tone: awardDraft.quoteSupplement.includes("补充") ? "warning" : "good" },
-            { label: "是否可生成 PO 草稿预览", value: awardDraft.canPreviewPo, tone: awardDraft.canPreviewPo.includes("可") ? "good" : "warning" },
+            { label: "后续处理", value: linkedPo ? "已创建采购订单" : "尚未创建采购订单", tone: linkedPo ? "good" : "warning" },
           ]} columns={3} />
         </DetailSection>
-        <DetailSection title="关联 PR / PO 草稿" right={<Chip label="只读关联" color={A.blue} bg="#f0f6ff" />}>
+        <DetailSection title="关联单据">
           <DetailFieldGrid fields={[
             { label: "来源 PR", value: source.pr, tone: "info" },
             { label: "来源 PR Line", value: `${source.pr}-L1 / ${source.pr}-L2` },
             { label: "来源 SKU", value: source.sku },
-            { label: "PO 草稿", value: linkedPo || "PO 草稿预览待生成", tone: linkedPo ? "good" : "warning" },
-            { label: "证据链", value: `${source.pr} → ${selectedRfq.id} → 授标建议草稿 → PO 草稿预览`, tone: "info" },
-            { label: "返回路径", value: "来源 PR / RFQ 列表 / 采购工作台 / 上一级" },
+            { label: "采购订单", value: linkedPo || "尚未创建", tone: linkedPo ? "good" : "warning" },
+            { label: "业务链", value: `${source.pr} → ${selectedRfq.id}${linkedPo ? ` → ${linkedPo}` : ""}`, tone: "info" },
           ]} columns={3} />
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button onClick={returnToSourcePr} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: "#f0f6ff", color: A.blue }}>返回来源 PR</button>
-            <button onClick={returnToList} className="px-3 py-1.5 text-xs font-medium rounded-lg" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>返回 RFQ 列表</button>
-          </div>
-        </DetailSection>
-        <ReviewActionPanel objectLabel={selectedRfq.id} />
-        <DetailSection title="评论与附件" right={<Chip label="占位" color={A.orange} bg="#fff8f0" />}>
-          <div className="grid grid-cols-2 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
-            {[
-              ["内部备注", selectedRfq.reason || "采购负责人需确认报价覆盖、条款和交期。"],
-              ["附件占位", "可记录报价单、规格书或供应商澄清文件名称；当前不上传文件。"],
-              ["URL 占位", "可粘贴内部资料链接；当前不访问外部系统。"],
-              ["AI 说明占位", "可生成推荐理由草稿，由负责人确认后再处理。"],
-            ].map(([title, body]) => (
-              <div key={title} className="rounded-lg p-3" style={{ background: A.white }}>
-                <div className="font-semibold mb-1" style={{ color: A.label }}>{title}</div>
-                <div>{body}</div>
-              </div>
-            ))}
-          </div>
         </DetailSection>
         <DocumentHistoryPanel
           entityType="rfq"
@@ -713,7 +693,6 @@ export default function PurchasingRFQPage({
           { label: "供应商报价", value: `${selectedRfq.quoted}/${selectedRfq.suppliers} 家供应商已响应，未响应报价会影响推荐完整性。`, tone: Number(selectedRfq.quoted || 0) < Number(selectedRfq.suppliers || 0) ? "warning" : "good" },
           { label: "报价比较", value: comparison[0] ? `${comparison[0].supplier} 当前排名第一，节省金额 ${fmt(comparison[0].savings)}。` : "等待报价后生成比较。", tone: comparison[0] ? "good" : "warning" },
         ]} />
-        <DataLimitationsPanel items={["workspace_only", "quote_partial", "external_sourcing_closed", "po_preview_only", "contract_quality_partial"]} labelFor={labelDataLimitation} />
         <DocumentTotals
           totals={[
             { label: "RFQ 行数", value: rfqLines.length },
@@ -727,17 +706,9 @@ export default function PurchasingRFQPage({
         <DocumentActionBar>
           <RecoveryActions
             actions={[
-              { key: "source-pr-bottom", label: "返回来源 PR", onClick: returnToSourcePr, kind: "module", tone: "subtle" },
               { key: "rfq-list-bottom", label: "返回 RFQ 列表", onClick: returnToList, kind: "list" },
-              { key: "module-bottom", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
-              { key: "evidence", label: "返回证据链", onClick: () => onNavigate?.("overview"), kind: "module", tone: "subtle" },
-              { key: "back-bottom", label: "返回上一级", onClick: returnToList, kind: "list", tone: "subtle" },
             ]}
           />
-          <button onClick={() => previewAwardDraft(selectedRfq.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>生成授标建议草稿</button>
-          <button onClick={() => previewPoDraft(selectedRfq.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0faf4", color: A.green }}>生成 PO 草稿预览</button>
-          <button onClick={() => requestQuoteCompletion(selectedRfq.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>要求补充报价预览</button>
-          <button onClick={() => markManualReview(selectedRfq.id)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>标记需人工复核预览</button>
           <button onClick={exportCsv} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
         </DocumentActionBar>
       </DocumentShell>
@@ -783,7 +754,7 @@ export default function PurchasingRFQPage({
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="搜索 RFQ / SKU / 标题"><input value={filters.rfqId || filters.skuOrItem} onChange={(event) => { updateFilter("rfqId", event.target.value); updateFilter("skuOrItem", event.target.value); }} placeholder="RFQ、SKU 或标题" style={inputStyle} /></Field>
+          <Field label="搜索 RFQ / SKU / 标题"><input value={filters.query} onChange={(event) => updateFilter("query", event.target.value)} placeholder="RFQ、SKU 或标题" style={inputStyle} /></Field>
           <Field label="状态"><select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} style={inputStyle}><option value="全部">全部</option>{statusOptions.map((status) => <option key={status} value={status}>{displayRfqStatus(status)}</option>)}</select></Field>
           <Field label="报价状态"><select value={filters.responseStatus} onChange={(event) => updateFilter("responseStatus", event.target.value as RfqWorkbenchFilters["responseStatus"])} style={inputStyle}>{(["全部", "未报价", "部分报价", "已报价"] as const).map((status) => <option key={status} value={status}>{status}</option>)}</select></Field>
           <Field label="截止日期"><input type="date" value={filters.dueTo} onChange={(event) => updateFilter("dueTo", event.target.value)} style={inputStyle} /></Field>
@@ -832,7 +803,7 @@ export default function PurchasingRFQPage({
                     <td className={tdActionClass}>
                       <div className="flex justify-end gap-1">
                         <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看</button>
-                        <details className="relative"><summary className="cursor-pointer list-none px-2 py-1 text-[11px] font-medium rounded-md" style={{background:A.gray6}}>更多</summary><div className="absolute right-0 z-20 mt-1 w-36 rounded-lg border bg-white p-1 shadow-lg">{["查看 RFQ","查看报价","查看比价","查看授标建议"].map(label=><button key={label} onClick={()=>openDetail(r.id)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">{label}</button>)}<button onClick={returnToSourcePr} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看来源 PR</button></div></details>
+                        <WorkbenchMoreMenu>{["查看 RFQ","查看报价","查看比价","查看授标建议"].map(label=><button key={label} onClick={()=>openDetail(r.id)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">{label}</button>)}<button onClick={returnToSourcePr} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看来源 PR</button></WorkbenchMoreMenu>
                       </div>
                     </td>
                   </tr>
@@ -840,7 +811,7 @@ export default function PurchasingRFQPage({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="px-5 py-12 text-center text-xs" style={{ color: A.gray2 }}>当前条件下暂无 RFQ</td>
+                  <td colSpan={8} className="px-5 py-12 text-center text-xs" style={{ color: A.gray2 }}>当前条件下暂无 RFQ</td>
                 </tr>
               )}
             </tbody>

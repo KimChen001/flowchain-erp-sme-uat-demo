@@ -629,10 +629,6 @@ export default function PurchasingOrdersPage({
     navigateOrderWithReturn(selectedPO, moduleId, focusTarget, label);
   }
 
-  function previewToast(title: string, description: string) {
-    toast(title, { description });
-  }
-
   const detailContent = selectedPO && (() => {
     const poLines = buildPoLineRows(selectedPO);
     const grnRows = buildGrnRows(selectedPO);
@@ -668,45 +664,27 @@ export default function PurchasingOrdersPage({
       >
         <RecoveryActions
           actions={[
-            {
+            ...(selectedPO.sourceRequest ? [{
               key: "source-pr",
               label: "返回来源 PR",
-              onClick: () => selectedPO.sourceRequest
-                ? navigateWithReturn("procurement:requests", { entityType: "purchase_request", entityId: selectedPO.sourceRequest }, selectedPO.sourceRequest)
-                : previewToast("来源 PR 待补齐", "当前 PO 未读取到来源 PR，只保留关联缺口。"),
-              kind: "previous",
-              tone: "primary",
-            },
-            {
+              onClick: () => navigateWithReturn("procurement:requests", { entityType: "purchase_request", entityId: selectedPO.sourceRequest }, selectedPO.sourceRequest), kind: "previous" as const, tone: "primary" as const,
+            }] : []),
+            ...(selectedPO.sourceRfq ? [{
               key: "source-rfq",
               label: "返回来源 RFQ",
-              onClick: () => selectedPO.sourceRfq
-                ? navigateWithReturn("procurement:rfq", { entityType: "rfq", entityId: selectedPO.sourceRfq }, selectedPO.sourceRfq)
-                : previewToast("来源 RFQ 待补齐", "当前 PO 未读取到来源 RFQ，只保留关联缺口。"),
-              kind: "previous",
-              tone: "primary",
-            },
+              onClick: () => navigateWithReturn("procurement:rfq", { entityType: "rfq", entityId: selectedPO.sourceRfq }, selectedPO.sourceRfq), kind: "previous" as const, tone: "primary" as const,
+            }] : []),
             { key: "list-short", label: "返回列表", onClick: () => setViewMode("list"), kind: "list" },
             { key: "po-list", label: "返回 PO 列表", onClick: () => setViewMode("list"), kind: "list" },
-            {
+            ...(firstGrn ? [{
               key: "receiving",
-              label: "返回收货记录",
-              onClick: () => firstGrn
-                ? navigateWithReturn("procurement:receiving", { entityType: "receiving_doc", entityId: firstGrn.grn }, firstGrn.grn)
-                : previewToast("收货记录待补齐", "当前 PO 尚未读取到 GRN 记录。"),
-              kind: "module",
-              tone: "subtle",
-            },
-            {
+              label: "查看收货单", onClick: () => navigateWithReturn("procurement:receiving", { entityType: "receiving_doc", entityId: firstGrn.grn }, firstGrn.grn), kind: "module" as const, tone: "subtle" as const,
+            }] : []),
+            ...(firstInvoice ? [{
               key: "invoice",
-              label: "返回发票记录",
-              onClick: () => firstInvoice
-                ? navigateWithReturn("procurement:invoices", { entityType: "supplier_invoice", entityId: firstInvoice.invoiceNumber }, firstInvoice.invoiceNumber)
-                : previewToast("发票记录待补齐", "当前 PO 尚未读取到发票记录。"),
-              kind: "module",
-              tone: "subtle",
-            },
-            { key: "match", label: "返回三单匹配", onClick: () => navigateWithReturn("procurement:match"), kind: "module", tone: "subtle" },
+              label: "查看供应商发票", onClick: () => navigateWithReturn("procurement:invoices", { entityType: "supplier_invoice", entityId: firstInvoice.invoiceNumber }, firstInvoice.invoiceNumber), kind: "module" as const, tone: "subtle" as const,
+            }] : []),
+            { key: "match", label: "查看三单匹配", onClick: () => navigateWithReturn("procurement:match"), kind: "module", tone: "subtle" },
             { key: "module", label: "返回采购工作台", onClick: () => onNavigate?.("procurement"), kind: "module", tone: "subtle" },
             { key: "previous", label: "返回上一级", onClick: () => setViewMode("list"), kind: "previous" },
             { key: "evidence", label: "返回证据链", onClick: () => onNavigate?.("sales:evidence"), kind: "module", tone: "subtle" },
@@ -782,7 +760,7 @@ export default function PurchasingOrdersPage({
         </Card>
 
         <div>
-          <SectionTitle title="收货 / GRN Line" right={<Chip label="只读收货证据" color={A.green} bg="#f0faf4" />} />
+          <SectionTitle title="收货 / GRN 明细行" />
           <DocumentLinesTable
             rows={grnRows}
             emptyText="当前 PO 暂无收货记录。"
@@ -871,59 +849,19 @@ export default function PurchasingOrdersPage({
           <DocumentLinesTable
             rows={accrualRows}
             columns={[
-              { key: "po", label: "PO Number" },
-              { key: "poLineId", label: "PO Line" },
-              { key: "pr", label: "Req / PR" },
-              { key: "requestedBy", label: "Requested By" },
-              { key: "item", label: "Item / SKU" },
-              { key: "supplier", label: "Supplier" },
-              { key: "qty", label: "Qty", align: "right", render: (line) => Number(line.qty).toLocaleString() },
-              { key: "unit", label: "UOM" },
-              { key: "unitPrice", label: "Unit Price", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) },
-              { key: "needBy", label: "Need By" },
-              { key: "uninvoicedQty", label: "Uninvoiced Qty", align: "right", render: (line) => Number(line.uninvoicedQty).toLocaleString() },
-              { key: "uninvoicedTotal", label: "Uninvoiced Total", align: "right", render: (line) => fmt(Number(line.uninvoicedTotal || 0)) },
-              { key: "currency", label: "Currency" },
-              { key: "grnLine", label: "GRN Line" },
-              { key: "receivedQty", label: "Received Qty", align: "right", render: (line) => Number(line.receivedQty).toLocaleString() },
-              { key: "approvedInvoicedQty", label: "Approved Invoiced Qty", align: "right", render: (line) => Number(line.approvedInvoicedQty).toLocaleString() },
-              { key: "openQty", label: "Open Qty", align: "right", render: (line) => Number(line.openQty).toLocaleString() },
-              { key: "lineAmount", label: "Line Amount", align: "right", render: (line) => fmt(Number(line.lineAmount || 0)) },
-              { key: "approvedInvoicedAmount", label: "Approved Invoiced Amount", align: "right", render: (line) => fmt(Number(line.approvedInvoicedAmount || 0)) },
-              { key: "accrualExposure", label: "Accrual Exposure", align: "right", render: (line) => fmt(Number(line.accrualExposure || 0)) },
-              { key: "risk", label: "Risk" },
-              { key: "suggestedAction", label: "Suggested Action" },
+              { key: "po", label: "PO 编号" }, { key: "poLineId", label: "PO 明细行" }, { key: "pr", label: "申请 / PR" },
+              { key: "requestedBy", label: "申请人" }, { key: "item", label: "物料 / SKU" }, { key: "supplier", label: "供应商" },
+              { key: "qty", label: "数量", align: "right", render: (line) => Number(line.qty).toLocaleString() }, { key: "unit", label: "单位" },
+              { key: "unitPrice", label: "单价", align: "right", render: (line) => fmt(Number(line.unitPrice || 0)) }, { key: "needBy", label: "需求日期" },
+              { key: "uninvoicedQty", label: "未开票数量", align: "right", render: (line) => Number(line.uninvoicedQty).toLocaleString() }, { key: "uninvoicedTotal", label: "未开票金额", align: "right", render: (line) => fmt(Number(line.uninvoicedTotal || 0)) },
+              { key: "currency", label: "币种" }, { key: "grnLine", label: "收货明细行" }, { key: "receivedQty", label: "已收数量", align: "right", render: (line) => Number(line.receivedQty).toLocaleString() },
+              { key: "approvedInvoicedQty", label: "已批准开票数量", align: "right", render: (line) => Number(line.approvedInvoicedQty).toLocaleString() }, { key: "openQty", label: "未结数量", align: "right", render: (line) => Number(line.openQty).toLocaleString() },
+              { key: "lineAmount", label: "明细金额", align: "right", render: (line) => fmt(Number(line.lineAmount || 0)) }, { key: "approvedInvoicedAmount", label: "已批准开票金额", align: "right", render: (line) => fmt(Number(line.approvedInvoicedAmount || 0)) },
+              { key: "accrualExposure", label: "已收未票金额", align: "right", render: (line) => fmt(Number(line.accrualExposure || 0)) }, { key: "risk", label: "风险" }, { key: "suggestedAction", label: "建议动作" },
             ]}
           />
         </div>
 
-        <Card className="p-4">
-          <SectionTitle title="AI 协同解释" />
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
-            {[
-              ["结论", `${selectedPO.po} 当前下一步：${nextStepForPo(selectedPO)}`],
-              ["关键证据", `${poLines.length} 条 PO Line · ${grnRows.length} 条 GRN Line · ${invoiceRows.length} 条 Invoice Line`],
-              ["业务影响", accrualRows.some((row) => row.accrualExposure > 0) ? "存在已收未票，需要跟进发票" : "未识别重大已收未票风险"],
-              ["建议动作", matchRows.some((row) => row.status !== "已匹配") ? "生成内部复核备注草稿" : "保留人工复核记录"],
-              ["数据限制 / 不确定性", "结论基于当前工作区可见记录，需业务负责人确认"],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>
-                <div className="fc-caption" style={{ color: A.gray2 }}>{label}</div>
-                <div className="text-[11px] leading-5 mt-1" style={{ color: A.label }}>{value}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button onClick={() => firstGrn && navigateWithReturn("procurement:receiving", { entityType: "receiving_doc", entityId: firstGrn.grn }, firstGrn.grn)}
-              className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>
-              可点击跳转：收货证据
-            </button>
-            <button onClick={() => firstInvoice && navigateWithReturn("procurement:invoices", { entityType: "supplier_invoice", entityId: firstInvoice.invoiceNumber }, firstInvoice.invoiceNumber)}
-              className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>
-              可点击跳转：发票证据
-            </button>
-          </div>
-        </Card>
 
         <DocumentTotals
           totals={[
@@ -936,35 +874,6 @@ export default function PurchasingOrdersPage({
           columns={5}
         />
 
-        <Card className="p-4">
-          <SectionTitle title="复核动作" />
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
-            {[
-              ["生成收货异常说明草稿", "仅基于 GRN Line 拒收、质检状态和发票影响生成内部说明。"],
-              ["生成差异说明草稿", "仅解释 PO / GRN / Invoice 数量、价格和金额差异。"],
-              ["生成内部复核备注草稿", "仅生成采购与财务协同备注，不改变单据状态。"],
-              ["标记需人工复核预览", "仅在当前视图提示复核，不提交审批或外发。"],
-            ].map(([title, body]) => (
-              <button
-                key={title}
-                type="button"
-                onClick={() => previewToast(title, `${selectedPO.po} · ${body}`)}
-                className="rounded-lg p-3 text-left"
-                style={{ background: A.gray6, color: A.label }}
-              >
-                <div className="font-semibold">{title}</div>
-                <div className="mt-1" style={{ color: A.sub }}>{body}</div>
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <SectionTitle title="评论与附件" />
-          <div className="text-[11px] leading-5" style={{ color: A.sub }}>
-            当前保留采购、仓库和财务协同评论入口。附件只作为证据引用展示，需人工确认后进入正式记录流程。
-          </div>
-        </Card>
 
         <div>
           <SectionTitle title="历史记录" />
@@ -996,25 +905,6 @@ export default function PurchasingOrdersPage({
           />
         </div>
 
-        <Card className="p-4">
-          <SectionTitle title="数据限制" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] leading-5" style={{ color: A.sub }}>
-            {dataLimitations().map((item) => (
-              <div key={item} className="rounded-lg px-3 py-2" style={{ background: A.gray6 }}>{item}</div>
-            ))}
-          </div>
-        </Card>
-
-        <DocumentActionBar>
-          <button onClick={() => previewToast("生成收货异常说明草稿", `${selectedPO.po} · 仅生成内部说明，不提交收货、不修改库存。`)}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff8f0", color: A.orange }}>生成收货异常说明草稿</button>
-          <button onClick={() => previewToast("生成差异说明草稿", `${selectedPO.po} · 仅解释三单匹配差异，需人工复核。`)}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f0f6ff", color: A.blue }}>生成差异说明草稿</button>
-          <button onClick={() => previewToast("生成内部复核备注草稿", `${selectedPO.po} · 不审批发票、不付款、不形成会计分录。`)}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#faf3ff", color: A.purple }}>生成内部复核备注草稿</button>
-          <button onClick={() => previewToast("标记需人工复核预览", `${selectedPO.po} · 仅在当前视图提示复核，不改变单据状态。`)}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.label }}>标记需人工复核预览</button>
-        </DocumentActionBar>
       </DocumentShell>
     );
   })();

@@ -419,10 +419,10 @@ export default function AiSuggestionsPage({
       <Card className="p-6" data-testid="ai-suggestions-workbench">
         <div className="animate-pulse space-y-4">
           <div className="h-7 w-48 rounded" style={{ background: A.gray5 }} />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-            {Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-24 rounded-[20px]" style={{ background: A.gray6 }} />)}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => <div key={index} className="h-20 rounded-xl" style={{ background: A.gray6 }} />)}
           </div>
-          <div className="h-80 rounded-[20px]" style={{ background: A.gray6 }} />
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2"><div className="h-80 rounded-[20px]" style={{ background: A.gray6 }} /><div className="h-80 rounded-[20px]" style={{ background: A.gray6 }} /></div>
         </div>
       </Card>
     );
@@ -451,9 +451,7 @@ export default function AiSuggestionsPage({
           <div className="mt-1 text-[13px]" style={{color:A.sub}}>其中 {workbench.summary.highPriorityCount} 项会阻断后续流程</div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={onOpenAi} className={scrollButtonClass(true)} style={{ background: A.blue }}>问 AI 继续追问</button>
-          <a href="#ai-suggestions-list" className={scrollButtonClass()} style={{ borderColor: A.border, color: A.label, background: A.white }}>查看今日建议</a>
-          <a href="#ai-draft-review" className={scrollButtonClass()} style={{ borderColor: A.border, color: A.label, background: A.white }}>查看待复核草稿</a>
+          <button type="button" onClick={onOpenAi} className={scrollButtonClass(true)} style={{ background: A.blue }}>问 AI</button>
         </div>
       </section>
 
@@ -545,10 +543,7 @@ export default function AiSuggestionsPage({
                 {[
                   { label: "结论", icon: ClipboardCheck, body: selected.conclusion, bg: "#eef4ff", color: A.blue },
                   { label: "为什么建议优先处理", icon: Info, body: selected.whyNow, bg: "#fff7ed", color: A.orange },
-                  { label: "关键证据", icon: FileText, body: selected.keyEvidence.slice(0, 3), bg: "#ecfdf5", color: A.green },
-                  { label: "业务影响", icon: ShieldCheck, body: selected.businessImpact, bg: "#fff7ed", color: A.orange },
                   { label: "建议动作", icon: ArrowRight, body: selected.suggestedAction, bg: "#f5f3ff", color: A.purple },
-                  { label: "数据限制", icon: Info, body: selected.dataLimitations.length ? selected.dataLimitations.slice(0, 2).map((item) => `${item.label}：${item.description || "需要人工确认"}`) : ["当前无额外限制"], bg: A.gray6, color: A.gray1 },
                 ].map((row, index) => {
                   const Icon = row.icon;
                   return (
@@ -569,15 +564,21 @@ export default function AiSuggestionsPage({
                 })}
               </div>
 
+              <div className="mt-3 space-y-2">
+                <details className="rounded-lg border p-3" style={{borderColor:A.border}}><summary className="cursor-pointer text-[13px] font-semibold">查看关键证据</summary><ul className="mt-2 list-disc space-y-1 pl-5 text-[12px]" style={{color:A.sub}}>{selected.keyEvidence.slice(0,3).map(item=><li key={item}>{item}</li>)}</ul></details>
+                <details className="rounded-lg border p-3" style={{borderColor:A.border}}><summary className="cursor-pointer text-[13px] font-semibold">查看业务影响</summary><div className="mt-2 text-[12px]" style={{color:A.sub}}>{selected.businessImpact}</div></details>
+                {selected.dataLimitations.length > 0 && <details className="rounded-lg border p-3" style={{borderColor:A.border}}><summary className="cursor-pointer text-[13px] font-semibold">查看数据缺口</summary><ul className="mt-2 list-disc space-y-1 pl-5 text-[12px]" style={{color:A.sub}}>{selected.dataLimitations.slice(0,2).map(item=><li key={item.label}>{item.label}：{item.description}</li>)}</ul></details>}
+              </div>
+
               <div className="mt-4 rounded-xl border p-3" style={{ borderColor: A.border, background: A.white }}>
-                <div className="mb-2 text-[13px] font-semibold" style={{ color: A.label }}>可点击跳转</div>
+                <div className="mb-2 text-[13px] font-semibold" style={{ color: A.label }}>相关记录</div>
                 <div className="flex flex-wrap gap-2">
-                  {[...selected.navigationLinks, ...(selected.draftPreview?.navigationLinks.slice(1) || [])].slice(0, 4).map((link) => <NavButton key={`${link.moduleId}-${link.entityType}-${link.entityId}-${link.label}`} link={link} onNavigate={onNavigate} />)}
+                  {[...selected.navigationLinks, ...(selected.draftPreview?.navigationLinks.slice(1) || [])].slice(0, 3).map((link) => <NavButton key={`${link.moduleId}-${link.entityType}-${link.entityId}-${link.label}`} link={link} onNavigate={onNavigate} />)}
                 </div>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-[12px] leading-5" style={{ color: A.sub }}>内部复核 · 草稿预览 · 人工确认后再进入后续流程。</div>
+                <div />
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -585,7 +586,7 @@ export default function AiSuggestionsPage({
                     className="inline-flex h-9 items-center justify-center rounded-md border px-4 text-[13px] font-semibold"
                     style={{ borderColor: A.border, color: A.blue, background: A.white }}
                   >
-                    问 AI 继续追问
+                    问 AI
                   </button>
                   <button
                     type="button"
@@ -604,7 +605,7 @@ export default function AiSuggestionsPage({
         </Card>
       </section>
 
-      <section id="ai-draft-review">
+      {false && <section id="ai-draft-review">
         <h2 className={`${typography.sectionTitle} mb-3`} style={{ color: A.label }}>待人工复核草稿</h2>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           {workbench.draftPreviews.slice(0, 6).map((draft) => {
@@ -647,7 +648,7 @@ export default function AiSuggestionsPage({
             );
           })}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

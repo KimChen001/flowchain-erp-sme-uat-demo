@@ -16,7 +16,7 @@ import ReceivingPanel from "../receiving/Page";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import { BusinessDocumentForm } from "../../components/business/BusinessDocumentForm";
 
-type PurTab = "overview" | "requests" | "rfq" | "orders" | "contracts" | "receiving" | "receiving-new" | "receiving-edit" | "invoices" | "match" | "returns";
+type PurTab = "workbench" | "overview" | "requests" | "rfq" | "orders" | "contracts" | "receiving" | "receiving-new" | "receiving-edit" | "invoices" | "match" | "returns";
 type WorkbenchFilter = "all" | "approval" | "overdue" | "tracking";
 
 type ProcurementPanelProps = {
@@ -29,6 +29,7 @@ type ProcurementPanelProps = {
 };
 
 export default function ProcurementPanel({ intent = null, onOpenRfq, view, onNavigate, onActiveContextChange, focus }: ProcurementPanelProps) {
+  if (!view || view === "workbench" || view === "overview") return <ProcurementOverview onOpenTab={(tab) => onNavigate?.(`procurement:${tab === "workbench" || tab === "overview" ? "workbench" : tab}`)} onOpenDetailViews={() => onNavigate?.("procurement:requests")} />;
   if (view === "receiving-new") return <BusinessDocumentForm documentLabel="采购收货单" listPath="/app/procurement/receiving" />;
   if (view === "receiving-edit") return <BusinessDocumentForm mode="edit" documentLabel="采购收货单" documentId={window.location.pathname.split("/").at(-2)} listPath="/app/procurement/receiving" />;
   if (view === "requests") return <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
@@ -40,62 +41,7 @@ export default function ProcurementPanel({ intent = null, onOpenRfq, view, onNav
   if (view === "returns") return <PurchaseReturnsPanel />;
   if (view === "receiving") return <ReceivingPanel focus={focus} onNavigate={onNavigate} />;
 
-  return <PurchasingOrders focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
-}
-
-function PurchasingPanel({
-  intent,
-  onOpenRfq,
-  onNavigate,
-  onActiveContextChange,
-  focus,
-}: {
-  intent: PurchaseIntent | null;
-  onOpenRfq?: () => void;
-  onNavigate?: (moduleId: string) => void;
-  onActiveContextChange?: (context: ActiveContext | null) => void;
-  focus?: { entityType: string; entityId: string; at: number } | null;
-}) {
-  const [tab, setTab] = useState<PurTab>("overview");
-  const tabs = [
-    { id: "overview",  label: "工作台",     icon: ClipboardCheck },
-    { id: "requests",  label: "采购申请",   icon: ClipboardCheck },
-    { id: "rfq",       label: "寻源 / RFx", icon: FileSpreadsheet, count: RFQS.length },
-    { id: "orders",    label: "采购订单",   icon: FileText },
-    { id: "contracts", label: "框架合同",   icon: Handshake,       count: CONTRACTS.length },
-    { id: "receiving", label: "收货协同",   icon: PackageCheck },
-    { id: "invoices",  label: "发票协同",   icon: FileText,        count: SUPPLIER_INVOICES.filter((invoice) => invoice.matchStatus !== "自动匹配" || invoice.varianceType !== "无差异").length },
-    { id: "match",     label: "三单匹配",   icon: ShieldCheck,     count: SUPPLIER_INVOICES.filter((invoice) => invoice.matchStatus !== "自动匹配").length },
-    { id: "returns",   label: "采购退货 / 贷项", icon: RotateCcw,  count: PURCHASE_RETURNS.filter((row) => isReturnException(row)).length },
-  ] as const;
-
-  useEffect(() => {
-    if (intent) onNavigate?.("procurement:requests");
-  }, [intent?.createdAt]);
-
-  function openTab(next: PurTab) {
-    const routes: Partial<Record<PurTab, string>> = {
-      overview: "procurement", requests: "procurement:requests", rfq: "procurement:rfq",
-      orders: "procurement:orders", receiving: "procurement:receiving", returns: "procurement:returns",
-      invoices: "finance:invoices", match: "finance:three-way-match", contracts: "procurement:contracts",
-    };
-    if (onNavigate && routes[next]) onNavigate(routes[next]!);
-    else setTab(next);
-  }
-
-  return (
-    <div className="space-y-4">
-      {tab === "overview" && <ProcurementOverview onOpenTab={openTab} onOpenDetailViews={() => openTab("requests")} />}
-      {tab === "requests"  && <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
-      {tab === "orders"    && <PurchasingOrders focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
-      {tab === "rfq"       && <PurchasingRFQ focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
-      {tab === "contracts" && <ContractsPanel />}
-      {tab === "receiving" && <ReceivingPanel focus={focus} onNavigate={onNavigate} />}
-      {tab === "invoices"  && <SupplierInvoiceRegister mode="procurement" focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />}
-      {tab === "match"     && <ThreeWayMatchPanel />}
-      {tab === "returns"   && <PurchaseReturnsPanel />}
-    </div>
-  );
+  return <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">当前采购视图不可用。</div>;
 }
 
 function parseLooseDate(value?: string | null) {
@@ -196,7 +142,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
     .map<WorkbenchRow>((rfq) => ({
       id: `rfq-${rfq.id}`,
       bucket: [formatDueLabel(rfq.due).startsWith("逾期") ? "overdue" : "tracking", "tracking"],
-      kind: "寻源 / RFx",
+      kind: "询价与报价",
       docNo: rfq.id,
       title: `${rfq.title} · ${rfq.suppliers} 家供应商`,
       supplier: rfq.bestSupplier,
@@ -205,7 +151,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
       status: rfq.status,
       moduleId: "rfq",
       note: rfq.category,
-      tone: queueTone("寻源 / RFx", rfq.due),
+      tone: queueTone("询价与报价", rfq.due),
     }));
 
   const invoiceRows = invoiceExceptions
@@ -213,7 +159,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
     .map<WorkbenchRow>((invoice) => ({
       id: `invoice-${invoice.id}`,
       bucket: ["approval", "overdue"],
-      kind: "发票协同",
+      kind: "供应商发票",
       docNo: invoice.invoiceNumber,
       title: `${invoice.supplier} · ${invoice.varianceType}`,
       supplier: invoice.supplier,
@@ -222,7 +168,7 @@ function ProcurementOverview({ onOpenTab, onOpenDetailViews }: { onOpenTab: (tab
       status: invoice.matchStatus,
       moduleId: "invoices",
       note: `${invoice.relatedPo || "缺少 PO"} · ${invoice.relatedGrn || "缺少 GRN"}`,
-      tone: queueTone("发票协同"),
+      tone: queueTone("供应商发票"),
     }));
 
   const receivingRows = pendingReceiving

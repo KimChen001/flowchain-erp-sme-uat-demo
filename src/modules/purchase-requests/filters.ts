@@ -1,6 +1,7 @@
 import type { Priority, PurchaseRequest, PurchaseRequestStatus } from "../../types/scm";
 
 export type PurchaseRequestWorkbenchFilters = {
+  query: string;
   prNumber: string;
   supplier: string;
   skuOrItem: string;
@@ -14,6 +15,7 @@ export type PurchaseRequestWorkbenchFilters = {
 };
 
 export const defaultPurchaseRequestWorkbenchFilters: PurchaseRequestWorkbenchFilters = {
+  query: "",
   prNumber: "",
   supplier: "",
   skuOrItem: "",
@@ -74,9 +76,10 @@ export function purchaseRequestMatchesWorkbenchFilters(
   request: PurchaseRequest,
   filters: PurchaseRequestWorkbenchFilters,
 ) {
-  if (!containsText(request.pr, filters.prNumber)) return false;
+  if (filters.query && ![request.pr, request.sourceSku, request.sourceName, request.requester, request.supplier, request.buyer].some((value) => containsText(value, filters.query))) return false;
+  if (!filters.query && !containsText(request.pr, filters.prNumber)) return false;
   if (!containsText(request.supplier, filters.supplier)) return false;
-  if (!matchesSkuOrItem(request, filters.skuOrItem)) return false;
+  if (!filters.query && !matchesSkuOrItem(request, filters.skuOrItem)) return false;
   if (!containsText(request.requester, filters.requester)) return false;
   if (!containsText(request.buyer, filters.buyer)) return false;
   if (filters.status !== "全部" && request.status !== filters.status) return false;

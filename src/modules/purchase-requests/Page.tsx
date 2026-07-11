@@ -24,6 +24,7 @@ import {
 } from "../../components/document/DocumentShell";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
+import { WorkbenchMoreMenu } from "../../components/ui/WorkbenchMoreMenu";
 import {
   CompactKpiStrip,
   DataLimitationsPanel,
@@ -637,22 +638,6 @@ export default function PurchaseRequestsPage({
           { label: "拒绝 / 要求修改 / 取消原因", value: selected.status === "已驳回" ? selected.reason : "暂无" },
         ]} columns={3} />
       </DetailSection>
-      <ReviewActionPanel objectLabel={selected.pr} />
-      <DetailSection title="评论与附件" right={<Chip label="占位" color={A.orange} bg="#fff8f0" />}>
-        <div className="grid grid-cols-2 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
-          {[
-            ["内部备注", selected.reason || "等待业务负责人补充用途说明。"],
-            ["附件占位", "可记录报价单、规格书或需求截图名称；当前不上传文件。"],
-            ["URL 占位", "可粘贴内部资料链接；当前不访问外部系统。"],
-            ["AI 生成说明占位", "可生成内部复核备注草稿，由负责人确认后再处理。"],
-          ].map(([title, body]) => (
-            <div key={title} className="rounded-lg p-3" style={{ background: A.white }}>
-              <div className="font-semibold mb-1" style={{ color: A.label }}>{title}</div>
-              <div>{body}</div>
-            </div>
-          ))}
-        </div>
-      </DetailSection>
       <DocumentTotals
         totals={[
           { label: "申请数量", value: `${Number(selected.quantity || 0).toLocaleString()} ${selected.unit}` },
@@ -686,17 +671,10 @@ export default function PurchaseRequestsPage({
         title="历史记录"
         refreshKey={selected.lastAuditId || selected.auditTrailIds?.join(",") || selected.status}
       />
-      <DetailSection title="历史记录">
-        <div className="grid grid-cols-3 gap-2 text-[11px] leading-5" style={{ color: A.sub }}>
-          {["创建 PR 草稿", "提交复核", "AI 解释生成", selected.status === "已驳回" ? "拒绝原因已记录" : "要求修改预览待生成", "生成 RFQ 草稿预览", "生成 PO 草稿预览", "关联 PO / RFQ 变化"].map((item) => (
-            <div key={item} className="rounded-lg p-2.5" style={{ background: A.white }}>{item}</div>
-          ))}
-        </div>
-      </DetailSection>
-      <DetailSection title="关联单据" right={<Chip label="只读" color={A.blue} bg="#f0f6ff" />}>
+      <DetailSection title="关联单据">
         <DetailFieldGrid fields={[
           { label: "关联 RFQ", value: selectedLinkedRfq, tone: "info" },
-          { label: "关联 PO", value: selectedLinkedPo || "PO 草稿预览待生成", tone: selectedLinkedPo ? "good" : "warning" },
+          { label: "关联 PO", value: selectedLinkedPo || "尚未创建", tone: selectedLinkedPo ? "good" : "warning" },
           { label: "关联 GRN / Receipt", value: selectedLinkedPo ? "收货记录待复核" : "暂未关联" },
           { label: "关联 Invoice", value: "当前未读取到完整发票记录" },
           { label: "关联 Exception Case", value: selected.priority === "高" ? "需关注交付风险" : "暂无" },
@@ -709,28 +687,6 @@ export default function PurchaseRequestsPage({
         { label: "库存缺口", value: selectedPrLines[0]?.sourceShortage || "需人工复核", tone: "warning" },
         { label: "客户订单风险", value: selectedPrLines[1]?.customerOrder || "待关联", tone: "warning" },
       ]} />
-      <DataLimitationsPanel items={["workspace_only", "supplier_quote_partial", "receiving_invoice_partial", "attachment_placeholder"]} labelFor={labelDataLimitation} />
-      <Card className="p-4" style={{ background: "#f8fbff", border: "0.5px solid rgba(0,113,227,0.14)" }}>
-        <div className="text-xs font-semibold mb-2" style={{ color: A.label }}>PR → RFQ 草稿 → 供应商响应复核 → 授标建议预览 → PO 草稿</div>
-        <div className="grid grid-cols-5 gap-2 text-[11px]">
-          {[
-            ["PR", selected.pr, displayPrStatus(selected.status)],
-            ["RFQ 草稿", selected.linkedPo ? "已转后续单据" : "可创建内部草稿", "先复核后确认"],
-            ["供应商响应", "内部录入", "不外发"],
-            ["授标建议", "仅预览推荐", "不授标"],
-            ["PO 草稿", "仅草稿", "不下发"],
-          ].map(([label, value, helper]) => (
-            <div key={label} className="rounded-lg p-2" style={{ background: A.white, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.06)" }}>
-              <div className="font-semibold" style={{ color: A.label }}>{label}</div>
-              <div className="mt-1 tabular-nums" style={{ color: A.blue }}>{value}</div>
-              <div className="mt-0.5" style={{ color: A.gray2 }}>{helper}</div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 text-[11px]" style={{ color: A.sub }}>
-          复核申请信息与关联单据后继续处理。
-        </div>
-      </Card>
       <DocumentActionBar>
         <RecoveryActions
           actions={[
@@ -742,10 +698,6 @@ export default function PurchaseRequestsPage({
             { key: "back", label: "返回上一级", onClick: returnToList, kind: "list", tone: "subtle" },
           ]}
         />
-        {selected.status === "待审批" && <button onClick={() => approveRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.blue }}>批准预览</button>}
-        {selected.status === "待审批" && <button onClick={() => rejectRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#fff1f0", color: A.red }}>拒绝预览</button>}
-        <button onClick={() => convertRequest(selected.pr)} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white" style={{ background: A.green }}>生成 PO 草稿预览</button>
-        <button onClick={createRfqFromSelected} disabled={creatingRfq} className="text-xs px-3 py-1.5 rounded-lg font-medium text-white disabled:opacity-60" style={{ background: supplierRecommendationResult?.needsRfq ? A.orange : A.blue }}>生成 RFQ 草稿预览</button>
         <button onClick={() => exportPurchaseRequestDetail(selected)} className="text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>导出详情</button>
       </DocumentActionBar>
     </DocumentShell>
@@ -760,7 +712,6 @@ export default function PurchaseRequestsPage({
             <button onClick={returnToList} className="ml-3 px-3 py-1.5 rounded-lg font-medium" style={{ background: A.gray6, color: A.blue }}>返回列表</button>
           </Card>
         )}
-        <NewPRModal open={newOpen} onClose={() => setNewOpen(false)} onCreate={createManualRequest} />
       </div>
     );
   }
@@ -804,7 +755,7 @@ export default function PurchaseRequestsPage({
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="搜索 PR / SKU / 品名"><input value={filters.prNumber || filters.skuOrItem} onChange={(event) => { updateFilter("prNumber", event.target.value); updateFilter("skuOrItem", event.target.value); }} placeholder="PR、SKU 或品名" style={inputStyle} /></Field>
+          <Field label="搜索 PR / SKU / 品名"><input value={filters.query} onChange={(event) => updateFilter("query", event.target.value)} placeholder="PR、SKU 或品名" style={inputStyle} /></Field>
           <Field label="状态"><select aria-label="状态" value={filters.status} onChange={(event) => updateFilter("status", event.target.value as PurchaseRequestWorkbenchFilters["status"])} style={inputStyle}>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></Field>
           <Field label="优先级"><select aria-label="优先级" value={filters.priority} onChange={(event) => updateFilter("priority", event.target.value as PurchaseRequestWorkbenchFilters["priority"])} style={inputStyle}>{priorityOptions.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></Field>
           <Field label="需求日期"><input type="date" value={filters.requiredTo} onChange={(event) => updateFilter("requiredTo", event.target.value)} style={inputStyle} /></Field>
@@ -854,7 +805,7 @@ export default function PurchaseRequestsPage({
                       <td className={tdActionClass}>
                         <div className="flex justify-end gap-1">
                           <button onClick={() => openDetail(item.pr)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看</button>
-                          <details className="relative"><summary className="cursor-pointer list-none px-2 py-1 text-[11px] font-medium rounded-md" style={{background:A.gray6}}>更多</summary><div className="absolute right-0 z-20 mt-1 w-36 rounded-lg border bg-white p-1 shadow-lg"><button onClick={() => openDetail(item.pr)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看明细</button>{item.source && <button onClick={() => openDetail(item.pr)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看来源需求</button>}{linkedRfqForPr(item) && <button onClick={() => openDetail(item.pr)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看关联 RFQ</button>}{linkedPoForPr(item) && <button onClick={() => openDetail(item.pr)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看关联 PO</button>}</div></details>
+                          <WorkbenchMoreMenu><button onClick={() => openDetail(item.pr)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看明细</button>{item.source && <button onClick={() => openDetail(item.pr)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看来源需求</button>}{linkedRfqForPr(item) && <button onClick={() => openDetail(item.pr)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看关联 RFQ</button>}{linkedPoForPr(item) && <button onClick={() => openDetail(item.pr)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看关联 PO</button>}</WorkbenchMoreMenu>
                         </div>
                       </td>
                     </tr>
