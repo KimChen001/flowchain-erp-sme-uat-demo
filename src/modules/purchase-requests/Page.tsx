@@ -150,7 +150,7 @@ function linkedRfqForPr(pr: PurchaseRequest) {
 function nextStepForPr(pr: PurchaseRequest) {
   if (pr.status === "草稿") return "提交复核预览";
   if (pr.status === "待审批") return "等待负责人复核";
-  if (pr.status === "已批准") return pr.source === "inventory" ? "生成 PO 草稿预览" : "生成 RFQ 草稿预览";
+  if (pr.status === "已批准") return pr.source === "inventory" ? "待创建采购订单" : "待发起询价";
   if (pr.status === "已转PO") return "跟踪关联 PO 草稿";
   if (pr.status === "已驳回") return "查看拒绝原因";
   if (pr.status === "已取消") return "查看取消原因";

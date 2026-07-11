@@ -181,7 +181,7 @@ function nextStepForRfq(rfq: RfqRecord) {
   if (display === "草稿" || display === "待发送预览") return "复核 RFQ 明细";
   if (display === "等待报价") return Number(rfq.quoted || 0) >= Number(rfq.suppliers || 0) ? "进入报价比较" : "要求补充报价预览";
   if (display === "报价已收到" || display === "比价中") return "生成授标建议草稿";
-  if (display === "授标建议待复核") return "复核后生成 PO 草稿预览";
+  if (display === "授标建议待复核") return "复核授标建议";
   if (display === "已生成 PO 草稿") return "跟踪 PO 草稿";
   if (display === "已取消") return "查看取消原因";
   return "需人工复核";
@@ -311,7 +311,7 @@ function buildAwardDraft(rfq: RfqRecord): AwardDraftView {
     reviewQuestions: "MOQ、付款条款、交期承诺和替代料是否满足生产节奏。",
     splitAllocation: second ? "建议拆分分配" : "暂不建议拆分",
     quoteSupplement: responded < Number(rfq.suppliers || 0) ? "建议先补充未响应报价" : "报价已满足内部比较",
-    canPreviewPo: responded >= 2 ? "可生成 PO 草稿预览" : "需补充报价后再预览 PO 草稿",
+    canPreviewPo: responded >= 2 ? "报价条件已满足" : "需补充报价",
   };
 }
 
@@ -333,7 +333,7 @@ function rfqTimeline(rfq: RfqRecord): TimelineStep[] {
     { label: "报价收集", status: suppliers > responded ? "current" : "done", helper: `${responded}/${suppliers} 家响应` },
     { label: "报价比较", status: comparisonReady ? (awardReady ? "done" : "current") : "pending" },
     { label: "授标建议草稿", status: awardReady ? (poReady ? "done" : "current") : "pending" },
-    { label: "PO 草稿预览", status: poReady ? "done" : "pending", helper: linkedPoForRfq(rfq) || "等待复核" },
+    { label: "采购订单", status: poReady ? "done" : "pending", helper: linkedPoForRfq(rfq) || "尚未创建" },
   ];
 }
 
