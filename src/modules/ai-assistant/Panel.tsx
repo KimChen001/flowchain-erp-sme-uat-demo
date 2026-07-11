@@ -101,11 +101,11 @@ const PO_EMPTY_PROMPTS = ["这个 PO 为什么需要关注？", "还差哪些收
 const SKU_EMPTY_PROMPTS = ["这个 SKU 需要补货吗？", "当前可用库存是多少？", "哪些订单会受影响？", "建议如何处理？"];
 
 function requestScopeLabel(message: string) {
-  if (/PO|采购订单|收货|GRN|发票|匹配/i.test(message)) return "正在查询采购订单、收货和发票记录";
-  if (/库存|SKU|补货|可用量/i.test(message)) return "正在查询库存余额和关联订单";
-  if (/供应商|RFQ|报价/i.test(message)) return "正在查询供应商和询报价记录";
-  if (/今天|重点|风险|待办/i.test(message)) return "正在汇总当前工作区重点事项";
-  return "正在查询当前页面相关业务记录";
+  if (/PO|采购订单|收货|GRN|发票|匹配/i.test(message)) return "正在查询业务数据：采购订单、收货和发票记录";
+  if (/库存|SKU|补货|可用量/i.test(message)) return "正在查询业务数据：库存余额和关联订单";
+  if (/供应商|RFQ|报价/i.test(message)) return "正在查询业务数据：供应商和询报价记录";
+  if (/今天|重点|风险|待办/i.test(message)) return "正在查询业务数据：当前工作区重点事项";
+  return "正在查询业务数据：当前页面相关记录";
 }
 
 const CONTEXT_ENTITY_LABELS: Record<string, string> = {
@@ -1747,7 +1747,7 @@ export default function FloatingAiAssistant({
             <div className="flex items-center gap-1">
               <button type="button" onClick={startNewConversation} className="flex h-8 items-center gap-1 rounded-lg px-2 text-[11px] font-medium hover:bg-slate-100" style={{ color: A.gray1 }} aria-label="新对话"><Plus size={13} />新对话</button>
               <button type="button" onClick={() => setExpanded((value) => !value)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100" style={{ color: A.gray1 }} aria-label={expanded ? "收起 AI 工作区" : "展开 AI 工作区"}>{expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
-              <button type="button" onClick={minimizeAssistant} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100" style={{ color: A.gray1 }} aria-label="关闭 AI 助手"><X size={15} /></button>
+              <button type="button" onClick={minimizeAssistant} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100" style={{ color: A.gray1 }} aria-label="最小化 AI 助手"><X size={15} /></button>
             </div>
           </div>
 

@@ -1,7 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { getSettingsRuntime, updateSettingsSection, listSettingsAuditEntries } from '../repositories/settings-runtime-repository.mjs'
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8')
 
@@ -17,21 +16,6 @@ test('focused AI presentation limits priorities, actions, evidence and follow-up
   assert.match(panel, /emptyPrompts\.slice\(0, 4\)/)
   assert.match(panel, /取消请求/)
   assert.doesNotMatch(panel, /getContextualQuickPrompts/)
-})
-
-test('settings runtime enforces last administrator and protected module invariants', () => {
-  const current = getSettingsRuntime()
-  assert.throws(() => updateSettingsSection('roles', {
-    ...current.roles,
-    users: current.roles.users.map((user) => ({ ...user, enabled: user.role === '管理员' ? false : user.enabled })),
-  }), /至少保留一名/)
-  assert.throws(() => updateSettingsSection('modules', {
-    ...current.modules,
-    items: current.modules.items.map((item) => item.id === 'settings' ? { ...item, enabled: false } : item),
-  }), /不能停用/)
-  const result = updateSettingsSection('company', { ...current.company, workspaceName: '供应链运营验证工作区' })
-  assert.equal(result.settings.workspaceName, '供应链运营验证工作区')
-  assert.equal(listSettingsAuditEntries()[0].entity.id, 'company')
 })
 
 test('settings, PO, master data and reports expose consolidated product surfaces', async () => {

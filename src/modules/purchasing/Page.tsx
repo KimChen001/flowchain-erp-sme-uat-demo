@@ -1117,7 +1117,7 @@ export default function PurchasingOrdersPage({
           <Chip label="只读复核" color={A.blue} bg="#f0f6ff" />
         </div>
         <div className={tableScrollClass}>
-          <table className="w-full min-w-[1200px] table-fixed text-left">
+          <table className="w-full min-w-[1200px] table-fixed text-left [&_tbody_td]:!py-0">
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
                 <th className={`${thClass} sticky left-0 z-20 w-[150px] bg-slate-50`} style={{ color: A.gray1 }}>PO 编号</th>
@@ -1143,7 +1143,7 @@ export default function PurchasingOrdersPage({
                     <td className={`${tdNumericClass} font-semibold`} style={{ color: A.label }}>{fmt(poAmount(order))}</td>
                     <td className={tdNowrapClass} style={{ color: A.sub }}>{order.eta}</td>
                     <td className={tdNowrapClass}>{statusChip(receivedStatus(order))}</td>
-                    <td className={tdNowrapClass}><div>{statusChip(invoiceStatus(order))}</div><div className="mt-1 text-[10px] text-slate-500">{matchStatus(order)}</div></td>
+                    <td className={tdNowrapClass}><div>{statusChip(invoiceStatus(order))}</div><div className="mt-1 text-[11px] text-slate-500">{matchStatus(order)}</div></td>
                     <td className={`${tdActionClass} sticky right-0 z-10 bg-white`}>
                       <div className="flex items-center justify-end gap-1.5">
                         <button onClick={() => openDetail(order.po)} className="rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-600">查看</button>

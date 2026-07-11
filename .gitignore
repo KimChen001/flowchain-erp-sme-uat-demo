@@ -6,6 +6,8 @@ dist/
 .env.*.local
 
 *.log
+data/system-settings.json
+data/system-settings.json.tmp-*
 cloudflare-tunnel.*.log
 localtunnel.*.log
 prod-server.*.log
