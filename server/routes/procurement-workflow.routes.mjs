@@ -18,4 +18,8 @@ export async function handleProcurementWorkflowRoute(ctx){ const {req,res,url,se
   if(req.method==='POST'&&po){try{send(res,201,await service.createDirectPoFromPurchaseRequest(decodeURIComponent(po[1]),await readBody(req),actor(ctx)))}catch(e){failure(send,res,e)}return true}
   if(req.method==='GET'&&url.pathname==='/api/procurement/rfqs') return send(res,200,await repository.list('rfq'))||true
   if(req.method==='GET'&&url.pathname==='/api/procurement/orders') return send(res,200,await repository.list('po'))||true
+  const poAction=url.pathname.match(/^\/api\/procurement\/orders\/([^/]+)\/(submit|approve|issue|cancel)$/)
+  if(req.method==='POST'&&poAction){try{const b=await readBody(req);const next={submit:'pending_approval',approve:'approved',issue:'issued',cancel:'cancelled'}[poAction[2]];send(res,200,await service.transitionPurchaseOrder(decodeURIComponent(poAction[1]),next,{...b,actor:actor(ctx)}))}catch(e){failure(send,res,e)}return true}
+  const rfqAction=url.pathname.match(/^\/api\/procurement\/rfqs\/([^/]+)\/(open|cancel)$/)
+  if(req.method==='POST'&&rfqAction){try{const b=await readBody(req);send(res,200,await service.transitionRfq(decodeURIComponent(rfqAction[1]),rfqAction[2]==='open'?'open':'cancelled',{...b,actor:actor(ctx)}))}catch(e){failure(send,res,e)}return true}
   return false }

@@ -48,6 +48,7 @@ import { grnLinesOf } from "../../domain/receiving/helpers";
 import { lineRemaining, lineStatusLabel, poLinesOf, poTotals, toNumber } from "../../domain/purchasing/helpers";
 import type { WorkflowContext } from "../../lib/workflowContext";
 import type { ActiveContext } from "../ai-assistant/Panel";
+import CanonicalDownstreamPanel from "../../components/procurement/CanonicalDownstreamPanel";
 import {
   defaultPurchaseOrderWorkbenchFilters,
   filterPurchaseOrdersForWorkbench,
@@ -479,6 +480,7 @@ export default function PurchasingOrdersPage({
   onNavigate?: NavigateFn;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
+  if (!focus) return <CanonicalDownstreamPanel kind="orders" />;
   const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [loading, setLoading] = useState(true);
@@ -924,6 +926,7 @@ export default function PurchasingOrdersPage({
 
   return (
     <div className="space-y-5">
+      <CanonicalDownstreamPanel kind="orders" />
       <div className="grid grid-cols-4 gap-3">
         <ActionableMetricCard label="PO 总额" value={fmt(totalAmount)} description={loading ? "加载中" : `${orders.length} 张订单`} to="/app/procurement/orders" icon={FileText} color={A.blue} />
         <ActionableMetricCard label="待收货 / 未收齐" value={String(waitingReceipt)} description="跟进未完成采购订单" to="/app/procurement/orders?status=open" icon={Truck} color={A.orange} />

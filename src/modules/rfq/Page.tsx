@@ -12,6 +12,7 @@ import ContextualImportActions from "../../components/import/ContextualImportAct
 import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
 import { WorkbenchMoreMenu } from "../../components/ui/WorkbenchMoreMenu";
 import type { ActiveContext } from "../ai-assistant/Panel";
+import CanonicalDownstreamPanel from "../../components/procurement/CanonicalDownstreamPanel";
 import {
   defaultRfqWorkbenchFilters,
   filterRfqsForWorkbench,
@@ -357,6 +358,7 @@ export default function PurchasingRFQPage({
   onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
+  if (!focus) return <CanonicalDownstreamPanel kind="rfqs" />;
   const enrichBuyer = (rfq: RfqRecord): RfqRecord => ({ ...rfq, buyer: rfq.buyer || (SOURCE_PR_BY_RFQ[rfq.id] || SOURCE_PR_BY_RFQ["RFQ-26-0046"]).buyer });
   const [rfqs, setRfqs] = useState<RfqRecord[]>(() => RFQS.map(enrichBuyer));
   const [loading, setLoading] = useState(true);
@@ -703,6 +705,7 @@ export default function PurchasingRFQPage({
 
   return (
     <div className="space-y-4">
+      <CanonicalDownstreamPanel kind="rfqs" />
       <div className="grid grid-cols-4 gap-3">
         <KpiCard label="活动询价" value={String(rfqs.length)} sub={loading ? "加载中" : "近 30 天"} delta="+2" positive icon={FileSpreadsheet} color={A.blue} />
         <KpiCard label="参与供应商" value={String(rfqs.reduce((a, b) => a + b.suppliers, 0))} sub="累计范围" icon={Building2} color={A.purple} />

@@ -32,6 +32,7 @@ import {
   EvidenceSummaryPanel,
 } from "../../components/business/BusinessObjectDetail";
 import type { ActiveContext } from "../ai-assistant/Panel";
+import CanonicalProcurementPanel from "./CanonicalProcurementPanel";
 import {
   defaultPurchaseRequestWorkbenchFilters,
   filterPurchaseRequestsForWorkbench,
@@ -330,6 +331,7 @@ export default function PurchaseRequestsPage({
   onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
+  if (!focus) return <CanonicalProcurementPanel onNavigate={onNavigate} />;
   const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
@@ -650,6 +652,7 @@ export default function PurchaseRequestsPage({
 
   return (
     <div className="space-y-5">
+      <CanonicalProcurementPanel onNavigate={onNavigate} />
       {intent?.sourceSku && (
         <div className="rounded-xl px-4 py-3 flex items-center justify-between gap-3"
           style={{ background: "#f0f6ff", border: `0.5px solid ${A.blue}30` }}>
