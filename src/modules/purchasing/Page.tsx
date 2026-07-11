@@ -338,7 +338,7 @@ function buildGrnRows(po: PurchaseOrder): GrnEvidenceRow[] {
         qcStatus: toNumber(line.rejectedQty) > 0 || grn.failed > 0 ? "质检异常" : grn.status === "质检中" ? "质检中" : "通过",
         invoiceImpact: relatedInvoiceLine ? "影响发票匹配" : "等待发票匹配",
         invoiceLine: relatedInvoiceLine?.invoiceLine.lineId || "关联 Invoice Line 待补齐",
-        note: toNumber(line.rejectedQty) > 0 ? "拒收数量需要采购与财务协同复核" : "当前仅展示收货证据和匹配影响",
+        note: toNumber(line.rejectedQty) > 0 ? "拒收数量需要采购与财务协同复核" : "查看收货记录和匹配影响",
       };
     });
   });
@@ -451,7 +451,7 @@ function buildAccrualRows(po: PurchaseOrder): AccrualRow[] {
       approvedInvoicedAmount,
       accrualExposure: Math.round(Math.max(0, receivedAmount - approvedInvoicedAmount)),
       risk: openQty > 0 ? "已收未票风险" : uninvoicedQty > 0 ? "未开票订单" : "低风险",
-      suggestedAction: openQty > 0 ? "等待供应商发票并保留应计可见性" : uninvoicedQty > 0 ? "等待发票" : "财务协同复核",
+      suggestedAction: openQty > 0 ? "等待供应商发票" : uninvoicedQty > 0 ? "等待发票" : "财务协同复核",
     };
   });
 }
@@ -785,7 +785,7 @@ export default function PurchasingOrdersPage({
           <SectionTitle title="收货 / GRN Line" right={<Chip label="只读收货证据" color={A.green} bg="#f0faf4" />} />
           <DocumentLinesTable
             rows={grnRows}
-            emptyText="当前 PO 尚未读取到 GRN Line。当前仅展示收货证据和匹配影响，不会提交收货、不会修改库存余额、不会产生库存过账。"
+            emptyText="当前 PO 暂无收货记录。"
             columns={[
               { key: "grn", label: "GRN / Receipt 编号", render: (line) => <span style={{ color: A.blue }}>{String(line.grn)}</span> },
               { key: "grnLineId", label: "GRN Line 编号" },
@@ -807,12 +807,12 @@ export default function PurchasingOrdersPage({
             ]}
           />
           <Card className="p-3 mt-3 text-[11px] leading-5" style={{ color: A.sub, background: "#f8fafc" }}>
-            当前仅展示收货证据和匹配影响。不会提交收货，不会修改库存余额，不会产生库存过账。
+            对照采购订单查看实收、质检和差异记录。
           </Card>
         </div>
 
         <div>
-          <SectionTitle title="发票 / Invoice Line" right={<Chip label="财务协同可见性" color={A.purple} bg="#faf3ff" />} />
+          <SectionTitle title="发票 / Invoice Line" />
           <DocumentLinesTable
             rows={invoiceRows}
             emptyText="当前 PO 尚未读取到 Invoice Line。"
@@ -867,7 +867,7 @@ export default function PurchasingOrdersPage({
         </div>
 
         <div>
-          <SectionTitle title="未开票 / 已收未票" right={<Chip label="应计可见性" color={A.blue} bg="#f0f6ff" />} />
+          <SectionTitle title="未开票 / 已收未票" />
           <DocumentLinesTable
             rows={accrualRows}
             columns={[
@@ -903,7 +903,7 @@ export default function PurchasingOrdersPage({
             {[
               ["结论", `${selectedPO.po} 当前下一步：${nextStepForPo(selectedPO)}`],
               ["关键证据", `${poLines.length} 条 PO Line · ${grnRows.length} 条 GRN Line · ${invoiceRows.length} 条 Invoice Line`],
-              ["业务影响", accrualRows.some((row) => row.accrualExposure > 0) ? "存在已收未票，应保持应计可见性" : "未识别重大已收未票风险"],
+              ["业务影响", accrualRows.some((row) => row.accrualExposure > 0) ? "存在已收未票，需要跟进发票" : "未识别重大已收未票风险"],
               ["建议动作", matchRows.some((row) => row.status !== "已匹配") ? "生成内部复核备注草稿" : "保留人工复核记录"],
               ["数据限制 / 不确定性", "结论基于当前工作区可见记录，需业务负责人确认"],
             ].map(([label, value]) => (
@@ -937,7 +937,7 @@ export default function PurchasingOrdersPage({
         />
 
         <Card className="p-4">
-          <SectionTitle title="复核动作" right={<Chip label="Review-first / Preview-only" color={A.blue} bg="#f0f6ff" />} />
+          <SectionTitle title="复核动作" />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
             {[
               ["生成收货异常说明草稿", "仅基于 GRN Line 拒收、质检状态和发票影响生成内部说明。"],
@@ -1172,22 +1172,6 @@ export default function PurchasingOrdersPage({
         </div>
       </Card>
 
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
-          <div className="rounded-lg p-3" style={{ background: A.gray6 }}>
-            <div className="font-semibold flex items-center gap-1.5" style={{ color: A.label }}><ClipboardCheck size={12} /> Review-first</div>
-            <div className="mt-1">页面只展示 PO、GRN、Invoice 和匹配证据，动作均需人工复核。</div>
-          </div>
-          <div className="rounded-lg p-3" style={{ background: A.gray6 }}>
-            <div className="font-semibold flex items-center gap-1.5" style={{ color: A.label }}><PackageCheck size={12} /> 收货边界</div>
-            <div className="mt-1">不会提交收货，不会修改库存余额，不会产生库存过账。</div>
-          </div>
-          <div className="rounded-lg p-3" style={{ background: A.gray6 }}>
-            <div className="font-semibold flex items-center gap-1.5" style={{ color: A.label }}><CheckCircle2 size={12} /> 财务边界</div>
-            <div className="mt-1">发票和应计金额仅作协同可见性，不形成会计分录或付款动作。</div>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 }

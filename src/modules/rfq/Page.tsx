@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Building2, Clock, FileSpreadsheet, Filter, GitBranch, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { apiJson } from "../../lib/api-client";
@@ -366,7 +367,9 @@ export default function PurchasingRFQPage({
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(RFQS[0]?.id ?? "");
   const [viewMode, setViewMode] = useState<RfqViewMode>("list");
-  const [filters, setFilters] = useState<RfqWorkbenchFilters>(defaultRfqWorkbenchFilters);
+  const [, setSearchParams] = useSearchParams();
+  const [filters, setFilters] = useState<RfqWorkbenchFilters>(() => Object.fromEntries(Object.entries(defaultRfqWorkbenchFilters).map(([key, fallback]) => [key, new URLSearchParams(window.location.search).get(key) || fallback])) as RfqWorkbenchFilters);
+  const [moreFilters, setMoreFilters] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -453,10 +456,14 @@ export default function PurchasingRFQPage({
 
   function updateFilter<K extends keyof RfqWorkbenchFilters>(key: K, value: RfqWorkbenchFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
+    const next = new URLSearchParams(window.location.search);
+    if (value === defaultRfqWorkbenchFilters[key]) next.delete(key); else next.set(key, String(value));
+    setSearchParams(next, { replace: true });
   }
 
   function resetFilters() {
     setFilters(defaultRfqWorkbenchFilters);
+    setSearchParams({}, { replace: true });
   }
 
   function openDetail(id: string) {
@@ -705,7 +712,6 @@ export default function PurchasingRFQPage({
           { label: "PR / RFQ", value: `${source.pr} 的 ${source.sku} 需求进入 ${selectedRfq.id}，用于报价收集和比价。`, tone: "info" },
           { label: "供应商报价", value: `${selectedRfq.quoted}/${selectedRfq.suppliers} 家供应商已响应，未响应报价会影响推荐完整性。`, tone: Number(selectedRfq.quoted || 0) < Number(selectedRfq.suppliers || 0) ? "warning" : "good" },
           { label: "报价比较", value: comparison[0] ? `${comparison[0].supplier} 当前排名第一，节省金额 ${fmt(comparison[0].savings)}。` : "等待报价后生成比较。", tone: comparison[0] ? "good" : "warning" },
-          { label: "草稿边界", value: "授标建议和 PO 均为草稿预览，需人工复核后再进入后续流程。", tone: "good" },
         ]} />
         <DataLimitationsPanel items={["workspace_only", "quote_partial", "external_sourcing_closed", "po_preview_only", "contract_quality_partial"]} labelFor={labelDataLimitation} />
         <DocumentTotals
@@ -763,12 +769,11 @@ export default function PurchasingRFQPage({
       <Card className="p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <SectionHeader title="RFQ 查询" />
+            <SectionHeader title="询价与报价" />
             <div className="text-xs mt-1" style={{ color: A.sub }}>按 RFQ、供应商、物料、状态、报价状态和截止日期查询询价记录</div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => toast.success(`已筛选 ${filtered.length} 条 RFQ`)}
-              className="h-8 px-3 rounded-lg text-xs font-medium text-white" style={{ background: A.blue }}>查询</button>
+            <button onClick={() => setMoreFilters((value) => !value)} className="h-8 px-3 rounded-lg text-xs font-medium" style={{ background: A.gray6, color: A.blue }}>更多筛选</button>
             <button onClick={resetFilters}
               className="h-8 px-3 rounded-lg text-xs font-medium" style={{ background: A.gray6, color: A.label }}>重置</button>
             <button onClick={exportCsv}
@@ -777,37 +782,33 @@ export default function PurchasingRFQPage({
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-5 gap-3">
-          <Field label="RFQ 编号"><input value={filters.rfqId} onChange={(event) => updateFilter("rfqId", event.target.value)} placeholder="RFQ-2026" style={inputStyle} /></Field>
-          <Field label="供应商"><input value={filters.supplier} onChange={(event) => updateFilter("supplier", event.target.value)} placeholder="供应商名称" style={inputStyle} /></Field>
-          <Field label="物料 / SKU"><input value={filters.skuOrItem} onChange={(event) => updateFilter("skuOrItem", event.target.value)} placeholder="SKU 或标题" style={inputStyle} /></Field>
-          <Field label="品类"><input value={filters.category} onChange={(event) => updateFilter("category", event.target.value)} placeholder="品类" style={inputStyle} /></Field>
-          <Field label="来源 PR"><input value={filters.sourceRequest} onChange={(event) => updateFilter("sourceRequest", event.target.value)} placeholder="PR-2026" style={inputStyle} /></Field>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Field label="搜索 RFQ / SKU / 标题"><input value={filters.rfqId || filters.skuOrItem} onChange={(event) => { updateFilter("rfqId", event.target.value); updateFilter("skuOrItem", event.target.value); }} placeholder="RFQ、SKU 或标题" style={inputStyle} /></Field>
           <Field label="状态"><select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)} style={inputStyle}><option value="全部">全部</option>{statusOptions.map((status) => <option key={status} value={status}>{displayRfqStatus(status)}</option>)}</select></Field>
           <Field label="报价状态"><select value={filters.responseStatus} onChange={(event) => updateFilter("responseStatus", event.target.value as RfqWorkbenchFilters["responseStatus"])} style={inputStyle}>{(["全部", "未报价", "部分报价", "已报价"] as const).map((status) => <option key={status} value={status}>{status}</option>)}</select></Field>
-          <Field label="截止起始"><input value={filters.dueFrom} onChange={(event) => updateFilter("dueFrom", event.target.value)} placeholder="2026-06-01" style={inputStyle} /></Field>
-          <Field label="截止结束"><input value={filters.dueTo} onChange={(event) => updateFilter("dueTo", event.target.value)} placeholder="2026-06-30" style={inputStyle} /></Field>
+          <Field label="截止日期"><input type="date" value={filters.dueTo} onChange={(event) => updateFilter("dueTo", event.target.value)} style={inputStyle} /></Field>
         </div>
+        {moreFilters && <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6"><Field label="来源 PR"><input value={filters.sourceRequest} onChange={(event) => updateFilter("sourceRequest", event.target.value)} style={inputStyle} /></Field><Field label="供应商"><input value={filters.supplier} onChange={(event) => updateFilter("supplier", event.target.value)} style={inputStyle} /></Field><Field label="品类"><input value={filters.category} onChange={(event) => updateFilter("category", event.target.value)} style={inputStyle} /></Field><Field label="采购负责人"><input value={filters.buyer} onChange={(event) => updateFilter("buyer", event.target.value)} style={inputStyle} /></Field><Field label="截止日期起"><input type="date" value={filters.dueFrom} onChange={(event) => updateFilter("dueFrom", event.target.value)} style={inputStyle} /></Field><Field label="截止日期止"><input type="date" value={filters.dueTo} onChange={(event) => updateFilter("dueTo", event.target.value)} style={inputStyle} /></Field></div>}
       </Card>
 
       <Card>
         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
           <div>
-            <h2 className="text-sm font-semibold" style={{ color: A.label }}>寻源 / RFx</h2>
+            <h2 className="text-sm font-semibold" style={{ color: A.label }}>询价与报价</h2>
             <p className="text-[11px] mt-1" style={{ color: A.sub }}>
-              共 {rfqs.length} 条，当前筛选 {filtered.length} 条；RFQ 保持草稿、报价、比价和授标建议的复核链路。
+              共 {rfqs.length} 条，当前筛选 {filtered.length} 条 RFQ。
             </p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs flex items-center gap-1.5" style={{ color: A.gray2 }}><Filter size={13} /> 当前结果</span>
-            <ContextualImportActions entityLabel="RFx" compact />
+            <ContextualImportActions entityLabel="RFQ" compact />
           </div>
         </div>
         <div className={tableScrollClass}>
           <table className={tableMinXlClass}>
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {["RFQ 编号", "标题", "来源 PR", "状态", "采购负责人", "供应商数量", "报价响应数量", "行数", "预计金额", "截止日期", "推荐结果", "下一步", "操作"].map((h) => (
+                {["RFQ / 需求", "来源 PR", "状态", "报价进度", "截止日期", "当前最优", "采购负责人", "操作"].map((h) => (
                   <th key={h} className={thClass} style={{ color: A.gray1 }}>{h}</th>
                 ))}
               </tr>
@@ -819,32 +820,19 @@ export default function PurchasingRFQPage({
                 const awardDraft = buildAwardDraft(r);
                 return (
                   <tr key={r.id}
-                    className="hover:bg-blue-50/40 transition-colors"
+                    className="h-16 hover:bg-blue-50/40 transition-colors"
                     style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className={tdIdClass}><BusinessEntityLink entityType="rfq" entityId={r.id} className={tableLinkClass}>{r.id}</BusinessEntityLink></td>
-                    <td className={`${tdNameClass} max-w-[260px] font-medium`} style={{ color: A.label }}>
-                      <div className="truncate">{r.title}</div>
-                      <div className="fc-caption mt-0.5 truncate" style={{ color: A.gray2 }}>{source.sku} · {source.name}</div>
-                    </td>
+                    <td className={`${tdIdClass} max-w-[260px]`}><BusinessEntityLink entityType="rfq" entityId={r.id} className={tableLinkClass}>{r.id}</BusinessEntityLink><div className="fc-caption mt-1 truncate font-normal" style={{ color: A.gray2 }}>{r.title} · {source.sku || source.name}</div></td>
                     <td className={tdIdClass} style={{ color: A.blue }}>{source.pr}</td>
                     <td className={tdNowrapClass}><Chip label={displayRfqStatus(r.status)} color={style.color} bg={style.bg} /></td>
-                    <td className={tdNowrapClass} style={{ color: A.sub }}>{buyerForRfq(r)}</td>
-                    <td className={tdNumericClass}>{r.suppliers}</td>
-                    <td className={tdNumericClass} style={{ color: Number(r.quoted || 0) < Number(r.suppliers || 0) ? A.orange : A.green }}>{r.quoted}</td>
-                    <td className={tdNumericClass}>{buildRfqLines(r).length}</td>
-                    <td className={tdNumericClass}>{fmt(estimatedAmountForRfq(r))}</td>
+                    <td className={tdNameClass}><div>已回复 {r.quoted} / {r.suppliers}</div><div className="fc-caption" style={{color:A.orange}}>{Math.max(0, r.suppliers-r.quoted)} 家待回复</div></td>
                     <td className={tdNowrapClass} style={{ color: A.label }}>{r.due}</td>
-                    <td className={tdNameClass} style={{ color: A.green }}>{awardDraft.recommendedSupplier}</td>
-                    <td className={tdNameClass} style={{ color: A.blue }}>{nextStepForRfq(r)}</td>
+                    <td className={tdNameClass} style={{ color: A.green }}>{awardDraft.recommendedSupplier}<div className="fc-caption">{fmt(estimatedAmountForRfq(r))}</div></td>
+                    <td className={tdNowrapClass} style={{ color: A.sub }}>{buyerForRfq(r)}</td>
                     <td className={tdActionClass}>
-                      <div className="flex flex-wrap justify-end gap-1">
-                        <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button>
-                        <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>查看报价</button>
-                        <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.blue }}>查看比价</button>
-                        <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.gray1 }}>查看授标建议</button>
-                        <button onClick={() => previewAwardDraft(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#fff8f0", color: A.orange }}>生成授标建议草稿</button>
-                        <button onClick={() => previewPoDraft(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0faf4", color: A.green }}>生成 PO 草稿预览</button>
-                        <button onClick={returnToSourcePr} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.white, color: A.blue, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>返回来源 PR</button>
+                      <div className="flex justify-end gap-1">
+                        <button onClick={() => openDetail(r.id)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看</button>
+                        <details className="relative"><summary className="cursor-pointer list-none px-2 py-1 text-[11px] font-medium rounded-md" style={{background:A.gray6}}>更多</summary><div className="absolute right-0 z-20 mt-1 w-36 rounded-lg border bg-white p-1 shadow-lg">{["查看 RFQ","查看报价","查看比价","查看授标建议"].map(label=><button key={label} onClick={()=>openDetail(r.id)} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">{label}</button>)}<button onClick={returnToSourcePr} className="w-full rounded px-2 py-1.5 text-left text-[11px] hover:bg-slate-50">查看来源 PR</button></div></details>
                       </div>
                     </td>
                   </tr>

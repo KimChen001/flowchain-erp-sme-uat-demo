@@ -48,11 +48,11 @@ const filterLabels: Record<SuggestionFilterKey, string> = {
   finance: "财务",
   data_quality: "数据质量",
   high: "高优先级",
-  draft: "可生成草稿",
-  limited: "数据限制",
+  draft: "可处理",
+  limited: "数据缺口",
 };
 
-const filterOrder: SuggestionFilterKey[] = ["all", "po", "inventory", "supplier", "finance", "data_quality", "high", "draft", "limited"];
+const filterOrder: SuggestionFilterKey[] = ["all", "high", "draft", "limited"];
 
 function priorityStyle(priority = "") {
   return priorityStyles[priority] || priorityStyles.medium;
@@ -389,7 +389,8 @@ export default function AiSuggestionsPage({
 
   const filteredSuggestions = useMemo(() => {
     const suggestions = workbench?.suggestions || [];
-    if (activeFilter === "all") return suggestions;
+    const sorted = [...suggestions].sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.priority] ?? 3) - ({ high: 0, medium: 1, low: 2 }[b.priority] ?? 3));
+    if (activeFilter === "all") return sorted.slice(0, 5);
     if (activeFilter === "high") return suggestions.filter((item) => item.priority === "high");
     if (activeFilter === "draft") return suggestions.filter((item) => Boolean(item.draftPreview));
     if (activeFilter === "limited") return suggestions.filter((item) => item.dataLimitations.length > 0);
@@ -430,8 +431,8 @@ export default function AiSuggestionsPage({
   if (!workbench) {
     return (
       <Card className="p-6" data-testid="ai-suggestions-workbench">
-        <h2 className="fc-section-title" style={{ color: A.label }}>AI 摘要</h2>
-        <div className="mt-3 text-sm" style={{ color: A.red }}>AI 摘要暂不可用，请稍后重试。</div>
+        <h2 className="fc-section-title" style={{ color: A.label }}>AI 重点</h2>
+        <div className="mt-3 text-sm" style={{ color: A.red }}>AI 重点暂不可用，请稍后重试。</div>
         <div className="mt-4">
           <RecoveryActions actions={[{ key: "reload", label: "重新加载", onClick: () => window.location.reload(), kind: "list" }]} />
         </div>
@@ -445,15 +446,9 @@ export default function AiSuggestionsPage({
     <div className="space-y-4" data-testid="ai-suggestions-workbench">
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="fc-section-title" style={{ color: A.label }}>AI 摘要</h2>
-            <Chip label={workbench.dataScopeLabel} color={A.green} bg="#ecfdf5" />
-            {error && <Chip label="当前工作区数据" color={A.orange} bg="#fff7ed" />}
-          </div>
-          <div className="mt-2 inline-flex max-w-4xl items-start gap-2 rounded-md px-3 py-2 text-[13px] leading-5" style={{ background: "#eef4ff", color: A.blue }}>
-            <Info size={15} className="mt-0.5 shrink-0" />
-            <span>AI 仅生成解释、证据整理与行动草稿；所有动作需人工复核，不形成审批、下单、资金处理或外发动作。</span>
-          </div>
+          <h2 className="fc-section-title" style={{ color: A.label }}>AI 重点</h2>
+          <div className="mt-2 text-[15px] font-semibold" style={{color:A.label}}>今天建议先处理 {Math.min(5, workbench.suggestions.length)} 件事</div>
+          <div className="mt-1 text-[13px]" style={{color:A.sub}}>其中 {workbench.summary.highPriorityCount} 项会阻断后续流程</div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" onClick={onOpenAi} className={scrollButtonClass(true)} style={{ background: A.blue }}>问 AI 继续追问</button>
@@ -462,11 +457,11 @@ export default function AiSuggestionsPage({
         </div>
       </section>
 
-      <SummaryCards workbench={workbench} />
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3">{[{label:"高优先级",value:workbench.summary.highPriorityCount},{label:"待确认动作",value:workbench.summary.draftAvailableCount},{label:"数据缺口",value:workbench.summary.dataLimitedCount}].map(item=><Card key={item.label} className="p-3"><div className="text-[11px]" style={{color:A.sub}}>{item.label}</div><div className="mt-1 text-2xl font-bold tabular-nums">{item.value}</div></Card>)}</section>
 
       <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(460px,0.92fr)_minmax(620px,1.08fr)]" id="ai-suggestions-list">
         <Card className="rounded-[20px] p-4">
-          <h2 className={typography.sectionTitle} style={{ color: A.label }}>AI 摘要列表</h2>
+          <h2 className={typography.sectionTitle} style={{ color: A.label }}>重点建议</h2>
           <div className="mt-3 flex flex-wrap gap-2" data-testid="ai-suggestion-filters">
             {filterOrder.map((key) => {
               const active = activeFilter === key;
@@ -513,10 +508,7 @@ export default function AiSuggestionsPage({
                       </div>
                       <div className="mt-1 truncate text-[12px]" style={{ color: A.gray1 }}>证据：{item.keyEvidence[0] || "待人工复核"}</div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      {item.draftPreview && <Chip label="草稿预览" color={A.blue} bg="#eef4ff" />}
-                      {item.dataLimitations.length > 0 && <Chip label="数据限制" color={A.orange} bg="#fff7ed" />}
-                    </div>
+                    <div />
                     <ArrowRight size={15} style={{ color: A.gray2 }} />
                   </div>
                 </button>
@@ -557,7 +549,6 @@ export default function AiSuggestionsPage({
                   { label: "业务影响", icon: ShieldCheck, body: selected.businessImpact, bg: "#fff7ed", color: A.orange },
                   { label: "建议动作", icon: ArrowRight, body: selected.suggestedAction, bg: "#f5f3ff", color: A.purple },
                   { label: "数据限制", icon: Info, body: selected.dataLimitations.length ? selected.dataLimitations.slice(0, 2).map((item) => `${item.label}：${item.description || "需要人工确认"}`) : ["当前无额外限制"], bg: A.gray6, color: A.gray1 },
-                  { label: "边界说明", icon: ShieldCheck, body: selected.boundaryLabels.slice(0, 3), bg: "#eef4ff", color: A.blue },
                 ].map((row, index) => {
                   const Icon = row.icon;
                   return (

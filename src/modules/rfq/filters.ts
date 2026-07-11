@@ -10,6 +10,7 @@ export type RfqWorkbenchFilters = {
   dueFrom: string;
   dueTo: string;
   sourceRequest: string;
+  buyer: string;
 };
 
 export const defaultRfqWorkbenchFilters: RfqWorkbenchFilters = {
@@ -22,6 +23,7 @@ export const defaultRfqWorkbenchFilters: RfqWorkbenchFilters = {
   dueFrom: "",
   dueTo: "",
   sourceRequest: "",
+  buyer: "",
 };
 
 function normalizedText(value: unknown) {

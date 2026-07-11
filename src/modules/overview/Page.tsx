@@ -614,7 +614,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
 
   return (
     <div className="space-y-4">
-      <Card className="p-5">
+      {false && <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -646,19 +646,19 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
             查看 AI 摘要 <ArrowRight size={14} />
           </button>
         </div>
-      </Card>
+      </Card>}
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      {false && <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {todaySummaryCards.map((kpi) => (
           <KpiCard key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} icon={kpi.icon} color={kpi.color} />
         ))}
-      </div>
+      </div>}
 
-      <div className="grid grid-cols-5 gap-4">
-        <Card className="col-span-3 p-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <Card className="p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold" style={{ color: A.label }}>今日优先处理队列</h2>
+              <h2 className="text-sm font-semibold" style={{ color: A.label }}>今日需处理</h2>
               <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>按交付、现金和供应连续性影响排序。</p>
             </div>
             <button onClick={() => setShowAllActions((value) => !value)}
@@ -680,11 +680,6 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
                     <div className="text-[11px] mt-1 truncate" style={{ color: A.sub }}>{row.object} · {row.evidence}</div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => setSelectedEvidence(row.detail)}
-                      className="text-[11px] px-2.5 py-1.5 rounded-md font-medium"
-                      style={{ background: "#eef4ff", color: A.blue }}>
-                      查看证据
-                    </button>
                     <button onClick={row.onClick || (() => onNavigate(row.moduleId))}
                       className="text-[11px] px-2.5 py-1.5 rounded-md font-medium text-white"
                       style={{ background: A.blue }}>
@@ -697,7 +692,16 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
           </div>
         </Card>
 
-        <Card className="col-span-2 p-4">
+        <Card className="p-4">
+          <h2 className="text-sm font-semibold" style={{ color: A.label }}>今日状态</h2>
+          <div className="mt-3 grid gap-3">{[
+            { label: "待我处理", value: actionRows.length, color: A.blue },
+            { label: "风险异常", value: risks.length, color: A.orange },
+            { label: "今日变化", value: recentDocuments.length, color: A.green },
+          ].map((item) => <div key={item.label} className="rounded-xl border p-3" style={{borderColor:A.border}}><div className="text-[11px]" style={{color:A.sub}}>{item.label}</div><div className="mt-1 text-2xl font-bold tabular-nums" style={{color:item.color}}>{item.value}</div></div>)}</div>
+          <button onClick={() => onNavigate("overview:ai")} className="mt-3 w-full rounded-md px-3 py-2 text-[12px] font-semibold" style={{background:"#eef4ff",color:A.blue}}>让 AI 解释今日重点</button>
+        </Card>
+        {false && <Card className="col-span-2 p-4">
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>进入工作台</h2>
             <p className="text-[11px] mt-0.5" style={{ color: A.sub }}>先进入模块，详细表格在模块内展开。</p>
@@ -784,10 +788,10 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
               </div>
             </div>
           </div>
-        </Card>
+        </Card>}
       </div>
 
-      <Card className="p-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2"><Card className="p-4"><h2 className="text-sm font-semibold" style={{color:A.label}}>业务概况</h2><div className="mt-3 grid grid-cols-2 gap-3">{riskKpis.map((item)=><div key={item.label} className="rounded-lg border p-3" style={{borderColor:A.border}}><div className="text-[11px]" style={{color:A.sub}}>{item.label}</div><div className="mt-1 text-xl font-bold">{item.value}</div></div>)}</div></Card><Card className="p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold" style={{ color: A.label }}>最近单据</h2>
@@ -799,7 +803,7 @@ export default function OverviewPanel({ initialView = "", onNavigate, onPrepareR
         <div className="mt-3">
           <TodayCockpitRecentDocuments documents={recentDocuments} onNavigate={onNavigate} />
         </div>
-      </Card>
+      </Card></div>
 
       {renderEvidenceModal()}
     </div>
