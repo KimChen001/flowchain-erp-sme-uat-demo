@@ -27,11 +27,9 @@ import { BusinessEntityLink } from "../../components/business/BusinessEntityLink
 import { WorkbenchMoreMenu } from "../../components/ui/WorkbenchMoreMenu";
 import {
   CompactKpiStrip,
-  DataLimitationsPanel,
   DetailFieldGrid,
   DetailSection,
   EvidenceSummaryPanel,
-  ReviewActionPanel,
 } from "../../components/business/BusinessObjectDetail";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
@@ -52,10 +50,6 @@ import {
 } from "../../components/ui/workbenchTable";
 
 type PurchaseRequestViewMode = "list" | "detail";
-
-const RFQ_DRAFT_PREVIEW_ROUTE = "/api/procurement/rfq-drafts/from-pr";
-const PR_TO_PO_PREVIEW_FLOW_COPY = "PR → RFQ → Supplier Response → Award Recommendation → PO Draft";
-const PR_PREVIEW_BOUNDARY_COPY = "no external RFQ send, no supplier award, no PO issue";
 
 function prTimeline(pr: PurchaseRequest): TimelineStep[] {
   const rejected = pr.status === "已驳回" || pr.status === "已取消";
@@ -213,16 +207,6 @@ function buildPrLines(pr: PurchaseRequest): PrLineView[] {
   ];
 }
 
-function labelDataLimitation(item: string) {
-  const map: Record<string, string> = {
-    workspace_only: "当前仅基于工作区内 PR、SKU、库存和采购记录判断",
-    supplier_quote_partial: "供应商报价尚未完整读取，是否转 RFQ 需人工复核",
-    receiving_invoice_partial: "当前未读取到完整收货或发票记录",
-    attachment_placeholder: "附件和 URL 仅为占位，不执行真实上传或外发",
-  };
-  return map[item] || item;
-}
-
 function NewPRModal({ open, onClose, onCreate }: {
   open: boolean;
   onClose: () => void;
@@ -357,8 +341,6 @@ export default function PurchaseRequestsPage({
   const [selectedId, setSelectedId] = useState("");
   const [viewMode, setViewMode] = useState<PurchaseRequestViewMode>("list");
   const [supplierRecommendationResult, setSupplierRecommendationResult] = useState<SupplierRecommendationResult | null>(null);
-  const [newOpen, setNewOpen] = useState(false);
-  const [creatingRfq, setCreatingRfq] = useState(false);
   const [moreFilters, setMoreFilters] = useState(false);
 
   useEffect(() => {
@@ -454,44 +436,6 @@ export default function PurchaseRequestsPage({
     return () => onActiveContextChange?.(null);
   }, [viewMode, selected?.pr, selected?.sourceName, onActiveContextChange]);
 
-  async function updateRequestStatus(pr: string, status: PurchaseRequestStatus) {
-    await Promise.resolve();
-    const current = requests.find((item) => item.pr === pr);
-    return { ...(current || selected), status } as PurchaseRequest;
-  }
-
-  async function approveRequest(pr: string) {
-    try {
-      await updateRequestStatus(pr, "已批准");
-      toast.success(`${pr} 已生成批准预览`, { description: "仅供负责人复核，不写入审批状态" });
-    } catch (error) {
-      toast.error("批准预览失败", { description: error instanceof Error ? error.message : "请检查当前申请" });
-    }
-  }
-
-  async function rejectRequest(pr: string) {
-    try {
-      await updateRequestStatus(pr, "已驳回");
-      toast.error(`${pr} 拒绝预览需要填写原因`, { description: "请在复核动作区填写原因后生成预览" });
-    } catch (error) {
-      toast.error("拒绝预览失败", { description: error instanceof Error ? error.message : "请检查当前申请" });
-    }
-  }
-
-  async function convertRequest(pr: string) {
-    try {
-      await Promise.resolve();
-      toast.success(`${pr} 已生成 PO 草稿预览`, { description: "未创建正式 PO、未下发供应商、未写入业务数据" });
-    } catch (error) {
-      toast.error("PO 草稿预览失败", { description: error instanceof Error ? error.message : "请先复核申请明细" });
-    }
-  }
-
-  async function createManualRequest(payload: Partial<PurchaseRequest>) {
-    await Promise.resolve(payload);
-    return { ...(payload as PurchaseRequest), pr: "PR-DRAFT-PREVIEW", status: "草稿" as PurchaseRequestStatus };
-  }
-
   function updateFilter<K extends keyof PurchaseRequestWorkbenchFilters>(key: K, value: PurchaseRequestWorkbenchFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
     const next = new URLSearchParams(window.location.search);
@@ -510,19 +454,6 @@ export default function PurchaseRequestsPage({
 
   function returnToList() {
     setViewMode("list");
-  }
-
-  async function createRfqFromSelected() {
-    if (!selected) return;
-    setCreatingRfq(true);
-    try {
-      await Promise.resolve([RFQ_DRAFT_PREVIEW_ROUTE, PR_TO_PO_PREVIEW_FLOW_COPY, PR_PREVIEW_BOUNDARY_COPY]);
-      toast.success(`${linkedRfqForPr(selected)} 已生成 RFQ 草稿预览`, { description: "未发送 RFQ、未邀请供应商、未授标、未创建 PO" });
-    } catch (error) {
-      toast.error("RFQ 草稿预览失败", { description: error instanceof Error ? error.message : "请复核供应商与需求日期" });
-    } finally {
-      setCreatingRfq(false);
-    }
   }
 
   const selectedPrLines = selected ? buildPrLines(selected) : [];

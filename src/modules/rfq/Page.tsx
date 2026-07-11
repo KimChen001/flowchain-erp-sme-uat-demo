@@ -19,11 +19,9 @@ import {
   type RfqWorkbenchFilters,
 } from "./filters";
 import {
-  DataLimitationsPanel,
   DetailFieldGrid,
   DetailSection,
   EvidenceSummaryPanel,
-  ReviewActionPanel,
 } from "../../components/business/BusinessObjectDetail";
 import {
   DocumentActionBar,
@@ -118,11 +116,6 @@ type AwardDraftView = {
   quoteSupplement: string;
   canPreviewPo: string;
 };
-
-const AWARD_RECOMMENDATION_DRAFT_ROUTE = "/api/procurement/award-recommendations/draft";
-const AWARD_PREVIEW_SOURCE_COPY = "Preview Award Recommendation";
-const PO_DRAFT_PREVIEW_SOURCE_COPY = "PO Draft Preview";
-const RFQ_PREVIEW_BOUNDARY_SOURCE_COPY = "no external send, no award mutation, no PO issue";
 
 const SOURCE_PR_BY_RFQ: Record<string, { pr: string; sku: string; name: string; quantity: number; unit: string; warehouse: string; buyer: string; created: string }> = {
   "RFQ-26-0042": { pr: "PR-2026-2408", sku: "SKU-00287", name: "铝合金型材 6063", quantity: 12000, unit: "kg", warehouse: "华东原料仓", buyer: "王志强", created: "2026-05-28" },
@@ -432,28 +425,6 @@ export default function PurchasingRFQPage({
     })));
     toast.success("导出文件已生成");
   };
-
-  async function previewAwardDraft(id: string) {
-    try {
-      await Promise.resolve([AWARD_RECOMMENDATION_DRAFT_ROUTE, AWARD_PREVIEW_SOURCE_COPY, RFQ_PREVIEW_BOUNDARY_SOURCE_COPY, id]);
-      toast.success(`${id} 已生成授标建议草稿`, { description: "仅供内部复核，不形成授标结果，不触达供应商。" });
-    } catch (error) {
-      toast.error("授标建议草稿失败", { description: error instanceof Error ? error.message : "请先复核报价比较" });
-    }
-  }
-
-  function previewPoDraft(id: string) {
-    Promise.resolve([PO_DRAFT_PREVIEW_SOURCE_COPY, RFQ_PREVIEW_BOUNDARY_SOURCE_COPY, id]);
-    toast.success(`${id} 已生成 PO 草稿预览`, { description: "仅供复核，不创建采购订单，不触达供应商。" });
-  }
-
-  function requestQuoteCompletion(id: string) {
-    toast.success(`${id} 已生成补充报价要求预览`, { description: "仅供采购负责人复核，不触达供应商。" });
-  }
-
-  function markManualReview(id: string) {
-    toast.success(`${id} 已标记为需人工复核预览`, { description: "不会修改供应商资料或采购订单。" });
-  }
 
   function updateFilter<K extends keyof RfqWorkbenchFilters>(key: K, value: RfqWorkbenchFilters[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
