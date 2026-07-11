@@ -144,7 +144,7 @@ function sourceForRfq(rfq: RfqRecord) {
 }
 
 function buyerForRfq(rfq: RfqRecord) {
-  return sourceForRfq(rfq).buyer;
+  return rfq.buyer || sourceForRfq(rfq).buyer;
 }
 
 function linkedPoForRfq(rfq: RfqRecord) {
@@ -154,7 +154,7 @@ function linkedPoForRfq(rfq: RfqRecord) {
 function displayRfqStatus(status: string) {
   const map: Record<string, string> = {
     草稿: "草稿",
-    待发送预览: "待发送预览",
+    待发送预览: "待发送",
     进行中: "等待报价",
     等待报价: "等待报价",
     比价中: "比价中",
@@ -178,11 +178,11 @@ function rfqStatusStyle(status: string) {
 
 function nextStepForRfq(rfq: RfqRecord) {
   const display = displayRfqStatus(rfq.status);
-  if (display === "草稿" || display === "待发送预览") return "复核 RFQ 明细";
-  if (display === "等待报价") return Number(rfq.quoted || 0) >= Number(rfq.suppliers || 0) ? "进入报价比较" : "要求补充报价预览";
+  if (display === "草稿" || display === "待发送") return "复核 RFQ 明细";
+  if (display === "等待报价") return Number(rfq.quoted || 0) >= Number(rfq.suppliers || 0) ? "进入报价比较" : "跟进未回复供应商";
   if (display === "报价已收到" || display === "比价中") return "生成授标建议草稿";
   if (display === "授标建议待复核") return "复核授标建议";
-  if (display === "已生成 PO 草稿") return "跟踪 PO 草稿";
+  if (display === "已生成 PO 草稿") return "跟踪采购订单";
   if (display === "已取消") return "查看取消原因";
   return "需人工复核";
 }
@@ -357,7 +357,8 @@ export default function PurchasingRFQPage({
   onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
-  const [rfqs, setRfqs] = useState<RfqRecord[]>(RFQS);
+  const enrichBuyer = (rfq: RfqRecord): RfqRecord => ({ ...rfq, buyer: rfq.buyer || (SOURCE_PR_BY_RFQ[rfq.id] || SOURCE_PR_BY_RFQ["RFQ-26-0046"]).buyer });
+  const [rfqs, setRfqs] = useState<RfqRecord[]>(() => RFQS.map(enrichBuyer));
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(RFQS[0]?.id ?? "");
   const [viewMode, setViewMode] = useState<RfqViewMode>("list");
@@ -370,7 +371,7 @@ export default function PurchasingRFQPage({
     apiJson<RfqRecord[]>("/api/rfqs")
       .then((data) => {
         if (!alive) return;
-        setRfqs(data);
+        setRfqs(data.map(enrichBuyer));
         setSelectedId((current) => data.some((item) => item.id === current) ? current : data[0]?.id ?? "");
       })
       .catch(() => toast.error("RFQ 服务暂不可用", { description: "已显示当前询价快照" }))
@@ -427,9 +428,10 @@ export default function PurchasingRFQPage({
   };
 
   function updateFilter<K extends keyof RfqWorkbenchFilters>(key: K, value: RfqWorkbenchFilters[K]) {
-    setFilters((current) => ({ ...current, [key]: value }));
-    const next = new URLSearchParams(window.location.search);
-    if (value === defaultRfqWorkbenchFilters[key]) next.delete(key); else next.set(key, String(value));
+    const updated = { ...filters, [key]: value };
+    setFilters(updated);
+    const next = new URLSearchParams();
+    Object.entries(updated).forEach(([filterKey, filterValue]) => { if (filterValue !== defaultRfqWorkbenchFilters[filterKey as keyof RfqWorkbenchFilters]) next.set(filterKey, String(filterValue)); });
     setSearchParams(next, { replace: true });
   }
 

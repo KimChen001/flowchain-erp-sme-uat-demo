@@ -84,7 +84,7 @@ function matchesSkuOrItem(rfq: RfqRecord, query: string) {
 }
 
 export function rfqMatchesWorkbenchFilters(rfq: RfqRecord, filters: RfqWorkbenchFilters) {
-  if (filters.query && ![rfq.id, rfq.title, rfq.sourceSku, rfq.sourceName, rfq.sourceRequest, rfq.bestSupplier, ...(rfq.invitedSuppliers || [])].some((value) => containsText(value, filters.query))) return false;
+  if (filters.query && ![rfq.id, rfq.title, rfq.sourceSku, rfq.sourceName, rfq.sourceRequest, rfq.sourcePrId, rfq.buyer, rfq.bestSupplier, ...(rfq.invitedSuppliers || [])].some((value) => containsText(value, filters.query))) return false;
   if (!filters.query && !containsText(rfq.id, filters.rfqId)) return false;
   if (!matchesSupplier(rfq, filters.supplier)) return false;
   if (!filters.query && !matchesSkuOrItem(rfq, filters.skuOrItem)) return false;
@@ -93,6 +93,7 @@ export function rfqMatchesWorkbenchFilters(rfq: RfqRecord, filters: RfqWorkbench
   if (filters.responseStatus !== "全部" && rfqResponseStatus(rfq) !== filters.responseStatus) return false;
   if (!dateInRange(rfq.due, filters.dueFrom, filters.dueTo)) return false;
   if (!containsText(rfq.sourceRequest, filters.sourceRequest)) return false;
+  if (!containsText(rfq.buyer, filters.buyer)) return false;
   return true;
 }
 

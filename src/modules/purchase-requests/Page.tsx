@@ -126,7 +126,7 @@ function displayPrStatus(status: string) {
     待审批: "待复核",
     已批准: "已通过",
     已驳回: "已拒绝",
-    已转PO: "已转 PO 草稿",
+    已转PO: "已创建采购订单",
     已取消: "已取消",
   };
   return map[status] || status || "待确认";
@@ -144,14 +144,14 @@ function linkedPoForPr(pr: PurchaseRequest) {
 }
 
 function linkedRfqForPr(pr: PurchaseRequest) {
-  return RFQS.find((rfq) => rfq.title.includes(pr.sourceSku) || rfq.bestSupplier === pr.supplier)?.id || `RFQ-DRAFT-${pr.pr.slice(-4)}`;
+  return (RFQS as RfqRecord[]).find((rfq) => (rfq.sourceRequest || rfq.sourcePrId) === pr.pr)?.id || "";
 }
 
 function nextStepForPr(pr: PurchaseRequest) {
-  if (pr.status === "草稿") return "提交复核预览";
+  if (pr.status === "草稿") return "提交复核";
   if (pr.status === "待审批") return "等待负责人复核";
   if (pr.status === "已批准") return pr.source === "inventory" ? "待创建采购订单" : "待发起询价";
-  if (pr.status === "已转PO") return "跟踪关联 PO 草稿";
+  if (pr.status === "已转PO") return "跟踪关联采购订单";
   if (pr.status === "已驳回") return "查看拒绝原因";
   if (pr.status === "已取消") return "查看取消原因";
   return "需人工复核";
@@ -199,15 +199,15 @@ function buildPrLines(pr: PurchaseRequest): PrLineView[] {
       sourceDemand: pr.source === "inventory" ? "来源于库存缺口" : purchaseRequestSourceMeta(pr.source).label,
       sourceShortage: pr.forecastBasis?.peakGap ? `缺口 ${pr.forecastBasis.peakGap}` : "安全库存低于再订货点",
       customerOrder: pr.source === "sales-risk" ? pr.reason.match(/SO-[\w-]+/)?.[0] || "—" : "—",
-      linkedRfqLine: linkedRfq && !linkedRfq.startsWith("RFQ-DRAFT") ? `${linkedRfq}-L1` : "—",
+      linkedRfqLine: linkedRfq ? `${linkedRfq}-L1` : "—",
       linkedPoLine: linkedPo ? `${linkedPo}-L1` : "—",
-      status: pr.status === "已转PO" ? "已转 PO 草稿" : pr.status === "已批准" ? "已转 RFQ 草稿" : "仍待复核",
+      status: pr.status === "已转PO" ? "已创建采购订单" : pr.status === "已批准" ? "待发起询价" : "仍待复核",
       risk: pr.priority === "高" ? "高优先级，需复核需求日期" : "需确认供应商与价格",
     },
   ];
 }
 
-function NewPRModal({ open, onClose, onCreate }: {
+function UnusedPurchaseRequestForm({ open, onClose, onCreate }: {
   open: boolean;
   onClose: () => void;
   onCreate: (request: Partial<PurchaseRequest>) => Promise<PurchaseRequest>;
@@ -437,9 +437,10 @@ export default function PurchaseRequestsPage({
   }, [viewMode, selected?.pr, selected?.sourceName, onActiveContextChange]);
 
   function updateFilter<K extends keyof PurchaseRequestWorkbenchFilters>(key: K, value: PurchaseRequestWorkbenchFilters[K]) {
-    setFilters((current) => ({ ...current, [key]: value }));
-    const next = new URLSearchParams(window.location.search);
-    if (value === defaultPurchaseRequestWorkbenchFilters[key]) next.delete(key); else next.set(key, String(value));
+    const updated = { ...filters, [key]: value };
+    setFilters(updated);
+    const next = new URLSearchParams();
+    Object.entries(updated).forEach(([filterKey, filterValue]) => { if (filterValue !== defaultPurchaseRequestWorkbenchFilters[filterKey as keyof PurchaseRequestWorkbenchFilters]) next.set(filterKey, String(filterValue)); });
     setSearchParams(next, { replace: true });
   }
 

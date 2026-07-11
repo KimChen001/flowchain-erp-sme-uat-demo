@@ -52,6 +52,20 @@ test("RFQ unified query, empty span and detail copy stay aligned", async ({ page
   await expect(page.locator("tbody td[colspan='8']")).toHaveCount(1);
 });
 
+test("RFQ buyer filter participates in AND filtering and restores from URL", async ({ page }) => {
+  await page.goto("/app/procurement/rfq");
+  const firstRow = page.locator("tbody tr").first();
+  const cells = firstRow.locator("td");
+  const buyer = (await cells.nth(6).innerText()).trim();
+  const rfq = (await cells.nth(0).innerText()).match(/RFQ-[A-Z0-9-]+/)?.[0];
+  await page.goto(`/app/procurement/rfq?buyer=${encodeURIComponent(buyer)}&query=${encodeURIComponent(rfq!)}`);
+  await expect(firstRow).toContainText(buyer);
+  await expect(page).toHaveURL(new RegExp(`buyer=${encodeURIComponent(buyer)}`));
+  await page.reload();
+  await page.getByRole("button", { name: "更多筛选" }).click();
+  await expect(page.locator(`input[value="${buyer}"]`)).toHaveCount(1);
+});
+
 test("AI focus evidence and impact are collapsed by default", async ({ page }) => {
   await page.goto("/app/overview/ai");
   await expect(page.getByText("结论", { exact: true })).toBeVisible();

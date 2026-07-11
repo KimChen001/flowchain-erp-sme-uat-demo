@@ -91,6 +91,8 @@ export type PurchaseOrder = {
   paid: boolean;
   source?: string;
   sourceRequest?: string;
+  sourcePrId?: string;
+  buyer?: string;
   sourceRfq?: string;
   sourceSku?: string;
   sourceName?: string;
@@ -258,6 +260,8 @@ export type RfqRecord = {
   due: string;
   status: string;
   sourceRequest?: string;
+  sourcePrId?: string;
+  buyer?: string;
   sourceSku?: string;
   sourceName?: string;
   quantity?: number;
