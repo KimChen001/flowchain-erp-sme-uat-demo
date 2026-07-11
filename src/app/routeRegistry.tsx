@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 
 export type AppPageType = "module-overview" | "list" | "detail" | "create" | "edit" | "analysis" | "settings";
+export type AppEntryBehavior = "redirect-to-default-child" | "landing";
 
 export type AppRouteDefinition = {
   id: string;
@@ -15,6 +16,7 @@ export type AppRouteDefinition = {
   description?: string;
   parentId?: string;
   defaultChildId?: string;
+  entryBehavior?: AppEntryBehavior;
   icon?: React.ElementType;
   showInSidebar?: boolean;
   showInModuleNav?: boolean;
@@ -31,7 +33,7 @@ export type AppRouteDefinition = {
   order: number;
 };
 
-const module = (definition: Omit<AppRouteDefinition, "showInSidebar" | "showInModuleNav" | "showInBreadcrumb">): AppRouteDefinition => ({
+const module = (definition: Omit<AppRouteDefinition, "showInSidebar" | "showInModuleNav" | "showInBreadcrumb"> & { entryBehavior: AppEntryBehavior }): AppRouteDefinition => ({
   ...definition, showInSidebar: true, showInModuleNav: false, showInBreadcrumb: true, pageType: definition.pageType || "module-overview",
 });
 const page = (definition: Omit<AppRouteDefinition, "showInSidebar" | "showInModuleNav" | "showInBreadcrumb">): AppRouteDefinition => ({
@@ -39,11 +41,11 @@ const page = (definition: Omit<AppRouteDefinition, "showInSidebar" | "showInModu
 });
 
 export const appRouteRegistry: AppRouteDefinition[] = [
-  module({ id: "overview", path: "/app/overview", moduleId: "overview", moduleLabel: "首页", label: "今日待办", description: "查看今天需要关注的经营事项。", icon: BarChart2, defaultChildId: "overview", group: "主导航", order: 10 }),
+  module({ id: "overview", path: "/app/overview", moduleId: "overview", moduleLabel: "首页", label: "今日待办", description: "查看今天需要关注的经营事项。", icon: BarChart2, defaultChildId: "overview", entryBehavior: "landing", group: "主导航", order: 10 }),
   page({ id: "overview:risks", path: "/app/overview/risks", moduleId: "overview", moduleLabel: "首页", label: "经营预警", description: "查看跨模块经营风险。", parentId: "overview", pageType: "analysis", viewId: "risks", order: 11 }),
   page({ id: "overview:ai", path: "/app/overview/ai", moduleId: "overview", moduleLabel: "首页", label: "AI 摘要", description: "查看基于业务数据的辅助摘要。", parentId: "overview", pageType: "analysis", viewId: "ai", order: 12 }),
 
-  module({ id: "master-data", path: "/app/master-data", moduleId: "master-data", moduleLabel: "基础资料", label: "基础资料总览", description: "统一维护商品、客户、供应商、仓库库位、税码、付款条款与打印模板。", icon: Database, defaultChildId: "master-data:items", group: "主导航", order: 20 }),
+  module({ id: "master-data", path: "/app/master-data", moduleId: "master-data", moduleLabel: "基础资料", label: "基础资料总览", description: "统一维护商品、客户、供应商、仓库库位、税码、付款条款与打印模板。", icon: Database, defaultChildId: "master-data:items", entryBehavior: "redirect-to-default-child", group: "主导航", order: 20 }),
   page({ id: "master-data:items", path: "/app/master-data/items", moduleId: "master-data", moduleLabel: "基础资料", label: "商品资料 / 物料资料", description: "维护商品、SKU 和物料属性。", parentId: "master-data", pageType: "list", viewId: "items", order: 21 }),
   page({ id: "master-data:suppliers", path: "/app/master-data/suppliers", moduleId: "master-data", moduleLabel: "基础资料", label: "供应商", description: "维护供应商基本资料、认证和绩效摘要。", parentId: "master-data", pageType: "list", panelId: "srm", viewId: "master", legacyIds: ["srm", "srm:master"], order: 22 }),
   page({ id: "master-data:customers", path: "/app/master-data/customers", moduleId: "master-data", moduleLabel: "基础资料", label: "客户", description: "维护客户联系人、信用和付款条款。", parentId: "master-data", pageType: "list", viewId: "customers", order: 23 }),
@@ -56,7 +58,7 @@ export const appRouteRegistry: AppRouteDefinition[] = [
   { id: "master-data:item-detail", path: "/app/master-data/items/:id", moduleId: "master-data", moduleLabel: "基础资料", label: "物料详情", parentId: "master-data:items", pageType: "detail", currentActiveMenuId: "master-data:items", entityType: "item", entityIdParam: "id", returnListRouteId: "master-data:items", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 28.2 },
   { id: "master-data:customer-detail", path: "/app/master-data/customers/:id", moduleId: "master-data", moduleLabel: "基础资料", label: "客户详情", parentId: "master-data:customers", pageType: "detail", currentActiveMenuId: "master-data:customers", entityType: "customer", entityIdParam: "id", returnListRouteId: "master-data:customers", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 28.3 },
 
-  module({ id: "procurement", path: "/app/procurement", moduleId: "procurement", moduleLabel: "采购管理", label: "采购管理", description: "管理采购订单、收货、退货、申请与询价。", icon: Handshake, defaultChildId: "procurement:orders", group: "主导航", order: 30 }),
+  module({ id: "procurement", path: "/app/procurement", moduleId: "procurement", moduleLabel: "采购管理", label: "采购管理", description: "管理采购订单、收货、退货、申请与询价。", icon: Handshake, defaultChildId: "procurement:orders", entryBehavior: "redirect-to-default-child", group: "主导航", order: 30 }),
   page({ id: "procurement:orders", path: "/app/procurement/orders", moduleId: "procurement", moduleLabel: "采购管理", label: "采购订单", description: "查看采购订单及履约状态。", parentId: "procurement", pageType: "list", viewId: "orders", legacyIds: ["purchasing"], order: 31 }),
   page({ id: "procurement:receiving", path: "/app/procurement/receiving", moduleId: "procurement", moduleLabel: "采购管理", label: "采购收货单 / 入库单", description: "管理采购到货、质检与入库记录。", parentId: "procurement", pageType: "list", viewId: "receiving", legacyIds: ["receiving"], order: 32 }),
   { id: "procurement:receiving:new", path: "/app/procurement/receiving/new", moduleId: "procurement", moduleLabel: "采购管理", label: "新建收货单", description: "创建采购收货草稿。", parentId: "procurement:receiving", pageType: "create", currentActiveMenuId: "procurement:receiving", panelId: "procurement", viewId: "receiving-new", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 32.1 },
@@ -70,7 +72,7 @@ export const appRouteRegistry: AppRouteDefinition[] = [
   { id: "procurement:order-detail", path: "/app/procurement/orders/:id", moduleId: "procurement", moduleLabel: "采购管理", label: "采购订单详情", parentId: "procurement:orders", pageType: "detail", currentActiveMenuId: "procurement:orders", entityType: "purchase_order", entityIdParam: "id", returnListRouteId: "procurement:orders", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 36.3 },
   { id: "procurement:receiving-detail", path: "/app/procurement/receiving/:id", moduleId: "procurement", moduleLabel: "采购管理", label: "收货单详情", parentId: "procurement:receiving", pageType: "detail", currentActiveMenuId: "procurement:receiving", entityType: "receiving_doc", entityIdParam: "id", returnListRouteId: "procurement:receiving", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 36.4 },
 
-  module({ id: "sales", path: "/app/sales", moduleId: "sales", moduleLabel: "销售管理", label: "销售订单", description: "管理销售订单和客户履约。", icon: ClipboardList, defaultChildId: "sales:orders", viewId: "orders", group: "主导航", order: 40 }),
+  module({ id: "sales", path: "/app/sales", moduleId: "sales", moduleLabel: "销售管理", label: "销售订单", description: "管理销售订单和客户履约。", icon: ClipboardList, defaultChildId: "sales:orders", entryBehavior: "redirect-to-default-child", group: "主导航", order: 40 }),
   page({ id: "sales:orders", path: "/app/sales/orders", moduleId: "sales", moduleLabel: "销售管理", label: "销售订单", description: "管理客户订单、数量和承诺日期。", parentId: "sales", pageType: "list", viewId: "orders", order: 41 }),
   page({ id: "sales:delivery", path: "/app/sales/deliveries", moduleId: "sales", moduleLabel: "销售管理", label: "销售出库单 / 发货单", description: "管理拣货、出库和物流发运。", parentId: "sales", pageType: "list", viewId: "delivery", order: 42 }),
   { id: "sales:delivery:new", path: "/app/sales/deliveries/new", moduleId: "sales", moduleLabel: "销售管理", label: "新建发货单", description: "创建销售发货草稿。", parentId: "sales:delivery", pageType: "create", currentActiveMenuId: "sales:delivery", viewId: "delivery-new", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 42.1 },
@@ -85,7 +87,7 @@ export const appRouteRegistry: AppRouteDefinition[] = [
   { id: "sales:delivery-detail", path: "/app/sales/deliveries/:id", moduleId: "sales", moduleLabel: "销售管理", label: "发货单详情", parentId: "sales:delivery", pageType: "detail", currentActiveMenuId: "sales:delivery", entityType: "delivery_note", entityIdParam: "id", returnListRouteId: "sales:delivery", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 46.2 },
   { id: "sales:receipt-detail", path: "/app/sales/receipts/:id", moduleId: "sales", moduleLabel: "销售管理", label: "签收单详情", parentId: "sales:receipts", pageType: "detail", currentActiveMenuId: "sales:receipts", entityType: "sign_receipt", entityIdParam: "id", returnListRouteId: "sales:receipts", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 46.3 },
 
-  module({ id: "inventory", path: "/app/inventory", moduleId: "inventory", moduleLabel: "库存管理", label: "库存查询", description: "查看库存余额、可用量和补货参数。", icon: Package, defaultChildId: "inventory:stock", viewId: "overview", group: "主导航", order: 50 }),
+  module({ id: "inventory", path: "/app/inventory", moduleId: "inventory", moduleLabel: "库存管理", label: "库存查询", description: "查看库存余额、可用量和补货参数。", icon: Package, defaultChildId: "inventory:stock", entryBehavior: "redirect-to-default-child", group: "主导航", order: 50 }),
   page({ id: "inventory:stock", path: "/app/inventory/stock", moduleId: "inventory", moduleLabel: "库存管理", label: "库存查询", description: "按 SKU 和仓库查看库存。", parentId: "inventory", pageType: "list", viewId: "overview", order: 51 }),
   page({ id: "inventory:movements", path: "/app/inventory/movements", moduleId: "inventory", moduleLabel: "库存管理", label: "库存流水", description: "查看入库、出库、调拨和调整流水。", parentId: "inventory", pageType: "list", viewId: "movements", order: 52 }),
   page({ id: "inventory:adjustments", path: "/app/inventory/adjustments", moduleId: "inventory", moduleLabel: "库存管理", label: "库存调整单", description: "管理盘盈、盘亏和报损调整。", parentId: "inventory", pageType: "list", viewId: "adjustments", order: 53 }),
@@ -98,7 +100,7 @@ export const appRouteRegistry: AppRouteDefinition[] = [
   page({ id: "inventory:exceptions", path: "/app/inventory/exceptions", moduleId: "inventory", moduleLabel: "库存管理", label: "库存异常", description: "处理库存差异、冻结和调拨异常。", parentId: "inventory", pageType: "list", viewId: "exceptions", order: 59 }),
   { id: "inventory:adjustment-detail", path: "/app/inventory/adjustments/:id", moduleId: "inventory", moduleLabel: "库存管理", label: "库存调整单详情", parentId: "inventory:adjustments", pageType: "detail", currentActiveMenuId: "inventory:adjustments", entityType: "inventory_adjustment", entityIdParam: "id", returnListRouteId: "inventory:adjustments", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 59.1 },
 
-  module({ id: "finance", path: "/app/finance", moduleId: "finance", moduleLabel: "结算管理", label: "结算管理", description: "管理费用、发票、对账和结算。", icon: Users, defaultChildId: "finance:invoices", viewId: "overview", group: "主导航", order: 60 }),
+  module({ id: "finance", path: "/app/finance", moduleId: "finance", moduleLabel: "结算管理", label: "结算管理", description: "管理费用、发票、对账和结算。", icon: Users, defaultChildId: "finance:invoices", entryBehavior: "redirect-to-default-child", group: "主导航", order: 60 }),
   page({ id: "finance:invoices", path: "/app/finance/invoices", moduleId: "finance", moduleLabel: "结算管理", label: "供应商发票", description: "查看供应商发票及匹配状态。", parentId: "finance", pageType: "list", viewId: "invoices", order: 61 }),
   page({ id: "finance:payables", path: "/app/finance/payables", moduleId: "finance", moduleLabel: "结算管理", label: "费用单 / 应付", description: "查看费用和应付项目。", parentId: "finance", pageType: "list", viewId: "payables", order: 62 }),
   page({ id: "finance:credits", path: "/app/finance/credits", moduleId: "finance", moduleLabel: "结算管理", label: "预付款 / 贷项", description: "查看预付款和贷项记录。", parentId: "finance", pageType: "list", viewId: "credits", order: 63 }),
@@ -111,7 +113,7 @@ export const appRouteRegistry: AppRouteDefinition[] = [
   { id: "finance:settlement-detail", path: "/app/finance/settlement/:id", moduleId: "finance", moduleLabel: "结算管理", label: "结算单详情", parentId: "finance:settlement", pageType: "detail", currentActiveMenuId: "finance:settlement", entityType: "settlement_document", entityIdParam: "id", returnListRouteId: "finance:settlement", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 66.4 },
   { id: "finance:credit-memo-detail", path: "/app/finance/credit-memos/:id", moduleId: "finance", moduleLabel: "结算管理", label: "贷项通知详情", parentId: "finance:credits", pageType: "detail", currentActiveMenuId: "finance:credits", entityType: "credit_memo", entityIdParam: "id", returnListRouteId: "finance:credits", showInSidebar: false, showInModuleNav: false, showInBreadcrumb: true, order: 66.5 },
 
-  module({ id: "reports", path: "/app/reports", moduleId: "reports", moduleLabel: "报表中心", label: "经营总览", description: "查看采购、销售、库存、结算和供应商经营分析。", icon: FileSpreadsheet, defaultChildId: "reports:overview", viewId: "overview", group: "主导航", order: 70 }),
+  module({ id: "reports", path: "/app/reports", moduleId: "reports", moduleLabel: "报表中心", label: "经营总览", description: "查看采购、销售、库存、结算和供应商经营分析。", icon: FileSpreadsheet, defaultChildId: "reports:overview", entryBehavior: "redirect-to-default-child", group: "主导航", order: 70 }),
   page({ id: "reports:overview", path: "/app/reports/overview", moduleId: "reports", moduleLabel: "报表中心", label: "经营总览", parentId: "reports", pageType: "analysis", viewId: "overview", order: 70.1 }),
   page({ id: "reports:procurement", path: "/app/reports/procurement", moduleId: "reports", moduleLabel: "报表中心", label: "采购分析", parentId: "reports", pageType: "analysis", viewId: "procurement", order: 71 }),
   page({ id: "reports:sales", path: "/app/reports/sales", moduleId: "reports", moduleLabel: "报表中心", label: "销售分析", parentId: "reports", pageType: "analysis", viewId: "sales", legacyIds: ["reports:delivery"], order: 72 }),
@@ -120,39 +122,40 @@ export const appRouteRegistry: AppRouteDefinition[] = [
   page({ id: "reports:suppliers", path: "/app/reports/suppliers", moduleId: "reports", moduleLabel: "报表中心", label: "供应商分析", parentId: "reports", pageType: "analysis", viewId: "suppliers", order: 75 }),
   page({ id: "reports:library", path: "/app/reports/library", moduleId: "reports", moduleLabel: "报表中心", label: "报表库", parentId: "reports", pageType: "list", viewId: "library", legacyIds: ["reports:quality"], order: 76 }),
 
-  module({ id: "settings", path: "/app/settings", moduleId: "settings", moduleLabel: "系统管理", label: "系统参数", description: "管理编号、权限、菜单和系统策略。", icon: Settings, defaultChildId: "settings", pageType: "settings", group: "主导航", order: 80 }),
+  module({ id: "settings", path: "/app/settings", moduleId: "settings", moduleLabel: "系统管理", label: "系统参数", description: "管理编号、权限、菜单和系统策略。", icon: Settings, defaultChildId: "settings:numbering", entryBehavior: "redirect-to-default-child", pageType: "settings", group: "主导航", order: 80 }),
   page({ id: "settings:numbering", path: "/app/settings/numbering", moduleId: "settings", moduleLabel: "系统管理", label: "编号规则", parentId: "settings", pageType: "settings", viewId: "numbering", order: 81 }),
   page({ id: "settings:roles", path: "/app/settings/roles", moduleId: "settings", moduleLabel: "系统管理", label: "角色权限", parentId: "settings", pageType: "settings", viewId: "roles", order: 82 }),
+  page({ id: "settings:boundaries", path: "/app/settings/boundaries", moduleId: "settings", moduleLabel: "系统管理", label: "工作区边界", parentId: "settings", pageType: "settings", viewId: "boundaries", order: 82.5 }),
   page({ id: "settings:modules", path: "/app/settings/modules", moduleId: "settings", moduleLabel: "系统管理", label: "菜单 / 模块", parentId: "settings", pageType: "settings", viewId: "modules", order: 83 }),
   page({ id: "settings:audit", path: "/app/settings/audit", moduleId: "settings", moduleLabel: "系统管理", label: "操作日志", parentId: "settings", pageType: "settings", panelId: "audit-history", viewId: "settings", legacyIds: ["audit-history:settings"], order: 84 }),
   page({ id: "settings:ai", path: "/app/settings/ai", moduleId: "settings", moduleLabel: "系统管理", label: "AI 设置", parentId: "settings", pageType: "settings", viewId: "ai", order: 85 }),
   page({ id: "settings:review", path: "/app/settings/review", moduleId: "settings", moduleLabel: "系统管理", label: "复核策略", parentId: "settings", pageType: "settings", viewId: "review", order: 86 }),
 
-  module({ id: "forecast", path: "/app/forecast", moduleId: "forecast", moduleLabel: "预测与 MRP", label: "计划驾驶舱", icon: TrendingUp, defaultChildId: "forecast:cockpit", viewId: "cockpit", group: "高级与内部", order: 110 }),
+  module({ id: "forecast", path: "/app/forecast", moduleId: "forecast", moduleLabel: "预测与 MRP", label: "计划驾驶舱", icon: TrendingUp, defaultChildId: "forecast:cockpit", entryBehavior: "redirect-to-default-child", group: "高级与内部", order: 110 }),
   page({ id: "forecast:cockpit", path: "/app/forecast/cockpit", moduleId: "forecast", moduleLabel: "预测与 MRP", label: "计划驾驶舱", parentId: "forecast", pageType: "analysis", viewId: "cockpit", order: 111 }),
   page({ id: "forecast:demand", path: "/app/forecast/demand", moduleId: "forecast", moduleLabel: "预测与 MRP", label: "需求预测", parentId: "forecast", pageType: "analysis", viewId: "demand", order: 112 }),
   page({ id: "forecast:mrp", path: "/app/forecast/mrp", moduleId: "forecast", moduleLabel: "预测与 MRP", label: "MRP 计划", parentId: "forecast", pageType: "analysis", viewId: "mrp", order: 113 }),
   page({ id: "forecast:replenishment", path: "/app/forecast/replenishment", moduleId: "forecast", moduleLabel: "预测与 MRP", label: "补货工作台", parentId: "forecast", pageType: "analysis", viewId: "replenishment", order: 114 }),
   page({ id: "forecast:parameters", path: "/app/forecast/parameters", moduleId: "forecast", moduleLabel: "预测与 MRP", label: "计划参数", parentId: "forecast", pageType: "settings", viewId: "parameters", order: 115 }),
-  module({ id: "imports", path: "/app/imports", moduleId: "imports", moduleLabel: "数据接入与质量", label: "导入任务", icon: Upload, defaultChildId: "imports", group: "高级与内部", order: 120 }),
+  module({ id: "imports", path: "/app/imports", moduleId: "imports", moduleLabel: "数据接入与质量", label: "导入任务", icon: Upload, defaultChildId: "imports", entryBehavior: "landing", group: "高级与内部", order: 120 }),
   page({ id: "imports:templates", path: "/app/imports/templates", moduleId: "imports", moduleLabel: "数据接入与质量", label: "字段映射", parentId: "imports", pageType: "settings", viewId: "templates", order: 121 }),
   page({ id: "imports:validation", path: "/app/imports/validation", moduleId: "imports", moduleLabel: "数据接入与质量", label: "质量检查", parentId: "imports", pageType: "analysis", viewId: "validation", order: 122 }),
   page({ id: "imports:failed", path: "/app/imports/failed", moduleId: "imports", moduleLabel: "数据接入与质量", label: "失败项处理", parentId: "imports", pageType: "list", viewId: "failed", order: 123 }),
-  module({ id: "exception-cases", path: "/app/exception-cases", moduleId: "exception-cases", moduleLabel: "异常处理工单", label: "工单列表", icon: AlertTriangle, defaultChildId: "exception-cases", group: "高级与内部", order: 130 }),
+  module({ id: "exception-cases", path: "/app/exception-cases", moduleId: "exception-cases", moduleLabel: "异常处理工单", label: "工单列表", icon: AlertTriangle, defaultChildId: "exception-cases", entryBehavior: "landing", group: "高级与内部", order: 130 }),
   page({ id: "exception-cases:open", path: "/app/exception-cases/open", moduleId: "exception-cases", moduleLabel: "异常处理工单", label: "未关闭工单", parentId: "exception-cases", pageType: "list", viewId: "open", order: 131 }),
   page({ id: "exception-cases:review", path: "/app/exception-cases/review", moduleId: "exception-cases", moduleLabel: "异常处理工单", label: "复核队列", parentId: "exception-cases", pageType: "list", viewId: "review", order: 132 }),
-  module({ id: "collaboration-drafts", path: "/app/collaboration-drafts", moduleId: "collaboration-drafts", moduleLabel: "协同通知草稿", label: "通知草稿列表", icon: MessageSquareText, defaultChildId: "collaboration-drafts", group: "高级与内部", order: 140 }),
+  module({ id: "collaboration-drafts", path: "/app/collaboration-drafts", moduleId: "collaboration-drafts", moduleLabel: "协同通知草稿", label: "通知草稿列表", icon: MessageSquareText, defaultChildId: "collaboration-drafts", entryBehavior: "landing", group: "高级与内部", order: 140 }),
   page({ id: "collaboration-drafts:review", path: "/app/collaboration-drafts/review", moduleId: "collaboration-drafts", moduleLabel: "协同通知草稿", label: "人工复核视图", parentId: "collaboration-drafts", pageType: "list", viewId: "review", order: 141 }),
   page({ id: "collaboration-drafts:limited", path: "/app/collaboration-drafts/limited", moduleId: "collaboration-drafts", moduleLabel: "协同通知草稿", label: "数据限制草稿", parentId: "collaboration-drafts", pageType: "list", viewId: "limited", order: 142 }),
-  module({ id: "review-actions", path: "/app/review-actions", moduleId: "review-actions", moduleLabel: "行动草稿与人工复核", label: "行动草稿工作台", icon: FileCheck2, defaultChildId: "review-actions", group: "高级与内部", order: 150 }),
+  module({ id: "review-actions", path: "/app/review-actions", moduleId: "review-actions", moduleLabel: "行动草稿与人工复核", label: "行动草稿工作台", icon: FileCheck2, defaultChildId: "review-actions", entryBehavior: "landing", group: "高级与内部", order: 150 }),
   page({ id: "review-actions:waiting", path: "/app/review-actions/waiting", moduleId: "review-actions", moduleLabel: "行动草稿与人工复核", label: "等待人工复核", parentId: "review-actions", pageType: "list", viewId: "waiting", order: 151 }),
   page({ id: "review-actions:data-limited", path: "/app/review-actions/data-limited", moduleId: "review-actions", moduleLabel: "行动草稿与人工复核", label: "数据限制草稿", parentId: "review-actions", pageType: "list", viewId: "data-limited", order: 152 }),
-  module({ id: "audit-history", path: "/app/audit-history", moduleId: "audit-history", moduleLabel: "业务审计与历史", label: "历史总览", icon: History, defaultChildId: "audit-history", group: "高级与内部", order: 160 }),
+  module({ id: "audit-history", path: "/app/audit-history", moduleId: "audit-history", moduleLabel: "业务审计与历史", label: "历史总览", icon: History, defaultChildId: "audit-history", entryBehavior: "landing", group: "高级与内部", order: 160 }),
   page({ id: "audit-history:ai", path: "/app/audit-history/ai", moduleId: "audit-history", moduleLabel: "业务审计与历史", label: "AI 建议历史", parentId: "audit-history", pageType: "list", viewId: "ai", order: 161 }),
   page({ id: "audit-history:drafts", path: "/app/audit-history/drafts", moduleId: "audit-history", moduleLabel: "业务审计与历史", label: "草稿复核历史", parentId: "audit-history", pageType: "list", viewId: "drafts", order: 162 }),
   page({ id: "audit-history:data", path: "/app/audit-history/data", moduleId: "audit-history", moduleLabel: "业务审计与历史", label: "数据接入历史", parentId: "audit-history", pageType: "list", viewId: "data", order: 163 }),
   page({ id: "audit-history:objects", path: "/app/audit-history/objects", moduleId: "audit-history", moduleLabel: "业务审计与历史", label: "业务对象历史", parentId: "audit-history", pageType: "list", viewId: "objects", order: 164 }),
-  module({ id: "pilot-readiness", path: "/app/pilot-readiness", moduleId: "pilot-readiness", moduleLabel: "试点准备度", label: "准备度总览", icon: Gauge, defaultChildId: "pilot-readiness", group: "高级与内部", order: 170 }),
+  module({ id: "pilot-readiness", path: "/app/pilot-readiness", moduleId: "pilot-readiness", moduleLabel: "试点准备度", label: "准备度总览", icon: Gauge, defaultChildId: "pilot-readiness", entryBehavior: "landing", group: "高级与内部", order: 170 }),
   page({ id: "pilot-readiness:modules", path: "/app/pilot-readiness/modules", moduleId: "pilot-readiness", moduleLabel: "试点准备度", label: "模块准备度", parentId: "pilot-readiness", pageType: "analysis", viewId: "modules", order: 171 }),
   page({ id: "pilot-readiness:data", path: "/app/pilot-readiness/data", moduleId: "pilot-readiness", moduleLabel: "试点准备度", label: "数据准备度", parentId: "pilot-readiness", pageType: "analysis", viewId: "data", order: 172 }),
   page({ id: "pilot-readiness:ai", path: "/app/pilot-readiness/ai", moduleId: "pilot-readiness", moduleLabel: "试点准备度", label: "AI 与复核准备度", parentId: "pilot-readiness", pageType: "analysis", viewId: "ai", order: 173 }),

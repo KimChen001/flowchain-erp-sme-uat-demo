@@ -18,7 +18,8 @@ import DeliveryPage from "./DeliveryPage";
 import ReceiptPage from "./ReceiptPage";
 import SalesReturnPage from "./SalesReturnPage";
 import { BusinessDocumentForm } from "../../components/business/BusinessDocumentForm";
-import { useLocation } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
+import { ActionableMetricCard } from "../../components/cards/ActionableMetricCard";
 
 type SalesOrder = {
   salesOrderId: string;
@@ -118,6 +119,7 @@ export default function SalesDemandPage(props: SalesDemandPageProps) {
 }
 
 function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDemandPageProps) {
+  const [searchParams] = useSearchParams();
   const view = viewFromInitial(initialView);
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [availability, setAvailability] = useState<InventoryAvailability[]>([]);
@@ -185,9 +187,15 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
   }, [focusedOrder, orders, selectedOrderId]);
   const availabilityBySku = useMemo(() => new Map(availability.map((item) => [item.sku, item])), [availability]);
   const visibleOrders = useMemo(() => {
-    if (!focusedOrder) return orders;
-    return [focusedOrder, ...orders.filter((order) => order.salesOrderId !== focusedOrder.salesOrderId)];
-  }, [orders, focusedOrder]);
+    const customer = searchParams.get("customer") || "";
+    const status = searchParams.get("status") || "";
+    const risk = searchParams.get("risk") || "";
+    const filtered = orders.filter((order) => (!customer || order.customerName === customer)
+      && (!status || (status === "unshipped" ? !/已完成|已交付/.test(order.statusLabel) : order.statusLabel === status))
+      && (!risk || (risk === "true" ? order.deliveryRiskLevel !== "low" : order.deliveryRiskLevel === risk)));
+    if (!focusedOrder) return filtered;
+    return [focusedOrder, ...filtered.filter((order) => order.salesOrderId !== focusedOrder.salesOrderId)];
+  }, [orders, focusedOrder, searchParams]);
   const riskOrders = useMemo(() => {
     return orders
       .filter((order) => order.deliveryRiskLevel !== "low")
@@ -215,10 +223,10 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="客户订单" value={String(activeSummary.totalOrders)} sub="当前工作区订单" icon={ClipboardList} color={A.blue} />
-        <KpiCard label="交付风险" value={String(activeSummary.riskOrderCount)} sub={`${activeSummary.highRiskOrderCount} 个高风险`} icon={AlertTriangle} color={activeSummary.highRiskOrderCount ? A.red : A.orange} />
-        <KpiCard label="缺口数量" value={qty(activeSummary.shortageQty)} sub="影响交付承诺" icon={PackageSearch} color={A.red} />
-        <KpiCard label="已预留数量" value={qty(activeSummary.reservedQty)} sub="已分配库存" icon={Boxes} color={A.green} />
+        <ActionableMetricCard label="客户订单" value={String(activeSummary.totalOrders)} description="查看当前工作区全部订单" to="/app/sales/orders" icon={ClipboardList} color={A.blue} />
+        <ActionableMetricCard label="交付风险" value={String(activeSummary.riskOrderCount)} description={`${activeSummary.highRiskOrderCount} 个高风险订单`} to="/app/sales/orders?risk=true" icon={AlertTriangle} color={activeSummary.highRiskOrderCount ? A.red : A.orange} />
+        <ActionableMetricCard label="缺口数量" value={qty(activeSummary.shortageQty)} description="查看影响交付承诺的订单" to="/app/sales/orders?risk=blocked" icon={PackageSearch} color={A.red} />
+        <ActionableMetricCard label="已预留数量" value={qty(activeSummary.reservedQty)} description="查看库存分配证据" to="/app/sales/orders?status=unshipped" icon={Boxes} color={A.green} />
       </div>
 
       <OrderDetailModal

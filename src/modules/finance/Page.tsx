@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, CreditCard, FileSpreadsheet, FileText, HandCoins, ReceiptText } from "lucide-react";
+import { FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
-import { A, Card, Chip, KpiCard } from "../../components/ui";
+import { A, Card, Chip } from "../../components/ui";
 import PayablesPanel from "../procurement/PayablesPanel";
 import SupplierInvoiceRegister from "../procurement/SupplierInvoiceRegister";
 import SupplierReconciliationPanel from "../procurement/SupplierReconciliationPanel";
@@ -10,11 +10,9 @@ import { creditMemoExportRows } from "../../domain/procurement/returns";
 import { creditMemoTaxSummary, formatTaxRate } from "../../domain/finance/tax";
 import { exportRowsToCsv } from "../../lib/data-export";
 import { fmt } from "../../lib/format";
-import FinanceOverview from "./FinanceOverview";
 import SettlementPreparation from "./SettlementPreparation";
-import { financeSummaryCards } from "./finance-summary";
 
-export type FinanceTab = "overview" | "invoices" | "payables" | "credits" | "reconciliation" | "settlement";
+export type FinanceTab = "invoices" | "payables" | "credits" | "reconciliation" | "settlement";
 
 function CreditMemoOffsetPanel() {
   const rows = SUPPLIER_CREDIT_MEMOS.map((memo) => {
@@ -104,33 +102,14 @@ function CreditMemoOffsetPanel() {
   );
 }
 
-export default function FinanceWorkbench({ initialView = "overview", onNavigate }: { initialView?: FinanceTab; onNavigate?: (routeId: string) => void }) {
+export default function FinanceWorkbench({ initialView = "invoices" }: { initialView?: FinanceTab; onNavigate?: (routeId: string) => void }) {
   const [tab, setTab] = useState<FinanceTab>(initialView);
-  const tabs = [
-    { id: "overview", label: "结算总览", icon: CheckCircle2 },
-    { id: "invoices", label: "供应商发票", icon: FileText },
-    { id: "payables", label: "费用 / 应付", icon: CreditCard },
-    { id: "credits", label: "预付款 / 贷项", icon: ReceiptText },
-    { id: "reconciliation", label: "对账单", icon: FileSpreadsheet },
-    { id: "settlement", label: "结算单", icon: HandCoins },
-  ] as const;
   useEffect(() => {
     if (initialView) setTab(initialView);
   }, [initialView]);
 
-  function openTab(next: FinanceTab) {
-    if (onNavigate) onNavigate(next === "overview" ? "finance" : `finance:${next}`);
-    else setTab(next);
-  }
-
   return (
     <div className="space-y-4">
-      {tab === "overview" && <div className="grid grid-cols-4 gap-3">
-        {financeSummaryCards().map((item) => (
-          <KpiCard key={item.label} {...item} />
-        ))}
-      </div>}
-      {tab === "overview" && <FinanceOverview onOpenTab={openTab} />}
       {tab === "invoices" && <SupplierInvoiceRegister mode="finance" />}
       {tab === "payables" && <PayablesPanel />}
       {tab === "credits" && <CreditMemoOffsetPanel />}

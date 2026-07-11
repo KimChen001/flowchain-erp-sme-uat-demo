@@ -12,7 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { navGroups, navItems } from "./routes";
-import { routeById, routeByPath, routePathForId } from "./routeRegistry";
+import { defaultRouteForModule, routeById, routeByPath, routePathForId } from "./routeRegistry";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
 import { apiJson } from "../lib/api-client";
 import {
@@ -507,8 +507,12 @@ export default function FlowChainApp() {
   useEffect(() => {
     if (location.pathname === "/" || location.pathname === "/app") {
       routerNavigate("/app/overview", { replace: true });
-    } else if (location.pathname === "/app/reports") {
-      routerNavigate("/app/reports/overview", { replace: true });
+    } else {
+      const route = routeByPath(location.pathname);
+      if (route && !route.parentId && route.entryBehavior === "redirect-to-default-child") {
+        const destination = defaultRouteForModule(route.moduleId);
+        if (destination && destination.path !== route.path) routerNavigate(destination.path, { replace: true });
+      }
     }
   }, [location.pathname, routerNavigate]);
 
@@ -635,6 +639,11 @@ export default function FlowChainApp() {
     returnContext?: WorkflowContext | null;
     source?: string;
   } = {}) {
+    const requestedRoute = routeById(moduleId);
+    const navigationRoute = requestedRoute && !requestedRoute.parentId && requestedRoute.entryBehavior === "redirect-to-default-child"
+      ? defaultRouteForModule(requestedRoute.moduleId)
+      : requestedRoute;
+    const navigationId = navigationRoute?.id || moduleId;
     const sourceLabel = activeChildLabel || activeModuleLabel;
     const focusLabel = focusTarget
       ? `${FOCUS_ENTITY_LABELS[focusTarget.entityType] || "业务对象"} ${focusTarget.entityId}`
@@ -656,7 +665,7 @@ export default function FlowChainApp() {
                 : `返回${sourceLabel}`,
         })
       : null;
-    applyNavigationIntent(navigationIntentFromModule(moduleId, {
+    applyNavigationIntent(navigationIntentFromModule(navigationId, {
       focusTarget,
       source: options.source || (focusTarget ? "evidence" : undefined),
       returnTo: options.returnTo,

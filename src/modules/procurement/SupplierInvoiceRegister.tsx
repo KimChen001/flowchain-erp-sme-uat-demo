@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, CheckCircle2, CreditCard, FileSpreadsheet, FileText, MoreHorizontal, Search, Wallet } from "lucide-react";
+import { AlertOctagon, CheckCircle2, FileSpreadsheet, FileText, MoreHorizontal, Search } from "lucide-react";
 import { toast } from "sonner";
-import { Modal, Card, Chip, KpiCard, A } from "../../components/ui";
+import { Modal, Card, Chip, A } from "../../components/ui";
+import { ActionableMetricCard } from "../../components/cards/ActionableMetricCard";
 import { DocumentActionBar, DocumentEvidencePanel, DocumentHeader, DocumentLinesTable, DocumentShell, DocumentStatusTimeline, DocumentTotals, statusTone, type TimelineStep } from "../../components/document/DocumentShell";
 import { SUPPLIER_INVOICES, purchaseOrders, receivingDocs } from "../../data/demo-data";
 import { getInvoiceLinkedDocuments } from "../../domain/procurement/document-links";
@@ -17,6 +18,7 @@ import type { SupplierInvoice, SupplierInvoiceStatus } from "../../types/scm";
 import { matchStatusStyle } from "./shared";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { BusinessEntityLink } from "../../components/business/BusinessEntityLink";
+import { useSearchParams } from "react-router";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import {
   tableMinXlClass,
@@ -77,10 +79,11 @@ type SupplierInvoiceRegisterProps = {
 };
 
 export default function SupplierInvoiceRegister({ mode = "finance", focus, onNavigate, onActiveContextChange }: SupplierInvoiceRegisterProps) {
+  const [searchParams] = useSearchParams();
   const [invoices, setInvoices] = useState<SupplierInvoice[]>(SUPPLIER_INVOICES);
-  const [statusFilter, setStatusFilter] = useState("全部");
-  const [varianceFilter, setVarianceFilter] = useState("全部");
-  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") || "全部");
+  const [varianceFilter, setVarianceFilter] = useState(() => searchParams.get("variance") ? "价格差异" : "全部");
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [selectedInvoice, setSelectedInvoice] = useState<SupplierInvoice | null>(null);
   const [openActionId, setOpenActionId] = useState<string | null>(null);
   const [invoiceInsight, setInvoiceInsight] = useState<ContextualAIInsight | null>(null);
@@ -88,21 +91,36 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
 
   const visibleInvoices = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const supplier = searchParams.get("supplier") || "";
+    const matchStatus = searchParams.get("matchStatus") || "";
+    const overdue = searchParams.get("overdue") === "true";
     return invoices
       .filter((invoice) => statusFilter === "全部" || invoice.status === statusFilter)
       .filter((invoice) => varianceFilter === "全部" || invoice.varianceType === varianceFilter)
+      .filter((invoice) => !supplier || invoice.supplier === supplier || invoice.supplierCode === supplier)
+      .filter((invoice) => !overdue || (!invoice.paid && invoice.dueDate < "2026-07-11"))
+      .filter((invoice) => !matchStatus
+        || (matchStatus === "pending" && (invoice.status === "待匹配" || invoice.matchStatus === "未匹配"))
+        || (matchStatus === "matched" && ["自动匹配", "已解决"].includes(invoice.matchStatus))
+        || (matchStatus === "variance" && invoice.varianceType !== "无差异")
+        || (matchStatus === "blocked" && (invoice.duplicateRisk || invoice.status === "已驳回")))
       .filter((invoice) => !q || [
         invoice.invoiceNumber,
         invoice.supplier,
         invoice.relatedPo,
         invoice.relatedGrn || "",
       ].some((value) => value.toLowerCase().includes(q)));
-  }, [invoices, search, statusFilter, varianceFilter]);
+  }, [invoices, search, statusFilter, varianceFilter, searchParams]);
+
+  useEffect(() => {
+    setStatusFilter(searchParams.get("status") || "全部");
+    if (!searchParams.get("variance")) setVarianceFilter("全部");
+    setSearch(searchParams.get("q") || "");
+  }, [searchParams]);
 
   const pendingMatch = invoices.filter((invoice) => invoice.status === "待匹配" || invoice.matchStatus === "未匹配").length;
   const varianceInvoices = invoices.filter((invoice) => invoice.varianceType !== "无差异" || invoice.status === "存在差异");
   const pendingApproval = invoices.filter((invoice) => invoice.status === "已匹配" || invoice.status === "待审批").length;
-  const posted = invoices.filter((invoice) => invoice.postedToAp).length;
   const dueSoonAmount = invoices
     .filter((invoice) => !invoice.paid && isInvoicePayableReady(invoice))
     .reduce((sum, invoice) => sum + invoice.total, 0);
@@ -262,12 +280,10 @@ export default function SupplierInvoiceRegister({ mode = "finance", focus, onNav
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard label={isProcurementMode ? "协同发票" : "发票总数"} value={String(invoices.length)} sub={isProcurementMode ? "PO / GRN 协同" : "发票台账"} icon={FileText} color={A.blue} />
-        <KpiCard label="待匹配" value={String(pendingMatch)} sub="需补齐 PO/GRN" icon={Search} color={A.orange} />
-        <KpiCard label="差异发票" value={String(varianceInvoices.length)} sub={fmt(varianceInvoices.reduce((sum, invoice) => sum + invoice.varianceAmount, 0))} icon={AlertOctagon} color={A.red} />
-        <KpiCard label={isProcurementMode ? "待采购确认" : "待审批"} value={String(pendingApproval)} sub={isProcurementMode ? "匹配后确认" : "匹配后审批"} icon={CheckCircle2} color={A.green} />
-        <KpiCard label={isProcurementMode ? "已关联应付" : "应付可见性"} value={String(posted)} sub={isProcurementMode ? "发票协同跟进" : "AP 状态可见"} icon={Wallet} color={A.purple} />
-        <KpiCard label={isProcurementMode ? "后续处理金额" : "待复核金额"} value={fmt(dueSoonAmount)} sub={isProcurementMode ? "审批/差异跟进" : "匹配/审批后复核"} icon={CreditCard} color={A.teal} />
+        <ActionableMetricCard label={isProcurementMode ? "协同发票" : "发票总数"} value={String(invoices.length)} description={isProcurementMode ? "PO / GRN 协同" : "查看全部发票台账"} to="/app/finance/invoices" icon={FileText} color={A.blue} />
+        <ActionableMetricCard label="待匹配" value={String(pendingMatch)} description="需补齐 PO / GRN" to="/app/finance/invoices?matchStatus=pending" icon={Search} color={A.orange} />
+        <ActionableMetricCard label="差异发票" value={String(varianceInvoices.length)} description={`差异金额 ${fmt(varianceInvoices.reduce((sum, invoice) => sum + invoice.varianceAmount, 0))}`} to="/app/finance/invoices?matchStatus=variance" icon={AlertOctagon} color={A.red} />
+        <ActionableMetricCard label={isProcurementMode ? "待采购确认" : "待审批"} value={String(pendingApproval)} description={isProcurementMode ? "匹配后确认" : `待复核金额 ${fmt(dueSoonAmount)}`} to="/app/finance/invoices?status=待审批" icon={CheckCircle2} color={A.green} />
       </div>
 
       <Card className="p-5">

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -24,10 +25,10 @@ import {
   DocumentHistoryPanel,
   Field,
   inputStyle,
-  KpiCard,
   RecoveryActions,
   SectionHeader,
 } from "../../components/ui";
+import { ActionableMetricCard } from "../../components/cards/ActionableMetricCard";
 import {
   DocumentActionBar,
   DocumentEvidencePanel,
@@ -478,6 +479,7 @@ export default function PurchasingOrdersPage({
   onNavigate?: NavigateFn;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
+  const [searchParams] = useSearchParams();
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<PurchaseOrderWorkbenchFilters>(defaultPurchaseOrderWorkbenchFilters);
@@ -504,7 +506,16 @@ export default function PurchasingOrdersPage({
     setViewMode("detail");
   }, [focus?.at, focus?.entityType, focus?.entityId, orders]);
 
-  const filtered = filterPurchaseOrdersForWorkbench(orders, filters);
+  const filtered = filterPurchaseOrdersForWorkbench(orders, filters).filter((order) => {
+    const supplier = searchParams.get("supplier");
+    const status = searchParams.get("status");
+    const overdue = searchParams.get("overdue") === "true";
+    if (supplier && order.supplier !== supplier) return false;
+    if (status && status !== "open" && order.status !== status) return false;
+    if (status === "open" && ["已完成", "已取消"].includes(order.status)) return false;
+    if (overdue && (["已完成", "已取消"].includes(order.status) || String(order.eta || "") >= "2026-07-11")) return false;
+    return true;
+  });
   const selectedPO = orders.find((order) => order.po === selectedId) ?? filtered[0] ?? orders[0] ?? null;
   const selectedPOTotals = poTotals(selectedPO);
   const sourceOptions = Array.from(new Set(orders.map((order) => order.source || "manual"))).sort();
@@ -1004,10 +1015,10 @@ export default function PurchasingOrdersPage({
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="PO 总额" value={fmt(totalAmount)} sub={loading ? "加载中" : `${orders.length} 张订单`} icon={FileText} color={A.blue} />
-        <KpiCard label="待收货 / 未收齐" value={String(waitingReceipt)} sub="需要跟进 GRN Line" icon={Truck} color={A.orange} />
-        <KpiCard label="发票差异" value={String(invoiceExceptions)} sub="需采购与财务复核" icon={AlertCircle} color={A.red} />
-        <KpiCard label="匹配复核" value={String(matchExceptions)} sub="三单匹配需解释" icon={ShieldCheck} color={A.purple} />
+        <ActionableMetricCard label="PO 总额" value={fmt(totalAmount)} description={loading ? "加载中" : `${orders.length} 张订单`} to="/app/procurement/orders" icon={FileText} color={A.blue} />
+        <ActionableMetricCard label="待收货 / 未收齐" value={String(waitingReceipt)} description="跟进未完成采购订单" to="/app/procurement/orders?status=open" icon={Truck} color={A.orange} />
+        <ActionableMetricCard label="发票差异" value={String(invoiceExceptions)} description="采购与财务共同复核" to="/app/finance/invoices?matchStatus=variance" icon={AlertCircle} color={A.red} />
+        <ActionableMetricCard label="匹配复核" value={String(matchExceptions)} description="查看三单匹配异常" to="/app/finance/three-way-match" icon={ShieldCheck} color={A.purple} />
       </div>
 
       <Card className="p-5">

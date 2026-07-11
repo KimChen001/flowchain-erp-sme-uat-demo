@@ -1,17 +1,19 @@
 import { apiJson } from "../../lib/api-client";
 
 export type DashboardView = "overview" | "procurement" | "sales" | "inventory" | "finance" | "suppliers";
-export type MetricDefinition = { id: string; label: string; description: string; subject: string; unit: string; format: string; aggregation: string; numerator: string; denominator: string | null; dateField: string; applicableFilters: string[]; drilldownPath: string; emptyValue: number; version: string; value: number };
-export type ReportChart = { id: string; title: string; type: string; data?: Array<{ name?: string; period?: string; value: number }>; series?: Array<{ key: string; label: string; data: Array<{ period: string; value: number }> }>; drilldownPath: string };
+export type MetricDefinition = { id: string; label: string; description: string; subject: string; unit: string; format: string; aggregation: string; numerator: string; denominator: string | null; dateField: string; applicableFilters: string[]; drilldownPath: string; emptyValue: number; version: string; value: number; currentValue: number; comparisonValue: number | null; comparisonDelta: number | null; comparisonRate: number | null; comparisonDirection: "up" | "down" | "flat"; comparisonLabel: string; comparisonUnit: string; calculationLabel: string };
+export type ReportChartType = "line" | "bar" | "horizontal_bar" | "area" | "stacked_bar" | "pie" | "donut";
+export type ReportChart = { id: string; title: string; type: ReportChartType; data?: Array<Record<string, string | number | undefined>>; series?: Array<{ key: string; label: string; data: Array<{ period: string; value: number }> }>; categoryKey?: string; valueKey?: string; seriesKeys?: string[]; valueFormat?: string; unit?: string; stack?: boolean; orientation?: string; legend?: boolean; tooltip?: boolean; colors?: string[]; drilldownPath: string; crossFilter?: string | null; emptyState?: string };
+export type ReportColumnDefinition = { key: string; label: string; type: string; subject: string; valueMap?: Record<string, string> };
 export type GovernedReport = {
-  query: Record<string, unknown>; generatedAt: string; dataScope: { label: string; company: string; currency: string; from: string; to: string; activeFilterCount: number };
-  kpis: MetricDefinition[]; charts: ReportChart[]; rankings: ReportChart[]; details: Record<string, unknown>[]; warnings: string[]; limitations: string[];
+  query: Record<string, unknown>; generatedAt: string; dataScope: { label: string; company: string; currency: string; from: string; to: string; activeFilterCount: number; sourceLabel: string; completenessLabel: string };
+  kpis: MetricDefinition[]; charts: ReportChart[]; rankings: ReportChart[]; details: Record<string, unknown>[]; columnDefinitions: ReportColumnDefinition[]; warnings: string[]; limitations: string[];
   drilldowns: Array<{ metricId: string; path: string }>; exportRows: Record<string, unknown>[]; metricDefinitions: Omit<MetricDefinition, "value">[];
 };
-export type SavedReportView = { viewId: string; name: string; description: string; ownerId: string; ownerName: string; subject: string; sourceRoute: string; columns: string[]; filters: Record<string, string>; sorting: unknown[]; grouping: string[]; measures: string[]; visualization: string; visibility: "private" | "team"; isDefault: boolean; createdAt: string; updatedAt: string; lastOpenedAt: string; version: number };
+export type SavedReportView = { viewId: string; name: string; description: string; ownerId: string; ownerName: string; subject: string; sourceRoute: string; columns: string[]; columnOrder?: string[]; filters: Record<string, string>; sorting: unknown[]; grouping: string[]; measures: string[]; visualization: string; comparison?: string; hiddenCharts?: string[]; chartOrder?: string[]; topN?: number; dateRange?: { from: string; to: string }; visibility: "private" | "team"; isDefault: boolean; createdAt: string; updatedAt: string; lastOpenedAt: string; version: number };
 
 export function fetchGovernedReport(view: DashboardView, filters: Record<string, string>) {
-  return apiJson<GovernedReport>("/api/reports/query", { method: "POST", body: JSON.stringify({ subject: view, filters, limit: 50 }) });
+  return apiJson<GovernedReport>("/api/reports/query", { method: "POST", body: JSON.stringify({ subject: view, filters, measures: (filters.measures || "").split(",").filter(Boolean), comparison: filters.comparison, topN: Number(filters.topN || 8), limit: 50 }) });
 }
 export function listSavedReportViews(visibility = "") { return apiJson<{ views: SavedReportView[]; actor: { id: string; role: string } }>(`/api/report-views${visibility ? `?visibility=${visibility}` : ""}`); }
 export function createSavedReportView(input: Partial<SavedReportView>) { return apiJson<{ view: SavedReportView; auditEventId: string }>("/api/report-views", { method: "POST", body: JSON.stringify(input) }); }

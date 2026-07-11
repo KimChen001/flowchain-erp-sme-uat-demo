@@ -68,3 +68,19 @@ export async function exportRowsToWorkbook(businessObject: string, rows: Record<
   const date = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
   return downloadWorkbook(XLSX, workbook, `${businessObject}-${date}.xlsx`);
 }
+
+export async function exportWorkbookSheets(businessObject: string, sheets: Array<{ name: string; rows: Record<string, unknown>[] }>) {
+  const XLSX = await loadXlsx();
+  const workbook = XLSX.utils.book_new();
+  sheets.forEach(({ name, rows }) => {
+    const safeRows = rows.length ? rows : [{ 说明: "当前筛选范围暂无数据" }];
+    const headers = Array.from(new Set(safeRows.flatMap((row) => Object.keys(row))));
+    const sheet = XLSX.utils.json_to_sheet(safeRows, { header: headers, cellDates: true });
+    sheet["!cols"] = fitColumns(safeRows, headers);
+    sheet["!autofilter"] = { ref: sheet["!ref"] || "A1:A1" };
+    (sheet as Record<string, unknown>)["!freeze"] = { xSplit: 0, ySplit: 1 };
+    XLSX.utils.book_append_sheet(workbook, sheet, name.slice(0, 31));
+  });
+  const date = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
+  return downloadWorkbook(XLSX, workbook, `${businessObject}-${date}.xlsx`);
+}

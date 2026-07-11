@@ -40,7 +40,7 @@ export default function ProcurementPanel({ intent = null, onOpenRfq, view, onNav
   if (view === "returns") return <PurchaseReturnsPanel />;
   if (view === "receiving") return <ReceivingPanel focus={focus} onNavigate={onNavigate} />;
 
-  return <PurchasingPanel intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
+  return <PurchasingOrders focus={focus} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
 }
 
 function PurchasingPanel({

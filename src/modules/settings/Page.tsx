@@ -9,7 +9,30 @@ import { fetchWorkspaceBoundaryVisibility, type WorkspaceBoundaryVisibilityV2 as
 
 type NavigateFn = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
 
+const controlledSettingsViews: Record<string, { title: string; description: string; status: string }> = {
+  modules: { title: "菜单 / 模块", description: "当前版本按产品路由注册表统一管理菜单与模块，暂不开放在线修改。", status: "只读配置" },
+  ai: { title: "AI 设置", description: "AI 仅提供辅助建议；自动执行、外发和高风险写操作仍受人工复核边界控制。", status: "受治理控制" },
+  review: { title: "复核策略", description: "复核策略由角色权限、工作区边界和行动草稿规则共同决定。", status: "策略可见" },
+};
+
+function ControlledSettingsView({ view }: { view: string }) {
+  const content = controlledSettingsViews[view] || {
+    title: "设置项暂不可用",
+    description: "此设置项尚未在当前工作区启用，请从系统管理导航选择可用设置。",
+    status: "未启用",
+  };
+  return (
+    <Card className="p-6" data-testid={`settings-${view}-controlled-state`}>
+      <div className="fc-caption font-semibold" style={{ color: A.blue }}>{content.status}</div>
+      <h2 className="fc-section-title mt-2" style={{ color: A.label }}>{content.title}</h2>
+      <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: A.sub }}>{content.description}</p>
+    </Card>
+  );
+}
+
 export default function SettingsPage({ initialView, onNavigate }: { initialView?: string; onNavigate: NavigateFn }) {
+  const view = initialView || "numbering";
+  const isWorkspaceView = view === "numbering";
   const isRoleView = initialView === "roles";
   const isBoundaryView = initialView === "boundaries";
   const [workspacePayload, setWorkspacePayload] = useState<WorkspaceSetupConfigPayload | null>(null);
@@ -20,6 +43,10 @@ export default function SettingsPage({ initialView, onNavigate }: { initialView?
 
   useEffect(() => {
     let alive = true;
+    if (!isWorkspaceView && !isRoleView && !isBoundaryView) {
+      setLoading(false);
+      return () => { alive = false; };
+    }
     setLoading(true);
     const request = isBoundaryView ? fetchWorkspaceBoundaryVisibility() : isRoleView ? fetchUserRolePermissionVisibility() : fetchWorkspaceSetupConfig();
     request
@@ -51,7 +78,9 @@ export default function SettingsPage({ initialView, onNavigate }: { initialView?
         if (alive) setLoading(false);
       });
     return () => { alive = false; };
-  }, [isRoleView, isBoundaryView]);
+  }, [isWorkspaceView, isRoleView, isBoundaryView]);
+
+  if (!isWorkspaceView && !isRoleView && !isBoundaryView) return <ControlledSettingsView view={view} />;
 
   if (loading) {
     return (

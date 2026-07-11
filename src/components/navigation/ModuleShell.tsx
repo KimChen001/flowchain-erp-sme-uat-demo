@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router";
 import { defaultRouteForModule, moduleRoute, recoveryModuleForPath, routesForModule, type AppRouteDefinition } from "../../app/routeRegistry";
 import { A } from "../ui";
 import { AppBreadcrumb } from "./AppBreadcrumb";
-import { RecentPages } from "./RecentPages";
 
 export function ModuleShell({ route, children }: { route: AppRouteDefinition; children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -27,11 +26,10 @@ export function ModuleShell({ route, children }: { route: AppRouteDefinition; ch
           {subRoutes.map((item) => <Link key={item.id} to={item.path} aria-current={activeMenuId === item.id ? "page" : undefined} className={activeMenuId === item.id ? "is-active" : ""}>{item.label}</Link>)}
         </nav>
       )}
-      <RecentPages />
       {showPageHeader && (
         <div className="fc-page-header" data-testid="page-header">
           <div className="min-w-0">
-            <h2 className="fc-page-title" data-testid="page-title">{route.label}</h2>
+            <h1 className="fc-page-title" data-testid="page-title">{route.label}</h1>
             <p className="fc-page-subtitle mt-1">{route.description}</p>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -26,6 +27,7 @@ import { makeSkuInsight, type ContextualAiAction } from "../../domain/contextual
 import type { ActiveContext } from "../ai-assistant/Panel";
 import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftReviewShell";
 import { BusinessDocumentForm } from "../../components/business/BusinessDocumentForm";
+import { ActionableMetricCard } from "../../components/cards/ActionableMetricCard";
 import {
   fetchInventoryItems,
   fetchInventoryLots,
@@ -132,18 +134,26 @@ function inventoryDraftRequest(item: InventoryStockItem & { plan: ReturnType<typ
 function InventoryOverview({
   items,
   onReviewActionDraft,
+  onSelectSku,
 }: {
   items: InventoryStockItem[];
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
+  onSelectSku?: (sku: string) => void;
 }) {
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("全部");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
+  const [filterStatus, setFilterStatus] = useState(() => searchParams.get("status") || "全部");
   const [previewedRequests, setPreviewedRequests] = useState<Record<string, string>>({});
   const plannedItems = items.map((item) => ({ ...item, plan: inventoryPlan(item) }));
+  const metricFilter = searchParams.get("filter") || "";
   const filtered = plannedItems.filter((i) => {
     const matchSearch = i.name.includes(search) || i.sku.includes(search);
     const matchStatus = filterStatus === "全部" || i.status === filterStatus;
-    return matchSearch && matchStatus;
+    const matchMetric = metricFilter === "needs-replenishment" ? i.plan.suggestedQty > 0
+      : metricFilter === "high-priority" ? i.plan.priority === "高"
+        : metricFilter === "low-coverage" ? i.plan.daysCover <= i.plan.leadTimeDays
+          : true;
+    return matchSearch && matchStatus && matchMetric;
   });
   const shortageItems = plannedItems.filter((i) => i.plan.suggestedQty > 0);
   const highPriority = shortageItems.filter((i) => i.plan.priority === "高").length;
@@ -151,6 +161,19 @@ function InventoryOverview({
   const avgTurnover = items.reduce((sum, item) => sum + item.turnover, 0) / Math.max(items.length, 1);
   const weightedCoverage = plannedItems.reduce((sum, item) => sum + item.plan.daysCover * Math.max(item.plan.monthlyDemand, 1), 0) /
     plannedItems.reduce((sum, item) => sum + Math.max(item.plan.monthlyDemand, 1), 0);
+
+  useEffect(() => {
+    setSearch(searchParams.get("q") || "");
+    setFilterStatus(searchParams.get("status") || "全部");
+  }, [searchParams]);
+
+  function changeStatus(next: string) {
+    setFilterStatus(next);
+    const params = new URLSearchParams(searchParams);
+    if (next === "全部") params.delete("status"); else params.set("status", next);
+    params.delete("filter");
+    setSearchParams(params, { replace: true });
+  }
 
   function previewInventoryDraft(item: typeof plannedItems[number]) {
     if (item.plan.suggestedQty <= 0) {
@@ -198,103 +221,12 @@ function InventoryOverview({
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-4 gap-3">
-        <KpiCard label="SKU 总数" value={String(items.length)} sub="库存控制台" icon={Package} color={A.blue} />
-        <KpiCard label="需补货 SKU" value={String(shortageItems.length)} sub={`${highPriority} 个高优先级`} delta="按 ROP 计算" positive={false} icon={XCircle} color={A.red} />
-        <KpiCard label="建议 PR 金额" value={fmt(replenishmentAmount)} sub="MOQ/批量修正后" icon={ClipboardCheck} color={A.orange} />
-        <KpiCard label="加权覆盖天数" value={`${weightedCoverage.toFixed(0)}天`} sub={`周转 ${avgTurnover.toFixed(1)}x`} positive icon={Activity} color={A.green} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <ActionableMetricCard label="SKU 总数" value={String(items.length)} description="查看全部库存余额" to="/app/inventory/stock" icon={Package} color={A.blue} />
+        <ActionableMetricCard label="需补货 SKU" value={String(shortageItems.length)} description={`${highPriority} 个高优先级，按 ROP 计算`} to="/app/inventory/stock?filter=needs-replenishment" icon={XCircle} color={A.red} />
+        <ActionableMetricCard label="建议 PR 金额" value={fmt(replenishmentAmount)} description="查看高优先级补货建议" to="/app/inventory/stock?filter=high-priority" icon={ClipboardCheck} color={A.orange} />
+        <ActionableMetricCard label="加权覆盖天数" value={`${weightedCoverage.toFixed(0)}天`} description={`查看低覆盖 SKU · 周转 ${avgTurnover.toFixed(1)}x`} to="/app/inventory/stock?filter=low-coverage" icon={Activity} color={A.green} />
       </div>
-
-      <Card className="p-5">
-        <SectionHeader title="库存流水草稿" right={<Chip label="仅预览" color={A.blue} bg="#eef6ff" />} />
-        <div className="grid grid-cols-3 gap-3 text-[11px] leading-5" style={{ color: A.sub }}>
-          <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div className="font-semibold" style={{ color: A.label }}>库存余额影响预览</div>
-            <div className="mt-1">在人工过账前预览预计现有库存、可用库存和冻结库存。</div>
-          </div>
-          <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div className="font-semibold" style={{ color: A.label }}>质检冻结</div>
-            <div className="mt-1">合格数量与质检冻结数量分开复核；冻结数量不会增加可用库存。</div>
-          </div>
-          <div className="rounded-lg p-3" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-            <div className="font-semibold" style={{ color: A.label }}>过账复核</div>
-            <div className="mt-1">库存过账、余额更新与 PO 关闭在复核确认后执行。</div>
-          </div>
-        </div>
-      </Card>
-
-      <Card className="p-5">
-        <SectionHeader title="库存补货控制台" right={
-          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#fff8f0", color: A.orange }}>
-            ROP + MOQ + 在途/分配
-          </span>
-        } />
-        <div className="grid grid-cols-4 gap-3">
-          {shortageItems.slice(0, 4).map((item) => {
-            const score = supplierRecommendation(item.plan.supplier);
-            return (
-              <div key={item.sku} className="p-3 rounded-lg" style={{ background: A.gray6, border: "0.5px solid rgba(0,0,0,0.06)" }}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[11px] font-semibold tabular-nums" style={{ color: A.blue }}>{item.sku}</div>
-                  <Chip label={item.plan.priority} color={item.plan.priority === "高" ? A.red : item.plan.priority === "中" ? A.orange : A.green} bg={item.plan.priority === "高" ? "#fff1f0" : item.plan.priority === "中" ? "#fff8f0" : "#f0faf4"} />
-                </div>
-                <div className="text-xs font-medium mt-1 truncate" style={{ color: A.label }}>{item.name}</div>
-                <div className="grid grid-cols-3 gap-2 mt-3 fc-caption">
-                  <div><div style={{ color: A.gray2 }}>覆盖</div><div className="font-semibold" style={{ color: item.plan.daysCover <= item.plan.leadTimeDays ? A.red : A.label }}>{item.plan.daysCover}天</div></div>
-                  <div><div style={{ color: A.gray2 }}>ROP</div><div className="font-semibold" style={{ color: A.label }}>{item.plan.reorderPoint}</div></div>
-                  <div><div style={{ color: A.gray2 }}>建议</div><div className="font-semibold" style={{ color: A.label }}>{item.plan.suggestedQty}</div></div>
-                </div>
-                <div className="fc-caption mt-2 leading-relaxed" style={{ color: A.sub }}>
-                  {item.plan.supplier} · 评分 {score.score} · {item.plan.policy}
-                </div>
-                <button onClick={() => previewInventoryDraft(item)}
-                  className="mt-3 w-full text-[11px] px-2.5 py-1.5 rounded-md font-medium text-white flex items-center justify-center gap-1.5"
-                  style={{ background: previewedRequests[item.sku] ? A.green : A.blue }}>
-                  <ClipboardCheck size={11} />
-                  {previewedRequests[item.sku] ? `已预览 ${previewedRequests[item.sku]}` : item.plan.needsSourcing ? "预览 RFQ 草稿" : "预览 PR 草稿"}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Category health bars */}
-      <Card className="p-5">
-        <SectionHeader title="品类库存健康分布" />
-        <div className="space-y-3">
-          {[
-            { cat: "机械部件", normal: 2980, warn: 180, low: 81 },
-            { cat: "电气元件", normal: 289,  warn: 71,  low: 52 },
-            { cat: "原材料",   normal: 1580, warn: 148, low: 92 },
-            { cat: "耗材",     normal: 2100, warn: 32,  low: 8  },
-            { cat: "标准件",   normal: 780,  warn: 16,  low: 3  },
-          ].map((row) => {
-            const total = row.normal + row.warn + row.low;
-            return (
-              <div key={row.cat} className="flex items-center gap-4">
-                <span className="text-xs w-20 shrink-0" style={{ color: A.sub }}>{row.cat}</span>
-                <div className="flex-1 h-5 rounded-lg overflow-hidden flex" style={{ background: A.gray5 }}>
-                  <div style={{ width: `${(row.normal / total) * 100}%`, background: A.green }} />
-                  <div style={{ width: `${(row.warn / total) * 100}%`, background: A.orange }} />
-                  <div style={{ width: `${(row.low / total) * 100}%`, background: A.red }} />
-                </div>
-                <div className="flex items-center gap-3 text-[11px] w-52 shrink-0" style={{ color: A.gray1 }}>
-                  <span className="text-green-500">{row.normal}</span>
-                  <span style={{ color: A.orange }}>{row.warn}</span>
-                  <span style={{ color: A.red }}>{row.low}</span>
-                  <span style={{ color: A.gray2 }}>/ {total.toLocaleString()} SKU</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-5 mt-3 text-[11px]" style={{ color: A.gray2 }}>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.green }} />正常</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.orange }} />预警</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: A.red }} />不足</span>
-        </div>
-      </Card>
 
       {/* Table */}
       <Card>
@@ -310,7 +242,7 @@ function InventoryOverview({
           <SegmentedControl
             options={["全部", "正常", "预警", "不足"].map((s) => ({ label: s, value: s }))}
             value={filterStatus}
-            onChange={setFilterStatus}
+            onChange={changeStatus}
           />
           <span className="text-xs ml-1" style={{ color: A.gray2 }}>{filtered.length}</span>
           <button onClick={exportStockCsv}
@@ -335,7 +267,9 @@ function InventoryOverview({
                   <tr key={item.sku}
                     className="transition-colors hover:bg-blue-50/40"
                     style={{ borderBottom: i < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className={tdIdClass} style={{ color: A.blue }}>{item.sku}</td>
+                    <td className={tdIdClass}>
+                      <button type="button" onClick={() => onSelectSku?.(item.sku)} className="font-semibold" style={{ color: A.blue }}>{item.sku}</button>
+                    </td>
                     <td className={`${tdNameClass} max-w-[240px]`}>
                       <div className="font-medium truncate" style={{ color: A.label }}>{item.name}</div>
                       <div className="fc-caption truncate" style={{ color: A.sub }}>{item.category} · {item.location}</div>
@@ -1524,16 +1458,7 @@ function InventoryLanding({
           </div>
       </div>
 
-      <InventoryOverview items={items} onReviewActionDraft={onReviewActionDraft} />
-
-      <InventoryAllocationPanel
-        availability={availability}
-        summary={allocationSummary}
-        selectedSku={selectedAvailability?.sku || selectedSku}
-        onSelectSku={setSelectedSku}
-        onOpenTab={onOpenTab}
-        onReviewActionDraft={onReviewActionDraft}
-      />
+      <InventoryOverview items={items} onSelectSku={setSelectedSku} onReviewActionDraft={onReviewActionDraft} />
 
       {selectedItem && (
         <Card className="p-4" style={{ border: `1px solid ${A.blue}30` }}>
@@ -1614,14 +1539,14 @@ function InventoryLanding({
         </Card>
       )}
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="hidden" aria-hidden="true">
         <KpiCard label="风险 SKU" value={String(riskItems.length)} sub={topRisk?.sku || "稳定"} icon={Package} color={A.red} />
         <KpiCard label="库存异常单据" value={String(exceptionDocs.length)} sub="待复核/处理中" icon={AlertTriangle} color={A.orange} />
         <KpiCard label="冻结库存" value={String(frozenCount)} sub="QA 或锁定状态" icon={ShieldCheck} color={A.purple} />
         <KpiCard label="盘点差异" value={String(VARIANCES.length)} sub="待复核关闭" icon={ClipboardCheck} color={A.teal} />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="hidden" aria-hidden="true">
         {[
           { title: "库存短缺风险", object: topRisk?.sku || "库存池", sku: topRisk?.sku, body: topRisk ? `${topRisk.name} 覆盖 ${topRisk.plan.daysCover} 天，建议补货 ${topRisk.plan.suggestedQty.toLocaleString()} ${topRisk.plan.unit}` : "当前未发现高优先级短缺。", tab: "movements" as const },
           { title: "异常单据", object: topException?.id || "异常单据", sku: topException?.sku, body: topException ? `${topException.type} · ${topException.sku} · ${topException.nextAction}` : "暂无待处理异常单据。", tab: "exceptions" as const },
@@ -1664,7 +1589,7 @@ function InventoryLanding({
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="hidden" aria-hidden="true">
         {primaryEntries.map((entry) => {
           const Icon = entry.icon;
           return (
@@ -1687,7 +1612,7 @@ function InventoryLanding({
         })}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="hidden" aria-hidden="true">
         {secondaryEntries.map((entry) => (
           <button
             key={entry.tab}
