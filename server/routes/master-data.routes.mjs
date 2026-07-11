@@ -1,5 +1,13 @@
 import { createJsonMasterDataRepository } from '../repositories/json-master-data-repository.mjs'
 
+const customerMaster = [
+  { code: 'CUS-001', name: '华南自动化设备有限公司', contact: '林志远', phone: '138****2018', address: '深圳市宝安区智能制造产业园', creditStatus: '正常', paymentTerms: '月结 30 天', status: '启用' },
+  { code: 'CUS-002', name: '苏州精工系统集成有限公司', contact: '张海峰', phone: '137****8291', address: '苏州市工业园区星港街 88 号', creditStatus: '正常', paymentTerms: '月结 45 天', status: '启用' },
+  { code: 'CUS-003', name: '武汉启明智能制造有限公司', contact: '黄文杰', phone: '139****1706', address: '武汉市东湖高新区光谷大道', creditStatus: '待评估', paymentTerms: '预付 30% / 到货 70%', status: '启用' },
+  { code: 'CUS-004', name: '成都锐创机器人科技有限公司', contact: '何雨', phone: '136****7720', address: '成都市高新区天府五街', creditStatus: '受限', paymentTerms: '款到发货', status: '启用' },
+  { code: 'CUS-005', name: '上海万联装备股份有限公司', contact: '顾晨', phone: '135****3902', address: '上海市嘉定区工业园区', creditStatus: '正常', paymentTerms: '月结 30 天', status: '启用' },
+]
+
 function masterDataRepository(ctx) {
   return ctx.repositories?.masterData || createJsonMasterDataRepository(ctx.db)
 }
@@ -7,6 +15,27 @@ function masterDataRepository(ctx) {
 export async function handleMasterDataRoute(ctx) {
   const { req, res, url, send } = ctx
   const repository = masterDataRepository(ctx)
+
+  if (req.method === 'GET' && url.pathname === '/api/master-data') {
+    const [items, suppliers, warehouses, paymentTerms, taxCodes] = await Promise.all([
+      repository.listItems(), repository.listSuppliers(), repository.listWarehouses(), repository.listPaymentTerms(), repository.listTaxCodes(),
+    ])
+    send(res, 200, { items, suppliers, customers: customerMaster, warehouses, paymentTerms, taxCodes })
+    return true
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/master-data/customers') {
+    send(res, 200, { customers: customerMaster })
+    return true
+  }
+
+  const customerMatch = url.pathname.match(/^\/api\/master-data\/customers\/([^/]+)$/)
+  if (req.method === 'GET' && customerMatch) {
+    const key = decodeURIComponent(customerMatch[1]).toLowerCase()
+    const customer = customerMaster.find((row) => [row.code, row.name].some((value) => value.toLowerCase() === key))
+    send(res, customer ? 200 : 404, customer ? { customer } : { error: 'Customer not found' })
+    return true
+  }
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/items') {
     send(res, 200, { items: await repository.listItems() })
@@ -45,13 +74,40 @@ export async function handleMasterDataRoute(ctx) {
     return true
   }
 
+  const warehouseMatch = url.pathname.match(/^\/api\/master-data\/(warehouses|bins)\/([^/]+)$/)
+  if (req.method === 'GET' && warehouseMatch) {
+    const rows = await repository.listWarehouses()
+    const key = decodeURIComponent(warehouseMatch[2]).toLowerCase()
+    const warehouse = rows.find((row) => warehouseMatch[1] === 'bins'
+      ? String(row.bin || row.id || '').toLowerCase() === key
+      : [row.warehouseCode, row.id, row.warehouseName, row.name].some((value) => String(value || '').toLowerCase() === key))
+    send(res, warehouse ? 200 : 404, warehouse ? { warehouse } : { error: 'Warehouse or bin not found' })
+    return true
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/master-data/payment-terms') {
     send(res, 200, { paymentTerms: await repository.listPaymentTerms() })
     return true
   }
 
+  const paymentTermMatch = url.pathname.match(/^\/api\/master-data\/payment-terms\/([^/]+)$/)
+  if (req.method === 'GET' && paymentTermMatch) {
+    const key = decodeURIComponent(paymentTermMatch[1]).toLowerCase()
+    const paymentTerm = (await repository.listPaymentTerms()).find((row) => [row.id, row.code, row.label, row.name].some((value) => String(value || '').toLowerCase() === key))
+    send(res, paymentTerm ? 200 : 404, paymentTerm ? { paymentTerm } : { error: 'Payment term not found' })
+    return true
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/master-data/tax-codes') {
     send(res, 200, { taxCodes: await repository.listTaxCodes() })
+    return true
+  }
+
+  const taxCodeMatch = url.pathname.match(/^\/api\/master-data\/tax-codes\/([^/]+)$/)
+  if (req.method === 'GET' && taxCodeMatch) {
+    const key = decodeURIComponent(taxCodeMatch[1]).toLowerCase()
+    const taxCode = (await repository.listTaxCodes()).find((row) => [row.id, row.code, row.label, row.name].some((value) => String(value || '').toLowerCase() === key))
+    send(res, taxCode ? 200 : 404, taxCode ? { taxCode } : { error: 'Tax code not found' })
     return true
   }
 

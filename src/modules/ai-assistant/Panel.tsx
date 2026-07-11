@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, MessageCircle, RotateCcw, Send, Sparkles, X } from "lucide-react";
+import { Loader2, Maximize2, MessageCircle, Minimize2, Plus, RotateCcw, Send, Square, Sparkles, X } from "lucide-react";
 import {
   navigationIntentFromInternalTarget,
   navigationIntentFromEvidenceLink,
@@ -16,7 +16,6 @@ import type { ActionDraftPreviewRequest } from "../action-drafts/ActionDraftRevi
 import type { AiResponseV2 } from "../../domain/ai/response-contract";
 import { focusTargetFromActiveContext, postAiRuntimeResponse } from "./aiRuntimeGateway";
 import { aiDisplayMessage, looksLikeRawJson, normalizeAiCardValue, safeUnknownCardMessage, sanitizeAiMessage } from "./presentation";
-import { getContextualQuickPrompts } from "./prompts";
 
 export type ActiveContext = {
   module?: string;
@@ -92,14 +91,22 @@ const aiActionLinkClass = `${aiActionPillClass} hover:underline`;
 const aiBoundaryNoticeClass = `${typography.metadata} text-slate-600`;
 
 export const AI_EMPTY_STATE_PROMPT_CHIPS = [
-  { label: "今日重点", prompt: "有什么需要我注意的？" },
-  { label: "库存风险", prompt: "哪些 SKU 有库存风险？" },
-  { label: "供应商跟进", prompt: "哪些供应商需要跟进？" },
-  { label: "RFQ 回复", prompt: "哪些 RFQ 需要关注？" },
-  { label: "收货异常", prompt: "今天有哪些收货异常？" },
-  { label: "数据缺口", prompt: "哪些数据依据不够完整？" },
-  { label: "生成草稿", prompt: "我可以生成哪些审阅草稿？" },
+  { label: "今天先处理什么？", prompt: "今天先处理什么？" },
+  { label: "哪些事项风险最高？", prompt: "哪些事项风险最高？" },
+  { label: "哪些数据需要补齐？", prompt: "哪些数据需要补齐？" },
+  { label: "帮我准备一个处理草稿", prompt: "帮我准备一个处理草稿" },
 ];
+
+const PO_EMPTY_PROMPTS = ["这个 PO 为什么需要关注？", "还差哪些收货或发票证据？", "延误会影响什么？", "建议下一步是什么？"];
+const SKU_EMPTY_PROMPTS = ["这个 SKU 需要补货吗？", "当前可用库存是多少？", "哪些订单会受影响？", "建议如何处理？"];
+
+function requestScopeLabel(message: string) {
+  if (/PO|采购订单|收货|GRN|发票|匹配/i.test(message)) return "正在查询采购订单、收货和发票记录";
+  if (/库存|SKU|补货|可用量/i.test(message)) return "正在查询库存余额和关联订单";
+  if (/供应商|RFQ|报价/i.test(message)) return "正在查询供应商和询报价记录";
+  if (/今天|重点|风险|待办/i.test(message)) return "正在汇总当前工作区重点事项";
+  return "正在查询当前页面相关业务记录";
+}
 
 const CONTEXT_ENTITY_LABELS: Record<string, string> = {
   purchase_order: "采购单",
@@ -1545,6 +1552,7 @@ export default function FloatingAiAssistant({
   onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState("");
   const [asking, setAsking] = useState(false);
   const [slowRequest, setSlowRequest] = useState(false);
@@ -1612,9 +1620,27 @@ export default function FloatingAiAssistant({
 
   const currentContext = cleanActiveContext(activeContext);
   const sessionGrounding = useMemo(() => buildSessionGrounding(messages, currentContext), [messages, currentContext]);
-  const quickPrompts = getContextualQuickPrompts({ moduleId, activeContext: currentContext });
   const contextLabel = getAiContextLabel(moduleId, currentContext);
   const inputPlaceholder = getAiInputPlaceholder(moduleId, currentContext);
+  const emptyPrompts = currentContext?.entityType === "purchase_order" ? PO_EMPTY_PROMPTS
+    : currentContext?.entityType === "item" ? SKU_EMPTY_PROMPTS
+      : AI_EMPTY_STATE_PROMPT_CHIPS.map((item) => item.prompt);
+  const currentRequestLabel = requestScopeLabel(messages.filter((message) => message.role === "user").at(-1)?.content || input);
+
+  function startNewConversation() {
+    abortReasonRef.current = "superseded";
+    abortRef.current?.abort();
+    requestInFlightRef.current = false;
+    setAsking(false);
+    setSlowRequest(false);
+    setMessages([]);
+    setInput("");
+  }
+
+  function cancelRequest() {
+    abortReasonRef.current = "superseded";
+    abortRef.current?.abort();
+  }
 
   async function askAi(text: string) {
     const message = text.trim();
@@ -1655,8 +1681,8 @@ export default function FloatingAiAssistant({
         sessionGrounding,
         returnTo: "ai-assistant",
       }, controller.signal);
-      const rawContent = response.runtimeModeLabel || "证据辅助回答 · 当前工作区数据 · 复核优先";
-      const content = aiDisplayMessage(rawContent, true);
+      const rawContent = response.runtimeModeLabel || "";
+      const content = "";
       if (looksLikeRawJson(rawContent)) console.debug("AI assistant raw content suppressed", rawContent);
       if (import.meta.env.DEV) {
         console.debug("AI assistant request completed", {
@@ -1685,7 +1711,7 @@ export default function FloatingAiAssistant({
         {
           role: "assistant",
           content: displaySafeAssistantRecoveryMessage(message),
-          retryPrompt: timeoutHit || abortReasonRef.current === "timeout" ? message : undefined,
+          retryPrompt: message,
         },
       ]);
     } finally {
@@ -1700,12 +1726,12 @@ export default function FloatingAiAssistant({
   }
 
   return (
-    <div className="fixed right-5 bottom-5 z-40 pointer-events-none" data-testid="ai-assistant-root">
+    <div className="fixed right-3 bottom-3 z-40 pointer-events-none sm:right-5 sm:bottom-5" data-testid="ai-assistant-root">
       {open && (
         <div
           ref={panelRef}
           data-testid="ai-assistant-panel"
-          className="pointer-events-auto mb-3 w-[min(380px,calc(100vw-2rem))] rounded-2xl bg-white shadow-2xl overflow-hidden"
+          className={`${expanded ? "w-[min(760px,calc(100vw-24px))]" : "w-[min(460px,calc(100vw-24px))]"} pointer-events-auto mb-3 flex h-[min(72vh,760px)] max-h-[calc(100vh-88px)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl`}
           style={{ border: `1px solid ${A.border}` }}
         >
           <div className="h-12 px-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${A.border}` }}>
@@ -1718,41 +1744,30 @@ export default function FloatingAiAssistant({
                 当前上下文：{contextLabel}
               </div>
             </div>
-            <button
-              onClick={minimizeAssistant}
-              className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100"
-              style={{ color: A.gray1 }}
-              aria-label="最小化 AI 助手"
-            >
-              <X size={15} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={startNewConversation} className="flex h-8 items-center gap-1 rounded-lg px-2 text-[11px] font-medium hover:bg-slate-100" style={{ color: A.gray1 }} aria-label="新对话"><Plus size={13} />新对话</button>
+              <button type="button" onClick={() => setExpanded((value) => !value)} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100" style={{ color: A.gray1 }} aria-label={expanded ? "收起 AI 工作区" : "展开 AI 工作区"}>{expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
+              <button type="button" onClick={minimizeAssistant} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100" style={{ color: A.gray1 }} aria-label="关闭 AI 助手"><X size={15} /></button>
+            </div>
           </div>
 
-          <div ref={scrollRef} data-testid="ai-assistant-messages" className="h-[min(360px,52vh)] overflow-auto px-4 py-3 space-y-3">
+          <div ref={scrollRef} data-testid="ai-assistant-messages" className="min-h-0 flex-1 overflow-auto px-4 py-3 space-y-3">
             {messages.length === 0 && (
               <div className="rounded-xl px-3 py-3 space-y-3" style={{ background: A.gray6, color: A.sub }}>
-                <div data-testid="ai-empty-context-chip" className={`${typography.compactMetadata} inline-flex rounded-full px-2 py-1`} style={{ background: A.white, color: A.gray1, border: `1px solid ${A.border}` }}>
-                  当前上下文：{contextLabel}
-                </div>
-                <div data-testid="ai-runtime-boundary" className="grid grid-cols-3 gap-1.5 fc-caption">
-                  {["当前工作区数据", "证据辅助回答", "复核优先", "草稿预览", "人工复核", "不形成正式业务处理", "不外发", "不写库存", "不写财务凭证", "不处理资金", "不改主数据", "不覆盖当前工作区数据"].map((label) => (
-                    <span key={label} className="rounded-full px-2 py-1 text-center" style={{ background: A.white, color: A.gray1, border: `1px solid ${A.border}` }}>
-                      {label}
-                    </span>
-                  ))}
-                </div>
+                <p data-testid="ai-runtime-boundary" className="text-xs leading-5" style={{ color: A.gray1 }}>基于当前工作区数据 · 涉及业务变更时需要确认</p>
+                <p className="text-xs leading-5" style={{ color: A.sub }}>直接提问，我会先给出结论、重点事项和建议下一步。</p>
                 <div className="flex flex-wrap gap-2">
-                  {AI_EMPTY_STATE_PROMPT_CHIPS.map((chip) => (
+                  {emptyPrompts.slice(0, 4).map((prompt) => (
                     <button
-                      key={chip.label}
+                      key={prompt}
                       type="button"
-                      onClick={() => askAi(chip.prompt)}
+                      onClick={() => askAi(prompt)}
                       disabled={asking}
                       data-testid="ai-empty-prompt-chip"
                       className="rounded-full px-2.5 py-1 text-[11px] font-medium hover:bg-slate-100 disabled:cursor-not-allowed"
                       style={{ background: A.white, color: asking ? A.gray3 : A.gray1, border: `1px solid ${A.border}` }}
                     >
-                      {chip.label}
+                      {prompt}
                     </button>
                   ))}
                 </div>
@@ -1768,7 +1783,7 @@ export default function FloatingAiAssistant({
                     color: message.role === "user" ? A.white : A.label,
                   }}
                 >
-                  <div className="whitespace-pre-wrap">{message.content}</div>
+                  {message.content ? <div className="whitespace-pre-wrap">{message.content}</div> : null}
                   {message.role === "assistant" && <AiResponseCards cards={message.cards} onNavigate={minimizeAfterNavigate} onReviewActionDraft={onReviewActionDraft} onFollowUp={askAi} />}
                   {message.role === "assistant" && getAiFollowUpChips(message).length ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1806,28 +1821,13 @@ export default function FloatingAiAssistant({
               <div className="flex justify-start">
                 <div className="rounded-2xl px-3 py-2 text-sm flex items-center gap-2" style={{ background: A.gray6, color: A.gray1 }}>
                   <Loader2 size={14} className="animate-spin" />
-                  {slowRequest ? "正在查询业务数据..." : "正在回复"}
+                  {slowRequest ? currentRequestLabel : "正在确认查询范围"}
                 </div>
               </div>
             )}
           </div>
 
           <div className="px-4 pb-3">
-            {messages.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {quickPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    onClick={() => askAi(prompt)}
-                    disabled={asking}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-medium hover:bg-slate-100"
-                    style={{ background: A.gray6, color: asking ? A.gray3 : A.gray1 }}
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            )}
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
@@ -1840,20 +1840,21 @@ export default function FloatingAiAssistant({
                   }
                 }}
                 disabled={asking}
-                rows={2}
+                rows={1}
                 placeholder={inputPlaceholder}
-                className="min-h-10 flex-1 resize-none rounded-xl px-3 py-2 text-sm outline-none disabled:cursor-not-allowed"
+                onInput={(event) => { const target = event.currentTarget; target.style.height = "auto"; target.style.height = `${Math.min(target.scrollHeight, 96)}px`; }}
+                className="min-h-10 max-h-24 flex-1 resize-none overflow-y-auto rounded-xl px-3 py-2 text-sm outline-none disabled:cursor-not-allowed"
                 style={{ background: A.gray6, color: A.label, fontFamily: "inherit" }}
               />
               <button
-                onClick={() => askAi(input)}
-                disabled={!input.trim() || asking}
+                onClick={() => asking ? cancelRequest() : askAi(input)}
+                disabled={!asking && !input.trim()}
                 data-testid="ai-assistant-send"
                 className="w-10 h-10 rounded-xl flex items-center justify-center text-white disabled:cursor-not-allowed"
-                style={{ background: input.trim() && !asking ? A.blue : A.gray3 }}
-                aria-label="发送"
+                style={{ background: asking || input.trim() ? A.blue : A.gray3 }}
+                aria-label={asking ? "取消请求" : "发送"}
               >
-                {asking ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                {asking ? <Square size={14} /> : <Send size={16} />}
               </button>
             </div>
           </div>

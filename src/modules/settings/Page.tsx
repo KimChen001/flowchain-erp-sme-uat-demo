@@ -1,115 +1,118 @@
-import { useEffect, useState } from "react";
-import { A, Card, RecoveryActions } from "../../components/ui";
-import { WorkspaceSetupConfigV2 } from "../../components/settings/WorkspaceSetupConfigV2";
-import { fetchWorkspaceSetupConfig, type WorkspaceSetupConfigV2 as WorkspaceSetupConfigPayload } from "./workspaceSetupConfig";
-import { UserRolePermissionVisibilityV2 } from "../../components/settings/UserRolePermissionVisibilityV2";
-import { fetchUserRolePermissionVisibility, type UserRolePermissionVisibilityV2 as RolePermissionPayload } from "./rolePermissionVisibility";
-import { WorkspaceBoundaryVisibilityV2 } from "../../components/settings/WorkspaceBoundaryVisibilityV2";
-import { fetchWorkspaceBoundaryVisibility, type WorkspaceBoundaryVisibilityV2 as BoundaryPayload } from "./workspaceBoundaryVisibility";
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, Plus, Save, Search, ShieldCheck } from 'lucide-react';
+import { A, Card, RecoveryActions } from '../../components/ui';
+import { BusinessEntityLink } from '../../components/business/BusinessEntityLink';
+import { businessEntityRouteRegistry, type BusinessEntityType } from '../../components/business/businessEntityRoutes';
+import { fetchSettingsAudit, fetchSettingsRuntime, saveSettingsSection, type SettingsAuditEntry, type SettingsRuntime } from './settingsRuntime';
 
-type NavigateFn = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
+type View = keyof SettingsRuntime | 'audit';
+type NavigateFn = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null) => void;
 
-const controlledSettingsViews: Record<string, { title: string; description: string; status: string }> = {
-  modules: { title: "菜单 / 模块", description: "当前版本按产品路由注册表统一管理菜单与模块，暂不开放在线修改。", status: "只读配置" },
-  ai: { title: "AI 设置", description: "AI 仅提供辅助建议；自动执行、外发和高风险写操作仍受人工复核边界控制。", status: "受治理控制" },
-  review: { title: "复核策略", description: "复核策略由角色权限、工作区边界和行动草稿规则共同决定。", status: "策略可见" },
+const sectionTitles: Record<View, [string, string]> = {
+  company: ['公司与工作区', '维护当前业务空间的基础信息。'], roles: ['用户与角色', '管理访问成员、角色和启用状态。'],
+  numbering: ['编号规则', '设置单据前缀、日期段和流水号。'], review: ['复核策略', '集中管理金额、风险和库存容差门槛。'],
+  modules: ['菜单与模块', '配置启用模块、顺序、默认入口和角色可见性。'], ai: ['AI 治理', '按能力设置允许、复核或禁止等级。'],
+  audit: ['操作日志', '检索真实设置与业务审计记录。'], advanced: ['高级设置', '维护安全、导出和显示类受控参数。'],
 };
 
-function ControlledSettingsView({ view }: { view: string }) {
-  const content = controlledSettingsViews[view] || {
-    title: "设置项暂不可用",
-    description: "此设置项尚未在当前工作区启用，请从系统管理导航选择可用设置。",
-    status: "未启用",
-  };
-  return (
-    <Card className="p-6" data-testid={`settings-${view}-controlled-state`}>
-      <div className="fc-caption font-semibold" style={{ color: A.blue }}>{content.status}</div>
-      <h2 className="fc-section-title mt-2" style={{ color: A.label }}>{content.title}</h2>
-      <p className="mt-2 max-w-3xl text-sm leading-6" style={{ color: A.sub }}>{content.description}</p>
-    </Card>
-  );
+const fieldClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400';
+const buttonClass = 'inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50';
+
+function Header({ view, dirty, saving, onSave }: { view: View; dirty?: boolean; saving?: boolean; onSave?: () => void }) {
+  const [title, description] = sectionTitles[view];
+  return <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div><h2 className="fc-section-title" style={{ color: A.label }}>{title}</h2><p className="mt-1 text-sm" style={{ color: A.sub }}>{description}</p></div>
+    {onSave && <button data-testid="settings-save" disabled={!dirty || saving} onClick={onSave} className={`${buttonClass} text-white`} style={{ background: A.blue }}><Save size={15} />{saving ? '保存中…' : dirty ? '保存更改' : '已保存'}</button>}
+  </div>;
 }
 
-export default function SettingsPage({ initialView, onNavigate }: { initialView?: string; onNavigate: NavigateFn }) {
-  const view = initialView || "numbering";
-  const isWorkspaceView = view === "numbering";
-  const isRoleView = initialView === "roles";
-  const isBoundaryView = initialView === "boundaries";
-  const [workspacePayload, setWorkspacePayload] = useState<WorkspaceSetupConfigPayload | null>(null);
-  const [rolePayload, setRolePayload] = useState<RolePermissionPayload | null>(null);
-  const [boundaryPayload, setBoundaryPayload] = useState<BoundaryPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+function Company({ value, onChange }: { value: SettingsRuntime['company']; onChange: (v: SettingsRuntime['company']) => void }) {
+  return <div className="grid gap-4 md:grid-cols-2">{[
+    ['companyName', '公司名称'], ['workspaceName', '工作区名称'], ['timezone', '时区'], ['currency', '本位币'], ['locale', '区域格式'],
+  ].map(([key, label]) => <label key={key} className="text-sm"><span className="mb-1 block font-medium" style={{ color: A.label }}>{label}</span><input className={fieldClass} value={String(value[key as keyof typeof value])} onChange={(e) => onChange({ ...value, [key]: e.target.value })} /></label>)}</div>;
+}
 
-  useEffect(() => {
-    let alive = true;
-    if (!isWorkspaceView && !isRoleView && !isBoundaryView) {
-      setLoading(false);
-      return () => { alive = false; };
-    }
-    setLoading(true);
-    const request = isBoundaryView ? fetchWorkspaceBoundaryVisibility() : isRoleView ? fetchUserRolePermissionVisibility() : fetchWorkspaceSetupConfig();
-    request
-      .then((next) => {
-        if (!alive) return;
-        if (isBoundaryView) {
-          setBoundaryPayload(next as BoundaryPayload);
-          setRolePayload(null);
-          setWorkspacePayload(null);
-        } else if (isRoleView) {
-          setRolePayload(next as RolePermissionPayload);
-          setWorkspacePayload(null);
-          setBoundaryPayload(null);
-        } else {
-          setWorkspacePayload(next as WorkspaceSetupConfigPayload);
-          setRolePayload(null);
-          setBoundaryPayload(null);
-        }
-        setError(false);
-      })
-      .catch(() => {
-        if (!alive) return;
-        setWorkspacePayload(null);
-        setRolePayload(null);
-        setBoundaryPayload(null);
-        setError(true);
-      })
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => { alive = false; };
-  }, [isWorkspaceView, isRoleView, isBoundaryView]);
+function Roles({ value, onChange }: { value: SettingsRuntime['roles']; onChange: (v: SettingsRuntime['roles']) => void }) {
+  const users = value.users;
+  const update = (id: string, patch: Partial<(typeof users)[number]>) => onChange({ ...value, users: users.map((user) => user.id === id ? { ...user, ...patch } : user) });
+  const add = () => onChange({ ...value, users: [...users, { id: `USR-${Date.now()}`, name: '新成员', email: '', role: '只读访客', enabled: true }] });
+  return <><div className="mb-3 flex justify-end"><button onClick={add} className={`${buttonClass} border border-slate-200 bg-white`}><Plus size={15} />添加用户</button></div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr>{['姓名', '邮箱', '角色', '状态'].map(x => <th key={x} className="px-3 py-2 font-medium">{x}</th>)}</tr></thead><tbody>{users.map(user => <tr key={user.id} className="border-t border-slate-100">
+      <td className="p-2"><input aria-label={`${user.name}姓名`} className={fieldClass} value={user.name} onChange={e => update(user.id, { name: e.target.value })} /></td>
+      <td className="p-2"><input aria-label={`${user.name}邮箱`} className={fieldClass} value={user.email} onChange={e => update(user.id, { email: e.target.value })} /></td>
+      <td className="p-2"><select aria-label={`${user.name}角色`} className={fieldClass} value={user.role} onChange={e => update(user.id, { role: e.target.value })}>{value.roleOptions.map(role => <option key={role}>{role}</option>)}</select></td>
+      <td className="p-2"><label className="inline-flex items-center gap-2"><input type="checkbox" checked={user.enabled} onChange={e => update(user.id, { enabled: e.target.checked })} />{user.enabled ? '已启用' : '已停用'}</label></td>
+    </tr>)}</tbody></table></div><p className="mt-3 text-xs text-slate-500">系统会阻止停用或降级最后一名管理员；这里不发送邀请邮件。</p></>;
+}
 
-  if (!isWorkspaceView && !isRoleView && !isBoundaryView) return <ControlledSettingsView view={view} />;
+function previewNumber(rule: SettingsRuntime['numbering']['rules'][number]) {
+  const date = rule.datePattern === 'YYYYMMDD' ? '20260711' : rule.datePattern === 'YYYYMM' ? '202607' : '';
+  return [rule.prefix.toUpperCase(), date, String(rule.nextSequence).padStart(rule.sequenceLength, '0')].filter(Boolean).join(rule.separator);
+}
 
-  if (loading) {
-    return (
-      <Card className="p-6" data-testid="workspace-setup-config">
-        <div className="animate-pulse space-y-4">
-          <div className="h-7 w-64 rounded" style={{ background: A.gray5 }} />
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
-            {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-20 rounded-xl" style={{ background: A.gray6 }} />)}
-          </div>
-          <div className="h-96 rounded-xl" style={{ background: A.gray6 }} />
-        </div>
-      </Card>
-    );
-  }
+function Numbering({ value, onChange }: { value: SettingsRuntime['numbering']; onChange: (v: SettingsRuntime['numbering']) => void }) {
+  const update = (id: string, patch: Partial<(typeof value.rules)[number]>) => onChange({ rules: value.rules.map(rule => rule.id === id ? { ...rule, ...patch } : rule) });
+  const signatures = value.rules.map(r => `${r.prefix.toUpperCase()}|${r.datePattern}|${r.separator}`);
+  return <div className="space-y-3">{value.rules.map((rule, index) => { const conflict = signatures.indexOf(signatures[index]) !== index; return <div key={rule.id} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-7">
+    <label className="text-xs md:col-span-2">单据<input className={`${fieldClass} mt-1`} value={rule.document} onChange={e => update(rule.id, { document: e.target.value })} /></label>
+    <label className="text-xs">前缀<input className={`${fieldClass} mt-1`} value={rule.prefix} onChange={e => update(rule.id, { prefix: e.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 8) })} /></label>
+    <label className="text-xs">日期<select className={`${fieldClass} mt-1`} value={rule.datePattern} onChange={e => update(rule.id, { datePattern: e.target.value })}><option>YYYYMM</option><option>YYYYMMDD</option><option value="">无日期</option></select></label>
+    <label className="text-xs">分隔符<input className={`${fieldClass} mt-1`} value={rule.separator} maxLength={1} onChange={e => update(rule.id, { separator: e.target.value })} /></label>
+    <label className="text-xs">流水位数<input type="number" min={2} max={8} className={`${fieldClass} mt-1`} value={rule.sequenceLength} onChange={e => update(rule.id, { sequenceLength: Number(e.target.value) })} /></label>
+    <div className="text-xs"><span>预览</span><div className="mt-1 rounded-lg bg-slate-50 px-3 py-2 font-mono">{previewNumber(rule)}</div>{conflict && <span className="mt-1 block text-red-600">与现有规则冲突</span>}</div>
+  </div>; })}</div>;
+}
 
-  const payloadReady = isBoundaryView ? boundaryPayload : isRoleView ? rolePayload : workspacePayload;
-  if (error || !payloadReady) {
-    return (
-      <Card className="p-6" data-testid={isBoundaryView ? "workspace-boundary-visibility" : isRoleView ? "user-role-permission-visibility" : "workspace-setup-config"}>
-        <h2 className="fc-section-title" style={{ color: A.label }}>系统设置加载失败</h2>
-        <div className="mt-3 text-sm" style={{ color: A.red }}>{isBoundaryView ? "工作区边界" : isRoleView ? "角色权限可见性" : "工作区配置"}暂不可用，请稍后重试。</div>
-        <div className="mt-4">
-          <RecoveryActions actions={[{ key: "reload", label: "重新加载", onClick: () => window.location.reload(), kind: "list" }]} />
-        </div>
-      </Card>
-    );
-  }
+function Review({ value, onChange }: { value: SettingsRuntime['review']; onChange: (v: SettingsRuntime['review']) => void }) {
+  const [amount, setAmount] = useState(120000); const requires = value.enabled && amount >= value.amountThreshold;
+  return <div className="grid gap-5 lg:grid-cols-[1fr_320px]"><div className="grid gap-4 md:grid-cols-2">
+    <label className="text-sm">金额复核阈值<input type="number" className={`${fieldClass} mt-1`} value={value.amountThreshold} onChange={e => onChange({ ...value, amountThreshold: Number(e.target.value) })} /></label>
+    <label className="text-sm">库存差异容差（%）<input type="number" className={`${fieldClass} mt-1`} value={value.inventoryTolerancePercent} onChange={e => onChange({ ...value, inventoryTolerancePercent: Number(e.target.value) })} /></label>
+    <label className="text-sm">触发风险等级<input className={`${fieldClass} mt-1`} value={value.riskLevels.join('、')} onChange={e => onChange({ ...value, riskLevels: e.target.value.split(/[、,]/).filter(Boolean) })} /></label>
+    <label className="text-sm">复核角色<input className={`${fieldClass} mt-1`} value={value.reviewerRoles.join('、')} onChange={e => onChange({ ...value, reviewerRoles: e.target.value.split(/[、,]/).filter(Boolean) })} /></label>
+    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={value.enabled} onChange={e => onChange({ ...value, enabled: e.target.checked })} />启用复核策略</label>
+  </div><div className="rounded-xl bg-slate-50 p-4"><div className="font-medium">策略模拟</div><label className="mt-3 block text-xs">模拟单据金额<input type="number" className={`${fieldClass} mt-1`} value={amount} onChange={e => setAmount(Number(e.target.value))} /></label><div className={`mt-3 rounded-lg p-3 text-sm ${requires ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>{requires ? `需要 ${value.reviewerRoles.join(' / ')} 复核` : '可按标准流程继续'}</div></div></div>;
+}
 
-  if (isBoundaryView && boundaryPayload) return <WorkspaceBoundaryVisibilityV2 payload={boundaryPayload} onNavigate={onNavigate} />;
-  if (isRoleView && rolePayload) return <UserRolePermissionVisibilityV2 payload={rolePayload} onNavigate={onNavigate} />;
-  return <WorkspaceSetupConfigV2 payload={workspacePayload as WorkspaceSetupConfigPayload} onNavigate={onNavigate} />;
+function Modules({ value, onChange }: { value: SettingsRuntime['modules']; onChange: (v: SettingsRuntime['modules']) => void }) {
+  const sorted = [...value.items].sort((a, b) => a.order - b.order);
+  const update = (id: string, patch: Partial<(typeof value.items)[number]>) => onChange({ ...value, items: value.items.map(item => item.id === id ? { ...item, ...patch } : item) });
+  const move = (index: number, delta: number) => { const next = [...sorted]; const target = index + delta; if (target < 0 || target >= next.length) return; [next[index], next[target]] = [next[target], next[index]]; onChange({ ...value, items: next.map((item, i) => ({ ...item, order: i + 1 })) }); };
+  return <div className="grid gap-5 lg:grid-cols-[1fr_260px]"><div className="space-y-2">{sorted.map((item, index) => <div key={item.id} className="grid items-center gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-[32px_1fr_160px_110px]">
+    <div className="flex flex-col"><button aria-label="上移" onClick={() => move(index, -1)}><ArrowUp size={14} /></button><button aria-label="下移" onClick={() => move(index, 1)}><ArrowDown size={14} /></button></div><div><div className="font-medium">{item.label}</div><input aria-label={`${item.label}可见角色`} className={`${fieldClass} mt-1`} value={item.roles.join('、')} onChange={e => update(item.id, { roles: e.target.value.split(/[、,]/).filter(Boolean) })} /></div>
+    <label className="text-sm"><input type="radio" name="default-module" checked={value.defaultModule === item.id} onChange={() => onChange({ ...value, defaultModule: item.id })} /> 设为默认</label>
+    <label className="text-sm"><input type="checkbox" checked={item.enabled} disabled={['overview', 'settings'].includes(item.id)} onChange={e => update(item.id, { enabled: e.target.checked })} /> {item.enabled ? '已启用' : '已停用'}</label>
+  </div>)}</div><div className="rounded-xl bg-slate-900 p-4 text-white"><div className="text-xs text-slate-400">侧边栏预览</div><div className="mt-3 space-y-1">{sorted.filter(x => x.enabled).map(x => <div key={x.id} className={`rounded-lg px-3 py-2 text-sm ${x.id === value.defaultModule ? 'bg-blue-600' : 'bg-slate-800'}`}>{x.label}</div>)}</div></div></div>;
+}
+
+function AiGovernance({ value, onChange }: { value: SettingsRuntime['ai']; onChange: (v: SettingsRuntime['ai']) => void }) {
+  const levels = ['允许', '复核后允许', '仅生成待确认动作', '禁止'];
+  return <><div className="space-y-2">{value.capabilities.map(cap => <div key={cap.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"><div><div className="font-medium">{cap.label}</div><div className="text-xs text-slate-500">能力 ID：{cap.id}</div></div><select className={`${fieldClass} max-w-[220px]`} value={cap.level} onChange={e => onChange({ ...value, capabilities: value.capabilities.map(x => x.id === cap.id ? { ...x, level: e.target.value } : x) })}>{levels.map(level => <option key={level}>{level}</option>)}</select></div>)}</div><div className="mt-4 flex flex-wrap gap-6 rounded-xl bg-slate-50 p-4 text-sm"><label><input type="checkbox" checked={value.evidenceRequired} onChange={e => onChange({ ...value, evidenceRequired: e.target.checked })} /> 回答必须附业务证据</label><label>记录保留天数 <input type="number" className="ml-2 w-24 rounded border px-2 py-1" value={value.retainDays} onChange={e => onChange({ ...value, retainDays: Number(e.target.value) })} /></label></div></>;
+}
+
+function Advanced({ value, onChange }: { value: SettingsRuntime['advanced']; onChange: (v: SettingsRuntime['advanced']) => void }) {
+  return <div className="grid gap-4 md:grid-cols-2"><label className="text-sm">会话超时（分钟）<input type="number" className={`${fieldClass} mt-1`} value={value.sessionTimeoutMinutes} onChange={e => onChange({ ...value, sessionTimeoutMinutes: Number(e.target.value) })} /></label><label className="text-sm">单次导出上限<input type="number" className={`${fieldClass} mt-1`} value={value.exportLimit} onChange={e => onChange({ ...value, exportLimit: Number(e.target.value) })} /></label><label className="text-sm">日期格式<select className={`${fieldClass} mt-1`} value={value.dateFormat} onChange={e => onChange({ ...value, dateFormat: e.target.value })}><option>YYYY-MM-DD</option><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option></select></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={value.negativeInventoryBlocked} onChange={e => onChange({ ...value, negativeInventoryBlocked: e.target.checked })} />阻止负库存过账</label><label className="text-sm md:col-span-2">维护公告<textarea rows={3} className={`${fieldClass} mt-1`} value={value.maintenanceNotice} onChange={e => onChange({ ...value, maintenanceNotice: e.target.value })} /></label></div>;
+}
+
+function Audit() {
+  const [entries, setEntries] = useState<SettingsAuditEntry[]>([]); const [query, setQuery] = useState(''); const [module, setModule] = useState(''); const [expanded, setExpanded] = useState<string | null>(null);
+  useEffect(() => { fetchSettingsAudit().then(setEntries).catch(() => setEntries([])); }, []);
+  const filtered = useMemo(() => entries.filter(e => (!module || e.module === module) && (!query || JSON.stringify(e).toLowerCase().includes(query.toLowerCase()))), [entries, query, module]);
+  return <><div className="mb-4 flex flex-wrap gap-2"><label className="relative min-w-[260px] flex-1"><Search className="absolute left-3 top-2.5 text-slate-400" size={16} /><input aria-label="搜索操作日志" className={`${fieldClass} pl-9`} value={query} onChange={e => setQuery(e.target.value)} placeholder="搜索操作者、摘要或实体" /></label><select aria-label="模块筛选" className={`${fieldClass} w-44`} value={module} onChange={e => setModule(e.target.value)}><option value="">全部模块</option>{[...new Set(entries.map(e => e.module))].map(x => <option key={x}>{x}</option>)}</select></div><div className="space-y-2">{filtered.map(entry => { const type = entry.entity?.type as BusinessEntityType | undefined; return <div key={entry.id} className="rounded-xl border border-slate-200 p-4"><button className="w-full text-left" onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}><div className="flex flex-wrap justify-between gap-2"><span className="font-medium">{entry.summary || entry.action}</span><time className="text-xs text-slate-500">{new Date(entry.timestamp).toLocaleString('zh-CN')}</time></div><div className="mt-1 text-xs text-slate-500">{entry.actor?.name || '系统'} · {entry.module} · {entry.entity?.type || 'system'} {entry.entity?.id || ''}</div></button>{expanded === entry.id && <div className="mt-3 grid gap-3 border-t border-slate-100 pt-3 md:grid-cols-2"><pre className="overflow-auto rounded-lg bg-slate-50 p-3 text-xs">变更前{`\n`}{JSON.stringify(entry.before, null, 2)}</pre><pre className="overflow-auto rounded-lg bg-slate-50 p-3 text-xs">变更后{`\n`}{JSON.stringify(entry.after, null, 2)}</pre>{entry.entity?.id && type && type in businessEntityRouteRegistry && <BusinessEntityLink entityType={type} entityId={entry.entity.id}>打开关联实体</BusinessEntityLink>}</div>}</div>; })}{!filtered.length && <div className="py-12 text-center text-sm text-slate-500">没有符合条件的日志</div>}</div></>;
+}
+
+export default function SettingsPage({ initialView }: { initialView?: string; onNavigate: NavigateFn }) {
+  const view = ((initialView === 'boundaries' ? 'advanced' : initialView) || 'company') as View;
+  const [data, setData] = useState<SettingsRuntime | null>(null); const [draft, setDraft] = useState<SettingsRuntime | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState(false); const [notice, setNotice] = useState('');
+  useEffect(() => { setLoading(true); fetchSettingsRuntime().then(next => { setData(next); setDraft(next); setError(''); }).catch(err => setError(err instanceof Error ? err.message : '设置加载失败')).finally(() => setLoading(false)); }, []);
+  if (view === 'audit') return <Card className="p-5"><Header view="audit" /><Audit /></Card>;
+  if (loading) return <Card className="p-6"><div className="h-52 animate-pulse rounded-xl bg-slate-100" /></Card>;
+  if (error || !data || !draft) return <Card className="p-6"><div className="text-sm text-red-600">{error || '设置加载失败'}</div><RecoveryActions actions={[{ key: 'reload', label: '重新加载', onClick: () => window.location.reload(), kind: 'list' }]} /></Card>;
+  const section = view as keyof SettingsRuntime;
+  const dirty = JSON.stringify(data[section]) !== JSON.stringify(draft[section]);
+  const change = <K extends keyof SettingsRuntime>(next: SettingsRuntime[K]) => { setDraft({ ...draft, [section]: next }); setNotice(''); };
+  const save = async () => { setSaving(true); setNotice(''); try { const result = await saveSettingsSection(section, draft[section]); setData({ ...data, [section]: result.settings }); setDraft({ ...draft, [section]: result.settings }); setNotice('更改已保存并写入操作日志。'); if (section === 'modules') { localStorage.setItem('flowchain:module-settings', JSON.stringify(result.settings)); window.dispatchEvent(new Event('flowchain:module-settings')); } } catch (err) { setNotice(err instanceof Error ? err.message : '保存失败'); } finally { setSaving(false); } };
+  return <Card className="p-5" data-testid={`settings-${view}`}><Header view={view} dirty={dirty} saving={saving} onSave={save} />{notice && <div role="status" className={`mb-4 rounded-lg p-3 text-sm ${notice.includes('已保存') ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>{notice}</div>}
+    {view === 'company' && <Company value={draft.company} onChange={change} />}{view === 'roles' && <Roles value={draft.roles} onChange={change} />}{view === 'numbering' && <Numbering value={draft.numbering} onChange={change} />}{view === 'review' && <Review value={draft.review} onChange={change} />}{view === 'modules' && <Modules value={draft.modules} onChange={change} />}{view === 'ai' && <AiGovernance value={draft.ai} onChange={change} />}{view === 'advanced' && <Advanced value={draft.advanced} onChange={change} />}
+    <div className="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4 text-xs text-slate-500"><ShieldCheck size={14} />所有保存操作都会记录操作者、时间以及变更前后值。</div></Card>;
 }

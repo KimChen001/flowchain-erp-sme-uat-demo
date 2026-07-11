@@ -66,7 +66,7 @@ export default function MasterDataTables({
                 <td className={tdNowrapClass}><BoolText value={item.serialManaged} /></td>
                 <td className={tdNowrapClass}><BoolText value={item.qaRequired} /></td>
                 <td className={tdNowrapClass}><Chip label={item.status} color={style.color} bg={style.bg} /></td>
-                <td className={tdActionClass}><button onClick={() => onDetail({ type: "items", item })} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>详情</button></td>
+                <td className={tdActionClass}><BusinessEntityLink entityType="item" entityId={item.sku} className="rounded-md bg-slate-100 px-2 py-1">详情</BusinessEntityLink></td>
               </tr>
             );
           })}</tbody>
@@ -99,7 +99,7 @@ export default function MasterDataTables({
                 <td className={tdNowrapClass}><Chip label={item.riskStatus} color={riskStyle.color} bg={riskStyle.bg} /></td>
                 <td className={tdNowrapClass} style={{ color: A.sub }}>{item.certificationStatus}</td>
                 <td className={tdNowrapClass}><Chip label={item.status} color={style.color} bg={style.bg} /></td>
-                <td className={tdActionClass}><button onClick={() => onDetail({ type: "suppliers", item })} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>详情</button></td>
+                <td className={tdActionClass}><BusinessEntityLink entityType="supplier" entityId={item.code} className="rounded-md bg-slate-100 px-2 py-1">详情</BusinessEntityLink></td>
               </tr>
             );
           })}</tbody>
@@ -117,17 +117,17 @@ export default function MasterDataTables({
             const style = statusStyle(item.qaStatus);
             return (
               <tr key={`${item.warehouseCode}-${item.bin}`} style={{ borderBottom: index < warehouses.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className={tdIdClass} style={{ color: A.blue }}>{item.warehouseCode}</td>
+                <td className={tdIdClass}><BusinessEntityLink entityType="warehouse" entityId={item.warehouseCode}>{item.warehouseCode}</BusinessEntityLink></td>
                 <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{item.warehouseName}</td>
                 <td className={tdNowrapClass} style={{ color: A.sub }}>{item.zone}</td>
-                <td className={tdNowrapClass} style={{ color: A.sub }}>{item.bin}</td>
+                <td className={tdNowrapClass}><BusinessEntityLink entityType="bin" entityId={item.bin}>{item.bin}</BusinessEntityLink></td>
                 <td className={tdNumericClass} style={{ color: A.sub }}>{item.capacity.toLocaleString()}</td>
                 <td className={`${tdNumericClass} font-medium`} style={{ color: item.utilization > 0.85 ? A.red : A.label }}>{Math.round(item.utilization * 100)}%</td>
                 <td className={tdNowrapClass} style={{ color: A.sub }}>{item.temperatureRequirement}</td>
                 <td className={tdNowrapClass}><Chip label={item.qaStatus} color={style.color} bg={style.bg} /></td>
                 <td className={tdNowrapClass}><BoolText value={item.available} /></td>
                 <td className={tdNowrapClass} style={{ color: A.sub }}>{item.owner}</td>
-                <td className={tdActionClass}><button onClick={() => onDetail({ type: "warehouses", item })} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>详情</button></td>
+                <td className={tdActionClass}><BusinessEntityLink entityType="warehouse" entityId={item.warehouseCode} className="rounded-md bg-slate-100 px-2 py-1">详情</BusinessEntityLink></td>
               </tr>
             );
           })}</tbody>
@@ -145,7 +145,7 @@ export default function MasterDataTables({
             const style = statusStyle(item.status);
             return (
               <tr key={item.code} style={{ borderBottom: index < taxCodes.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                <td className={tdIdClass} style={{ color: A.blue }}>{item.code}</td>
+                <td className={tdIdClass}><BusinessEntityLink entityType="tax_code" entityId={item.code}>{item.code}</BusinessEntityLink></td>
                 <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{item.name}</td>
                 <td className={tdNumericClass} style={{ color: A.sub }}>{Math.round(item.rate * 100)}%</td>
                 <td className={tdNowrapClass} style={{ color: A.sub }}>{item.type}</td>
@@ -153,7 +153,7 @@ export default function MasterDataTables({
                 <td className={tdNowrapClass}><BoolText value={item.isDefault} /></td>
                 <td className={tdNowrapClass}><Chip label={item.status} color={style.color} bg={style.bg} /></td>
                 <td className="px-4 py-3 max-w-[320px] truncate" style={{ color: A.sub }}>{item.description}</td>
-                <td className={tdActionClass}><button onClick={() => onDetail({ type: "tax-codes", item })} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>详情</button></td>
+                <td className={tdActionClass}><BusinessEntityLink entityType="tax_code" entityId={item.code} className="rounded-md bg-slate-100 px-2 py-1">详情</BusinessEntityLink></td>
               </tr>
             );
           })}</tbody>
@@ -170,14 +170,14 @@ export default function MasterDataTables({
           const style = statusStyle(item.status);
           return (
             <tr key={item.code} style={{ borderBottom: index < paymentTerms.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-              <td className={tdIdClass} style={{ color: A.blue }}>{item.code}</td>
+              <td className={tdIdClass}><BusinessEntityLink entityType="payment_term" entityId={item.code}>{item.code}</BusinessEntityLink></td>
               <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{item.name}</td>
               <td className={tdNumericClass} style={{ color: A.sub }}>{item.netDays}</td>
               <td className={tdNowrapClass} style={{ color: A.sub }}>{item.discountRule}</td>
               <td className={tdNowrapClass} style={{ color: A.sub }}>{item.dueDateRule}</td>
               <td className={tdNowrapClass}><Chip label={item.status} color={style.color} bg={style.bg} /></td>
               <td className="px-4 py-3 max-w-[360px] truncate" style={{ color: A.sub }}>{item.description}</td>
-              <td className={tdActionClass}><button onClick={() => onDetail({ type: "payment-terms", item })} className="px-2 py-1 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>详情</button></td>
+              <td className={tdActionClass}><BusinessEntityLink entityType="payment_term" entityId={item.code} className="rounded-md bg-slate-100 px-2 py-1">详情</BusinessEntityLink></td>
             </tr>
           );
         })}</tbody>

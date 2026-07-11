@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Database, FileSpreadsheet, Package, Printer, Search, Tags, Truck, Users, Warehouse } from "lucide-react";
 import ContextualImportActions from "../../components/import/ContextualImportActions";
 import { A, Card, KpiCard } from "../../components/ui";
-import { ITEM_MASTER, PAYMENT_TERMS, SUPPLIER_MASTER, TAX_CODES, WAREHOUSE_BINS } from "../../data/master-data";
 import type { ActiveContext } from "../ai-assistant/Panel";
 import MasterDataDetailModal, { type DetailRecord } from "./MasterDataDetailModal";
 import MasterDataOverview from "./MasterDataOverview";
@@ -10,7 +9,7 @@ import MasterDataTables from "./MasterDataTables";
 import { fetchMasterDataSnapshot, type MasterDataSnapshot } from "./api";
 import { exportMasterDataCsv } from "./export";
 import { CustomerTable, PrintTemplateTable } from "./StandardMasterTables";
-import { CUSTOMER_MASTER, PRINT_TEMPLATE_CATALOG, type PrintTemplateCatalogItem } from "./standardData";
+import { PRINT_TEMPLATE_CATALOG, type PrintTemplateCatalogItem } from "./standardData";
 
 export type MasterDataTab = "overview" | "items" | "suppliers" | "customers" | "warehouses" | "tax-codes" | "payment-terms" | "print-templates";
 export type MasterDataTableTab = Exclude<MasterDataTab, "overview" | "customers" | "print-templates">;
@@ -27,11 +26,7 @@ const tabs = [
 ] as const;
 
 const fallbackMasterData: MasterDataSnapshot = {
-  items: ITEM_MASTER,
-  suppliers: SUPPLIER_MASTER,
-  warehouses: WAREHOUSE_BINS,
-  taxCodes: TAX_CODES,
-  paymentTerms: PAYMENT_TERMS,
+  items: [], suppliers: [], customers: [], warehouses: [], taxCodes: [], paymentTerms: [],
 };
 
 export default function MasterDataPage({
@@ -49,6 +44,7 @@ export default function MasterDataPage({
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<DetailRecord | null>(null);
   const [masterData, setMasterData] = useState<MasterDataSnapshot>(fallbackMasterData);
+  const [masterDataError, setMasterDataError] = useState("");
   const [templateCatalog, setTemplateCatalog] = useState<PrintTemplateCatalogItem[]>(PRINT_TEMPLATE_CATALOG);
 
   function openTab(next: MasterDataTab) {
@@ -93,8 +89,8 @@ export default function MasterDataPage({
   useEffect(() => {
     let alive = true;
     fetchMasterDataSnapshot(fallbackMasterData)
-      .then((snapshot) => { if (alive) setMasterData(snapshot); })
-      .catch(() => { if (alive) setMasterData(fallbackMasterData); });
+      .then((snapshot) => { if (alive) { setMasterData(snapshot); setMasterDataError(""); } })
+      .catch(() => { if (alive) { setMasterData(fallbackMasterData); setMasterDataError("主数据 API 暂不可用，未使用前端静态数据替代。"); } });
     return () => { alive = false; };
   }, []);
 
@@ -139,7 +135,7 @@ export default function MasterDataPage({
   const filteredPaymentTerms = useMemo(() => masterData.paymentTerms.filter((item) =>
     !query || [item.code, item.name, item.description].some((value) => value.toLowerCase().includes(query))
   ), [masterData.paymentTerms, query]);
-  const filteredCustomers = useMemo(() => CUSTOMER_MASTER.filter((item) => !query || [item.code, item.name, item.contact, item.phone, item.address, item.paymentTerms].some((value) => value.toLowerCase().includes(query))), [query]);
+  const filteredCustomers = useMemo(() => masterData.customers.filter((item) => !query || [item.code, item.name, item.contact, item.phone, item.address, item.paymentTerms].some((value) => value.toLowerCase().includes(query))), [masterData.customers, query]);
   const filteredTemplates = useMemo(() => templateCatalog.filter((item) => !query || [item.name, item.documentType].some((value) => value.toLowerCase().includes(query))), [query, templateCatalog]);
 
   function exportCurrent() {
@@ -166,6 +162,8 @@ export default function MasterDataPage({
 
   const [entityLabel, templateName] = importLabels[tab];
 
+  if (masterDataError) return <Card className="p-6"><h2 className="text-sm font-semibold" style={{ color: A.red }}>基础资料加载失败</h2><p className="mt-2 text-sm" style={{ color: A.sub }}>{masterDataError}</p><button onClick={() => window.location.reload()} className="mt-4 rounded-lg bg-slate-100 px-3 py-2 text-sm">重新加载</button></Card>;
+
   return (
     <div className="space-y-4">
       <MasterDataDetailModal detail={detail} onClose={() => setDetail(null)} />
@@ -173,7 +171,7 @@ export default function MasterDataPage({
         <KpiCard label="物料资料" value={String(masterData.items.length)} sub={`${masterData.items.filter((item) => item.status === "待完善").length} 条待完善`} icon={Package} color={A.blue} />
         <KpiCard label="供应商资料" value={String(masterData.suppliers.length)} sub={`${masterData.suppliers.filter((item) => item.riskStatus === "高").length} 个高风险`} icon={Truck} color={A.purple} />
         <KpiCard label="仓库 / 库位" value={String(masterData.warehouses.length)} sub={`${masterData.warehouses.filter((item) => item.available).length} 个可用`} icon={Warehouse} color={A.green} />
-        <KpiCard label="客户资料" value={String(CUSTOMER_MASTER.length)} sub={`${CUSTOMER_MASTER.filter((item) => item.creditStatus !== "正常").length} 个需关注`} icon={Users} color={A.orange} />
+        <KpiCard label="客户资料" value={String(masterData.customers.length)} sub={`${masterData.customers.filter((item) => item.creditStatus !== "正常").length} 个需关注`} icon={Users} color={A.orange} />
       </div>
 
       <div className="flex items-center justify-between gap-3">

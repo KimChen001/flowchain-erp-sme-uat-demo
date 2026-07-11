@@ -479,10 +479,20 @@ export default function PurchasingOrdersPage({
   onNavigate?: NavigateFn;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<PurchaseOrder[]>(purchaseOrders);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<PurchaseOrderWorkbenchFilters>(defaultPurchaseOrderWorkbenchFilters);
+  const [filters, setFilters] = useState<PurchaseOrderWorkbenchFilters>(() => ({
+    ...defaultPurchaseOrderWorkbenchFilters,
+    poNumber: searchParams.get("po") || "",
+    supplier: searchParams.get("supplier") || "",
+    skuOrItem: searchParams.get("item") || "",
+    status: (searchParams.get("status") || "全部") as PurchaseOrderWorkbenchFilters["status"],
+    source: searchParams.get("source") || "全部",
+    owner: searchParams.get("owner") || "",
+    etaFrom: searchParams.get("etaFrom") || "",
+    etaTo: searchParams.get("etaTo") || "",
+  }));
   const [selectedId, setSelectedId] = useState(purchaseOrders[0]?.po ?? "");
   const [viewMode, setViewMode] = useState<PurchaseOrderViewMode>("list");
 
@@ -552,11 +562,21 @@ export default function PurchasingOrdersPage({
   const matchExceptions = orders.filter((order) => !["已匹配", "缺少发票"].includes(matchStatus(order))).length;
 
   function updateFilter<K extends keyof PurchaseOrderWorkbenchFilters>(key: K, value: PurchaseOrderWorkbenchFilters[K]) {
-    setFilters((current) => ({ ...current, [key]: value }));
+    setFilters((current) => {
+      const next = { ...current, [key]: value };
+      const params = new URLSearchParams(searchParams);
+      const queryKeys: Record<keyof PurchaseOrderWorkbenchFilters, string> = { poNumber: "po", supplier: "supplier", skuOrItem: "item", status: "status", source: "source", owner: "owner", etaFrom: "etaFrom", etaTo: "etaTo" };
+      const queryKey = queryKeys[key];
+      const normalized = String(value);
+      if (!normalized || normalized === "全部") params.delete(queryKey); else params.set(queryKey, normalized);
+      setSearchParams(params, { replace: true });
+      return next;
+    });
   }
 
   function resetFilters() {
     setFilters(defaultPurchaseOrderWorkbenchFilters);
+    setSearchParams({}, { replace: true });
   }
 
   function openDetail(poId: string) {
@@ -1030,11 +1050,6 @@ export default function PurchasingOrdersPage({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => toast.success(`已筛选 ${filtered.length} 条采购订单`)}
-              className="h-8 px-3 rounded-lg text-xs font-medium text-white"
-              style={{ background: A.blue }}>
-              查询
-            </button>
             <button onClick={resetFilters}
               className="h-8 px-3 rounded-lg text-xs font-medium"
               style={{ background: A.gray6, color: A.label }}>
@@ -1102,12 +1117,12 @@ export default function PurchasingOrdersPage({
           <Chip label="只读复核" color={A.blue} bg="#f0f6ff" />
         </div>
         <div className={tableScrollClass}>
-          <table className={tableMinXlClass}>
+          <table className="w-full min-w-[1200px] table-fixed text-left">
             <thead>
               <tr style={{ borderBottom: "0.5px solid rgba(0,0,0,0.06)" }}>
-                {["PO 编号", "来源 PR", "来源 RFQ", "供应商", "状态", "采购负责人", "行数", "订单金额", "需求日期 / 预计到货", "收货状态", "发票状态", "三单匹配状态", "下一步", "操作"].map((header) => (
-                  <th key={header} className={thClass} style={{ color: A.gray1 }}>{header}</th>
-                ))}
+                <th className={`${thClass} sticky left-0 z-20 w-[150px] bg-slate-50`} style={{ color: A.gray1 }}>PO 编号</th>
+                {["供应商", "状态", "采购负责人", "订单金额", "预计到货", "收货状态", "发票 / 匹配"].map((header) => <th key={header} className={thClass} style={{ color: A.gray1 }}>{header}</th>)}
+                <th className={`${thClass} sticky right-0 z-20 w-[150px] bg-slate-50`} style={{ color: A.gray1 }}>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -1117,33 +1132,29 @@ export default function PurchasingOrdersPage({
                 const firstInvoice = invoicesForPo(order.po)[0];
                 return (
                   <tr key={order.po}
-                    className="transition-colors hover:bg-blue-50/40"
+                    className="h-14 transition-colors hover:bg-blue-50/40"
                     style={{ borderBottom: index < filtered.length - 1 ? "0.5px solid rgba(0,0,0,0.04)" : "none" }}>
-                    <td className={tdIdClass}>
+                    <td className={`${tdIdClass} sticky left-0 z-10 bg-white`}>
                       <BusinessEntityLink entityType="purchase_order" entityId={order.po} className={tableLinkClass}>{order.po}</BusinessEntityLink>
                     </td>
-                    <td className={tdNowrapClass} style={{ color: order.sourceRequest ? A.blue : A.orange }}>{order.sourceRequest || "待补齐"}</td>
-                    <td className={tdNowrapClass} style={{ color: order.sourceRfq ? A.blue : A.orange }}>{order.sourceRfq || "待补齐"}</td>
-                    <td className={`${tdNameClass} max-w-[180px] truncate font-medium`} style={{ color: A.label }}>{order.supplier}</td>
+                    <td className={`${tdNameClass} max-w-[180px] truncate font-medium`}><BusinessEntityLink entityType="supplier" entityId={order.supplier}>{order.supplier}</BusinessEntityLink></td>
                     <td className={tdNowrapClass}><POStatusPill status={order.status} /></td>
                     <td className={tdNowrapClass} style={{ color: A.sub }}>{order.owner}</td>
-                    <td className={tdNumericClass} style={{ color: A.sub }}>{totals.lineCount}</td>
                     <td className={`${tdNumericClass} font-semibold`} style={{ color: A.label }}>{fmt(poAmount(order))}</td>
                     <td className={tdNowrapClass} style={{ color: A.sub }}>{order.eta}</td>
                     <td className={tdNowrapClass}>{statusChip(receivedStatus(order))}</td>
-                    <td className={tdNowrapClass}>{statusChip(invoiceStatus(order))}</td>
-                    <td className={tdNowrapClass}>{statusChip(matchStatus(order))}</td>
-                    <td className={`${tdNameClass} max-w-[180px] truncate`} style={{ color: A.label }}>{nextStepForPo(order)}</td>
-                    <td className={tdActionClass}>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button onClick={() => openDetail(order.po)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button>
-                        <button onClick={() => openDetail(order.po)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看 PO Line</button>
-                        <button onClick={() => firstGrn ? navigateOrderWithReturn(order, "procurement:receiving", { entityType: "receiving_doc", entityId: firstGrn.grn }, firstGrn.grn) : toast("收货记录待补齐")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看收货记录</button>
-                        <button onClick={() => firstInvoice ? navigateOrderWithReturn(order, "procurement:invoices", { entityType: "supplier_invoice", entityId: firstInvoice.invoiceNumber }, firstInvoice.invoiceNumber) : toast("发票记录待补齐")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看发票记录</button>
-                        <button onClick={() => navigateOrderWithReturn(order, "procurement:match")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看三单匹配</button>
-                        <button onClick={() => openDetail(order.po)} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>查看证据链</button>
-                        <button onClick={() => order.sourceRequest ? navigateOrderWithReturn(order, "procurement:requests", { entityType: "purchase_request", entityId: order.sourceRequest }, order.sourceRequest) : toast("来源 PR 待补齐")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>返回来源 PR</button>
-                        <button onClick={() => order.sourceRfq ? navigateOrderWithReturn(order, "procurement:rfq", { entityType: "rfq", entityId: order.sourceRfq }, order.sourceRfq) : toast("来源 RFQ 待补齐")} className="px-2 py-1 text-[11px] font-medium rounded-md" style={{ background: A.gray6, color: A.label }}>返回来源 RFQ</button>
+                    <td className={tdNowrapClass}><div>{statusChip(invoiceStatus(order))}</div><div className="mt-1 text-[10px] text-slate-500">{matchStatus(order)}</div></td>
+                    <td className={`${tdActionClass} sticky right-0 z-10 bg-white`}>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => openDetail(order.po)} className="rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-600">查看</button>
+                        <details className="relative"><summary className="cursor-pointer list-none rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium">更多</summary><div className="absolute right-0 top-7 z-30 w-40 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                          <button onClick={() => openDetail(order.po)} className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50">查看订单行与证据</button>
+                          {firstGrn && <button onClick={() => navigateOrderWithReturn(order, "procurement:receiving", { entityType: "receiving_doc", entityId: firstGrn.grn }, firstGrn.grn)} className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50">打开收货记录</button>}
+                          {firstInvoice && <button onClick={() => navigateOrderWithReturn(order, "finance:invoices", { entityType: "supplier_invoice", entityId: firstInvoice.invoiceNumber }, firstInvoice.invoiceNumber)} className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50">打开发票记录</button>}
+                          <button onClick={() => navigateOrderWithReturn(order, "finance:three-way-match")} className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50">打开三单匹配</button>
+                          {order.sourceRequest && <button onClick={() => navigateOrderWithReturn(order, "procurement:requests", { entityType: "purchase_request", entityId: order.sourceRequest }, order.sourceRequest)} className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50">打开来源 PR</button>}
+                          {order.sourceRfq && <button onClick={() => navigateOrderWithReturn(order, "procurement:rfq", { entityType: "rfq", entityId: order.sourceRfq }, order.sourceRfq)} className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50">打开来源 RFQ</button>}
+                        </div></details>
                       </div>
                     </td>
                   </tr>
@@ -1151,7 +1162,7 @@ export default function PurchasingOrdersPage({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-4 py-12 text-center text-xs" style={{ color: A.gray2 }}>
+                  <td colSpan={9} className="px-4 py-12 text-center text-xs" style={{ color: A.gray2 }}>
                     当前条件下暂无采购订单
                   </td>
                 </tr>

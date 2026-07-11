@@ -1,5 +1,6 @@
 import { apiJson } from "../../lib/api-client";
 import type { ItemMaster, PaymentTerm, SupplierMaster, TaxCode, WarehouseBin } from "../../types/scm";
+import type { CustomerMaster } from "./standardData";
 
 type ApiMasterItem = {
   id?: string;
@@ -55,6 +56,7 @@ type MasterDataApiSnapshot = {
   warehouses?: ApiMasterWarehouse[];
   paymentTerms?: ApiPaymentTerm[];
   taxCodes?: ApiTaxCode[];
+  customers?: CustomerMaster[];
 };
 
 export type MasterDataSnapshot = {
@@ -63,6 +65,7 @@ export type MasterDataSnapshot = {
   warehouses: WarehouseBin[];
   paymentTerms: PaymentTerm[];
   taxCodes: TaxCode[];
+  customers: CustomerMaster[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -267,14 +270,25 @@ export function normalizeTaxCodeRows(
 }
 
 export async function fetchMasterDataSnapshot(fallback: MasterDataSnapshot): Promise<MasterDataSnapshot> {
-  const [items, suppliers, warehouses, paymentTerms, taxCodes] = await Promise.all([
-    readOptional<ApiMasterItem>("/api/master-data/items", "items"),
-    readOptional<ApiMasterSupplier>("/api/master-data/suppliers", "suppliers"),
-    readOptional<ApiMasterWarehouse>("/api/master-data/warehouses", "warehouses"),
-    readOptional<ApiPaymentTerm>("/api/master-data/payment-terms", "paymentTerms"),
-    readOptional<ApiTaxCode>("/api/master-data/tax-codes", "taxCodes"),
-  ]);
-  const apiSnapshot: MasterDataApiSnapshot = { items, suppliers, warehouses, paymentTerms, taxCodes };
+  let items: ApiMasterItem[] | undefined;
+  let suppliers: ApiMasterSupplier[] | undefined;
+  let warehouses: ApiMasterWarehouse[] | undefined;
+  let paymentTerms: ApiPaymentTerm[] | undefined;
+  let taxCodes: ApiTaxCode[] | undefined;
+  let customers: CustomerMaster[] | undefined;
+  try {
+    const payload = await apiJson<unknown>("/api/master-data");
+    items = arrayField<ApiMasterItem>(payload, "items");
+    suppliers = arrayField<ApiMasterSupplier>(payload, "suppliers");
+    warehouses = arrayField<ApiMasterWarehouse>(payload, "warehouses");
+    paymentTerms = arrayField<ApiPaymentTerm>(payload, "paymentTerms");
+    taxCodes = arrayField<ApiTaxCode>(payload, "taxCodes");
+    customers = arrayField<CustomerMaster>(payload, "customers");
+  } catch (error) {
+    if ((import.meta as any).env?.DEV) console.warn("[master-data] canonical snapshot unavailable", error);
+  }
+  if (!items || !suppliers || !customers || !warehouses || !paymentTerms || !taxCodes) throw new Error("主数据 API 返回不完整");
+  const apiSnapshot: MasterDataApiSnapshot = { items, suppliers, customers, warehouses, paymentTerms, taxCodes };
   const normalizedSuppliers = normalizeSupplierRows(apiSnapshot.suppliers, fallback.suppliers);
   return {
     suppliers: normalizedSuppliers,
@@ -282,5 +296,6 @@ export async function fetchMasterDataSnapshot(fallback: MasterDataSnapshot): Pro
     warehouses: normalizeWarehouseRows(apiSnapshot.warehouses, fallback.warehouses),
     paymentTerms: normalizePaymentTermRows(apiSnapshot.paymentTerms, fallback.paymentTerms),
     taxCodes: normalizeTaxCodeRows(apiSnapshot.taxCodes, fallback.taxCodes),
+    customers: apiSnapshot.customers,
   };
 }

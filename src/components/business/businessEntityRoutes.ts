@@ -2,6 +2,7 @@ export type BusinessEntityType =
   | "purchase_request" | "rfq" | "purchase_order" | "receiving_doc"
   | "supplier_invoice" | "three_way_match" | "reconciliation_statement" | "settlement_document"
   | "supplier" | "item" | "customer" | "sales_order" | "delivery_note" | "sign_receipt"
+  | "warehouse" | "bin" | "payment_term" | "tax_code"
   | "inventory_adjustment" | "purchase_return" | "credit_memo";
 
 export type BusinessEntityRoute = {
@@ -26,6 +27,10 @@ export const businessEntityRouteRegistry: Record<BusinessEntityType, BusinessEnt
   supplier: { entityType: "supplier", routeId: "master-data:supplier-detail", path: "/app/master-data/suppliers/:id", listRouteId: "master-data:suppliers", listPath: "/app/master-data/suppliers", label: "供应商", returnLabel: "返回供应商" },
   item: { entityType: "item", routeId: "master-data:item-detail", path: "/app/master-data/items/:id", listRouteId: "master-data:items", listPath: "/app/master-data/items", label: "物料", returnLabel: "返回物料资料" },
   customer: { entityType: "customer", routeId: "master-data:customer-detail", path: "/app/master-data/customers/:id", listRouteId: "master-data:customers", listPath: "/app/master-data/customers", label: "客户", returnLabel: "返回客户" },
+  warehouse: { entityType: "warehouse", routeId: "master-data:warehouse-detail", path: "/app/master-data/warehouses/:id", listRouteId: "master-data:warehouses", listPath: "/app/master-data/warehouses", label: "仓库", returnLabel: "返回仓库资料" },
+  bin: { entityType: "bin", routeId: "master-data:bin-detail", path: "/app/master-data/bins/:id", listRouteId: "master-data:bins", listPath: "/app/master-data/bins", label: "库位", returnLabel: "返回库位资料" },
+  payment_term: { entityType: "payment_term", routeId: "master-data:payment-term-detail", path: "/app/master-data/payment-terms/:id", listRouteId: "master-data:payment-terms", listPath: "/app/master-data/payment-terms", label: "付款条款", returnLabel: "返回付款条款" },
+  tax_code: { entityType: "tax_code", routeId: "master-data:tax-code-detail", path: "/app/master-data/tax-codes/:id", listRouteId: "master-data:tax-codes", listPath: "/app/master-data/tax-codes", label: "税码", returnLabel: "返回税码" },
   sales_order: { entityType: "sales_order", routeId: "sales:order-detail", path: "/app/sales/orders/:id", listRouteId: "sales:orders", listPath: "/app/sales/orders", label: "销售订单", returnLabel: "返回销售订单" },
   delivery_note: { entityType: "delivery_note", routeId: "sales:delivery-detail", path: "/app/sales/deliveries/:id", listRouteId: "sales:delivery", listPath: "/app/sales/deliveries", label: "发货单", returnLabel: "返回发货单" },
   sign_receipt: { entityType: "sign_receipt", routeId: "sales:receipt-detail", path: "/app/sales/receipts/:id", listRouteId: "sales:receipts", listPath: "/app/sales/receipts", label: "签收单", returnLabel: "返回签收单" },

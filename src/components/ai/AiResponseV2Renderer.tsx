@@ -1,338 +1,83 @@
-import type { ActionDraftPreviewRequest } from "../../modules/action-drafts/ActionDraftReviewShell";
 import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
+import { Link } from "react-router";
+import type { ActionDraftPreviewRequest } from "../../modules/action-drafts/ActionDraftReviewShell";
+import type { AiResponseV2, AiResponseV2EvidenceItem, AiResponseV2NavigationLink, AiResponseV2ReviewCard } from "../../domain/ai/response-contract";
+import { toAiFocusedResponse, type AiFocusedAction } from "../../domain/ai/focused-response";
+import { routePathForId } from "../../app/routeRegistry";
+import { BusinessEntityLink } from "../business/BusinessEntityLink";
+import { businessEntityRouteRegistry, type BusinessEntityType } from "../business/businessEntityRoutes";
 import { A } from "../ui";
-import { typography } from "../ui/typography";
-import type {
-  AiResponseV2,
-  AiResponseV2EvidenceItem,
-  AiResponseV2NavigationLink,
-  AiResponseV2ReviewCard,
-} from "../../domain/ai/response-contract";
-import type { CanonicalFocusTarget } from "../../lib/evidenceLinks";
 
-type NavigateOptions = {
-  returnTo?: string;
-  entityLabel?: string;
-  source?: string;
-  returnContext?: unknown;
+type NavigateOptions = { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown };
+type Navigate = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: NavigateOptions) => void;
+
+const severityLabel = { info: "信息", warning: "提醒", risk: "风险", success: "正常" } as const;
+const severityTone = {
+  info: { color: A.blue, bg: "#eef5ff" }, warning: { color: "#8a5a00", bg: "#fff7db" },
+  risk: { color: A.red, bg: "#fff1f2" }, success: { color: A.green, bg: "#effaf3" },
 };
 
-type Navigate = (moduleId: string, focusTarget?: CanonicalFocusTarget | null, options?: NavigateOptions) => void;
-
-const severityLabels: Record<string, string> = {
-  info: "信息",
-  warning: "提醒",
-  risk: "风险",
-  success: "正常",
-};
-
-const severityColors: Record<string, { color: string; bg: string }> = {
-  info: { color: A.blue, bg: "#f0f6ff" },
-  warning: { color: "#8a5a00", bg: "#fff7db" },
-  risk: { color: A.red, bg: "#fff1f2" },
-  success: { color: A.green, bg: "#effaf3" },
-};
-
-const confidenceLabels: Record<string, string> = {
-  high: "高",
-  medium: "中",
-  low: "低",
-};
-
-function text(value: unknown) {
-  if (value === undefined || value === null || value === "") return "";
-  if (typeof value === "number") return Number.isFinite(value) ? value.toLocaleString() : "";
-  if (typeof value === "boolean") return value ? "是" : "否";
-  if (typeof value === "object") return "";
-  return String(value);
+function Chip({ tone, children }: { tone: keyof typeof severityTone; children: ReactNode }) {
+  const color = severityTone[tone] || severityTone.info;
+  return <span className="inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ color: color.color, background: color.bg }}>{children}</span>;
 }
 
-function asArray<T>(value: T[] | undefined | null): T[] {
-  return Array.isArray(value) ? value : [];
+function entityType(value = ""): BusinessEntityType | null {
+  const aliases: Record<string, BusinessEntityType> = { inventory_item: "item", sku: "item", po: "purchase_order", pr: "purchase_request", grn: "receiving_doc", invoice: "supplier_invoice" };
+  const candidate = aliases[value] || value;
+  return candidate in businessEntityRouteRegistry ? candidate as BusinessEntityType : null;
 }
 
-function Chip({ children, tone = "info" }: { children: ReactNode; tone?: string }) {
-  const colors = severityColors[tone] || severityColors.info;
-  return (
-    <span className="inline-flex items-center rounded-full px-2 py-0.5 fc-caption font-semibold" style={{ color: colors.color, background: colors.bg }}>
-      {children}
-    </span>
-  );
+function EvidenceLink({ item, children }: { item: AiResponseV2EvidenceItem; children?: ReactNode }) {
+  const type = entityType(item.entityType);
+  if (!type || !item.entityId) return <span style={{ color: A.label }}>{children || item.entityLabel || item.label}</span>;
+  return <BusinessEntityLink entityType={type} entityId={item.entityId} returnLabel="返回 AI 助手">{children || item.entityLabel || item.label || item.entityId}</BusinessEntityLink>;
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="space-y-1.5">
-      <div className="text-[11px] font-semibold" style={{ color: A.label }}>{title}</div>
-      {children}
-    </section>
-  );
-}
-
-function focusTarget(entityType?: string, entityId?: string): CanonicalFocusTarget | null {
-  if (!entityType || !entityId) return null;
-  return { entityType, entityId };
-}
-
-function navigateLink(onNavigate: Navigate | undefined, link: AiResponseV2NavigationLink | AiResponseV2EvidenceItem, label: string) {
-  if (!onNavigate) return undefined;
-  const target = "linkTarget" in link ? link.linkTarget : link;
-  const moduleId = target?.moduleId || ("moduleId" in link ? link.moduleId : "");
-  if (!moduleId) return undefined;
-  return () => onNavigate(moduleId, focusTarget(target.entityType, target.entityId), {
-    returnTo: "returnTo" in link && link.returnTo ? link.returnTo : "ai-assistant",
-    entityLabel: label,
-    source: "source" in link && link.source ? link.source : "aiRuntimeGateway",
-    returnContext: "returnContext" in link ? link.returnContext : {
-      sourceModule: "ai-assistant",
-      sourceRoute: "ai-assistant",
-      sourceLabel: "AI 助手",
-      returnLabel: "返回 AI 助手",
-      originIntent: "aiRuntimeGateway",
-    },
-  });
-}
-
-function EvidenceRow({ item, onNavigate }: { item: AiResponseV2EvidenceItem; onNavigate?: Navigate }) {
-  const label = text(item.entityLabel || item.label || item.entityId);
-  const detail = [item.status, item.value !== undefined && item.value !== null ? text(item.value) : "", item.sourceLabel]
-    .filter(Boolean)
-    .join(" · ");
-  const handleNavigate = navigateLink(onNavigate, item, label);
-  return (
-    <div className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className={`${typography.compactMetadata} font-semibold truncate`} style={{ color: A.label }}>{label}</div>
-          {detail ? <div className={`${typography.compactMetadata} truncate`} style={{ color: A.gray2 }}>{detail}</div> : null}
-        </div>
-        {item.severity ? <Chip tone={item.severity}>{severityLabels[item.severity] || "提醒"}</Chip> : null}
-      </div>
-      {item.summary ? <div className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{item.summary}</div> : null}
-      {handleNavigate ? (
-        <button
-          type="button"
-          onClick={handleNavigate}
-          data-testid="ai-evidence-link"
-          data-business-id={item.entityId}
-          className="mt-1 text-[11px] font-medium hover:underline"
-          style={{ color: A.blue }}
-        >
-          查看 {label}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function NavigationButton({ link, onNavigate }: { link: AiResponseV2NavigationLink; onNavigate?: Navigate }) {
-  const label = text(link.label || link.entityId || link.moduleId);
-  const handleNavigate = navigateLink(onNavigate, link, label);
-  return (
-    <button
-      type="button"
-      onClick={handleNavigate}
-      disabled={!handleNavigate}
-      data-testid="ai-evidence-link"
-      data-business-id={link.entityId || link.moduleId}
-      className="rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed"
-      style={{ background: A.white, color: handleNavigate ? A.blue : A.gray2, border: `1px solid ${A.border}` }}
-    >
-      {label}
-    </button>
-  );
-}
-
-function requestFromReviewCard(card: AiResponseV2ReviewCard): ActionDraftPreviewRequest | null {
+function reviewRequest(card: AiResponseV2ReviewCard): ActionDraftPreviewRequest | null {
   if (!card.draftType) return null;
-  return {
-    type: card.draftType,
-    title: card.draftTitle || card.title,
-    source: "ai_assistant",
-    originEvidence: card.originEvidence || [],
-    payload: {
-      ...(card.payload || {}),
-      reason: card.payload?.reason || card.description || card.allowedNextStep,
-    },
-  };
+  return { type: card.draftType, title: card.draftTitle || card.title, source: "ai_assistant", originEvidence: card.originEvidence || [], payload: { ...(card.payload || {}), reason: card.payload?.reason || card.description || card.allowedNextStep } };
 }
 
-function ReviewCard({
-  card,
-  onReviewActionDraft,
-}: {
-  card: AiResponseV2ReviewCard;
-  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
-}) {
-  const request = requestFromReviewCard(card);
-  return (
-    <div className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-      <div className="flex items-start justify-between gap-2">
-        <div className={`${typography.compactMetadata} font-semibold`} style={{ color: A.label }}>{card.title}</div>
-        <Chip tone="warning">草稿预览</Chip>
-      </div>
-      <div className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{card.description}</div>
-      <div className="mt-1 fc-caption leading-4" style={{ color: A.gray2 }}>
-        需人工复核 · 不会外发 · 不提交 · 不写库存 · 不写财务凭证 · 不改主数据
-      </div>
-      {request && onReviewActionDraft ? (
-        <button
-          type="button"
-          onClick={() => onReviewActionDraft(request)}
-          data-testid="ai-action-draft-preview"
-          data-draft-type={request.type}
-          className="mt-1 rounded-full px-2.5 py-1 text-[11px] font-medium hover:underline"
-          style={{ background: A.white, color: A.blue, border: `1px solid ${A.border}` }}
-        >
-          审阅草稿
-        </button>
-      ) : (
-        <div className="mt-1 text-[11px]" style={{ color: A.blue }}>{card.allowedNextStep}</div>
-      )}
-    </div>
-  );
+function NavigationAction({ link, primary = false }: { link: AiResponseV2NavigationLink; primary?: boolean }) {
+  const type = entityType(link.entityType);
+  const className = primary ? "inline-flex min-h-9 items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-white" : "inline-flex min-h-9 items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold";
+  if (type && link.entityId) return <BusinessEntityLink entityType={type} entityId={link.entityId} returnLabel="返回 AI 助手" className={className}>{link.label}<ChevronRight size={13} /></BusinessEntityLink>;
+  return <Link to={routePathForId(link.moduleId)} className={className} style={primary ? { background: A.blue } : { background: A.gray6, color: A.blue }}>{link.label}<ChevronRight size={13} /></Link>;
 }
 
-function runtimeFollowUps(response: AiResponseV2) {
-  const hasReviewCard = asArray(response.reviewCards).length > 0;
-  const seen = new Set<string>();
-  return asArray(response.followUpSuggestions).filter((item) => {
-    const key = `${text(item.label)}|${text(item.prompt)}`;
-    if (!key.trim() || seen.has(key)) return false;
-    seen.add(key);
-    if (hasReviewCard && /进入人工复核|预览.*草稿|草稿.*预览|人工复核/.test(`${item.label} ${item.prompt}`)) return false;
-    return true;
-  }).slice(0, 4);
+function Action({ action, primary, onReviewActionDraft }: { action: AiFocusedAction; primary?: boolean; onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void }) {
+  if (action.kind === "navigation") return <NavigationAction link={action.link} primary={primary} />;
+  const request = reviewRequest(action.card);
+  if (!request || !onReviewActionDraft) return null;
+  return <button type="button" onClick={() => onReviewActionDraft(request)} data-testid="ai-action-draft-preview" className={primary ? "min-h-9 rounded-lg px-3 py-2 text-xs font-semibold text-white" : "min-h-9 rounded-lg px-3 py-2 text-xs font-semibold"} style={primary ? { background: A.blue } : { background: A.gray6, color: A.blue }}>{action.label || "审阅草稿"}</button>;
 }
 
-export function AiResponseV2Renderer({
-  response,
-  onNavigate,
-  onReviewActionDraft,
-  onFollowUp,
-}: {
-  response: AiResponseV2;
-  onNavigate?: Navigate;
-  onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void;
-  onFollowUp?: (prompt: string) => void;
-}) {
+function Detail({ title, children, testId }: { title: string; children: ReactNode; testId: string }) {
+  return <details data-testid={testId} className="rounded-lg" style={{ border: `1px solid ${A.border}` }}><summary className="cursor-pointer px-3 py-2 text-xs font-semibold" style={{ color: A.gray1 }}>{title}</summary><div className="space-y-2 px-3 pb-3">{children}</div></details>;
+}
+
+export function AiResponseV2Renderer({ response, onReviewActionDraft, onFollowUp }: { response: AiResponseV2; onNavigate?: Navigate; onReviewActionDraft?: (request: ActionDraftPreviewRequest) => void; onFollowUp?: (prompt: string) => void }) {
   if (!response || response.version !== "v2") return null;
-  const conclusion = response.conclusion;
-  const breadcrumbs = asArray(response.contextBreadcrumbs).slice(0, 4);
-  const followUps = runtimeFollowUps(response);
+  const focused = toAiFocusedResponse(response);
   return (
-    <div data-testid="ai-response-v2" className="rounded-xl px-3 py-2.5 space-y-3" style={{ background: A.white, border: `1px solid ${A.border}` }}>
-      <Section title="结论">
-        <div className="space-y-1">
-          <div className="text-[12px] font-semibold leading-5" style={{ color: A.label }}>{conclusion.title}</div>
-          <div className="text-[11px] leading-5" style={{ color: A.gray1 }}>{conclusion.summary}</div>
-          <div className="flex flex-wrap gap-1.5">
-            <Chip tone={conclusion.severity}>{severityLabels[conclusion.severity] || "信息"}</Chip>
-            <Chip>可信度 {confidenceLabels[conclusion.confidence] || "中"}</Chip>
-            <span className="inline-flex rounded-full px-2 py-0.5 fc-caption" style={{ color: A.gray1, background: A.gray6 }}>
-              {response.scope?.dataScopeLabel || "当前工作区数据"}
-            </span>
-          </div>
-        </div>
-      </Section>
+    <div data-testid="ai-response-v2" data-answer-mode={focused.answerMode} className="space-y-3 rounded-xl p-3" style={{ background: A.white, border: `1px solid ${A.border}` }}>
+      <section data-testid="ai-focused-conclusion">
+        <div className="flex items-start justify-between gap-2"><div><h3 className="text-sm font-semibold leading-5" style={{ color: A.label }}>{focused.headline}</h3><p className="mt-1 text-xs leading-5" style={{ color: A.gray1 }}>{focused.summary}</p></div><Chip tone={focused.severity}>{severityLabel[focused.severity]}</Chip></div>
+      </section>
 
-      {breadcrumbs.length ? (
-        <Section title="上下文">
-          <div className="flex flex-wrap gap-1.5">
-            {breadcrumbs.map((item, index) => (
-              <span
-                key={`${item.label}-${index}`}
-                className="inline-flex max-w-full rounded-full px-2 py-0.5 fc-caption truncate"
-                style={{ color: A.gray1, background: A.gray6, border: `1px solid ${A.border}` }}
-              >
-                {item.label}
-              </span>
-            ))}
-          </div>
-        </Section>
-      ) : null}
+      {focused.primaryItems.length ? <section data-testid="ai-focused-primary-items" className="space-y-2"><div className="text-[11px] font-semibold" style={{ color: A.gray1 }}>重点事项</div>{focused.primaryItems.map((item) => <article key={item.id} className="rounded-lg p-2.5" style={{ background: A.gray6 }}><div className="flex items-start justify-between gap-2"><div className="min-w-0 text-xs font-semibold"><EvidenceLink item={item.evidence}>{item.title}</EvidenceLink></div>{item.status ? <span className="shrink-0 text-[11px]" style={{ color: A.gray2 }}>{item.status}</span> : null}</div><p className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{item.reason}</p>{item.impact ? <p className="mt-1 text-[11px] leading-5" style={{ color: A.sub }}>影响：{item.impact}</p> : null}</article>)}</section> : null}
 
-      <Section title="关键证据 / 依据">
-        <div className="space-y-1.5">
-          {asArray(response.keyEvidence).slice(0, 5).map((item) => (
-            <EvidenceRow key={item.id} item={item} onNavigate={onNavigate} />
-          ))}
-        </div>
-      </Section>
+      {focused.primaryAction || focused.secondaryActions.length ? <section data-testid="ai-focused-actions"><div className="text-[11px] font-semibold" style={{ color: A.gray1 }}>下一步</div><div className="mt-2 flex flex-wrap gap-2">{focused.primaryAction ? <Action action={focused.primaryAction} primary onReviewActionDraft={onReviewActionDraft} /> : null}{focused.secondaryActions.map((action, index) => <Action key={`${action.kind}-${action.label}-${index}`} action={action} onReviewActionDraft={onReviewActionDraft} />)}</div></section> : null}
 
-      <Section title="业务影响">
-        <div className="space-y-1">
-          {asArray(response.businessImpact).slice(0, 4).map((item) => (
-            <div key={`${item.area}-${item.impact}`} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-              <div className="flex items-center justify-between gap-2">
-                <div className={`${typography.compactMetadata} font-semibold truncate`} style={{ color: A.label }}>{item.area} · {item.impact}</div>
-                <Chip tone={item.severity}>{severityLabels[item.severity] || "提醒"}</Chip>
-              </div>
-              <div className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{item.explanation}</div>
-            </div>
-          ))}
-        </div>
-      </Section>
+      {focused.evidence.length || focused.businessImpact.length || focused.limitations.length ? <section className="space-y-2" data-testid="ai-focused-details">
+        {focused.evidence.length ? <Detail title={`查看关键证据（${Math.min(5, focused.evidence.length)}）`} testId="ai-evidence-details">{focused.evidence.map((item) => <div key={item.id} className="text-[11px] leading-5"><EvidenceLink item={item} /><div style={{ color: A.gray2 }}>{[item.status, item.value, item.sourceLabel].filter((value) => value !== undefined && value !== null && value !== "").join(" · ")}</div></div>)}</Detail> : null}
+        {focused.businessImpact.length ? <Detail title="查看业务影响" testId="ai-impact-details">{focused.businessImpact.map((item) => <div key={`${item.area}-${item.impact}`} className="text-[11px] leading-5"><div className="font-semibold" style={{ color: A.label }}>{item.area} · {item.impact}</div><div style={{ color: A.gray1 }}>{item.explanation}</div></div>)}</Detail> : null}
+        {focused.limitations.length ? <Detail title="查看数据限制" testId="ai-limitations-details">{focused.limitations.map((item) => <div key={item.label} className="text-[11px] leading-5"><div className="font-semibold" style={{ color: A.label }}>{item.label}</div><div style={{ color: A.gray1 }}>{item.description}</div>{item.consequence ? <div style={{ color: A.gray2 }}>{item.consequence}</div> : null}</div>)}</Detail> : null}
+      </section> : null}
 
-      <Section title="建议操作 / 建议动作">
-        <div className="space-y-1">
-          {asArray(response.recommendedActions).slice(0, 4).map((action) => (
-            <div key={`${action.label}-${action.targetEntityId || action.targetModule}`} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-              <div className={`${typography.compactMetadata} font-semibold`} style={{ color: A.label }}>{action.label}</div>
-              <div className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{action.description}</div>
-              {action.reviewRequired ? <div className="mt-1 fc-caption" style={{ color: A.gray2 }}>需人工复核后继续</div> : null}
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Section title="可点击跳转">
-        <div className="flex flex-wrap gap-1.5">
-          {asArray(response.navigationLinks).slice(0, 6).map((link) => (
-            <NavigationButton key={`${link.label}-${link.moduleId}-${link.entityId || ""}`} link={link} onNavigate={onNavigate} />
-          ))}
-        </div>
-      </Section>
-
-      <Section title="数据限制">
-        <div className="space-y-1">
-          {asArray(response.dataLimitations).slice(0, 4).map((item) => (
-            <div key={item.label} className="rounded-lg px-2 py-1.5" style={{ background: A.gray6 }}>
-              <div className={`${typography.compactMetadata} font-semibold`} style={{ color: A.label }}>{item.label}</div>
-              <div className="mt-1 text-[11px] leading-5" style={{ color: A.gray1 }}>{item.description}</div>
-              {item.consequence ? <div className="mt-1 fc-caption" style={{ color: A.gray2 }}>{item.consequence}</div> : null}
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Section title="内部复核 / 草稿预览">
-        <div className="space-y-1">
-          {asArray(response.reviewCards).slice(0, 4).map((card) => (
-            <ReviewCard key={`${card.title}-${card.targetEntityId || ""}`} card={card} onReviewActionDraft={onReviewActionDraft} />
-          ))}
-        </div>
-      </Section>
-
-      {followUps.length ? (
-        <Section title="继续追问">
-          <div className="flex flex-wrap gap-1.5">
-            {followUps.map((item) => (
-              <button
-                key={`${item.label}-${item.prompt}`}
-                type="button"
-                onClick={() => onFollowUp?.(item.prompt)}
-                disabled={!onFollowUp}
-                data-testid="ai-runtime-follow-up-chip"
-                className="rounded-full px-2.5 py-1 text-[11px] font-medium disabled:cursor-not-allowed"
-                style={{ background: A.white, color: onFollowUp ? A.blue : A.gray2, border: `1px solid ${A.border}` }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </Section>
-      ) : null}
+      {focused.followUps.length ? <section data-testid="ai-focused-follow-ups" className="flex flex-wrap gap-2">{focused.followUps.map((item) => <button key={item.prompt} type="button" onClick={() => onFollowUp?.(item.prompt)} disabled={!onFollowUp} className="rounded-full px-2.5 py-1 text-[11px] font-medium disabled:opacity-50" style={{ background: A.gray6, color: A.blue }}>{item.label}</button>)}</section> : null}
     </div>
   );
 }

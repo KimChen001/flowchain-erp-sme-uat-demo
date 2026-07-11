@@ -495,6 +495,12 @@ export default function FlowChainApp() {
   const searchRef = useRef<HTMLFormElement | null>(null);
   const [unreadCount] = useState(3);
   const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
+  const [enabledModuleIds, setEnabledModuleIds] = useState<Set<string> | null>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("flowchain:module-settings") || "null");
+      return saved?.items ? new Set(saved.items.filter((item: { enabled: boolean }) => item.enabled).map((item: { id: string }) => item.id)) : null;
+    } catch { return null; }
+  });
   const [user, setUser] = useState<WorkspaceUser | null>(() => {
     try {
       const raw = localStorage.getItem("scm-demo-user");
@@ -503,6 +509,17 @@ export default function FlowChainApp() {
       return null;
     }
   });
+
+  useEffect(() => {
+    const refreshModuleSettings = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem("flowchain:module-settings") || "null");
+        setEnabledModuleIds(saved?.items ? new Set(saved.items.filter((item: { enabled: boolean }) => item.enabled).map((item: { id: string }) => item.id)) : null);
+      } catch { setEnabledModuleIds(null); }
+    };
+    window.addEventListener("flowchain:module-settings", refreshModuleSettings);
+    return () => window.removeEventListener("flowchain:module-settings", refreshModuleSettings);
+  }, []);
 
   useEffect(() => {
     if (location.pathname === "/" || location.pathname === "/app") {
@@ -836,7 +853,7 @@ export default function FlowChainApp() {
         }}
       />
 
-      <aside className="w-56 shrink-0 flex flex-col"
+      <aside className="hidden w-56 shrink-0 flex-col lg:flex"
         style={{
           background: A.sidebar,
           borderRight: "1px solid rgba(255,255,255,0.06)",
@@ -882,7 +899,7 @@ export default function FlowChainApp() {
                   <div className="space-y-0.5">
                     {group.itemIds.map((itemId) => {
                       const item = navItems.find((entry) => entry.id === itemId);
-                      if (!item) return null;
+                      if (!item || (enabledModuleIds && !enabledModuleIds.has(item.id))) return null;
                       const isActive = activeNavItem?.id === item.id;
                       return (
                         <div key={item.id} className="space-y-0.5">
@@ -918,11 +935,14 @@ export default function FlowChainApp() {
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Topbar */}
-        <header className="h-12 flex items-center justify-between px-6 shrink-0 bg-white"
+        <header className="h-12 flex items-center justify-between px-3 sm:px-6 shrink-0 bg-white"
           style={{
             borderBottom: `1px solid ${A.border}`,
           }}>
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex min-w-0 items-center gap-2 text-sm">
+            <select aria-label="移动端模块导航" value={activeModule} onChange={(event) => navigateTo(event.target.value)} className="max-w-[150px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs lg:hidden">
+              {navItems.filter((item) => !enabledModuleIds || enabledModuleIds.has(item.id)).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
             <span className="fc-label font-medium" style={{ color: A.label }}>{user.company}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -1103,7 +1123,7 @@ export default function FlowChainApp() {
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
-          <main className="flex-1 overflow-auto p-6" data-testid="app-main">
+          <main className="flex-1 overflow-auto p-3 sm:p-6" data-testid="app-main">
             <div id="module-export-scope" data-testid="module-export-scope" className={`mx-auto w-full ${contentMaxWidthClass}`}>
               {activeRoute ? <ModuleShell route={activeRoute}>
               {searchFocus && (

@@ -8,7 +8,6 @@ import { ITEM_MASTER, SUPPLIER_MASTER } from "../../data/master-data";
 import { DELIVERY_NOTES } from "../../modules/sales/deliveryData";
 import { SIGN_RECEIPTS } from "../../modules/sales/receiptData";
 import { INVENTORY_ADJUSTMENTS } from "../../modules/inventory/adjustmentData";
-import { CUSTOMER_MASTER } from "../../modules/master-data/standardData";
 import { THREE_WAY_MATCHES, SETTLEMENT_DOCUMENTS } from "../../data/standard-business-scenario";
 import { A, Card, Chip, SectionHeader } from "../ui";
 import { BusinessEntityLink } from "./BusinessEntityLink";
@@ -55,7 +54,6 @@ function syncRecord(entityType: BusinessEntityType, id: string): RecordValue | n
     settlement_document: SETTLEMENT_DOCUMENTS as unknown as RecordValue[],
     supplier: SUPPLIER_MASTER as unknown as RecordValue[],
     item: ITEM_MASTER as unknown as RecordValue[],
-    customer: CUSTOMER_MASTER as unknown as RecordValue[],
     delivery_note: DELIVERY_NOTES as unknown as RecordValue[],
     sign_receipt: SIGN_RECEIPTS as unknown as RecordValue[],
     inventory_adjustment: INVENTORY_ADJUSTMENTS as unknown as RecordValue[],
@@ -98,7 +96,16 @@ export function BusinessEntityDetailPage({ route }: { route: AppRouteDefinition 
   const entityType = route.entityType as BusinessEntityType;
   const [params] = useSearchParams();
   const [record, setRecord] = useState<RecordValue | null>(() => syncRecord(entityType, id));
-  const [loading, setLoading] = useState(entityType === "purchase_request" || entityType === "sales_order");
+  const masterDetailEndpoints: Partial<Record<BusinessEntityType, { url: string; key: string }>> = {
+    item: { url: `/api/master-data/items/${encodeURIComponent(id)}`, key: "item" },
+    supplier: { url: `/api/master-data/suppliers/${encodeURIComponent(id)}`, key: "supplier" },
+    customer: { url: `/api/master-data/customers/${encodeURIComponent(id)}`, key: "customer" },
+    warehouse: { url: `/api/master-data/warehouses/${encodeURIComponent(id)}`, key: "warehouse" },
+    bin: { url: `/api/master-data/bins/${encodeURIComponent(id)}`, key: "warehouse" },
+    payment_term: { url: `/api/master-data/payment-terms/${encodeURIComponent(id)}`, key: "paymentTerm" },
+    tax_code: { url: `/api/master-data/tax-codes/${encodeURIComponent(id)}`, key: "taxCode" },
+  };
+  const [loading, setLoading] = useState(entityType === "purchase_request" || entityType === "sales_order" || Boolean(masterDetailEndpoints[entityType]));
 
   useEffect(() => {
     let active = true;
@@ -110,6 +117,11 @@ export function BusinessEntityDetailPage({ route }: { route: AppRouteDefinition 
       apiJson<{ orders: RecordValue[] }>("/api/sales-demand/orders").then((payload) => {
         if (active) setRecord(payload.orders.find((row) => String(row.orderNo || row.id) === id) || null);
       }).finally(() => { if (active) setLoading(false); });
+    } else if (masterDetailEndpoints[entityType]) {
+      const endpoint = masterDetailEndpoints[entityType]!;
+      apiJson<RecordValue>(endpoint.url).then((payload) => {
+        if (active) setRecord((payload[endpoint.key] as RecordValue) || null);
+      }).catch(() => { if (active) setRecord(null); }).finally(() => { if (active) setLoading(false); });
     } else {
       setRecord(syncRecord(entityType, id));
       setLoading(false);
