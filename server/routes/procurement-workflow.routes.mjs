@@ -55,6 +55,11 @@ export async function handleProcurementWorkflowRoute(ctx) {
   const service = workflowService(ctx);
   if (req.method === "GET" && url.pathname === "/api/procurement/requests")
     return send(res, 200, await repository.list("pr")) || true;
+  const requestDetail = url.pathname.match(/^\/api\/procurement\/requests\/([^/]+)$/);
+  if (req.method === "GET" && requestDetail) {
+    const request = await repository.get("pr", decodeURIComponent(requestDetail[1]));
+    return send(res, request ? 200 : 404, request || { code: "ENTITY_NOT_FOUND", message: "采购申请不存在" }) || true;
+  }
   if (req.method === "POST" && url.pathname === "/api/procurement/requests") {
     if (!allowed(ctx, "pr.create")) return deny(send, res) || true;
     try {
@@ -91,7 +96,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
     return true;
   }
   const action = url.pathname.match(
-    /^\/api\/procurement\/requests\/([^/]+)\/(submit|approve|reject|cancel)$/,
+    /^\/api\/procurement\/requests\/([^/]+)\/(submit|approve|reject|withdraw|cancel)$/,
   );
   if (req.method === "POST" && action) {
     const permissionAction = ["approve", "reject"].includes(action[2])
@@ -100,10 +105,12 @@ export async function handleProcurementWorkflowRoute(ctx) {
     if (!allowed(ctx, permissionAction)) return deny(send, res) || true;
     try {
       const b = await readBody(req);
+      if (action[2] === "reject" && !String(b.reason || "").trim()) throw Object.assign(new Error("拒绝必须填写原因"), { code: "REJECT_REASON_REQUIRED", status: 400, details: [{ field: "reason" }] });
       const next = {
         submit: "submitted",
         approve: "approved",
         reject: "rejected",
+        withdraw: "draft",
         cancel: "cancelled",
       }[action[2]];
       send(
@@ -159,7 +166,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
     return true;
   }
   const po = url.pathname.match(
-    /^\/api\/procurement\/requests\/([^/]+)\/direct-purchase-order$/,
+    /^\/api\/procurement\/requests\/([^/]+)\/(direct-purchase-order|generate-purchase-orders)$/,
   );
   if (req.method === "POST" && po) {
     if (!allowed(ctx, "direct-po")) return deny(send, res) || true;
@@ -182,6 +189,11 @@ export async function handleProcurementWorkflowRoute(ctx) {
     return send(res, 200, await repository.list("rfq")) || true;
   if (req.method === "GET" && url.pathname === "/api/procurement/orders")
     return send(res, 200, await repository.list("po")) || true;
+  const orderDetail = url.pathname.match(/^\/api\/procurement\/orders\/([^/]+)$/);
+  if (req.method === "GET" && orderDetail) {
+    const order = await repository.get("po", decodeURIComponent(orderDetail[1]));
+    return send(res, order ? 200 : 404, order || { code: "ENTITY_NOT_FOUND", message: "采购订单不存在" }) || true;
+  }
   const poAction = url.pathname.match(
     /^\/api\/procurement\/orders\/([^/]+)\/(submit|approve|issue|cancel)$/,
   );

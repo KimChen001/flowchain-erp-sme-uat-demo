@@ -27,6 +27,8 @@
     "demo:seed:dry-run": "node scripts/demo-data-dry-run.mjs seed",
     "demo:clear:dry-run": "node scripts/demo-data-dry-run.mjs clear",
     "demo:reset:dry-run": "node scripts/demo-data-dry-run.mjs reset",
+    "data:reset:procurement": "node scripts/procurement-runtime.mjs reset",
+    "data:seed:demo:procurement": "node scripts/procurement-runtime.mjs seed",
     "db:studio": "prisma studio"
   },
   "dependencies": {

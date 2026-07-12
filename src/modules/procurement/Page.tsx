@@ -29,7 +29,7 @@ type ProcurementPanelProps = {
 };
 
 export default function ProcurementPanel({ intent = null, onOpenRfq, view, onNavigate, onActiveContextChange, focus }: ProcurementPanelProps) {
-  if (!view || view === "workbench" || view === "overview") return <ProcurementOverview onOpenTab={(tab) => onNavigate?.(`procurement:${tab === "workbench" || tab === "overview" ? "workbench" : tab}`)} onOpenDetailViews={() => onNavigate?.("procurement:requests")} />;
+  if (!view || view === "workbench" || view === "overview") return <RuntimeProcurementWorkbench onNavigate={onNavigate} />;
   if (view === "receiving-new") return <BusinessDocumentForm documentLabel="采购收货单" listPath="/app/procurement/receiving" />;
   if (view === "receiving-edit") return <BusinessDocumentForm mode="edit" documentLabel="采购收货单" documentId={window.location.pathname.split("/").at(-2)} listPath="/app/procurement/receiving" />;
   if (view === "requests") return <PurchasingRequests intent={intent} focus={focus} onOpenRfq={onOpenRfq} onNavigate={onNavigate} onActiveContextChange={onActiveContextChange} />;
@@ -42,6 +42,20 @@ export default function ProcurementPanel({ intent = null, onOpenRfq, view, onNav
   if (view === "receiving") return <ReceivingPanel focus={focus} onNavigate={onNavigate} />;
 
   return <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">当前采购视图不可用。</div>;
+}
+
+type RuntimePr = { id:string; status:string; totalAmount:number; defaultNeedByDate?:string; lines?:Array<{supplierId?:string;needByDate?:string}> };
+type RuntimePo = { id:string; status:string; transmissionStatus:string; totalAmount:number; supplierId:string; targetWarehouseId:string; sourcePrId:string };
+function RuntimeProcurementWorkbench({onNavigate}:{onNavigate?: (moduleId:string, focus?:unknown)=>void}) {
+  const [filter,setFilter]=useState<WorkbenchFilter>("all"), [prs,setPrs]=useState<RuntimePr[]>([]), [pos,setPos]=useState<RuntimePo[]>([]), [loading,setLoading]=useState(true);
+  const load=()=>{setLoading(true);Promise.all([fetch("/api/procurement/requests").then(r=>r.json()),fetch("/api/procurement/orders").then(r=>r.json())]).then(([requests,orders])=>{setPrs(requests);setPos(orders);}).finally(()=>setLoading(false));};
+  useEffect(load,[]);
+  const rows=[...prs.filter(pr=>["submitted","approved"].includes(pr.status)).map(pr=>({id:pr.id,kind:"采购申请",status:pr.status,amount:pr.totalAmount,bucket:[pr.status==="submitted"?"approval":"tracking"] as WorkbenchFilter[],route:"procurement:requests",focus:{entityType:"purchase_request",entityId:pr.id}})),...pos.filter(po=>po.status!=="cancelled").map(po=>({id:po.id,kind:"采购订单",status:`${po.status} · ${po.transmissionStatus}`,amount:po.totalAmount,bucket:["tracking"] as WorkbenchFilter[],route:"procurement:orders",focus:{entityType:"purchase_order",entityId:po.id}}))];
+  const overdue=rows.filter(row=>row.bucket.includes("overdue")).length, approval=rows.filter(row=>row.bucket.includes("approval")).length, tracking=rows.filter(row=>row.bucket.includes("tracking")).length;
+  const shown=rows.filter(row=>filter==="all"||row.bucket.includes(filter));
+  return <div className="space-y-4"><Card className="p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="fc-section-title">今日采购待办：{rows.length}</h2><p className="mt-1 text-xs" style={{color:A.sub}}>采购申请、审批与 Draft PO 来自采购 runtime repository。</p></div><div className="flex gap-2"><button onClick={load} className="inline-flex items-center gap-1 rounded-md border px-3 py-2 text-xs"><RefreshCw size={14}/>刷新</button><button onClick={()=>onNavigate?.("procurement:requests")} className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white">新建采购申请</button></div></div></Card>
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{[{id:"all" as const,label:"全部待办",count:rows.length},{id:"approval" as const,label:"待我审批",count:approval},{id:"overdue" as const,label:"逾期处理",count:overdue},{id:"tracking" as const,label:"跟进中",count:tracking}].map(item=><button key={item.id} onClick={()=>setFilter(item.id)} className="rounded-md border bg-white p-4 text-left"><div className="text-xs" style={{color:A.sub}}>{item.label}</div><div className="mt-1 text-2xl font-semibold">{item.count}</div></button>)}</div>
+    <Card className="overflow-hidden"><div className="border-b p-4"><h2 className="text-sm font-semibold">待办队列</h2></div>{!loading&&shown.length===0?<div className="py-14 text-center text-sm" style={{color:A.sub}}>暂无采购事项<br/><span className="text-xs">点击“新建采购申请”开始录入。</span></div>:<table className="w-full text-xs"><thead><tr>{["类型","单号","状态","金额"].map(h=><th key={h} className="p-3 text-left">{h}</th>)}</tr></thead><tbody>{shown.map(row=><tr key={row.id} onClick={()=>onNavigate?.(row.route,row.focus)} className="cursor-pointer border-t hover:bg-slate-50"><td className="p-3">{row.kind}</td><td className="p-3 font-medium text-blue-600">{row.id}</td><td className="p-3">{row.status}</td><td className="p-3">{row.amount}</td></tr>)}</tbody></table>}</Card></div>;
 }
 
 function parseLooseDate(value?: string | null) {
