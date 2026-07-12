@@ -33,7 +33,14 @@ export function validateDirectPo(pr, policy = {}, permission = true) {
   if (!pr.currency) details.push({ field:'currency', message:'尚未设置币种' })
   if (!pr.paymentTermsId) details.push({ field:'paymentTermsId', message:'尚未设置付款条款' })
   if (!pr.expectedDeliveryDate) details.push({ field:'expectedDeliveryDate', message:'尚未设置交付日期' })
-  if (!pr.lines?.length || pr.lines.some(x => !x.sku || Number(x.quantity) <= 0 || !x.unit || Number(x.unitPrice) < 0)) details.push({ field:'lines', message:'采购明细不完整' })
+  if (!pr.lines?.length || pr.lines.some(x => {
+    const catalogValid = x.lineType === 'non_catalog_item'
+      ? Boolean(x.itemNameSnapshot)
+      : x.lineType === 'catalog_item'
+        ? Boolean(x.itemId && x.sku && x.itemNameSnapshot)
+        : Boolean(x.sku)
+    return !catalogValid || Number(x.quantity) <= 0 || !(x.unitSnapshot || x.unit) || Number(x.unitPrice || 0) < 0
+  })) details.push({ field:'lines', message:'采购明细不完整' })
   if (!permission) throw procurementError('PERMISSION_DENIED','无权创建采购订单',[],403)
   if (Number(pr.totalAmount) >= Number(policy.rfqRequiredAboveAmount ?? Infinity) && policy.allowManagerOverride === false) details.push({ field:'totalAmount', message:'公司策略要求询价且不可覆盖' })
   if (details.length) throw procurementError('DIRECT_PO_NOT_ALLOWED','当前采购申请不能直接创建采购订单',details)

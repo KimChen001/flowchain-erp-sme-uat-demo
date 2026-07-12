@@ -14,6 +14,7 @@ export function createProcurementWorkflowService({
   repository,
   policyProvider = async () => ({}),
   permission = async () => true,
+  itemRepository,
 }) {
   const audit = (doc, entry) => {
     const record = { id: id("AUD"), timestamp: now(), ...entry };
@@ -29,9 +30,96 @@ export function createProcurementWorkflowService({
         403,
       );
   };
+  const canonicalLines = async (lines = []) =>
+    Promise.all(
+      lines.map(async (line, index) => {
+        const lineType =
+          line.lineType ||
+          (line.itemId || line.sku ? "catalog_item" : "non_catalog_item");
+        if (lineType === "non_catalog_item") {
+          if (!String(line.itemNameSnapshot || line.itemName || "").trim())
+            throw procurementError(
+              "NON_CATALOG_ITEM_NAME_REQUIRED",
+              "非目录物料名称必填",
+              [{ field: `lines.${index}.itemNameSnapshot` }],
+              400,
+            );
+          if (!String(line.unitSnapshot || line.unit || "").trim())
+            throw procurementError(
+              "NON_CATALOG_ITEM_UNIT_REQUIRED",
+              "非目录物料单位必填",
+              [{ field: `lines.${index}.unitSnapshot` }],
+              400,
+            );
+          return {
+            ...structuredClone(line),
+            lineType,
+            itemId: null,
+            sku: null,
+            itemNameSnapshot: line.itemNameSnapshot || line.itemName,
+            unitSnapshot: line.unitSnapshot || line.unit,
+            specificationSnapshot:
+              line.specificationSnapshot || line.specification || "",
+          };
+        }
+    if (!itemRepository)
+      return {
+        ...structuredClone(line),
+            itemNameSnapshot: line.itemNameSnapshot || line.itemName || "",
+            unitSnapshot: line.unitSnapshot || line.unit || "",
+            specificationSnapshot:
+              line.specificationSnapshot || line.specification || "",
+          };
+    const item = await (itemRepository.getManagedItem || itemRepository.getItem)(line.itemId || line.sku);
+        if (!item)
+          throw procurementError(
+            "ITEM_NOT_FOUND",
+            "物料不存在",
+            [{ field: `lines.${index}.itemId` }],
+            400,
+          );
+        if (item.status !== "active")
+          throw procurementError(
+            "ITEM_INACTIVE",
+            "物料已停用",
+            [{ field: `lines.${index}.itemId` }],
+            400,
+          );
+        if (!item.purchasable)
+          throw procurementError(
+            "ITEM_NOT_PURCHASABLE",
+            "物料不允许采购",
+            [{ field: `lines.${index}.itemId` }],
+            400,
+          );
+        if (
+          (line.itemId && line.itemId !== item.itemId) ||
+          (line.sku && line.sku !== item.sku)
+        )
+          throw procurementError(
+            "ITEM_MAPPING_MISMATCH",
+            "itemId 与 SKU 不匹配",
+            [{ field: `lines.${index}.sku` }],
+            400,
+          );
+        return {
+          ...structuredClone(line),
+          lineType,
+          itemId: item.itemId,
+          sku: item.sku,
+          itemNameSnapshot: item.itemName,
+          unitSnapshot: item.purchaseUnit || item.baseUnit,
+          specificationSnapshot: item.specification || "",
+          warehouseId: line.warehouseId || item.defaultWarehouseId || "",
+          suggestedSupplierId:
+            line.suggestedSupplierId || item.defaultSupplierId || "",
+        };
+      }),
+    );
   return {
     async createPurchaseRequest(input, actor) {
       await requirePermission(actor, "pr.create", input);
+      const lines = await canonicalLines(input.lines);
       return repository.transact((doc) => {
         const t = now();
         const pr = {
@@ -49,7 +137,8 @@ export function createProcurementWorkflowService({
           paymentTermsId: input.paymentTermsId || "",
           expectedDeliveryDate: input.expectedDeliveryDate || "",
           totalAmount: Number(input.totalAmount || 0),
-          lines: input.lines || [],
+          comments: input.comments || "",
+          lines,
           version: 1,
           createdAt: t,
           createdBy: actor,
@@ -73,6 +162,10 @@ export function createProcurementWorkflowService({
     },
     async updatePurchaseRequestDraft(prId, input, actor) {
       await requirePermission(actor, "pr.update", { id: prId });
+      const lines =
+        input.lines === undefined
+          ? undefined
+          : await canonicalLines(input.lines);
       return repository.transact((doc) => {
         const pr = doc.purchaseRequests.find((x) => x.id === prId);
         if (!pr)
@@ -99,8 +192,10 @@ export function createProcurementWorkflowService({
           "emergencyPurchase",
           "singleSource",
           "reason",
+          "comments",
         ])
-          if (input[key] !== undefined) pr[key] = structuredClone(input[key]);
+          if (input[key] !== undefined)
+            pr[key] = structuredClone(key === "lines" ? lines : input[key]);
         pr.version++;
         pr.updatedAt = now();
         pr.updatedBy = actor;
@@ -280,6 +375,8 @@ export function createProcurementWorkflowService({
           dueDate: input.dueDate || pr.expectedDeliveryDate,
           invitedSupplierIds: input.invitedSupplierIds || [],
           lines: structuredClone(pr.lines),
+          comments: pr.comments || "",
+          sourcePurchaseRequestId: pr.id,
           status: "draft",
           version: 1,
           createdAt: t,
@@ -381,6 +478,8 @@ export function createProcurementWorkflowService({
           taxAmount: Number(input.taxAmount || 0),
           totalAmount: Number(pr.totalAmount) + Number(input.taxAmount || 0),
           lines: structuredClone(pr.lines),
+          comments: pr.comments || "",
+          sourcePurchaseRequestId: pr.id,
           status: "draft",
           version: 1,
           createdAt: t,

@@ -1,11 +1,56 @@
 import { createJsonMasterDataRepository } from '../repositories/json-master-data-repository.mjs'
 
 const customerMaster = [
-  { code: 'CUS-001', name: '华南自动化设备有限公司', contact: '林志远', phone: '138****2018', address: '深圳市宝安区智能制造产业园', creditStatus: '正常', paymentTerms: '月结 30 天', status: '启用' },
-  { code: 'CUS-002', name: '苏州精工系统集成有限公司', contact: '张海峰', phone: '137****8291', address: '苏州市工业园区星港街 88 号', creditStatus: '正常', paymentTerms: '月结 45 天', status: '启用' },
-  { code: 'CUS-003', name: '武汉启明智能制造有限公司', contact: '黄文杰', phone: '139****1706', address: '武汉市东湖高新区光谷大道', creditStatus: '待评估', paymentTerms: '预付 30% / 到货 70%', status: '启用' },
-  { code: 'CUS-004', name: '成都锐创机器人科技有限公司', contact: '何雨', phone: '136****7720', address: '成都市高新区天府五街', creditStatus: '受限', paymentTerms: '款到发货', status: '启用' },
-  { code: 'CUS-005', name: '上海万联装备股份有限公司', contact: '顾晨', phone: '135****3902', address: '上海市嘉定区工业园区', creditStatus: '正常', paymentTerms: '月结 30 天', status: '启用' },
+  {
+    code: 'CUS-001',
+    name: '华南自动化设备有限公司',
+    contact: '林志远',
+    phone: '138****2018',
+    address: '深圳市宝安区智能制造产业园',
+    creditStatus: '正常',
+    paymentTerms: '月结 30 天',
+    status: '启用',
+  },
+  {
+    code: 'CUS-002',
+    name: '苏州精工系统集成有限公司',
+    contact: '张海峰',
+    phone: '137****8291',
+    address: '苏州市工业园区星港街 88 号',
+    creditStatus: '正常',
+    paymentTerms: '月结 45 天',
+    status: '启用',
+  },
+  {
+    code: 'CUS-003',
+    name: '武汉启明智能制造有限公司',
+    contact: '黄文杰',
+    phone: '139****1706',
+    address: '武汉市东湖高新区光谷大道',
+    creditStatus: '待评估',
+    paymentTerms: '预付 30% / 到货 70%',
+    status: '启用',
+  },
+  {
+    code: 'CUS-004',
+    name: '成都锐创机器人科技有限公司',
+    contact: '何雨',
+    phone: '136****7720',
+    address: '成都市高新区天府五街',
+    creditStatus: '受限',
+    paymentTerms: '款到发货',
+    status: '启用',
+  },
+  {
+    code: 'CUS-005',
+    name: '上海万联装备股份有限公司',
+    contact: '顾晨',
+    phone: '135****3902',
+    address: '上海市嘉定区工业园区',
+    creditStatus: '正常',
+    paymentTerms: '月结 30 天',
+    status: '启用',
+  },
 ]
 
 function masterDataRepository(ctx) {
@@ -13,14 +58,31 @@ function masterDataRepository(ctx) {
 }
 
 export async function handleMasterDataRoute(ctx) {
-  const { req, res, url, send } = ctx
+  const { req, res, url, send, readBody } = ctx
   const repository = masterDataRepository(ctx)
+  const role = String(
+    req.headers?.['x-flowchain-role'] || 'manager',
+  ).toLowerCase()
+  const actor = String(req.headers?.['x-flowchain-user'] || 'user-local')
+  const canWrite = !['viewer'].includes(role)
 
   if (req.method === 'GET' && url.pathname === '/api/master-data') {
-    const [items, suppliers, warehouses, paymentTerms, taxCodes] = await Promise.all([
-      repository.listItems(), repository.listSuppliers(), repository.listWarehouses(), repository.listPaymentTerms(), repository.listTaxCodes(),
-    ])
-    send(res, 200, { items, suppliers, customers: customerMaster, warehouses, paymentTerms, taxCodes })
+    const [items, suppliers, warehouses, paymentTerms, taxCodes] =
+      await Promise.all([
+        repository.listItems(),
+        repository.listSuppliers(),
+        repository.listWarehouses(),
+        repository.listPaymentTerms(),
+        repository.listTaxCodes(),
+      ])
+    send(res, 200, {
+      items,
+      suppliers,
+      customers: customerMaster,
+      warehouses,
+      paymentTerms,
+      taxCodes,
+    })
     return true
   }
 
@@ -29,22 +91,69 @@ export async function handleMasterDataRoute(ctx) {
     return true
   }
 
-  const customerMatch = url.pathname.match(/^\/api\/master-data\/customers\/([^/]+)$/)
+  const customerMatch = url.pathname.match(
+    /^\/api\/master-data\/customers\/([^/]+)$/,
+  )
   if (req.method === 'GET' && customerMatch) {
     const key = decodeURIComponent(customerMatch[1]).toLowerCase()
-    const customer = customerMaster.find((row) => [row.code, row.name].some((value) => value.toLowerCase() === key))
-    send(res, customer ? 200 : 404, customer ? { customer } : { error: 'Customer not found' })
+    const customer = customerMaster.find((row) =>
+      [row.code, row.name].some((value) => value.toLowerCase() === key),
+    )
+    send(
+      res,
+      customer ? 200 : 404,
+      customer ? { customer } : { error: 'Customer not found' },
+    )
     return true
   }
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/items') {
-    send(res, 200, { items: await repository.listItems() })
+    const managed =
+      url.searchParams.get('managed') === 'true' ||
+      url.searchParams.get('purchasable') === 'true'
+    send(res, 200, {
+      items: await (managed && repository.listManagedItems
+        ? repository.listManagedItems
+        : repository.listItems)({
+        purchasableOnly: url.searchParams.get('purchasable') === 'true',
+      }),
+    })
+    return true
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/master-data/items') {
+    if (!canWrite) {
+      send(res, 403, {
+        code: 'PERMISSION_DENIED',
+        message: '当前用户无权维护物料主数据',
+      })
+      return true
+    }
+    if (!repository.createItem) {
+      send(res, 501, {
+        code: 'ADAPTER_WRITE_UNSUPPORTED',
+        message: '当前数据适配器尚未启用物料写入',
+      })
+      return true
+    }
+    try {
+      send(res, 201, {
+        item: await repository.createItem(await readBody(req), actor),
+      })
+    } catch (error) {
+      send(res, error.status || 500, {
+        code: error.code || 'PERSISTENCE_ERROR',
+        message: error.message,
+      })
+    }
     return true
   }
 
   const itemMatch = url.pathname.match(/^\/api\/master-data\/items\/([^/]+)$/)
   if (req.method === 'GET' && itemMatch) {
-    const item = await repository.getItem(itemMatch[1])
+    const item = await (repository.getManagedItem || repository.getItem)(
+      itemMatch[1],
+    )
     if (!item) {
       send(res, 404, { error: 'Item not found' })
       return true
@@ -53,12 +162,46 @@ export async function handleMasterDataRoute(ctx) {
     return true
   }
 
+  if (req.method === 'PATCH' && itemMatch) {
+    if (!canWrite) {
+      send(res, 403, {
+        code: 'PERMISSION_DENIED',
+        message: '当前用户无权维护物料主数据',
+      })
+      return true
+    }
+    if (!repository.updateItem) {
+      send(res, 501, {
+        code: 'ADAPTER_WRITE_UNSUPPORTED',
+        message: '当前数据适配器尚未启用物料写入',
+      })
+      return true
+    }
+    try {
+      send(res, 200, {
+        item: await repository.updateItem(
+          itemMatch[1],
+          await readBody(req),
+          actor,
+        ),
+      })
+    } catch (error) {
+      send(res, error.status || 500, {
+        code: error.code || 'PERSISTENCE_ERROR',
+        message: error.message,
+      })
+    }
+    return true
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/master-data/suppliers') {
     send(res, 200, { suppliers: await repository.listSuppliers() })
     return true
   }
 
-  const supplierMatch = url.pathname.match(/^\/api\/master-data\/suppliers\/([^/]+)$/)
+  const supplierMatch = url.pathname.match(
+    /^\/api\/master-data\/suppliers\/([^/]+)$/,
+  )
   if (req.method === 'GET' && supplierMatch) {
     const supplier = await repository.getSupplier(supplierMatch[1])
     if (!supplier) {
@@ -74,27 +217,50 @@ export async function handleMasterDataRoute(ctx) {
     return true
   }
 
-  const warehouseMatch = url.pathname.match(/^\/api\/master-data\/(warehouses|bins)\/([^/]+)$/)
+  const warehouseMatch = url.pathname.match(
+    /^\/api\/master-data\/(warehouses|bins)\/([^/]+)$/,
+  )
   if (req.method === 'GET' && warehouseMatch) {
     const rows = await repository.listWarehouses()
     const key = decodeURIComponent(warehouseMatch[2]).toLowerCase()
-    const warehouse = rows.find((row) => warehouseMatch[1] === 'bins'
-      ? String(row.bin || row.id || '').toLowerCase() === key
-      : [row.warehouseCode, row.id, row.warehouseName, row.name].some((value) => String(value || '').toLowerCase() === key))
-    send(res, warehouse ? 200 : 404, warehouse ? { warehouse } : { error: 'Warehouse or bin not found' })
+    const warehouse = rows.find((row) =>
+      warehouseMatch[1] === 'bins'
+        ? String(row.bin || row.id || '').toLowerCase() === key
+        : [row.warehouseCode, row.id, row.warehouseName, row.name].some(
+            (value) => String(value || '').toLowerCase() === key,
+          ),
+    )
+    send(
+      res,
+      warehouse ? 200 : 404,
+      warehouse ? { warehouse } : { error: 'Warehouse or bin not found' },
+    )
     return true
   }
 
-  if (req.method === 'GET' && url.pathname === '/api/master-data/payment-terms') {
+  if (
+    req.method === 'GET' &&
+    url.pathname === '/api/master-data/payment-terms'
+  ) {
     send(res, 200, { paymentTerms: await repository.listPaymentTerms() })
     return true
   }
 
-  const paymentTermMatch = url.pathname.match(/^\/api\/master-data\/payment-terms\/([^/]+)$/)
+  const paymentTermMatch = url.pathname.match(
+    /^\/api\/master-data\/payment-terms\/([^/]+)$/,
+  )
   if (req.method === 'GET' && paymentTermMatch) {
     const key = decodeURIComponent(paymentTermMatch[1]).toLowerCase()
-    const paymentTerm = (await repository.listPaymentTerms()).find((row) => [row.id, row.code, row.label, row.name].some((value) => String(value || '').toLowerCase() === key))
-    send(res, paymentTerm ? 200 : 404, paymentTerm ? { paymentTerm } : { error: 'Payment term not found' })
+    const paymentTerm = (await repository.listPaymentTerms()).find((row) =>
+      [row.id, row.code, row.label, row.name].some(
+        (value) => String(value || '').toLowerCase() === key,
+      ),
+    )
+    send(
+      res,
+      paymentTerm ? 200 : 404,
+      paymentTerm ? { paymentTerm } : { error: 'Payment term not found' },
+    )
     return true
   }
 
@@ -103,11 +269,21 @@ export async function handleMasterDataRoute(ctx) {
     return true
   }
 
-  const taxCodeMatch = url.pathname.match(/^\/api\/master-data\/tax-codes\/([^/]+)$/)
+  const taxCodeMatch = url.pathname.match(
+    /^\/api\/master-data\/tax-codes\/([^/]+)$/,
+  )
   if (req.method === 'GET' && taxCodeMatch) {
     const key = decodeURIComponent(taxCodeMatch[1]).toLowerCase()
-    const taxCode = (await repository.listTaxCodes()).find((row) => [row.id, row.code, row.label, row.name].some((value) => String(value || '').toLowerCase() === key))
-    send(res, taxCode ? 200 : 404, taxCode ? { taxCode } : { error: 'Tax code not found' })
+    const taxCode = (await repository.listTaxCodes()).find((row) =>
+      [row.id, row.code, row.label, row.name].some(
+        (value) => String(value || '').toLowerCase() === key,
+      ),
+    )
+    send(
+      res,
+      taxCode ? 200 : 404,
+      taxCode ? { taxCode } : { error: 'Tax code not found' },
+    )
     return true
   }
 

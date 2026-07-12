@@ -15,21 +15,47 @@ async function auth(page: Page) {
 test.beforeEach(async ({ page }) => auth(page));
 test("canonical PR direct PO workflow persists through refresh", async ({
   page,
+  request,
 }) => {
+  const created = await request.post("/api/procurement/requests", {
+    headers: {
+      "x-flowchain-role": "manager",
+      "x-flowchain-user": "procurement-manager",
+    },
+    data: {
+      requesterId: "u",
+      supplierId: "SUP-001",
+      currency: "CNY",
+      paymentTermsId: "NET30",
+      expectedDeliveryDate: "2026-08-01",
+      totalAmount: 20,
+      lines: [
+        {
+          lineType: "non_catalog_item",
+          itemNameSnapshot: "测试服务",
+          unitSnapshot: "项",
+          quantity: 1,
+          unitPrice: 20,
+        },
+      ],
+    },
+  });
+  const draft = await created.json();
+  const submitted = await request.post(
+    `/api/procurement/requests/${draft.id}/submit`,
+    {
+      headers: { "x-flowchain-role": "manager" },
+      data: { expectedVersion: draft.version },
+    },
+  );
+  const createdId = (await submitted.json()).id;
   await page.goto("/app/procurement/requests");
-  const [createResponse] = await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.request().method() === "POST" &&
-        new URL(response.url()).pathname === "/api/procurement/requests",
-    ),
-    page.getByRole("button", { name: "新建并提交 PR" }).click(),
-  ]);
-  const createdId = (await createResponse.json()).id;
-  let row=page.locator("div.rounded-lg.border").filter({hasText:createdId});
+  let row = page
+    .locator("div.rounded-lg.border")
+    .filter({ hasText: createdId });
   await expect(row).toBeVisible();
   await row.scrollIntoViewIfNeeded();
-  await page.mouse.wheel(0,-240);
+  await page.mouse.wheel(0, -240);
   await row.getByRole("button", { name: "批准" }).click();
   row = page.locator("div.rounded-lg.border").filter({ hasText: createdId });
   await expect(row).toBeVisible();
@@ -73,7 +99,15 @@ test("canonical API enforces permissions and expectedVersion", async ({
     requesterId: "u",
     currency: "CNY",
     totalAmount: 10,
-    lines: [{ sku: "A", quantity: 1, unit: "件", unitPrice: 10 }],
+    lines: [
+      {
+        lineType: "non_catalog_item",
+        itemNameSnapshot: "测试服务",
+        unitSnapshot: "项",
+        quantity: 1,
+        unitPrice: 10,
+      },
+    ],
   };
   const denied = await request.post("/api/procurement/requests", {
     data: body,

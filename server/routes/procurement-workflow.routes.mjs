@@ -4,8 +4,8 @@ import { createProcurementWorkflowService } from "../services/procurement-workfl
 const repository = createDurableProcurementRepository({
   dataFile: resolve("data/procurement-transactions.json"),
 });
-const service = createProcurementWorkflowService({
-  repository,
+const workflowService = (ctx) => createProcurementWorkflowService({
+  repository, itemRepository: ctx.repositories?.masterData,
   policyProvider: async () => ({
     directPurchaseThreshold: 50000,
     rfqRequiredAboveAmount: 100000,
@@ -52,6 +52,7 @@ const failure = (send, res, e) =>
   });
 export async function handleProcurementWorkflowRoute(ctx) {
   const { req, res, url, send, readBody } = ctx;
+  const service = workflowService(ctx);
   if (req.method === "GET" && url.pathname === "/api/procurement/requests")
     return send(res, 200, await repository.list("pr")) || true;
   if (req.method === "POST" && url.pathname === "/api/procurement/requests") {

@@ -10,6 +10,7 @@ import { fetchMasterDataSnapshot, type MasterDataSnapshot } from "./api";
 import { exportMasterDataCsv } from "./export";
 import { CustomerTable, PrintTemplateTable } from "./StandardMasterTables";
 import { PRINT_TEMPLATE_CATALOG, type PrintTemplateCatalogItem } from "./standardData";
+import ItemMasterWorkbench from "./ItemMasterWorkbench";
 
 export type MasterDataTab = "overview" | "items" | "suppliers" | "customers" | "warehouses" | "tax-codes" | "payment-terms" | "print-templates";
 export type MasterDataTableTab = Exclude<MasterDataTab, "overview" | "customers" | "print-templates">;
@@ -193,7 +194,9 @@ export default function MasterDataPage({
       </div>
 
       <Card>
-        {tab === "overview" ? (
+        {tab === "items" ? (
+          <ItemMasterWorkbench />
+        ) : tab === "overview" ? (
           <MasterDataOverview data={masterData} onOpenTab={openTab} />
         ) : tab === "customers" ? (
           <CustomerTable customers={filteredCustomers} />

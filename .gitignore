@@ -10,6 +10,8 @@ data/system-settings.json
 data/system-settings.json.tmp-*
 data/procurement-transactions.json
 data/procurement-transactions.json.tmp-*
+data/item-master-runtime.json
+data/item-master-runtime.json.tmp-*
 cloudflare-tunnel.*.log
 localtunnel.*.log
 prod-server.*.log
