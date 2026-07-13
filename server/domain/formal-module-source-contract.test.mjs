@@ -10,9 +10,11 @@ const entries = [
   'src/modules/procurement/Page.tsx',
   'src/modules/purchase-requests/Page.tsx',
   'src/modules/suppliers/Page.tsx',
+  'src/modules/finance/Page.tsx',
   'src/modules/srm/Page.tsx',
   'src/modules/overview/Page.tsx',
   'src/app/FlowChainApp.tsx',
+  'src/components/business/BusinessEntityDetailPage.tsx',
 ]
 const formalRoots = entries.map(file => path.dirname(path.resolve(root, file)))
 const importPattern = /(?:import|export)\s+(?:[\s\S]*?\s+from\s+)?["'](\.[^"']+)["']/g

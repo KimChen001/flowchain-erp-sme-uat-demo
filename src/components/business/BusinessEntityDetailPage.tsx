@@ -3,12 +3,10 @@ import { ArrowLeft, Clock3, FileText } from "lucide-react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import type { AppRouteDefinition } from "../../app/routeRegistry";
 import { apiJson } from "../../lib/api-client";
-import { purchaseOrders, receivingDocs, RFQS, SUPPLIER_INVOICES, SUPPLIER_RECONCILIATION_STATEMENTS, SUPPLIER_CREDIT_MEMOS } from "../../data/demo-data";
 import { ITEM_MASTER, SUPPLIER_MASTER } from "../../data/master-data";
 import { DELIVERY_NOTES } from "../../modules/sales/deliveryData";
 import { SIGN_RECEIPTS } from "../../modules/sales/receiptData";
 import { INVENTORY_ADJUSTMENTS } from "../../modules/inventory/adjustmentData";
-import { THREE_WAY_MATCHES, SETTLEMENT_DOCUMENTS } from "../../data/standard-business-scenario";
 import { A, Card, Chip, SectionHeader } from "../ui";
 import { BusinessEntityLink } from "./BusinessEntityLink";
 import { businessEntityRouteRegistry, type BusinessEntityType } from "./businessEntityRoutes";
@@ -45,19 +43,11 @@ function formatValue(key: string, value: unknown) {
 
 function syncRecord(entityType: BusinessEntityType, id: string): RecordValue | null {
   const candidates: Partial<Record<BusinessEntityType, RecordValue[]>> = {
-    rfq: RFQS as unknown as RecordValue[],
-    purchase_order: purchaseOrders as unknown as RecordValue[],
-    receiving_doc: receivingDocs as unknown as RecordValue[],
-    supplier_invoice: SUPPLIER_INVOICES as unknown as RecordValue[],
-    three_way_match: THREE_WAY_MATCHES as unknown as RecordValue[],
-    reconciliation_statement: SUPPLIER_RECONCILIATION_STATEMENTS as unknown as RecordValue[],
-    settlement_document: SETTLEMENT_DOCUMENTS as unknown as RecordValue[],
     supplier: SUPPLIER_MASTER as unknown as RecordValue[],
     item: ITEM_MASTER as unknown as RecordValue[],
     delivery_note: DELIVERY_NOTES as unknown as RecordValue[],
     sign_receipt: SIGN_RECEIPTS as unknown as RecordValue[],
     inventory_adjustment: INVENTORY_ADJUSTMENTS as unknown as RecordValue[],
-    credit_memo: SUPPLIER_CREDIT_MEMOS as unknown as RecordValue[],
   };
   const keys: Partial<Record<BusinessEntityType, string[]>> = {
     rfq: ["id"], purchase_order: ["po", "id"], receiving_doc: ["grn", "id"], supplier_invoice: ["invoiceNumber", "id"],
@@ -76,17 +66,6 @@ function relatedLinks(entityType: BusinessEntityType, record: RecordValue) {
   add("receiving_doc", record.relatedGrn || record.grn, "收货单");
   add("supplier_invoice", record.invoiceNumber || record.invoice, "供应商发票");
   add("reconciliation_statement", record.reconciliationStatement, "对账单");
-  if (entityType === "supplier_invoice") {
-    add("three_way_match", `MATCH-${record.invoiceNumber}`, "三单匹配");
-    const statement = SUPPLIER_RECONCILIATION_STATEMENTS.find((item) => item.lines.some((line) => line.relatedInvoice === record.invoiceNumber));
-    add("reconciliation_statement", statement?.statementNo, "对账单");
-    const settlement = SETTLEMENT_DOCUMENTS.find((item) => item.invoices.includes(String(record.invoiceNumber)));
-    add("settlement_document", settlement?.settlementNo, "结算单");
-  }
-  if (entityType === "reconciliation_statement") {
-    const settlement = SETTLEMENT_DOCUMENTS.find((item) => item.reconciliationStatement === record.statementNo);
-    add("settlement_document", settlement?.settlementNo, "结算单");
-  }
   return links.filter((link, index, rows) => rows.findIndex((candidate) => candidate.type === link.type && candidate.id === link.id) === index);
 }
 
