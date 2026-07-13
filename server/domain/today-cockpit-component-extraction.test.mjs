@@ -11,14 +11,17 @@ function readSource(filePath) {
   return fs.readFileSync(filePath, 'utf8')
 }
 
-test('overview page reuses focused today cockpit pieces without mounting the full cockpit', () => {
+test('overview page uses the authoritative procurement runtime without mounting the legacy cockpit', () => {
   const overview = readSource(overviewPath)
 
-  assert.match(overview, /import \{ TodayCockpitRecentDocuments \} from "\.\/TodayCockpitPanel"/)
-  assert.match(overview, /<TodayCockpitRecentDocuments\b/)
+  assert.match(overview, /function RuntimeHomepage\b/)
+  assert.match(overview, /"\/api\/procurement\/requests"/)
+  assert.match(overview, /"\/api\/procurement\/orders"/)
+  assert.match(overview, /"\/api\/procurement\/rfqs"/)
   assert.match(overview, /import AiSuggestionsPage from "\.\/AiSuggestionsPage"/)
   assert.match(overview, /<AiSuggestionsPage\b/)
   assert.doesNotMatch(overview, /<TodayCockpitPanel\b/)
+  assert.doesNotMatch(overview, /<TodayCockpitRecentDocuments\b/)
   assert.doesNotMatch(overview, /function TodayCockpitV2Panel/)
   assert.doesNotMatch(overview, /function CockpitInventoryRiskList/)
   assert.doesNotMatch(overview, /function cockpitCardValue/)

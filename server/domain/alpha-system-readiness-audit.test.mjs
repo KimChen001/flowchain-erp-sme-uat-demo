@@ -21,11 +21,11 @@ test('R66 Alpha readiness classification is documented without production claims
   assert.doesNotMatch(review, /ready for production/i)
 })
 
-test('Overview planning CTAs use review and draft preview wording for Alpha', () => {
+test('Overview work items use review-first runtime procurement wording', () => {
   const overview = readSource('src', 'modules', 'overview', 'Page.tsx')
 
-  assert.match(overview, /审阅 MRP 计划订单/)
-  assert.match(overview, /预览补货 PR 草稿/)
+  assert.match(overview, /采购申请待审批/)
+  assert.match(overview, /Draft PO 待复核/)
   assert.doesNotMatch(overview, /title: "释放 MRP 计划订单"/)
   assert.doesNotMatch(overview, /suggestedAction: .*"生成补货 PR"/)
 })

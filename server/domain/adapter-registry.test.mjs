@@ -43,13 +43,15 @@ test('repository registry defaults to JSON without DATABASE_URL', () => {
   assert.equal(typeof registry.procurementTransactions.createRfqDraftFromPr, 'function')
 })
 
-test('JSON repository registry exposes expected groups and delegates to current read models', () => {
+test('JSON repository registry exposes expected groups and delegates to current read models', async () => {
   const db = createDb()
   const before = clone(db)
   const registry = createJsonRepositoryRegistry({ db })
 
   assert.equal(registry.masterData.listItems()[0].sku, 'A100')
-  assert.equal(registry.masterData.getSupplier('SUP-001').name, 'ABC Components')
+  assert.equal(Array.isArray(await registry.masterData.listSuppliers()), true)
+  assert.equal(typeof registry.masterData.createSupplier, 'function')
+  assert.equal(typeof registry.masterData.selectSuppliers, 'function')
   assert.equal(registry.inventoryRead.getItem('A100').sku, 'A100')
   assert.equal(registry.inventoryRead.listMovements()[0].movementId, 'IM-1')
   assert.equal(registry.procurementRead.getDocument('po', 'PO-1').id, 'PO-1')

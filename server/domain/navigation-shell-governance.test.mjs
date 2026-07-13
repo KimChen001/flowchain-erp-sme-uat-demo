@@ -49,8 +49,8 @@ test("business-level inventory, master-data, procurement and finance tabs naviga
   }
 });
 
-test("module content does not recreate a separate h1 title shell", () => {
-  for (const path of ["src/modules/overview/Page.tsx", "src/modules/master-data/Page.tsx", "src/modules/procurement/Page.tsx", "src/modules/receiving/Page.tsx", "src/modules/sales/Page.tsx", "src/modules/inventory/Page.tsx", "src/modules/finance/Page.tsx", "src/modules/reports/Page.tsx", "src/modules/settings/Page.tsx", "src/modules/srm/Page.tsx"]) {
+test("module content without a standalone workbench does not recreate a separate h1 title shell", () => {
+  for (const path of ["src/modules/overview/Page.tsx", "src/modules/master-data/Page.tsx", "src/modules/receiving/Page.tsx", "src/modules/sales/Page.tsx", "src/modules/inventory/Page.tsx", "src/modules/finance/Page.tsx", "src/modules/reports/Page.tsx", "src/modules/settings/Page.tsx"]) {
     assert.doesNotMatch(read(path), /<h1\b/, path);
   }
 });

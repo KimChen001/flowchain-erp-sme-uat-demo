@@ -62,13 +62,7 @@ export default function MasterDataPage({
     if (!focus?.entityId) return;
     const normalized = focus.entityId.toLowerCase();
     if (focus.entityType === "item") {
-      const item = masterData.items.find((entry) =>
-        entry.sku.toLowerCase() === normalized ||
-        entry.name.toLowerCase() === normalized
-      );
-      if (!item) return;
       setTab("items");
-      setDetail({ type: "items", item });
       return;
     }
     if (focus.entityType === "supplier") {

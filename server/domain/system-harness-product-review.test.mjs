@@ -314,7 +314,9 @@ test('Phase 0 product positioning and visible language governance stay productiz
   assert.match(inventoryPage, /当前工作区数据补足/)
   assert.match(reportsPage, /API \/ 当前数据范围/)
   assert.match(aiVisibleCopySources, /待复核草稿/)
-  assert.match(overview, /库存周转/)
+  assert.match(overview, /首页概览/)
+  assert.match(overview, /今日需处理/)
+  assert.match(overview, /最近单据/)
 
   assert.doesNotMatch(readme.split('\n')[0], /UAT|Demo|ERP\/SCM/)
   assert.doesNotMatch(publicDocs, /FlowChain ERP\/SCM UAT Demo|JSON\/demo-data-backed UAT|UAT limitations|Demo script|Demo screenshot|Fake API keys|演示数据|示例数据|样例数据|sample data|demo data|UAT data/)
