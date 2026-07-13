@@ -13,6 +13,8 @@ data/procurement-transactions.json.tmp-*
 data/backups/
 data/item-master-runtime.json
 data/item-master-runtime.json.tmp-*
+data/supplier-master-runtime.json
+data/supplier-master-runtime.json.tmp-*
 cloudflare-tunnel.*.log
 localtunnel.*.log
 prod-server.*.log

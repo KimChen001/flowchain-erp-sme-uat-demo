@@ -539,6 +539,15 @@ export default function FlowChainApp() {
   const activeView = activeRoute?.viewId;
   const panelModule = activeRoute?.panelId || activeModule;
 
+  useEffect(() => {
+    if (!activeRoute?.entityType || !activeRoute.entityIdParam) return;
+    const entityId = decodeURIComponent(location.pathname.split('/').filter(Boolean).at(-1) || '');
+    if (!entityId) return;
+    setSearchFocus((current) => current?.entityType === activeRoute.entityType && current.entityId === entityId
+      ? current
+      : { entityType: activeRoute.entityType!, entityId, entityLabel: entityId, source: 'detailUrl', at: Date.now() });
+  }, [activeRoute?.id, location.pathname]);
+
   function prepareReplenishmentRequest(sku: string) {
     const item = inventoryItems.find((entry) => entry.sku === sku);
     if (!item) {
@@ -1148,7 +1157,7 @@ export default function FlowChainApp() {
               )}
               <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
                 <React.Suspense fallback={<div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="模块加载中">{[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl" style={{ background: A.gray5 }} />)}</div>}>
-                {activeRoute.pageType === "detail" && activeRoute.entityType
+                {activeRoute.pageType === "detail" && activeRoute.entityType && !["purchase_request", "purchase_order", "supplier"].includes(activeRoute.entityType)
                   ? <BusinessEntityDetailPage route={activeRoute} />
                   : panels[panelModule] || panels[activeModule] || panels.overview}
                 </React.Suspense>

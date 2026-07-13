@@ -22,13 +22,8 @@ if (command === 'reset') {
   await writeFile(file, JSON.stringify(emptyProcurementRuntime(), null, 2), 'utf8')
   console.log(`Backup: ${backup}`)
 } else if (command === 'seed') {
-  const demo = JSON.parse(await readFile(resolve('data/scm-demo.json'), 'utf8'))
-  const seed = emptyProcurementRuntime()
-  seed.purchaseRequests = Array.isArray(demo.purchaseRequests) ? demo.purchaseRequests : []
-  seed.rfqs = Array.isArray(demo.rfqs) ? demo.rfqs : []
-  seed.purchaseOrders = Array.isArray(demo.purchaseOrders) ? demo.purchaseOrders : []
-  await writeFile(file, JSON.stringify(seed, null, 2), 'utf8')
-  console.log(`Seeded procurement runtime; backup: ${backup}`)
+  console.error('Demo procurement seed is not available for runtime schema v2.')
+  process.exit(3)
 } else {
   console.error('Expected reset or seed')
   process.exit(2)

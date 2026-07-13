@@ -116,9 +116,13 @@ export function createProcurementWorkflowService({
             [{ field: `lines.${index}.sku` }],
             400,
           );
-        if (item.defaultSupplierId && supplierId !== item.defaultSupplierId)
+        if (itemRepository?.approvedSuppliersForItem) {
+          const approved = await itemRepository.approvedSuppliersForItem(item.itemId);
+          if (!approved.length) throw procurementError("ITEM_HAS_NO_APPROVED_SUPPLIER", "该 SKU 尚未维护可采购供应商，请先维护 SKU–供应商关系。", [{ field: `lines.${index}.supplierId` }], 400);
+          if (!approved.some(row => row.id === supplierId)) throw procurementError("ITEM_SUPPLIER_RELATIONSHIP_INVALID", "所选供应商不是该 SKU 的已批准供应商", [{ field: `lines.${index}.supplierId` }], 400);
+        } else if (item.defaultSupplierId && supplierId !== item.defaultSupplierId) {
           throw procurementError("ITEM_SUPPLIER_RELATIONSHIP_INVALID", "所选供应商不是该 SKU 的已批准供应商", [{ field: `lines.${index}.supplierId` }], 400);
-        if (!item.defaultSupplierId) throw procurementError("ITEM_HAS_NO_APPROVED_SUPPLIER", "该 SKU 尚未维护可采购供应商，请先维护 SKU–供应商关系。", [{ field: `lines.${index}.supplierId` }], 400);
+        }
         return {
           ...structuredClone(line),
           lineType, sourceType: lineType, lineBasis, supplierId, quantity: lineBasis === "quantity" ? quantity : null,

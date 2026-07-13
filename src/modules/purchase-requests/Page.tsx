@@ -331,7 +331,7 @@ export default function PurchaseRequestsPage({
   onNavigate?: (moduleId: string) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
-  if (!focus) return <CanonicalProcurementPanel onNavigate={onNavigate} />;
+  if (true) return <CanonicalProcurementPanel onNavigate={onNavigate} focus={focus} />;
   const navigate = useNavigate();
   const [, setSearchParams] = useSearchParams();
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
