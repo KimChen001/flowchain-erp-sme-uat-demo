@@ -196,7 +196,7 @@ function normalizeInventoryItems(apiItems: ApiInventoryItem[], fallback: Invento
   });
 }
 
-function normalizeLots(apiLots: ApiInventoryLot[], fallback: typeof import("../../data/demo-data").LOTS = []) {
+function normalizeLots(apiLots: ApiInventoryLot[], fallback: any[] = []) {
   return apiLots.map((lot, index) => {
     const fallbackLot = fallback.find((row) => row.lot === lot.lotId || row.sku === lot.sku) || fallback[index];
     return {
@@ -214,7 +214,7 @@ function normalizeLots(apiLots: ApiInventoryLot[], fallback: typeof import("../.
   });
 }
 
-function normalizeSerials(apiSerials: ApiInventorySerial[], fallback: typeof import("../../data/demo-data").SERIALS = []) {
+function normalizeSerials(apiSerials: ApiInventorySerial[], fallback: any[] = []) {
   return apiSerials.map((serial, index) => {
     const fallbackSerial = fallback.find((row) => row.sn === serial.serialId || row.sku === serial.sku) || fallback[index];
     return {
@@ -304,7 +304,7 @@ export async function fetchInventoryItem(sku: string): Promise<ApiInventoryItem 
   }
 }
 
-export async function fetchInventoryLots(fallback: typeof import("../../data/demo-data").LOTS = []) {
+export async function fetchInventoryLots(fallback: any[] = []) {
   const rows = await readArray<ApiInventoryLot>("/api/inventory/lots", "lots", fallback as unknown as ApiInventoryLot[]);
   if (rows === (fallback as unknown as ApiInventoryLot[])) return fallback;
   if (rows.length) return normalizeLots(rows, fallback);
@@ -312,7 +312,7 @@ export async function fetchInventoryLots(fallback: typeof import("../../data/dem
   return fallback;
 }
 
-export async function fetchInventorySerials(fallback: typeof import("../../data/demo-data").SERIALS = []) {
+export async function fetchInventorySerials(fallback: any[] = []) {
   const rows = await readArray<ApiInventorySerial>("/api/inventory/serials", "serials", fallback as unknown as ApiInventorySerial[]);
   if (rows === (fallback as unknown as ApiInventorySerial[])) return fallback;
   if (rows.length) return normalizeSerials(rows, fallback);

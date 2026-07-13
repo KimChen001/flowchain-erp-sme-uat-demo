@@ -94,6 +94,7 @@ test('inventory and procurement routes use injected repositories while preservin
   const db = createDb()
   const before = clone(db)
   const repositories = createRepositoryRegistry({ db, env: {} })
+  repositories.inventoryRuntime = repositories.inventoryRead
   const inventoryRoute = createRouteContext('/api/inventory/items?q=A100', db, repositories)
   const inventoryMissing = createRouteContext('/api/inventory/items/missing', db, repositories)
   const procurementRoute = createRouteContext('/api/procurement/documents/purchase-order/PO-1', db, repositories)

@@ -22,7 +22,7 @@ function query(url) {
 }
 
 function inventoryReadRepository(ctx) {
-  return ctx.repositories?.inventoryRead || createJsonInventoryReadRepository(ctx.db)
+  return ctx.repositories?.inventoryRuntime || ctx.repositories?.inventoryRead || createJsonInventoryReadRepository(ctx.db)
 }
 
 export async function handleInventoryRoute(ctx) {
@@ -131,6 +131,16 @@ export async function handleInventoryRoute(ctx) {
 
   if (req.method === 'GET' && url.pathname === '/api/inventory/items') {
     send(res, 200, { items: await repository.listItems(query(url)) })
+    return true
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/inventory/items') {
+    try {
+      const item = await repository.upsertItem(await ctx.readBody(req))
+      send(res, 201, { item })
+    } catch (error) {
+      send(res, error.status || 400, { error: error.message, code: error.code })
+    }
     return true
   }
 

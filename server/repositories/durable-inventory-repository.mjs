@@ -1,0 +1,88 @@
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
+
+const clone = value => structuredClone(value)
+const text = value => String(value ?? '').trim()
+const number = (value, fallback = 0) => value === '' || value == null ? fallback : Number.isFinite(Number(value)) ? Number(value) : fallback
+
+export const emptyInventoryRuntime = () => ({
+  schemaVersion: 1,
+  initialized: true,
+  updatedAt: new Date().toISOString(),
+  items: [], lots: [], serials: [], movements: [], exceptions: [],
+})
+
+async function atomicWrite(file, document) {
+  const temp = `${file}.tmp-${process.pid}-${Date.now()}`
+  await mkdir(dirname(file), { recursive: true })
+  try {
+    await writeFile(temp, JSON.stringify(document, null, 2), 'utf8')
+    await rename(temp, file)
+  } catch (error) {
+    await rm(temp, { force: true }).catch(() => {})
+    throw error
+  }
+}
+
+export function createDurableInventoryRepository({ dataFile }) {
+  let document
+  async function load() {
+    if (document) return document
+    try { document = JSON.parse(await readFile(dataFile, 'utf8')) }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw error
+      document = emptyInventoryRuntime()
+    }
+    document = { ...emptyInventoryRuntime(), ...document, initialized: true }
+    return document
+  }
+  async function save() {
+    document.updatedAt = new Date().toISOString()
+    await atomicWrite(dataFile, document)
+  }
+  function filter(rows, filters = {}) {
+    const q = text(filters.q).toLowerCase()
+    return rows.filter(row =>
+      (!filters.status || text(row.status) === text(filters.status)) &&
+      (!filters.warehouse || text(row.warehouseId || row.defaultWarehouseId) === text(filters.warehouse)) &&
+      (!q || [row.sku, row.itemName, row.name, row.lotId, row.serialId, row.movementId, row.id].some(value => text(value).toLowerCase().includes(q))),
+    ).slice(0, Math.max(1, number(filters.limit, rows.length || 1)))
+  }
+  return {
+    mode: 'json', adapter: 'durable-inventory-runtime-v1', _dataFile: dataFile,
+    async listItems(filters) { return clone(filter((await load()).items, filters)) },
+    async getItem(key) { const decoded = decodeURIComponent(key); return clone((await load()).items.find(row => row.sku === decoded || row.itemId === decoded) || null) },
+    async listLots(filters) { return clone(filter((await load()).lots, filters)) },
+    async listSerials(filters) { return clone(filter((await load()).serials, filters)) },
+    async listMovements(filters) { return clone(filter((await load()).movements, filters)) },
+    async listExceptions(filters) { return clone(filter((await load()).exceptions, filters)) },
+    async getSummary() {
+      const doc = await load()
+      return {
+        itemCount: doc.items.length,
+        lowStockCount: doc.items.filter(row => number(row.availableQuantity ?? row.onHandQuantity) < number(row.reorderPoint ?? row.safetyStock)).length,
+        highRiskCount: doc.items.filter(row => ['blocked', 'high', '缺货'].includes(text(row.riskLevel || row.status))).length,
+        movementCount: doc.movements.length, exceptionCount: doc.exceptions.length,
+        lotCount: doc.lots.length, serialCount: doc.serials.length,
+      }
+    },
+    async upsertItem(input) {
+      const doc = await load()
+      const sku = text(input.sku)
+      if (!sku) { const error = new Error('SKU 必填'); Object.assign(error, { status: 400, code: 'SKU_REQUIRED' }); throw error }
+      const index = doc.items.findIndex(row => row.sku === sku)
+      const row = {
+        ...(index >= 0 ? doc.items[index] : {}), ...input, sku,
+        itemId: text(input.itemId) || text(input.id) || sku,
+        itemName: text(input.itemName || input.name) || sku,
+        onHandQuantity: number(input.onHandQuantity ?? input.qty),
+        availableQuantity: number(input.availableQuantity ?? input.onHandQuantity ?? input.qty),
+        reservedQuantity: number(input.reservedQuantity), safetyStock: number(input.safetyStock),
+        reorderPoint: number(input.reorderPoint ?? input.safetyStock), updatedAt: new Date().toISOString(),
+      }
+      if (index >= 0) doc.items[index] = row; else doc.items.push(row)
+      await save()
+      return clone(row)
+    },
+  }
+}

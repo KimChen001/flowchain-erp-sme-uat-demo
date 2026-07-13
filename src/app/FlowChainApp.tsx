@@ -21,7 +21,6 @@ import {
   type CanonicalFocusTarget,
   type CanonicalNavigationIntent,
 } from "../lib/evidenceLinks";
-import { fmt } from "../lib/format";
 import { A, Card, Field, inputStyle, Modal, RecoveryActions } from "../components/ui";
 import { BusinessBackLink } from "../components/navigation/BusinessBackLink";
 import { ModuleShell, NotFoundRecovery } from "../components/navigation/ModuleShell";
@@ -32,11 +31,6 @@ import type {
   WorkspaceUser,
   PurchaseIntent,
 } from "../types/scm";
-import {
-  inventoryItems,
-  supplierData,
-} from "../data/demo-data";
-import { inventoryPlan } from "../domain/inventory/planning";
 import ReceivingPanel from "../modules/receiving/Page";
 import InventoryPanel from "../modules/inventory/Page";
 import ForecastPanel from "../modules/forecast/Page";
@@ -58,161 +52,6 @@ import { BusinessEntityDetailPage } from "../components/business/BusinessEntityD
 
 const ReportsPanel = React.lazy(() => import("../modules/reports/Page"));
 const ImportsPanel = React.lazy(() => import("../modules/imports/Page"));
-
-function supplierRecommendation(name: string) {
-  const supplier = supplierData.find((item) => item.name === name);
-  if (!supplier) {
-    return {
-      score: 68,
-      grade: "待评估",
-      note: "缺少完整供应商绩效，建议补充准时率、质量合格率和报价记录后再自动推荐。",
-      color: A.orange,
-    };
-  }
-  const gradeScore = supplier.grade === "S" ? 100 : supplier.grade === "A" ? 88 : supplier.grade === "B" ? 72 : 60;
-  const trendScore = supplier.trend === "up" ? 5 : supplier.trend === "down" ? -8 : 0;
-  const score = Math.round(supplier.ontime * 0.38 + supplier.quality * 0.42 + gradeScore * 0.16 + trendScore);
-  const color = score >= 92 ? A.green : score >= 84 ? A.blue : score >= 74 ? A.orange : A.red;
-  const grade = score >= 92 ? "优先推荐" : score >= 84 ? "可推荐" : score >= 74 ? "需复核" : "高风险";
-  return {
-    score,
-    grade,
-    color,
-    note: `准时率 ${supplier.ontime}% · 质量 ${supplier.quality}% · ${supplier.grade} 级供应商 · ${supplier.trend === "up" ? "趋势改善" : supplier.trend === "down" ? "趋势下滑" : "趋势稳定"}`,
-  };
-}
-
-function ReplenishmentRequestModal({
-  item,
-  open,
-  onClose,
-  onPreviewDraft,
-}: {
-  item: typeof inventoryItems[number] | null;
-  open: boolean;
-  onClose: () => void;
-  onPreviewDraft: (request: ActionDraftPreviewRequest) => void;
-}) {
-  const plan = item ? inventoryPlan(item) : null;
-  const [quantity, setQuantity] = useState(0);
-  const [requiredDate, setRequiredDate] = useState("");
-  const [reason, setReason] = useState("");
-
-  useEffect(() => {
-    if (!item || !plan) return;
-    setQuantity(plan.suggestedQty);
-    setRequiredDate(`${plan.leadTimeDays}天内`);
-    setReason(`库存低于再订货点：可用 ${plan.projectedAvailable}${plan.unit}，ROP ${plan.reorderPoint}${plan.unit}，覆盖 ${plan.daysCover} 天。策略 ${plan.policy}。`);
-  }, [item?.sku]);
-
-  if (!item || !plan) return null;
-  const amount = quantity * plan.unitPrice;
-  const score = supplierRecommendation(plan.supplier);
-  const draftType = plan.needsSourcing ? "rfq_draft" : "purchase_request_draft";
-  const draftLabel = plan.needsSourcing ? "预览 RFQ 草稿" : "预览 PR 草稿";
-  const canPreview = quantity > 0;
-  const previewDraft = () => {
-    onPreviewDraft({
-      type: draftType,
-      title: `${item.sku} ${plan.needsSourcing ? "RFQ 草稿预览" : "补货 PR 草稿预览"}`,
-      source: "inventory_replenishment",
-      originEvidence: [
-        {
-          type: "inventory_item",
-          id: item.sku,
-          label: item.name,
-          status: item.status,
-          summary: reason,
-        },
-      ],
-      payload: {
-        itemIdOrSku: item.sku,
-        quantity,
-        unit: plan.unit,
-        requestedDeliveryDate: requiredDate,
-        reason,
-        supplierIdOrName: plan.needsSourcing ? "" : plan.supplier,
-        supplierSuggestion: plan.needsSourcing ? undefined : { supplierName: plan.supplier },
-        severity: plan.priority,
-      },
-    });
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} width={680}
-      title={plan.needsSourcing ? "补货 RFQ 草稿预览" : "补货 PR 草稿预览"} subtitle={`${item.sku} · ${item.name}`}>
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        {[
-          { label: "可用库存", value: `${plan.projectedAvailable.toLocaleString()} ${plan.unit}`, color: plan.projectedAvailable <= item.min ? A.red : A.label },
-          { label: "ROP", value: `${plan.reorderPoint.toLocaleString()} ${plan.unit}`, color: A.label },
-          { label: "覆盖天数", value: `${plan.daysCover} 天`, color: plan.daysCover <= plan.leadTimeDays ? A.red : A.label },
-          { label: "MOQ/倍量", value: `${plan.moq}/${plan.batchMultiple}`, color: A.label },
-        ].map((metric) => (
-          <div key={metric.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-            <div className="fc-caption" style={{ color: A.gray2 }}>{metric.label}</div>
-            <div className="text-sm font-semibold mt-1" style={{ color: metric.color }}>{metric.value}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="建议供应商">
-          <div className="rounded-lg px-3 py-2 text-xs" style={{ background: A.gray6, color: A.label }}>
-            {plan.supplier} · 评分 {score.score} · {score.grade}
-          </div>
-        </Field>
-        <Field label="采购负责人">
-          <div className="rounded-lg px-3 py-2 text-xs" style={{ background: A.gray6, color: A.label }}>{plan.buyer}</div>
-        </Field>
-        <Field label={`申请数量 (${plan.unit}) *`}>
-          <input type="number" min={1} step={plan.batchMultiple}
-            value={quantity}
-            onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
-            style={inputStyle} />
-        </Field>
-        <Field label="需求日期 *">
-          <input value={requiredDate} onChange={(e) => setRequiredDate(e.target.value)} style={inputStyle} />
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 mt-4">
-        {[
-          { label: "系统建议量", value: `${plan.suggestedQty.toLocaleString()} ${plan.unit}` },
-          { label: "预估金额", value: fmt(amount) },
-          { label: "优先级", value: plan.priority },
-        ].map((metric) => (
-          <div key={metric.label} className="rounded-xl p-3" style={{ background: A.gray6 }}>
-            <div className="fc-caption" style={{ color: A.gray2 }}>{metric.label}</div>
-            <div className="text-sm font-semibold mt-1" style={{ color: metric.label === "优先级" && plan.priority === "高" ? A.red : A.label }}>{metric.value}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4">
-        <Field label="申请理由 / 审批说明">
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)}
-            rows={3} style={{ ...inputStyle, resize: "none", fontFamily: "inherit" }} />
-        </Field>
-      </div>
-
-      {plan.needsSourcing && (
-        <div className="mt-4 rounded-xl p-3 text-xs" style={{ background: "#fff8f0", color: A.label }}>
-          当前 SKU 缺少有效供应商或单价，将先进入 RFQ 草稿预览，确认能力仍保留为后续人工动作。
-        </div>
-      )}
-
-      <div className="flex justify-end gap-2 mt-5">
-        <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg font-medium"
-          style={{ background: A.white, color: A.label, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.1)" }}>取消</button>
-        <button onClick={previewDraft} disabled={!canPreview}
-          className="text-xs px-3 py-1.5 rounded-lg font-medium text-white"
-          style={{ background: canPreview ? A.blue : A.gray3 }}>
-          {draftLabel}
-        </button>
-      </div>
-    </Modal>
-  );
-}
 
 function actionDraftErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message.trim() : "";
@@ -474,7 +313,15 @@ export default function FlowChainApp() {
   const location = useLocation();
   const routerNavigate = useNavigate();
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(null);
-  const [replenishmentSku, setReplenishmentSku] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    apiJson<{ commitSha: string; branch: string; runtimeMode: string; worktree?: string }>("/api/health").then(identity => {
+      document.documentElement.dataset.flowchainCommit = identity.commitSha;
+      document.documentElement.dataset.flowchainBranch = identity.branch;
+      console.info("FlowChain build identity", identity);
+    }).catch(() => {});
+  }, []);
   const [draftShellOpen, setDraftShellOpen] = useState(false);
   const [draftPreview, setDraftPreview] = useState<ActionDraftPreview | null>(null);
   const [draftLoading, setDraftLoading] = useState(false);
@@ -547,23 +394,6 @@ export default function FlowChainApp() {
       ? current
       : { entityType: activeRoute.entityType!, entityId, entityLabel: entityId, source: 'detailUrl', at: Date.now() });
   }, [activeRoute?.id, location.pathname]);
-
-  function prepareReplenishmentRequest(sku: string) {
-    const item = inventoryItems.find((entry) => entry.sku === sku);
-    if (!item) {
-      toast.error("未找到库存 SKU", { description: sku });
-      return;
-    }
-    const plan = inventoryPlan(item);
-    if (plan.suggestedQty <= 0) {
-      toast("当前无需生成 PR", { description: `${item.sku} 仍高于再订货点，建议继续监控。` });
-      routerNavigate(routePathForId("inventory"));
-      return;
-    }
-    setReplenishmentSku(sku);
-  }
-
-  const replenishmentItem = replenishmentSku ? inventoryItems.find((item) => item.sku === replenishmentSku) ?? null : null;
 
   function navItemMatchesActive(item: typeof navItems[number]) {
     return item.id === activeModule || Boolean(item.children?.some((child) => child.id === (activeRoute?.currentActiveMenuId || active)));
@@ -808,7 +638,7 @@ export default function FlowChainApp() {
     : "可返回来源对象或返回列表";
 
   const panels: Record<string, React.ReactNode> = {
-    overview:    <OverviewPanel initialView={activeView} onNavigate={navigateTo} onPrepareReplenishmentRequest={prepareReplenishmentRequest} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
+    overview:    <OverviewPanel initialView={activeView} onNavigate={navigateTo} onOpenAi={() => setAiOpenSignal(Date.now())} onReviewActionDraft={openActionDraftReview} />,
     sales:       <SalesDemandPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onOpenAi={() => setAiOpenSignal(Date.now())} />,
     inventory:   <InventoryPanel initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} onReviewActionDraft={openActionDraftReview} />,
     forecast:    <ForecastPanel initialView={activeView as any} onNavigate={navigateTo} onReviewActionDraft={openActionDraftReview} />,
@@ -852,16 +682,6 @@ export default function FlowChainApp() {
       <Toaster position="top-right" toastOptions={{
         style: { borderRadius: 14, fontSize: 12, fontFamily: "var(--fc-font-family)", boxShadow: "0 8px 24px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)" },
       }} />
-      <ReplenishmentRequestModal
-        open={Boolean(replenishmentItem)}
-        item={replenishmentItem}
-        onClose={() => setReplenishmentSku(null)}
-        onPreviewDraft={(request) => {
-          setReplenishmentSku(null);
-          openActionDraftReview(request);
-        }}
-      />
-
       <aside className="hidden w-56 shrink-0 flex-col lg:flex"
         style={{
           background: A.sidebar,

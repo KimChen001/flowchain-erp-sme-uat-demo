@@ -51,7 +51,7 @@ test('action draft review shell renders business payload, validation, audit, and
   assert.match(shell, /审计预览/)
 })
 
-test('Today Cockpit AI and inventory can open review shell without business write actions', () => {
+test('Today Cockpit and AI keep review shell while inventory uses canonical PR navigation', () => {
   const app = readSource('src', 'app', 'FlowChainApp.tsx')
   const cockpit = readSource('src', 'modules', 'overview', 'TodayCockpitPanel.tsx')
   const ai = readSource('src', 'modules', 'ai-assistant', 'Panel.tsx')
@@ -68,8 +68,9 @@ test('Today Cockpit AI and inventory can open review shell without business writ
   assert.match(cockpit, /actionDraftRequest\(item\)/)
   assert.match(ai, /actionDraftRequestFromCard/)
   assert.match(ai, /审阅草稿/)
-  assert.match(inventory, /source: "inventory_replenishment"/)
-  assert.match(inventory, /type: draftType/)
-  assert.match(inventory, /originEvidence/)
+  assert.match(inventory, /<EntityLink kind="item"/)
+  assert.match(inventory, /\/app\/procurement\/requests\?itemId=/)
+  assert.match(inventory, /新建采购申请/)
+  assert.doesNotMatch(inventory, /inventory_replenishment|预览 PR/)
   assert.doesNotMatch(app, /\/api\/purchase-requests/)
 })

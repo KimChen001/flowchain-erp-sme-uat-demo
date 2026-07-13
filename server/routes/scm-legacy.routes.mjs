@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ProxyAgent } from 'undici'
+import { execFileSync } from 'node:child_process'
 import { loadEnv } from '../config/env.mjs'
 import { createJsonDb } from '../repositories/json-db.mjs'
 import { createRepositoryRegistry, getPersistenceMode } from '../repositories/adapter-registry.mjs'
@@ -86,6 +87,17 @@ const dataFile = path.join(root, 'data', 'scm-demo.json')
 const jsonDb = createJsonDb(dataFile)
 const port = Number(process.env.SCM_API_PORT || 8787)
 const distDir = path.join(root, 'dist')
+
+function gitValue(args, fallback = 'unknown') {
+  try { return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || fallback }
+  catch { return fallback }
+}
+const buildIdentity = Object.freeze({
+  commitSha: process.env.FLOWCHAIN_COMMIT_SHA || gitValue(['rev-parse', 'HEAD']),
+  branch: process.env.FLOWCHAIN_BRANCH || gitValue(['branch', '--show-current'], 'detached'),
+  runtimeMode: process.env.NODE_ENV === 'production' ? 'production' : 'local-dev',
+  worktree: root,
+})
 
 await loadEnv(root)
 
@@ -911,6 +923,7 @@ export function createScmServer() {
         ok: true,
         service: 'flowchain-scm-api',
         mode: 'local-dev',
+        ...buildIdentity,
         port,
         persistenceMode,
         timestamp: new Date().toISOString(),
@@ -919,6 +932,7 @@ export function createScmServer() {
           aiChat: '/api/ai/chat',
           dataMode: dataMode.mode,
           dataSource: dataMode.dataSource,
+          runtimeDataSources: { inventory: 'inventory-runtime', salesOrders: 'sales-orders-runtime', suppliers: 'supplier-master-runtime', items: 'item-master-runtime', procurement: 'procurement-runtime' },
         },
         purchaseOrders: db.purchaseOrders.length,
         purchaseRequests: ensurePurchaseRequests(db).length,

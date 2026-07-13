@@ -12,6 +12,9 @@ import { createDbInventoryReadRepository } from './db-inventory-read-repository.
 import { createDisabledUserDataRuntimeRepository, createInMemoryUserDataRuntimeRepository } from './user-data-runtime-repository.mjs'
 import { createInMemoryUserConfirmedActionRepository } from './user-confirmed-action-repository.mjs'
 import { createInMemoryProcurementTransactionRepository } from './procurement-transaction-repository.mjs'
+import { createDurableInventoryRepository } from './durable-inventory-repository.mjs'
+import { createDurableSalesOrderRepository } from './durable-sales-order-repository.mjs'
+import path from 'node:path'
 
 export const PERSISTENCE_MODES = Object.freeze({
   json: 'json',
@@ -50,8 +53,13 @@ function createUserDataRuntimeRepository({ db = {}, env = process.env } = {}) {
 export function createJsonRepositoryRegistry({ db = {}, env = process.env } = {}) {
   return {
     mode: PERSISTENCE_MODES.json,
-    masterData: createJsonMasterDataRepository(db),
+    masterData: createJsonMasterDataRepository(db, {
+      itemDataFile: path.resolve(env.FLOWCHAIN_ITEM_RUNTIME_FILE || 'data/item-master-runtime.json'),
+      supplierDataFile: path.resolve(env.FLOWCHAIN_SUPPLIER_RUNTIME_FILE || 'data/supplier-master-runtime.json'),
+    }),
     inventoryRead: createJsonInventoryReadRepository(db),
+    inventoryRuntime: createDurableInventoryRepository({ dataFile: path.resolve(env.FLOWCHAIN_INVENTORY_RUNTIME_FILE || 'data/inventory-runtime.json') }),
+    salesOrders: createDurableSalesOrderRepository({ dataFile: path.resolve(env.FLOWCHAIN_SALES_RUNTIME_FILE || 'data/sales-orders-runtime.json') }),
     procurementRead: createJsonProcurementReadRepository(db),
     actionDrafts: createJsonActionDraftRepository(db),
     exceptionCases: createInMemoryExceptionCaseRepository({ db }),

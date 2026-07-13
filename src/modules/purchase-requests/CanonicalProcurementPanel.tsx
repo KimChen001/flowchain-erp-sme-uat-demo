@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiJson } from "../../lib/api-client";
@@ -17,6 +18,8 @@ const makeLine = (date=today()):Line => ({ lineId:crypto.randomUUID(), sourceTyp
 const request = <T,>(url:string, method="GET", body?:unknown) => apiJson<T>(url,{method,body:body===undefined?undefined:JSON.stringify(body)});
 
 export default function CanonicalProcurementPanel({onNavigate,focus}:{onNavigate?:(id:string,focus?:unknown)=>void;focus?:{entityType:string;entityId:string;at:number}|null}) {
+  const [searchParams] = useSearchParams();
+  const prefilled = useRef(false);
   const requesterId = (()=>{try{return JSON.parse(localStorage.getItem("scm-demo-user")||"{}").id||"user-local"}catch{return "user-local"}})();
   const [items,setItems]=useState<Item[]>([]), [suppliers,setSuppliers]=useState<Supplier[]>([]), [warehouses,setWarehouses]=useState<Warehouse[]>([]), [rows,setRows]=useState<PR[]>([]);
   const [itemSuppliers,setItemSuppliers]=useState<Record<string,SupplierOption[]>>({});
@@ -25,6 +28,7 @@ export default function CanonicalProcurementPanel({onNavigate,focus}:{onNavigate
   const selected=focus?.entityType==="purchase_request"?rows.find(row=>row.id===focus.entityId):null;
   const load=async()=>{try{const [prs,master,catalog,selector]=await Promise.all([request<PR[]>("/api/procurement/requests"),request<{items:Item[];suppliers:Supplier[];warehouses:Warehouse[]}>("/api/master-data"),request<{items:Item[]}>("/api/master-data/items?purchasable=true"),request<{suppliers:SupplierOption[]}>("/api/master-data/suppliers/select")]);setRows(prs);setItems(catalog.items);setSuppliers(selector.suppliers.map(s=>({...s,name:s.name||s.supplierName||s.id})));setWarehouses(master.warehouses.filter(w=>w.status!=="inactive"));setLoadError("")}catch(error:any){setLoadError(error.message||"采购申请数据加载失败");throw error}};
   useEffect(()=>{load().catch(e=>toast.error(e.message));},[]);
+  useEffect(()=>{if(prefilled.current||!items.length)return;const requestedItem=searchParams.get("itemId")||searchParams.get("sku");if(!requestedItem)return;const item=items.find(row=>(row.itemId||row.id)===requestedItem||row.sku===requestedItem);if(!item)return;prefilled.current=true;const itemId=item.itemId||item.id||"";const quantity=String(Math.max(1,Number(searchParams.get("quantity")||1)));request<{suppliers:SupplierOption[]}>(`/api/master-data/items/${encodeURIComponent(itemId)}/suppliers`).then(result=>{setItemSuppliers(current=>({...current,[itemId]:result.suppliers}));const preferred=result.suppliers.find(s=>s.preferred)||result.suppliers[0];setLines([{...makeLine(defaultDate),itemId,sku:item.sku,itemNameSnapshot:item.itemName||item.name||"",unitSnapshot:item.purchaseUnit||item.baseUnit,specificationSnapshot:item.specification||"",commodityId:item.category||"",targetWarehouseId:item.defaultWarehouseId||"",quantity,supplierId:preferred?.id||"",estimatedUnitPrice:preferred?.referencePrice?String(preferred.referencePrice):"",currency:preferred?.currency||currency,internalLineComment:"由库存补货入口预填；保存前请人工复核数量、供应商和需求日期。"}]);}).catch(error=>toast.error(error.message||"供应商关系读取失败"));},[items,searchParams]);
   const patchLine=(index:number,patch:Partial<Line>)=>setLines(current=>current.map((line,i)=>i===index?{...line,...patch}:line));
   const selectItem=async(index:number,value:string)=>{ const item=items.find(row=>(row.itemId||row.id)===value); if(!item) return patchLine(index,{itemId:"",sku:"",supplierId:"",itemNameSnapshot:"",unitSnapshot:"",specificationSnapshot:"",commodityId:""}); const itemId=item.itemId||item.id||""; patchLine(index,{sourceType:"catalog_item",itemId,sku:item.sku,supplierId:"",itemNameSnapshot:item.itemName||item.name||"",unitSnapshot:item.purchaseUnit||item.baseUnit,specificationSnapshot:item.specification||"",commodityId:item.category||"",targetWarehouseId:item.defaultWarehouseId||"",estimatedUnitPrice:""}); const result=await request<{suppliers:SupplierOption[]}>(`/api/master-data/items/${encodeURIComponent(itemId)}/suppliers`);setItemSuppliers(current=>({...current,[itemId]:result.suppliers}));const preferred=result.suppliers.find(s=>s.preferred);if(preferred)patchLine(index,{supplierId:preferred.id,estimatedUnitPrice:preferred.referencePrice?String(preferred.referencePrice):"",currency:preferred.currency||currency}); };
   const supplierOptions=(line:Line):SupplierOption[]=>line.sourceType==="non_catalog_item"?suppliers:(itemSuppliers[line.itemId||""]||[]);

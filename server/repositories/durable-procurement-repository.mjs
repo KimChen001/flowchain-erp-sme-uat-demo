@@ -11,7 +11,7 @@ export const emptyProcurementRuntime = () => ({
 async function atomicWrite(file, doc) { const temp = `${file}.tmp-${process.pid}-${Date.now()}`; try { await mkdir(dirname(file),{recursive:true}); await writeFile(temp,JSON.stringify(doc,null,2),'utf8'); await rename(temp,file) } catch (cause) { await rm(temp,{force:true}).catch(()=>{}); throw procurementError('PERSISTENCE_ERROR','采购交易持久化失败',[],500,{cause}) } }
 export function createDurableProcurementRepository({ dataFile, seed = emptyProcurementRuntime() }) {
   let document
-  async function load() { if (document) return document; try { document=JSON.parse(await readFile(dataFile,'utf8')) } catch (e) { if(e.code!=='ENOENT') throw e; document=clone(seed); await atomicWrite(dataFile,document) }
+  async function load() { if (document) return document; try { document=JSON.parse(await readFile(dataFile,'utf8')) } catch (e) { if(e.code!=='ENOENT') throw e; document=clone(seed) }
     document = { ...emptyProcurementRuntime(), ...document, initialized: true }
     for (const key of ['purchaseRequests','rfqs','purchaseOrders','receipts','supplierInvoices','matchRecords','purchaseReturns','workItems','auditEvents','auditEntries','idempotencyRecords']) if (!Array.isArray(document[key])) document[key]=[]
     return document }

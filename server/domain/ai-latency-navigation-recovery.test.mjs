@@ -37,12 +37,12 @@ test('global focus recovery renders return and clear focus controls', () => {
   assert.match(appSource, /setSearchFocus\(null\)/)
 })
 
-test('inventory SKU focus renders visible recovery and related document entry points', () => {
-  assert.match(inventorySource, /当前 SKU 聚焦/)
-  assert.match(inventorySource, /<RecoveryActions/)
-  assert.match(inventorySource, /返回库存列表/)
-  assert.match(inventorySource, /查看事务流水/)
-  assert.match(inventorySource, /查看异常单据/)
+test('inventory SKU focus renders a local detail and canonical entity navigation', () => {
+  assert.match(inventorySource, /data-testid="inventory-local-detail"/)
+  assert.match(inventorySource, /库存详情/)
+  assert.match(inventorySource, /<EntityLink kind="item"/)
+  assert.match(inventorySource, /movements:\s*\{\s*url:\s*"\/api\/inventory\/movements"/)
+  assert.match(inventorySource, /exceptions:\s*\{\s*url:\s*"\/api\/inventory\/exceptions"/)
 })
 
 test('PO detail and draft review shell use shared recovery actions', () => {

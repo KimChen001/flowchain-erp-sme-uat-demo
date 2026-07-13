@@ -31,13 +31,15 @@ test('R193 PO delayed risk stays aligned with open partially received PO logic',
   assert.match(source('src', 'modules', 'purchasing', 'Page.tsx'), /poDelayedRisk/)
 })
 
-test('R194 SKU detail separates risk level from reason and supports review-first replenishment draft', () => {
+test('R194 SKU detail supports supplier-gated canonical replenishment navigation', () => {
   const inventory = source('src', 'modules', 'inventory', 'Page.tsx')
-  assert.match(inventory, /风险等级/)
-  assert.match(inventory, /原因/)
-  assert.match(inventory, /补货 PR 草稿/)
-  assert.match(inventory, /mutationAllowed:\s*false/)
-  assert.doesNotMatch(inventory, /auto-create|自动创建 PR/)
+  assert.match(inventory, /<EntityLink kind="item"/)
+  assert.match(inventory, /新建采购申请/)
+  assert.match(inventory, /维护供应商关系/)
+  assert.match(inventory, /\/app\/procurement\/requests\?itemId=/)
+  assert.match(inventory, /approved/)
+  assert.match(inventory, /preferred/)
+  assert.doesNotMatch(inventory, /预览 PR|auto-create|自动创建 PR/)
 })
 
 test('R195-R196 GRN and invoice contextual actions do not auto-post approve or pay', () => {

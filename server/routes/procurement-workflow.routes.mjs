@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { createDurableProcurementRepository } from "../repositories/durable-procurement-repository.mjs";
 import { createProcurementWorkflowService } from "../services/procurement-workflow-service.mjs";
 const repository = createDurableProcurementRepository({
-  dataFile: resolve("data/procurement-transactions.json"),
+  dataFile: resolve(process.env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE || "data/procurement-transactions.json"),
 });
 const workflowService = (ctx) => createProcurementWorkflowService({
   repository, itemRepository: ctx.repositories?.masterData,

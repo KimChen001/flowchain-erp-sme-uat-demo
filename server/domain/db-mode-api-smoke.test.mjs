@@ -94,7 +94,7 @@ test('JSON mode smoke routes run without DATABASE_URL', async () => {
   assert.equal(repositories.mode, 'json')
   assert.equal(master.response.status, 200)
   assert.equal(procurement.response.payload.documents[0].documentType, 'po')
-  assert.equal(inventory.response.payload.items[0].sku, 'A100')
+  assert.deepEqual(inventory.response.payload.items, [])
   assert.equal(preview.response.payload.previewOnly, true)
   assert.deepEqual(db, before)
 })

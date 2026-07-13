@@ -11,7 +11,7 @@ type RFQ={id:string;status:string;updatedAt:string;sourcePrId:string};
 type Work={priority:"高"|"中"|"低";title:string;id:string;description:string;route:string;entityType:string};
 const request=async<T,>(url:string)=>{const response=await fetch(url);if(!response.ok)throw new Error(`${response.status} ${response.statusText}`);return response.json() as Promise<T>};
 
-export default function OverviewPanel({initialView="",onNavigate,onOpenAi,onReviewActionDraft}:{initialView?:string;onNavigate:Navigate;onPrepareReplenishmentRequest:(sku:string)=>void;onOpenAi:()=>void;onReviewActionDraft?:(request:ActionDraftPreviewRequest)=>void}){
+export default function OverviewPanel({initialView="",onNavigate,onOpenAi,onReviewActionDraft}:{initialView?:string;onNavigate:Navigate;onOpenAi:()=>void;onReviewActionDraft?:(request:ActionDraftPreviewRequest)=>void}){
   if(initialView==="ai")return <AiSuggestionsPage onNavigate={onNavigate} onReviewActionDraft={onReviewActionDraft} onOpenAi={onOpenAi}/>;
   return <RuntimeHomepage onNavigate={onNavigate}/>;
 }
