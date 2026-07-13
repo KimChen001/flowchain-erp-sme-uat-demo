@@ -50,11 +50,13 @@ const HISTORICAL_TECHNICAL_DOCS = new Set([
   'docs/ui-typography-consistency-v1.md',
   'docs/ui-typography-system-v1.md',
   'docs/ui-typography-token-consolidation-v2.md',
+  'docs/verification/browser-baseline-differential.md',
 ])
 
 const TECHNICAL_FILE_PATTERNS = [
   /^package\.json$/,
   /^server\/domain\/product-terminology-governance\.test\.mjs$/,
+  /^server\/domain\/authoritative-runtime-initialization\.test\.mjs$/,
   /(^|\/)ai-runtime-provider/i,
   /(^|\/)ai-provider-safety/i,
   /(^|\/)ai-model-router/i,

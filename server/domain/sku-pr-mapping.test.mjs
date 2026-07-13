@@ -22,8 +22,8 @@ async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "flowchain-sku-"));
   const items = createDurableItemMasterRepository({
     dataFile: join(directory, "items.json"),
-    seed: [baseItem],
   });
+  await items.createItem(baseItem, "fixture");
   const procurement = createDurableProcurementRepository({
     dataFile: join(directory, "procurement.json"),
   });

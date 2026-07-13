@@ -32,7 +32,7 @@ export function createEmptyDataset({ mode = DATA_MODES.empty } = {}) {
 
 export function resolveFlowchainDataMode(env = process.env) {
   const raw = String(env.FLOWCHAIN_DATA_MODE || '').trim().toLowerCase()
-  const mode = VALID_DATA_MODES.has(raw) ? raw : DATA_MODES.demo
+  const mode = VALID_DATA_MODES.has(raw) ? raw : DATA_MODES.user
   return {
     mode,
     requestedMode: raw || null,

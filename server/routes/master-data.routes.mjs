@@ -1,58 +1,5 @@
 import { createJsonMasterDataRepository } from '../repositories/json-master-data-repository.mjs'
 
-const customerMaster = [
-  {
-    code: 'CUS-001',
-    name: '华南自动化设备有限公司',
-    contact: '林志远',
-    phone: '138****2018',
-    address: '深圳市宝安区智能制造产业园',
-    creditStatus: '正常',
-    paymentTerms: '月结 30 天',
-    status: '启用',
-  },
-  {
-    code: 'CUS-002',
-    name: '苏州精工系统集成有限公司',
-    contact: '张海峰',
-    phone: '137****8291',
-    address: '苏州市工业园区星港街 88 号',
-    creditStatus: '正常',
-    paymentTerms: '月结 45 天',
-    status: '启用',
-  },
-  {
-    code: 'CUS-003',
-    name: '武汉启明智能制造有限公司',
-    contact: '黄文杰',
-    phone: '139****1706',
-    address: '武汉市东湖高新区光谷大道',
-    creditStatus: '待评估',
-    paymentTerms: '预付 30% / 到货 70%',
-    status: '启用',
-  },
-  {
-    code: 'CUS-004',
-    name: '成都锐创机器人科技有限公司',
-    contact: '何雨',
-    phone: '136****7720',
-    address: '成都市高新区天府五街',
-    creditStatus: '受限',
-    paymentTerms: '款到发货',
-    status: '启用',
-  },
-  {
-    code: 'CUS-005',
-    name: '上海万联装备股份有限公司',
-    contact: '顾晨',
-    phone: '135****3902',
-    address: '上海市嘉定区工业园区',
-    creditStatus: '正常',
-    paymentTerms: '月结 30 天',
-    status: '启用',
-  },
-]
-
 function masterDataRepository(ctx) {
   return ctx.repositories?.masterData || createJsonMasterDataRepository(ctx.db)
 }
@@ -67,10 +14,11 @@ export async function handleMasterDataRoute(ctx) {
   const canWrite = !['viewer'].includes(role)
 
   if (req.method === 'GET' && url.pathname === '/api/master-data') {
-    const [items, suppliers, warehouses, paymentTerms, taxCodes] =
+    const [items, suppliers, customers, warehouses, paymentTerms, taxCodes] =
       await Promise.all([
         repository.listItems(),
         repository.listSuppliers(),
+        repository.listCustomers(),
         repository.listWarehouses(),
         repository.listPaymentTerms(),
         repository.listTaxCodes(),
@@ -78,7 +26,7 @@ export async function handleMasterDataRoute(ctx) {
     send(res, 200, {
       items,
       suppliers,
-      customers: customerMaster,
+      customers,
       warehouses,
       paymentTerms,
       taxCodes,
@@ -87,7 +35,44 @@ export async function handleMasterDataRoute(ctx) {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/customers') {
-    send(res, 200, { customers: customerMaster })
+    send(res, 200, { customers: await repository.listCustomers({
+      query: url.searchParams.get('query') || '',
+      status: url.searchParams.get('status') || '',
+    }) })
+    return true
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/master-data/customers') {
+    if (!canWrite) {
+      send(res, 403, { code: 'PERMISSION_DENIED', message: '当前用户无权维护客户' })
+      return true
+    }
+    try {
+      send(res, 201, { customer: await repository.createCustomer(await readBody(req), actor) })
+    } catch (error) {
+      send(res, error.status || 500, { code: error.code || 'PERSISTENCE_ERROR', message: error.message, details: error.details || [] })
+    }
+    return true
+  }
+
+  const customerStatusMatch = url.pathname.match(
+    /^\/api\/master-data\/customers\/([^/]+)\/(activate|deactivate)$/,
+  )
+  if (req.method === 'POST' && customerStatusMatch) {
+    if (!canWrite) {
+      send(res, 403, { code: 'PERMISSION_DENIED', message: '当前用户无权维护客户' })
+      return true
+    }
+    const body = await readBody(req)
+    try {
+      const customer = await repository.updateCustomer(customerStatusMatch[1], {
+        status: customerStatusMatch[2] === 'activate' ? 'active' : 'inactive',
+        expectedVersion: body.expectedVersion,
+      }, actor)
+      send(res, 200, { customer })
+    } catch (error) {
+      send(res, error.status || 500, { code: error.code || 'PERSISTENCE_ERROR', message: error.message, details: error.details || [] })
+    }
     return true
   }
 
@@ -95,10 +80,7 @@ export async function handleMasterDataRoute(ctx) {
     /^\/api\/master-data\/customers\/([^/]+)$/,
   )
   if (req.method === 'GET' && customerMatch) {
-    const key = decodeURIComponent(customerMatch[1]).toLowerCase()
-    const customer = customerMaster.find((row) =>
-      [row.code, row.name].some((value) => value.toLowerCase() === key),
-    )
+    const customer = await repository.getCustomer(customerMatch[1])
     send(
       res,
       customer ? 200 : 404,
@@ -196,6 +178,19 @@ export async function handleMasterDataRoute(ctx) {
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/suppliers') {
     send(res, 200, { suppliers: await repository.listSuppliers({ query:url.searchParams.get('query')||'', status:url.searchParams.get('status')||'', category:url.searchParams.get('category')||'' }) })
+    return true
+  }
+
+  if (req.method === 'PATCH' && customerMatch) {
+    if (!canWrite) {
+      send(res, 403, { code: 'PERMISSION_DENIED', message: '当前用户无权维护客户' })
+      return true
+    }
+    try {
+      send(res, 200, { customer: await repository.updateCustomer(customerMatch[1], await readBody(req), actor) })
+    } catch (error) {
+      send(res, error.status || 500, { code: error.code || 'PERSISTENCE_ERROR', message: error.message, details: error.details || [] })
+    }
     return true
   }
 

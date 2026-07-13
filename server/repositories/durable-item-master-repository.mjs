@@ -92,7 +92,7 @@ async function atomicWrite(file, document) {
   }
 }
 
-export function createDurableItemMasterRepository({ dataFile, seed = [] }) {
+export function createDurableItemMasterRepository({ dataFile }) {
   let document;
   async function load() {
     if (document) return document;
@@ -100,16 +100,12 @@ export function createDurableItemMasterRepository({ dataFile, seed = [] }) {
       document = JSON.parse(await readFile(dataFile, "utf8"));
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
-      document = {
-        schemaVersion: 1,
-        items: seed.map((item) => normalize(item, {}, "seed")),
-        updatedAt: now(),
-      };
-      await atomicWrite(dataFile, document);
+      document = { schemaVersion: 1, revision: 0, items: [], updatedAt: null };
     }
     return document;
   }
   async function save() {
+    document.revision = Number(document.revision || 0) + 1;
     document.updatedAt = now();
     await atomicWrite(dataFile, document);
   }

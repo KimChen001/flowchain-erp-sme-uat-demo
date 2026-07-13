@@ -121,11 +121,11 @@ function assertNoObjectSpecificEvidence(payload) {
 }
 
 test('R151 resolves data modes without implicitly enabling demo for empty or user data', () => {
-  assert.deepEqual(resolveFlowchainDataMode({}).mode, 'demo')
+  assert.deepEqual(resolveFlowchainDataMode({}).mode, 'user')
   assert.equal(resolveFlowchainDataMode({ FLOWCHAIN_DATA_MODE: 'empty' }).readsDemoData, false)
   assert.equal(resolveFlowchainDataMode({ FLOWCHAIN_DATA_MODE: 'user' }).readsDemoData, false)
   assert.equal(resolveFlowchainDataMode({ FLOWCHAIN_DATA_MODE: 'test' }).dataSource, 'in-memory-test')
-  assert.equal(resolveFlowchainDataMode({ FLOWCHAIN_DATA_MODE: 'invalid' }).mode, 'demo')
+  assert.equal(resolveFlowchainDataMode({ FLOWCHAIN_DATA_MODE: 'invalid' }).mode, 'user')
 })
 
 test('R152 core read models handle empty business data', async () => {

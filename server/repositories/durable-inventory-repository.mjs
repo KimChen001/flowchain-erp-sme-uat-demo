@@ -7,8 +7,9 @@ const number = (value, fallback = 0) => value === '' || value == null ? fallback
 
 export const emptyInventoryRuntime = () => ({
   schemaVersion: 1,
+  revision: 0,
   initialized: true,
-  updatedAt: new Date().toISOString(),
+  updatedAt: null,
   items: [], lots: [], serials: [], movements: [], exceptions: [],
 })
 
@@ -37,6 +38,7 @@ export function createDurableInventoryRepository({ dataFile }) {
     return document
   }
   async function save() {
+    document.revision = Number(document.revision || 0) + 1
     document.updatedAt = new Date().toISOString()
     await atomicWrite(dataFile, document)
   }

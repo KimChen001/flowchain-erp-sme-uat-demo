@@ -908,6 +908,7 @@ function supplierRecommendations(db, { sku = '', quantity = 0, currentSupplier =
 }
 
 export function createScmServer() {
+  const localSessions = new Map()
   return http.createServer(async (req, res) => {
   try {
     if (req.method === 'OPTIONS') return send(res, 204, {})
@@ -925,13 +926,25 @@ export function createScmServer() {
         mode: 'local-dev',
         ...buildIdentity,
         port,
+        dataMode: dataMode.mode,
+        readsDemoData: dataMode.readsDemoData,
         persistenceMode,
+        runtimeAdapters: {
+          masterData: repositories.masterData?.adapter || 'unavailable',
+          items: repositories.masterData?.itemRuntime?.adapter || 'unavailable',
+          suppliers: repositories.masterData?.supplierRuntime?.adapter || 'unavailable',
+          customers: repositories.masterData?.customerRuntime?.adapter || 'unavailable',
+          inventory: repositories.inventoryRuntime?.adapter || 'unavailable',
+          salesOrders: repositories.salesOrders?.adapter || 'unavailable',
+          procurement: 'durable-procurement-runtime-v2',
+        },
         timestamp: new Date().toISOString(),
         diagnostics: {
           healthCheck: '/api/health',
           aiChat: '/api/ai/chat',
           dataMode: dataMode.mode,
           dataSource: dataMode.dataSource,
+          readsDemoData: dataMode.readsDemoData,
           runtimeDataSources: { inventory: 'inventory-runtime', salesOrders: 'sales-orders-runtime', suppliers: 'supplier-master-runtime', items: 'item-master-runtime', procurement: 'procurement-runtime' },
         },
         purchaseOrders: db.purchaseOrders.length,
@@ -957,26 +970,21 @@ export function createScmServer() {
       } catch (error) {
         return send(res, 400, { error: error.message })
       }
-      const users = ensureUsers(db)
       const now = new Date().toISOString()
-      let user = users.find((item) => item.email === profile.email)
-      if (!user) {
-        user = {
-          id: `USR-${Date.now()}`,
-          token: `demo-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          createdAt: now,
-        }
-        users.unshift(user)
+      const user = {
+        id: `USR-${Date.now()}`,
+        token: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        createdAt: now,
+        ...profile,
+        lastLoginAt: now,
       }
-      Object.assign(user, profile, { lastLoginAt: now })
-      event(db, 'user_login', `${user.name} logged in for ${user.company}`, user.id)
-      await writeDb(db)
+      localSessions.set(user.token, user)
       return send(res, 200, { token: user.token, user: publicUser(user) })
     }
 
     if (req.method === 'GET' && url.pathname === '/api/auth/me') {
       const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
-      const user = ensureUsers(db).find((item) => item.token === token)
+      const user = localSessions.get(token)
       if (!user) return send(res, 401, { error: 'invalid workspace session token' })
       return send(res, 200, publicUser(user))
     }

@@ -15,8 +15,9 @@ function fail(code, message, status = 400, details = []) {
 
 export const emptySupplierRuntime = () => ({
   schemaVersion: 1,
+  revision: 0,
   initialized: true,
-  updatedAt: now(),
+  updatedAt: null,
   suppliers: [],
   itemSupplierRelationships: [],
   auditEvents: [],
@@ -63,13 +64,13 @@ export function createDurableSupplierRepository({ dataFile }) {
     } catch (error) {
       if (error.code !== 'ENOENT') throw error
       document = emptySupplierRuntime()
-      await atomicWrite(dataFile, document)
     }
     document = { ...emptySupplierRuntime(), ...document, initialized: true }
     return document
   }
 
   async function save() {
+    document.revision = Number(document.revision || 0) + 1
     document.updatedAt = now()
     await atomicWrite(dataFile, document)
   }

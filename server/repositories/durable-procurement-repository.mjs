@@ -3,10 +3,10 @@ import { dirname } from 'node:path'
 import { procurementError } from '../domain/procurement-workflow.mjs'
 const clone = value => structuredClone(value)
 export const emptyProcurementRuntime = () => ({
-  schemaVersion: 2, initialized: true, purchaseRequests: [], rfqs: [],
+  schemaVersion: 2, revision: 0, initialized: true, purchaseRequests: [], rfqs: [],
   purchaseOrders: [], receipts: [], supplierInvoices: [], matchRecords: [],
   purchaseReturns: [], workItems: [], auditEvents: [], auditEntries: [],
-  idempotencyRecords: [], updatedAt: new Date().toISOString(),
+  idempotencyRecords: [], updatedAt: null,
 })
 async function atomicWrite(file, doc) { const temp = `${file}.tmp-${process.pid}-${Date.now()}`; try { await mkdir(dirname(file),{recursive:true}); await writeFile(temp,JSON.stringify(doc,null,2),'utf8'); await rename(temp,file) } catch (cause) { await rm(temp,{force:true}).catch(()=>{}); throw procurementError('PERSISTENCE_ERROR','采购交易持久化失败',[],500,{cause}) } }
 export function createDurableProcurementRepository({ dataFile, seed = emptyProcurementRuntime() }) {
@@ -15,9 +15,10 @@ export function createDurableProcurementRepository({ dataFile, seed = emptyProcu
     document = { ...emptyProcurementRuntime(), ...document, initialized: true }
     for (const key of ['purchaseRequests','rfqs','purchaseOrders','receipts','supplierInvoices','matchRecords','purchaseReturns','workItems','auditEvents','auditEntries','idempotencyRecords']) if (!Array.isArray(document[key])) document[key]=[]
     return document }
-  async function save() { document.updatedAt=new Date().toISOString(); await atomicWrite(dataFile,document) }
+  async function save() { document.revision=Number(document.revision||0)+1; document.updatedAt=new Date().toISOString(); await atomicWrite(dataFile,document) }
   const collection = kind => ({ pr:'purchaseRequests', rfq:'rfqs', po:'purchaseOrders' })[kind]
   return {
+    mode:'json', adapter:'durable-procurement-runtime-v2',
     async list(kind){ return clone((await load())[collection(kind)]) },
     async get(kind,id){ return clone((await load())[collection(kind)].find(x => x.id===id) || null) },
     async transact(fn){ const doc=await load(); const backup=clone(doc); try { const result=await fn(doc); await save(); return clone(result) } catch(e){ document=backup; throw e } },

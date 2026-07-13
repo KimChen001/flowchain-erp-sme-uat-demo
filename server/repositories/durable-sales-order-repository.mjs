@@ -5,7 +5,7 @@ const clone = value => structuredClone(value)
 const text = value => String(value ?? '').trim()
 const number = value => Number.isFinite(Number(value)) ? Number(value) : 0
 
-export const emptySalesRuntime = () => ({ schemaVersion: 1, initialized: true, updatedAt: new Date().toISOString(), orders: [] })
+export const emptySalesRuntime = () => ({ schemaVersion: 1, revision: 0, initialized: true, updatedAt: null, orders: [] })
 
 async function atomicWrite(file, document) {
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`
@@ -55,7 +55,7 @@ export function createDurableSalesOrderRepository({ dataFile }) {
     document = { ...emptySalesRuntime(), ...document, initialized: true }
     return document
   }
-  async function save() { document.updatedAt = new Date().toISOString(); await atomicWrite(dataFile, document) }
+  async function save() { document.revision = Number(document.revision || 0) + 1; document.updatedAt = new Date().toISOString(); await atomicWrite(dataFile, document) }
   return {
     mode: 'json', adapter: 'durable-sales-order-runtime-v1', _dataFile: dataFile,
     async listOrders(filters = {}) {

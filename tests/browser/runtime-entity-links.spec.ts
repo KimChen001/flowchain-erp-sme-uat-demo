@@ -15,7 +15,7 @@ test('UI and API expose the same development build identity', async ({ page, req
   const health = await (await request.get('/api/health')).json()
   await page.goto('/app/inventory/stock')
   await expect.poll(() => page.locator('html').getAttribute('data-flowchain-commit')).toBe(health.commitSha)
-  expect(health.branch).toBe('codex/persistent-sme-procurement')
+  expect(health.branch).toBe('codex/authoritative-runtime-cutover')
   expect(health.runtimeMode).toBe('local-dev')
 })
 

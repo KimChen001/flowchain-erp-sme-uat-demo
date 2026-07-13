@@ -30,6 +30,7 @@
     "data:reset:procurement": "node scripts/procurement-runtime.mjs reset",
     "data:seed:demo:procurement": "node scripts/procurement-runtime.mjs seed",
     "data:reset:suppliers": "node scripts/supplier-runtime.mjs reset",
+    "data:seed:runtime": "node scripts/seed-runtime-data.mjs",
     "db:studio": "prisma studio"
   },
   "dependencies": {

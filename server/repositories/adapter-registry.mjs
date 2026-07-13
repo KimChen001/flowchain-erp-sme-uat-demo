@@ -56,6 +56,7 @@ export function createJsonRepositoryRegistry({ db = {}, env = process.env } = {}
     masterData: createJsonMasterDataRepository(db, {
       itemDataFile: path.resolve(env.FLOWCHAIN_ITEM_RUNTIME_FILE || 'data/item-master-runtime.json'),
       supplierDataFile: path.resolve(env.FLOWCHAIN_SUPPLIER_RUNTIME_FILE || 'data/supplier-master-runtime.json'),
+      customerDataFile: path.resolve(env.FLOWCHAIN_CUSTOMER_RUNTIME_FILE || 'data/customer-master-runtime.json'),
     }),
     inventoryRead: createJsonInventoryReadRepository(db),
     inventoryRuntime: createDurableInventoryRepository({ dataFile: path.resolve(env.FLOWCHAIN_INVENTORY_RUNTIME_FILE || 'data/inventory-runtime.json') }),

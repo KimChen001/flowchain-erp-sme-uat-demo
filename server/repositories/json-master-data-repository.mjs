@@ -10,13 +10,14 @@ import {
 import { resolve } from 'node:path'
 import { createDurableItemMasterRepository } from './durable-item-master-repository.mjs'
 import { createDurableSupplierRepository } from './durable-supplier-repository.mjs'
+import { createDurableCustomerRepository } from './durable-customer-repository.mjs'
 
 export function createJsonMasterDataRepository(db = {}, options = {}) {
   const items = createDurableItemMasterRepository({
     dataFile: options.itemDataFile || resolve('data/item-master-runtime.json'),
-    seed: listMasterItems(db),
   })
   const suppliers = createDurableSupplierRepository({ dataFile: options.supplierDataFile || resolve('data/supplier-master-runtime.json') })
+  const customers = createDurableCustomerRepository({ dataFile: options.customerDataFile || resolve('data/customer-master-runtime.json') })
   return {
     mode: 'json',
     adapter: 'json-master-data-v1',
@@ -26,6 +27,10 @@ export function createJsonMasterDataRepository(db = {}, options = {}) {
     getManagedItem: (idOrSku) => items.getItem(idOrSku),
     createItem: (input, actor) => items.createItem(input, actor),
     updateItem: (id, input, actor) => items.updateItem(id, input, actor),
+    listCustomers: (filters) => customers.listCustomers(filters),
+    getCustomer: (id) => customers.getCustomer(id),
+    createCustomer: (input, actor) => customers.createCustomer(input, actor),
+    updateCustomer: (id, input, actor) => customers.updateCustomer(id, input, actor),
     listSuppliers: (filters) => suppliers.listSuppliers(filters),
     getSupplier: (idOrName, options) => suppliers.getSupplier(idOrName, options),
     createSupplier: (input, actor) => suppliers.createSupplier(input, actor),
@@ -40,6 +45,8 @@ export function createJsonMasterDataRepository(db = {}, options = {}) {
     updateItemSupplier: async (itemId, relationshipId, input, actor) => suppliers.updateItemSupplier(itemId, relationshipId, input, actor, await items.getItem(itemId)),
     approvedSuppliersForItem: (itemId) => suppliers.approvedSuppliersForItem(itemId),
     supplierRuntime: suppliers,
+    itemRuntime: items,
+    customerRuntime: customers,
     listWarehouses: () => listMasterWarehouses(db),
     listPaymentTerms: () => listPaymentTerms(db),
     listTaxCodes: () => listTaxCodes(db),
