@@ -233,6 +233,10 @@ export function createDurableSupplierRepository({ dataFile }) {
       return clone((await load()).itemSupplierRelationships.filter(row => row.supplierId === supplierId))
     },
 
+    async listAllItemSupplierRelationships() {
+      return clone((await load()).itemSupplierRelationships)
+    },
+
     async createItemSupplier(itemId, input, actor, item) {
       const doc = await load()
       const supplier = findSupplier(doc, input.supplierId)

@@ -9,14 +9,17 @@ function readSource(...parts) {
   return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8')
 }
 
-test('homepage reads authoritative procurement runtime without legacy evidence or synthetic fixture imports', () => {
+test('homepage reads one server-derived BusinessReadContext overview', () => {
   const page = readSource('src', 'modules', 'overview', 'Page.tsx')
+  const service = readSource('server', 'services', 'business-read-context-service.mjs')
 
-  assert.match(page, /\/api\/procurement\/requests/)
-  assert.match(page, /\/api\/procurement\/orders/)
-  assert.match(page, /\/api\/procurement\/rfqs/)
+  assert.match(page, /\/api\/home\/overview/)
+  assert.doesNotMatch(page, /\/api\/procurement\/(requests|orders|rfqs)/)
+  assert.doesNotMatch(page, /risks\s*=\s*0/)
   assert.match(page, /首页数据加载失败/)
   assert.doesNotMatch(page, /demo-data|operationsControlTower|todayCockpit/)
+  assert.match(service, /repositories\.procurementRuntime/)
+  assert.doesNotMatch(service, /ctx\.db|scm-demo|demo-data/)
 })
 
 test('overview evidence builders preserve module targets and export fields', () => {

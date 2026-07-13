@@ -41,6 +41,7 @@ export function createJsonMasterDataRepository(db = {}, options = {}) {
       ...relationship,
       item: await items.getItem(relationship.itemId),
     }))),
+    listAllItemSupplierRelationships: () => suppliers.listAllItemSupplierRelationships(),
     createItemSupplier: async (itemId, input, actor) => suppliers.createItemSupplier(itemId, input, actor, await items.getItem(itemId)),
     updateItemSupplier: async (itemId, relationshipId, input, actor) => suppliers.updateItemSupplier(itemId, relationshipId, input, actor, await items.getItem(itemId)),
     approvedSuppliersForItem: (itemId) => suppliers.approvedSuppliersForItem(itemId),

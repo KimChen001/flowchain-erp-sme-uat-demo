@@ -1,0 +1,55 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { buildHomeOverview, createBusinessReadContextService } from '../services/business-read-context-service.mjs'
+
+function repositories() {
+  return {
+    masterData: {
+      adapter: 'json-master-data-v1',
+      itemRuntime: { adapter: 'durable-item-master-v1' },
+      supplierRuntime: { adapter: 'durable-supplier-master-v1' },
+      customerRuntime: { adapter: 'durable-customer-master-v1' },
+      listManagedItems: async () => [{ itemId: 'ITEM-1', sku: 'SKU-1', itemName: 'Runtime item' }],
+      listSuppliers: async () => [{ id: 'SUP-1', supplierCode: 'SUP-1', supplierName: 'Runtime supplier' }],
+      listCustomers: async () => [{ id: 'CUS-1', code: 'CUS-1', name: 'Runtime customer' }],
+      listAllItemSupplierRelationships: async () => [{ relationshipId: 'REL-1', itemId: 'ITEM-1', supplierId: 'SUP-1', active: true, approved: true }],
+    },
+    inventoryRuntime: { adapter: 'durable-inventory-runtime-v1', listItems: async () => [{ itemId: 'ITEM-1', sku: 'SKU-1', onHandQuantity: 9 }] },
+    salesOrders: { adapter: 'durable-sales-order-runtime-v1', listOrders: async () => [{ salesOrderId: 'SO-1', itemId: 'ITEM-1', sku: 'SKU-1' }] },
+    procurementRuntime: {
+      adapter: 'durable-procurement-runtime-v2',
+      snapshot: async () => ({
+        purchaseRequests: [{ id: 'PR-1', status: 'submitted', totalAmount: 120, updatedAt: '2026-07-14T01:00:00.000Z', lines: [{ supplierId: 'SUP-1' }] }],
+        rfqs: [],
+        purchaseOrders: [{ id: 'PO-1', status: 'draft', transmissionStatus: 'not_sent', supplierId: 'SUP-1', totalAmount: 120, updatedAt: '2026-07-14T02:00:00.000Z' }],
+        receipts: [], supplierInvoices: [],
+      }),
+    },
+  }
+}
+
+test('BusinessReadContext aggregates only runtime repositories and reports unavailable domains', async () => {
+  const context = await createBusinessReadContextService({ repositories: repositories(), dataMode: 'user' }).read()
+  assert.equal(context.dataMode, 'user')
+  assert.equal(context.items[0].sku, 'SKU-1')
+  assert.equal(context.suppliers[0].supplierCode, 'SUP-1')
+  assert.equal(context.customers[0].code, 'CUS-1')
+  assert.equal(context.inventoryItems[0].onHandQuantity, 9)
+  assert.equal(context.salesOrders[0].salesOrderId, 'SO-1')
+  assert.equal(context.purchaseRequests[0].id, 'PR-1')
+  assert.equal(context.itemSupplierRelationships[0].relationshipId, 'REL-1')
+  assert.equal(context.warehouses.length, 0)
+  assert.ok(context.dataLimitations.includes('warehouse_runtime_not_connected'))
+  assert.equal(context.runtimeAdapters.procurement, 'durable-procurement-runtime-v2')
+})
+
+test('home overview is server-derived, uses canonical routes and does not manufacture risk zero', async () => {
+  const context = await createBusinessReadContextService({ repositories: repositories(), dataMode: 'user' }).read()
+  const overview = buildHomeOverview(context)
+  assert.equal(overview.workItems.length, 2)
+  assert.equal(overview.unresolvedRisks, null)
+  assert.equal(overview.counts.unresolvedRisks, null)
+  assert.equal(overview.recentDocuments.length, 2)
+  assert.ok(overview.recentDocuments.every(row => row.canonicalRoute.startsWith('/app/')))
+  assert.ok(overview.limitations.includes('unresolved_risk_metric_not_connected'))
+})

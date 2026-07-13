@@ -35,6 +35,7 @@ import { handleSupplierRecommendationsRoute } from './supplier-recommendations.r
 import { handleAuditLogRoute } from './audit-log.routes.mjs'
 import { handleContextRoute } from './context.routes.mjs'
 import { handleMasterDataRoute } from './master-data.routes.mjs'
+import { handleBusinessReadContextRoute } from './business-read-context.routes.mjs'
 import { handleSearchRoute } from './search.routes.mjs'
 import { handleSalesDemandRoute } from './sales-demand.routes.mjs'
 import { handleEvidenceGraphRoute } from './evidence-graph.routes.mjs'
@@ -936,7 +937,7 @@ export function createScmServer() {
           customers: repositories.masterData?.customerRuntime?.adapter || 'unavailable',
           inventory: repositories.inventoryRuntime?.adapter || 'unavailable',
           salesOrders: repositories.salesOrders?.adapter || 'unavailable',
-          procurement: 'durable-procurement-runtime-v2',
+          procurement: repositories.procurementRuntime?.adapter || 'unavailable',
         },
         timestamp: new Date().toISOString(),
         diagnostics: {
@@ -1056,6 +1057,7 @@ export function createScmServer() {
     if (await handleMrpRoute(routeContext)) return
     if (await handleSopRoute(routeContext)) return
     if (await handleContextRoute(routeContext)) return
+    if (await handleBusinessReadContextRoute(routeContext)) return
     if (await handleSearchRoute(routeContext)) return
     if (await handleSalesDemandRoute(routeContext)) return
     if (await handleEvidenceGraphRoute(routeContext)) return

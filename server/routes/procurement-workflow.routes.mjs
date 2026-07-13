@@ -4,8 +4,9 @@ import { createProcurementWorkflowService } from "../services/procurement-workfl
 const repository = createDurableProcurementRepository({
   dataFile: resolve(process.env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE || "data/procurement-transactions.json"),
 });
+const repositoryFor = (ctx) => ctx.repositories?.procurementRuntime || repository;
 const workflowService = (ctx) => createProcurementWorkflowService({
-  repository, itemRepository: ctx.repositories?.masterData,
+  repository: repositoryFor(ctx), itemRepository: ctx.repositories?.masterData,
   policyProvider: async () => ({
     directPurchaseThreshold: 50000,
     rfqRequiredAboveAmount: 100000,
@@ -52,12 +53,13 @@ const failure = (send, res, e) =>
   });
 export async function handleProcurementWorkflowRoute(ctx) {
   const { req, res, url, send, readBody } = ctx;
+  const runtimeRepository = repositoryFor(ctx);
   const service = workflowService(ctx);
   if (req.method === "GET" && url.pathname === "/api/procurement/requests")
-    return send(res, 200, await repository.list("pr")) || true;
+    return send(res, 200, await runtimeRepository.list("pr")) || true;
   const requestDetail = url.pathname.match(/^\/api\/procurement\/requests\/([^/]+)$/);
   if (req.method === "GET" && requestDetail) {
-    const request = await repository.get("pr", decodeURIComponent(requestDetail[1]));
+    const request = await runtimeRepository.get("pr", decodeURIComponent(requestDetail[1]));
     return send(res, request ? 200 : 404, request || { code: "ENTITY_NOT_FOUND", message: "采购申请不存在" }) || true;
   }
   if (req.method === "POST" && url.pathname === "/api/procurement/requests") {
@@ -186,12 +188,12 @@ export async function handleProcurementWorkflowRoute(ctx) {
     return true;
   }
   if (req.method === "GET" && url.pathname === "/api/procurement/rfqs")
-    return send(res, 200, await repository.list("rfq")) || true;
+    return send(res, 200, await runtimeRepository.list("rfq")) || true;
   if (req.method === "GET" && url.pathname === "/api/procurement/orders")
-    return send(res, 200, await repository.list("po")) || true;
+    return send(res, 200, await runtimeRepository.list("po")) || true;
   const orderDetail = url.pathname.match(/^\/api\/procurement\/orders\/([^/]+)$/);
   if (req.method === "GET" && orderDetail) {
-    const order = await repository.get("po", decodeURIComponent(orderDetail[1]));
+    const order = await runtimeRepository.get("po", decodeURIComponent(orderDetail[1]));
     return send(res, order ? 200 : 404, order || { code: "ENTITY_NOT_FOUND", message: "采购订单不存在" }) || true;
   }
   const poAction = url.pathname.match(
