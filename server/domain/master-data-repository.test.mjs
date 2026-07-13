@@ -5,6 +5,9 @@ import { createDatabaseRepositoryRegistry, createRepositoryRegistry } from '../r
 import { handleMasterDataRoute } from '../routes/master-data.routes.mjs'
 import { findMasterItem, listMasterItems, listMasterSuppliers } from './master-data.mjs'
 import { DATABASE_CONFIG_ERROR } from '../persistence/persistence-config.mjs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
@@ -45,30 +48,40 @@ function createRouteContext(pathname, db = createDb(), repositories) {
   }
 }
 
-test('MasterDataRepository delegates to existing read model shapes without mutation', () => {
+test('MasterDataRepository keeps legacy item reads while supplier master is durable and authoritative', async () => {
   const db = createDb()
   const before = clone(db)
-  const repository = createJsonMasterDataRepository(db)
+  const directory = await mkdtemp(join(tmpdir(), 'flowchain-master-repository-'))
+  const repository = createJsonMasterDataRepository(db, {
+    itemDataFile: join(directory, 'items.json'),
+    supplierDataFile: join(directory, 'suppliers.json'),
+  })
 
-  assert.deepEqual(repository.listItems(), listMasterItems(db))
-  assert.deepEqual(repository.getItem('A100'), findMasterItem(db, 'A100'))
-  assert.deepEqual(repository.listSuppliers(), listMasterSuppliers(db))
-  assert.equal(repository.getSupplier('SUP-001').name, 'ABC Components')
-  assert.equal(repository.listWarehouses().some((item) => item.id === 'WH-MOVEMENT'), true)
-  assert.equal(repository.listPaymentTerms()[0].id, 'NET45')
-  assert.equal(repository.listTaxCodes()[0].id, 'TAX-ZERO')
-  assert.equal(repository.getItem('missing'), null)
-  assert.equal(repository.getSupplier('missing'), null)
-  assert.deepEqual(db, before)
+  try {
+    assert.deepEqual(repository.listItems(), listMasterItems(db))
+    assert.deepEqual(repository.getItem('A100'), findMasterItem(db, 'A100'))
+    assert.deepEqual(await repository.listSuppliers(), [])
+    const created = await repository.createSupplier({ supplierCode: 'SUP-RUNTIME', supplierName: 'Runtime Supplier', status: 'active' }, 'tester')
+    assert.equal((await repository.getSupplier(created.id)).supplierName, 'Runtime Supplier')
+    assert.equal(repository.listWarehouses().some((item) => item.id === 'WH-MOVEMENT'), true)
+    assert.equal(repository.listPaymentTerms()[0].id, 'NET45')
+    assert.equal(repository.listTaxCodes()[0].id, 'TAX-ZERO')
+    assert.equal(repository.getItem('missing'), null)
+    assert.equal(await repository.getSupplier('missing'), null)
+    assert.deepEqual(db, before)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
-test('adapter registry exposes MasterDataRepository in default JSON mode', () => {
+test('adapter registry exposes durable supplier master in default JSON mode', async () => {
   const db = createDb()
   const registry = createRepositoryRegistry({ db, env: {} })
 
   assert.equal(registry.mode, 'json')
   assert.equal(registry.masterData.getItem('A100').id, 'ITEM-A100')
-  assert.equal(registry.masterData.listSuppliers()[0].id, 'SUP-001')
+  assert.equal(registry.masterData.supplierRuntime.adapter, 'durable-supplier-master-v1')
+  assert.ok(Array.isArray(await registry.masterData.listSuppliers()))
 })
 
 test('database mode registry uses DB read adapters', async () => {
@@ -197,7 +210,10 @@ test('master data route uses injected repository while preserving response shape
   assert.deepEqual(missingRoute.response.payload, { error: 'Item not found' })
 
   assert.equal(await handleMasterDataRoute(suppliersRoute.ctx), true)
-  assert.equal(suppliersRoute.response.payload.suppliers[0].name, 'ABC Components')
+  assert.ok(Array.isArray(suppliersRoute.response.payload.suppliers))
+  if (suppliersRoute.response.payload.suppliers.length) {
+    assert.equal(typeof suppliersRoute.response.payload.suppliers[0].supplierCode, 'string')
+  }
 
   assert.equal(await handleMasterDataRoute(warehousesRoute.ctx), true)
   assert.equal(warehousesRoute.response.payload.warehouses.some((item) => item.id === 'WH-SECONDARY'), true)

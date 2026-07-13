@@ -11,12 +11,12 @@ import { resolve } from 'node:path'
 import { createDurableItemMasterRepository } from './durable-item-master-repository.mjs'
 import { createDurableSupplierRepository } from './durable-supplier-repository.mjs'
 
-export function createJsonMasterDataRepository(db = {}) {
+export function createJsonMasterDataRepository(db = {}, options = {}) {
   const items = createDurableItemMasterRepository({
-    dataFile: resolve('data/item-master-runtime.json'),
+    dataFile: options.itemDataFile || resolve('data/item-master-runtime.json'),
     seed: listMasterItems(db),
   })
-  const suppliers = createDurableSupplierRepository({ dataFile: resolve('data/supplier-master-runtime.json') })
+  const suppliers = createDurableSupplierRepository({ dataFile: options.supplierDataFile || resolve('data/supplier-master-runtime.json') })
   return {
     mode: 'json',
     adapter: 'json-master-data-v1',
@@ -32,9 +32,12 @@ export function createJsonMasterDataRepository(db = {}) {
     updateSupplier: (id, input, actor) => suppliers.updateSupplier(id, input, actor),
     selectSuppliers: (filters) => suppliers.selectSuppliers(filters),
     listItemSuppliers: (itemId) => suppliers.listItemSuppliers(itemId),
-    listSupplierItems: (supplierId) => suppliers.listSupplierItems(supplierId),
+    listSupplierItems: async (supplierId) => Promise.all((await suppliers.listSupplierItems(supplierId)).map(async (relationship) => ({
+      ...relationship,
+      item: await items.getItem(relationship.itemId),
+    }))),
     createItemSupplier: async (itemId, input, actor) => suppliers.createItemSupplier(itemId, input, actor, await items.getItem(itemId)),
-    updateItemSupplier: (itemId, relationshipId, input, actor) => suppliers.updateItemSupplier(itemId, relationshipId, input, actor),
+    updateItemSupplier: async (itemId, relationshipId, input, actor) => suppliers.updateItemSupplier(itemId, relationshipId, input, actor, await items.getItem(itemId)),
     approvedSuppliersForItem: (itemId) => suppliers.approvedSuppliersForItem(itemId),
     supplierRuntime: suppliers,
     listWarehouses: () => listMasterWarehouses(db),

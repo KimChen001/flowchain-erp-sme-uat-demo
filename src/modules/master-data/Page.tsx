@@ -38,7 +38,7 @@ export default function MasterDataPage({
 }: {
   initialView?: MasterDataTab;
   focus?: { entityType: string; entityId: string; at: number } | null;
-  onNavigate?: (routeId: string) => void;
+  onNavigate?: (routeId: string, focus?: unknown) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [tab, setTab] = useState<MasterDataTab>(initialView);
@@ -195,7 +195,7 @@ export default function MasterDataPage({
 
       <Card>
         {tab === "items" ? (
-          <ItemMasterWorkbench />
+          <ItemMasterWorkbench focus={focus} onNavigate={onNavigate} />
         ) : tab === "overview" ? (
           <MasterDataOverview data={masterData} onOpenTab={openTab} />
         ) : tab === "customers" ? (

@@ -11,7 +11,7 @@ import {
   listTaxCodes,
 } from './master-data.mjs'
 
-function createRouteContext(method, pathname, db) {
+function createRouteContext(method, pathname, db, repositories) {
   let response = null
   return {
     ctx: {
@@ -19,6 +19,7 @@ function createRouteContext(method, pathname, db) {
       res: {},
       url: new URL(pathname, 'http://localhost'),
       db,
+      repositories,
       send(_res, status, payload) {
         response = { status, payload }
       },
@@ -171,27 +172,29 @@ test('GET /api/master-data/items/:id returns 404 for missing item', async () => 
 })
 
 test('GET /api/master-data/suppliers returns supplier collection', async () => {
-  const route = createRouteContext('GET', '/api/master-data/suppliers', createDb())
+  const rows = [{ id: 'SUP-RUNTIME', supplierCode: 'SUP-RUNTIME', supplierName: 'Runtime Supplier', status: 'active' }]
+  const route = createRouteContext('GET', '/api/master-data/suppliers', createDb(), { masterData: { listSuppliers: async () => rows } })
   const handled = await handleMasterDataRoute(route.ctx)
 
   assert.ok(handled)
   assert.equal(route.response.status, 200)
-  assert.equal(route.response.payload.suppliers.length, 2)
-  assert.equal(route.response.payload.suppliers[0].id, 'SUP-001')
-  assert.equal(route.response.payload.suppliers[0].scoreSource, 'derived_performance_fallback')
+  assert.equal(route.response.payload.suppliers.length, 1)
+  assert.equal(route.response.payload.suppliers[0].id, 'SUP-RUNTIME')
+  assert.equal(route.response.payload.suppliers[0].supplierName, 'Runtime Supplier')
 })
 
 test('GET /api/master-data/suppliers/:id returns one supplier', async () => {
-  const route = createRouteContext('GET', '/api/master-data/suppliers/SUP-001', createDb())
+  const supplier = { id: 'SUP-RUNTIME', supplierCode: 'SUP-RUNTIME', supplierName: 'Runtime Supplier', status: 'active' }
+  const route = createRouteContext('GET', '/api/master-data/suppliers/SUP-RUNTIME', createDb(), { masterData: { getSupplier: async () => supplier } })
   const handled = await handleMasterDataRoute(route.ctx)
 
   assert.ok(handled)
   assert.equal(route.response.status, 200)
-  assert.equal(route.response.payload.supplier.name, 'ABC Components')
+  assert.equal(route.response.payload.supplier.supplierName, 'Runtime Supplier')
 })
 
 test('GET /api/master-data/suppliers/:id returns 404 for missing supplier', async () => {
-  const route = createRouteContext('GET', '/api/master-data/suppliers/SUP-MISSING', createDb())
+  const route = createRouteContext('GET', '/api/master-data/suppliers/SUP-MISSING', createDb(), { masterData: { getSupplier: async () => null } })
   const handled = await handleMasterDataRoute(route.ctx)
 
   assert.ok(handled)

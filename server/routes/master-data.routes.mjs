@@ -215,8 +215,7 @@ export async function handleMasterDataRoute(ctx) {
     /^\/api\/master-data\/suppliers\/([^/]+)$/,
   )
   if (req.method === 'GET' && supplierMatch) {
-    const privileged = ['manager','admin','procurement-manager'].includes(role)
-    const supplier = await repository.getSupplier(supplierMatch[1],{privileged})
+    const supplier = await repository.getSupplier(supplierMatch[1])
     if (!supplier) {
       send(res, 404, { error: 'Supplier not found' })
       return true

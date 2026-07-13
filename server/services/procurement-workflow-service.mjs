@@ -41,6 +41,11 @@ export function createProcurementWorkflowService({
         const supplier = itemRepository?.getSupplier ? await itemRepository.getSupplier(supplierId) : { id: supplierId };
         if (!supplier) throw procurementError("SUPPLIER_NOT_FOUND", "供应商不存在", [{ field: `lines.${index}.supplierId` }], 400);
         if (["inactive", "disabled", "停用"].includes(String(supplier.status || "").toLowerCase())) throw procurementError("SUPPLIER_INACTIVE", "供应商已停用", [{ field: `lines.${index}.supplierId` }], 400);
+        const supplierSnapshot = {
+          id: supplier.id || supplierId,
+          supplierCode: supplier.supplierCode || supplier.code || supplierId,
+          supplierName: supplier.supplierName || supplier.name || supplierId,
+        };
         const estimatedUnitPrice = line.estimatedUnitPrice ?? line.unitPrice;
         const quantity = line.quantity == null || line.quantity === "" ? null : Number(line.quantity);
         const estimatedAmount = lineBasis === "amount" ? Number(line.estimatedAmount) : Number(quantity) * Number(estimatedUnitPrice);
@@ -65,7 +70,7 @@ export function createProcurementWorkflowService({
             );
           return {
             ...structuredClone(line),
-            lineType, sourceType: lineType, lineBasis, supplierId, quantity: lineBasis === "quantity" ? quantity : null,
+            lineType, sourceType: lineType, lineBasis, supplierId, supplierSnapshot, quantity: lineBasis === "quantity" ? quantity : null,
             estimatedUnitPrice: lineBasis === "quantity" ? Number(estimatedUnitPrice) : null,
             estimatedAmount,
             itemId: null,
@@ -125,7 +130,7 @@ export function createProcurementWorkflowService({
         }
         return {
           ...structuredClone(line),
-          lineType, sourceType: lineType, lineBasis, supplierId, quantity: lineBasis === "quantity" ? quantity : null,
+          lineType, sourceType: lineType, lineBasis, supplierId, supplierSnapshot, quantity: lineBasis === "quantity" ? quantity : null,
           estimatedUnitPrice: lineBasis === "quantity" ? Number(estimatedUnitPrice) : null,
           estimatedAmount,
           itemId: item.itemId,
