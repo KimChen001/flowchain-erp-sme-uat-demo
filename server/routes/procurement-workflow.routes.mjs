@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { createDurableProcurementRepository } from "../repositories/durable-procurement-repository.mjs";
 import { createProcurementWorkflowService } from "../services/procurement-workflow-service.mjs";
+import { authorizeMutation } from "../domain/mutation-authorization.mjs";
 const repository = createDurableProcurementRepository({
   dataFile: resolve(process.env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE || "data/procurement-transactions.json"),
 });
@@ -13,11 +14,9 @@ const workflowService = (ctx) => createProcurementWorkflowService({
     allowManagerOverride: true,
   }),
 });
-const actor = (ctx) => ctx.identity?.userId || ctx.req.headers["x-flowchain-user"] || "user-local";
-const role = (ctx) =>
-  ctx.identity?.role || ctx.req.headers["x-flowchain-role"] || "procurement-manager";
+const actor = (ctx) => ctx.identity.userId;
 const allowed = (ctx, action) => {
-  const r = role(ctx);
+  const r = ctx.identity.role;
   if (["manager", "admin", "procurement-manager"].includes(r)) return true;
   if (r === "viewer") return false;
   if (r === "business-specialist")
@@ -41,6 +40,17 @@ const deny = (send, res) =>
     message: "当前用户无权执行此操作",
     details: [],
   });
+const authorizeAction = (ctx, action) => {
+  const authorization = authorizeMutation(ctx, {
+    allowedRoles: ["admin", "manager", "procurement-manager", "business-specialist", "procurement-specialist"],
+    action,
+    resource: "procurement-workflow",
+  });
+  if (authorization.blocked) return false;
+  if (allowed(ctx, action)) return true;
+  deny(ctx.send, ctx.res);
+  return false;
+};
 const failure = (send, res, e) =>
   send(res, e.status || 500, {
     code: e.code || "PERSISTENCE_ERROR",
@@ -63,7 +73,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
     return send(res, request ? 200 : 404, request || { code: "ENTITY_NOT_FOUND", message: "采购申请不存在" }) || true;
   }
   if (req.method === "POST" && url.pathname === "/api/procurement/requests") {
-    if (!allowed(ctx, "pr.create")) return deny(send, res) || true;
+    if (!authorizeAction(ctx, "pr.create")) return true;
     try {
       return (
         send(
@@ -81,7 +91,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
     /^\/api\/procurement\/requests\/([^/]+)$/,
   );
   if (req.method === "PATCH" && draftUpdate) {
-    if (!allowed(ctx, "pr.update")) return deny(send, res) || true;
+    if (!authorizeAction(ctx, "pr.update")) return true;
     try {
       send(
         res,
@@ -104,7 +114,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
     const permissionAction = ["approve", "reject"].includes(action[2])
       ? "pr.approve"
       : `pr.${action[2]}`;
-    if (!allowed(ctx, permissionAction)) return deny(send, res) || true;
+    if (!authorizeAction(ctx, permissionAction)) return true;
     try {
       const b = await readBody(req);
       if (action[2] === "reject" && !String(b.reason || "").trim()) throw Object.assign(new Error("拒绝必须填写原因"), { code: "REJECT_REASON_REQUIRED", status: 400, details: [{ field: "reason" }] });
@@ -139,7 +149,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
         200,
         await service.recommendPath(
           decodeURIComponent(recommendation[1]),
-          actor(ctx),
+          ctx.identity?.userId || "anonymous",
         ),
       );
     } catch (e) {
@@ -151,7 +161,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
     /^\/api\/procurement\/requests\/([^/]+)\/rfqs$/,
   );
   if (req.method === "POST" && rfq) {
-    if (!allowed(ctx, "rfq.create")) return deny(send, res) || true;
+    if (!authorizeAction(ctx, "rfq.create")) return true;
     try {
       send(
         res,
@@ -171,7 +181,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
     /^\/api\/procurement\/requests\/([^/]+)\/(direct-purchase-order|generate-purchase-orders)$/,
   );
   if (req.method === "POST" && po) {
-    if (!allowed(ctx, "direct-po")) return deny(send, res) || true;
+    if (!authorizeAction(ctx, "direct-po")) return true;
     try {
       send(
         res,
@@ -202,7 +212,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
   if (req.method === "POST" && poAction) {
     const permissionAction =
       poAction[2] === "submit" ? "po.submit" : "po.approve";
-    if (!allowed(ctx, permissionAction)) return deny(send, res) || true;
+    if (!authorizeAction(ctx, permissionAction)) return true;
     try {
       const b = await readBody(req);
       const next = {
@@ -229,7 +239,7 @@ export async function handleProcurementWorkflowRoute(ctx) {
     /^\/api\/procurement\/rfqs\/([^/]+)\/(open|cancel)$/,
   );
   if (req.method === "POST" && rfqAction) {
-    if (!allowed(ctx, "rfq.create")) return deny(send, res) || true;
+    if (!authorizeAction(ctx, "rfq.create")) return true;
     try {
       const b = await readBody(req);
       send(

@@ -1,5 +1,6 @@
 import { createJsonMasterDataRepository } from '../repositories/json-master-data-repository.mjs'
 import { selectMasterData } from '../domain/master-data-selectors.mjs'
+import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 
 function masterDataRepository(ctx) {
   return ctx.repositories?.masterData || createJsonMasterDataRepository(ctx.db)
@@ -8,9 +9,12 @@ function masterDataRepository(ctx) {
 export async function handleMasterDataRoute(ctx) {
   const { req, res, url, send, readBody } = ctx
   const repository = masterDataRepository(ctx)
-  const role = String(ctx.identity?.role || req.headers?.['x-flowchain-role'] || 'manager').toLowerCase()
-  const actor = String(ctx.identity?.userId || req.headers?.['x-flowchain-user'] || 'user-local')
-  const canWrite = !['viewer'].includes(role)
+  const authorizeWrite = resource => authorizeMutation(ctx, {
+    allowedRoles: ['admin', 'manager', 'business-specialist', 'procurement-specialist', 'analyst'],
+    action: 'maintain',
+    resource,
+  })
+  const actor = () => ctx.identity.userId
 
   const selectorMatch = url.pathname.match(/^\/api\/master-data\/(departments|currencies|units|commodities|warehouses|payment-terms|tax-codes)\/select$/)
   if (req.method === 'GET' && selectorMatch) {
@@ -49,12 +53,9 @@ export async function handleMasterDataRoute(ctx) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/master-data/customers') {
-    if (!canWrite) {
-      send(res, 403, { code: 'PERMISSION_DENIED', message: '当前用户无权维护客户' })
-      return true
-    }
+    if (authorizeWrite('customer-master').blocked) return true
     try {
-      send(res, 201, { customer: await repository.createCustomer(await readBody(req), actor) })
+      send(res, 201, { customer: await repository.createCustomer(await readBody(req), actor()) })
     } catch (error) {
       send(res, error.status || 500, { code: error.code || 'PERSISTENCE_ERROR', message: error.message, details: error.details || [] })
     }
@@ -65,16 +66,13 @@ export async function handleMasterDataRoute(ctx) {
     /^\/api\/master-data\/customers\/([^/]+)\/(activate|deactivate)$/,
   )
   if (req.method === 'POST' && customerStatusMatch) {
-    if (!canWrite) {
-      send(res, 403, { code: 'PERMISSION_DENIED', message: '当前用户无权维护客户' })
-      return true
-    }
+    if (authorizeWrite('customer-master').blocked) return true
     const body = await readBody(req)
     try {
       const customer = await repository.updateCustomer(customerStatusMatch[1], {
         status: customerStatusMatch[2] === 'activate' ? 'active' : 'inactive',
         expectedVersion: body.expectedVersion,
-      }, actor)
+      }, actor())
       send(res, 200, { customer })
     } catch (error) {
       send(res, error.status || 500, { code: error.code || 'PERSISTENCE_ERROR', message: error.message, details: error.details || [] })
@@ -110,13 +108,7 @@ export async function handleMasterDataRoute(ctx) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/master-data/items') {
-    if (!canWrite) {
-      send(res, 403, {
-        code: 'PERMISSION_DENIED',
-        message: '当前用户无权维护物料主数据',
-      })
-      return true
-    }
+    if (authorizeWrite('item-master').blocked) return true
     if (!repository.createItem) {
       send(res, 501, {
         code: 'ADAPTER_WRITE_UNSUPPORTED',
@@ -126,7 +118,7 @@ export async function handleMasterDataRoute(ctx) {
     }
     try {
       send(res, 201, {
-        item: await repository.createItem(await readBody(req), actor),
+        item: await repository.createItem(await readBody(req), actor()),
       })
     } catch (error) {
       send(res, error.status || 500, {
@@ -151,13 +143,7 @@ export async function handleMasterDataRoute(ctx) {
   }
 
   if (req.method === 'PATCH' && itemMatch) {
-    if (!canWrite) {
-      send(res, 403, {
-        code: 'PERMISSION_DENIED',
-        message: '当前用户无权维护物料主数据',
-      })
-      return true
-    }
+    if (authorizeWrite('item-master').blocked) return true
     if (!repository.updateItem) {
       send(res, 501, {
         code: 'ADAPTER_WRITE_UNSUPPORTED',
@@ -170,7 +156,7 @@ export async function handleMasterDataRoute(ctx) {
         item: await repository.updateItem(
           itemMatch[1],
           await readBody(req),
-          actor,
+          actor(),
         ),
       })
     } catch (error) {
@@ -188,12 +174,9 @@ export async function handleMasterDataRoute(ctx) {
   }
 
   if (req.method === 'PATCH' && customerMatch) {
-    if (!canWrite) {
-      send(res, 403, { code: 'PERMISSION_DENIED', message: '当前用户无权维护客户' })
-      return true
-    }
+    if (authorizeWrite('customer-master').blocked) return true
     try {
-      send(res, 200, { customer: await repository.updateCustomer(customerMatch[1], await readBody(req), actor) })
+      send(res, 200, { customer: await repository.updateCustomer(customerMatch[1], await readBody(req), actor()) })
     } catch (error) {
       send(res, error.status || 500, { code: error.code || 'PERSISTENCE_ERROR', message: error.message, details: error.details || [] })
     }
@@ -206,9 +189,9 @@ export async function handleMasterDataRoute(ctx) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/master-data/suppliers') {
-    if (!canWrite) { send(res,403,{code:'PERMISSION_DENIED',message:'当前用户无权维护供应商'}); return true }
+    if (authorizeWrite('supplier-master').blocked) return true
     if (!repository.createSupplier) { send(res,501,{code:'ADAPTER_WRITE_UNSUPPORTED',message:'当前数据适配器不支持供应商写入'}); return true }
-    try { send(res,201,{supplier:await repository.createSupplier(await readBody(req),actor)}) } catch(error) { send(res,error.status||500,{code:error.code||'PERSISTENCE_ERROR',message:error.message,details:error.details||[]}) }
+    try { send(res,201,{supplier:await repository.createSupplier(await readBody(req),actor())}) } catch(error) { send(res,error.status||500,{code:error.code||'PERSISTENCE_ERROR',message:error.message,details:error.details||[]}) }
     return true
   }
 
@@ -226,8 +209,8 @@ export async function handleMasterDataRoute(ctx) {
   }
 
   if (req.method === 'PATCH' && supplierMatch) {
-    if (!canWrite) { send(res,403,{code:'PERMISSION_DENIED',message:'当前用户无权维护供应商'}); return true }
-    try { send(res,200,{supplier:await repository.updateSupplier(supplierMatch[1],await readBody(req),actor)}) } catch(error) { send(res,error.status||500,{code:error.code||'PERSISTENCE_ERROR',message:error.message,details:error.details||[]}) }
+    if (authorizeWrite('supplier-master').blocked) return true
+    try { send(res,200,{supplier:await repository.updateSupplier(supplierMatch[1],await readBody(req),actor())}) } catch(error) { send(res,error.status||500,{code:error.code||'PERSISTENCE_ERROR',message:error.message,details:error.details||[]}) }
     return true
   }
 
@@ -236,9 +219,9 @@ export async function handleMasterDataRoute(ctx) {
 
   const itemSuppliers = url.pathname.match(/^\/api\/master-data\/items\/([^/]+)\/suppliers$/)
   if (req.method === 'GET' && itemSuppliers) { const itemId=decodeURIComponent(itemSuppliers[1]); send(res,200,{relationships:await repository.listItemSuppliers(itemId),suppliers:await repository.approvedSuppliersForItem(itemId)}); return true }
-  if (req.method === 'POST' && itemSuppliers) { if(!canWrite){send(res,403,{code:'PERMISSION_DENIED',message:'当前用户无权维护关系'});return true} try{send(res,201,{relationship:await repository.createItemSupplier(decodeURIComponent(itemSuppliers[1]),await readBody(req),actor)})}catch(error){send(res,error.status||500,{code:error.code||'PERSISTENCE_ERROR',message:error.message,details:error.details||[]})} return true }
+  if (req.method === 'POST' && itemSuppliers) { if(authorizeWrite('item-supplier-relationship').blocked)return true; try{send(res,201,{relationship:await repository.createItemSupplier(decodeURIComponent(itemSuppliers[1]),await readBody(req),actor())})}catch(error){send(res,error.status||500,{code:error.code||'PERSISTENCE_ERROR',message:error.message,details:error.details||[]})} return true }
   const relationshipMatch=url.pathname.match(/^\/api\/master-data\/items\/([^/]+)\/suppliers\/([^/]+)$/)
-  if(req.method==='PATCH'&&relationshipMatch){if(!canWrite){send(res,403,{code:'PERMISSION_DENIED',message:'当前用户无权维护关系'});return true}try{send(res,200,{relationship:await repository.updateItemSupplier(decodeURIComponent(relationshipMatch[1]),decodeURIComponent(relationshipMatch[2]),await readBody(req),actor)})}catch(error){send(res,error.status||500,{code:error.code||'PERSISTENCE_ERROR',message:error.message,details:error.details||[]})}return true}
+  if(req.method==='PATCH'&&relationshipMatch){if(authorizeWrite('item-supplier-relationship').blocked)return true;try{send(res,200,{relationship:await repository.updateItemSupplier(decodeURIComponent(relationshipMatch[1]),decodeURIComponent(relationshipMatch[2]),await readBody(req),actor())})}catch(error){send(res,error.status||500,{code:error.code||'PERSISTENCE_ERROR',message:error.message,details:error.details||[]})}return true}
 
   if (req.method === 'GET' && url.pathname === '/api/master-data/warehouses') {
     send(res, 200, { warehouses: await repository.listWarehouses() })

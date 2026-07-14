@@ -42,6 +42,7 @@ function routeContext(method, path, db = createDb()) {
   return {
     ctx: {
       req: { method },
+      identity: { authenticated: true, userId: 'runtime-manager', name: 'Runtime Manager', role: 'manager' },
       res: {},
       url: new URL(path, 'http://localhost'),
       db,

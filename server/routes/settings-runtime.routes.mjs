@@ -1,4 +1,5 @@
 import { getDefaultSettingsRuntimeRepository } from '../repositories/settings-runtime-repository.mjs'
+import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 
 function settingsRepository(ctx) {
   return ctx.repositories?.settingsRuntime || getDefaultSettingsRuntimeRepository()
@@ -18,9 +19,15 @@ export async function handleSettingsRuntimeRoute(ctx) {
 
   const match = url.pathname.match(/^\/api\/settings-runtime\/([a-z-]+)$/)
   if (req.method === 'PATCH' && match) {
+    const authorization = authorizeMutation(ctx, { allowedRoles: ['admin', 'manager'], action: 'settings.section.update', resource: 'settings' })
+    if (authorization.blocked) return true
     try {
       const body = await readBody(req)
-      const result = await repository.updateSettingsSection(match[1], body.settings, body.actor)
+      const result = await repository.updateSettingsSection(match[1], body.settings, {
+        id: authorization.identity.userId,
+        name: authorization.identity.name,
+        role: authorization.identity.role,
+      })
       send(res, 200, result)
     } catch (error) {
       send(res, error?.statusCode || 400, { error: error?.message || '设置保存失败' })

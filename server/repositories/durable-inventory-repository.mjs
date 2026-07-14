@@ -78,7 +78,7 @@ export function createDurableInventoryRepository({ dataFile }) {
         lotCount: doc.lots.length, serialCount: doc.serials.length,
       }
     },
-    async upsertItem(input) {
+    async upsertItem(input, actor = 'system') {
       return transact(doc => {
         const sku = text(input.sku)
         if (!sku) { const error = new Error('SKU 必填'); Object.assign(error, { status: 400, code: 'SKU_REQUIRED' }); throw error }
@@ -90,7 +90,8 @@ export function createDurableInventoryRepository({ dataFile }) {
           onHandQuantity: number(input.onHandQuantity ?? input.qty),
           availableQuantity: number(input.availableQuantity ?? input.onHandQuantity ?? input.qty),
           reservedQuantity: number(input.reservedQuantity), safetyStock: number(input.safetyStock),
-          reorderPoint: number(input.reorderPoint ?? input.safetyStock), updatedAt: new Date().toISOString(),
+          reorderPoint: number(input.reorderPoint ?? input.safetyStock),
+          ...(index >= 0 ? {} : { createdBy: actor }), updatedBy: actor, updatedAt: new Date().toISOString(),
         }
         if (index >= 0) doc.items[index] = row; else doc.items.push(row)
         return row

@@ -15,6 +15,7 @@ import { createInMemoryProcurementTransactionRepository } from './procurement-tr
 import { createDurableInventoryRepository } from './durable-inventory-repository.mjs'
 import { createDurableSalesOrderRepository } from './durable-sales-order-repository.mjs'
 import { createDurableProcurementRepository } from './durable-procurement-repository.mjs'
+import { createSettingsRuntimeRepository } from './settings-runtime-repository.mjs'
 import path from 'node:path'
 
 export const PERSISTENCE_MODES = Object.freeze({
@@ -63,6 +64,7 @@ export function createJsonRepositoryRegistry({ db = {}, env = process.env } = {}
     inventoryRuntime: createDurableInventoryRepository({ dataFile: path.resolve(env.FLOWCHAIN_INVENTORY_RUNTIME_FILE || 'data/inventory-runtime.json') }),
     salesOrders: createDurableSalesOrderRepository({ dataFile: path.resolve(env.FLOWCHAIN_SALES_RUNTIME_FILE || 'data/sales-orders-runtime.json') }),
     procurementRuntime: createDurableProcurementRepository({ dataFile: path.resolve(env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE || 'data/procurement-transactions.json') }),
+    settingsRuntime: createSettingsRuntimeRepository({ dataFile: path.resolve(env.FLOWCHAIN_SETTINGS_RUNTIME_FILE || 'data/system-settings.json') }),
     procurementRead: createJsonProcurementReadRepository(db),
     actionDrafts: createJsonActionDraftRepository(db),
     exceptionCases: createInMemoryExceptionCaseRepository({ db }),

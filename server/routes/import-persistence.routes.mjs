@@ -1,4 +1,5 @@
 import { resolveCurrentUser } from '../domain/context.mjs'
+import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 import {
   createImportPreview,
   getImportBatch,
@@ -87,15 +88,16 @@ export async function handleImportPersistenceRoute(ctx) {
 
   const commitMatch = url.pathname.match(/^\/api\/imports\/([^/]+)\/commit$/)
   if (req.method === 'POST' && commitMatch) {
+    const authorization = authorizeMutation(ctx, { allowedRoles: ['admin', 'manager', 'business-specialist'], action: 'commit', resource: 'durable-import' })
+    if (authorization.blocked) return true
     const body = await readBody(req)
     const previewId = decodeURIComponent(commitMatch[1])
-    if (ctx.identity && !ctx.identity.authenticated) { send(res, 401, { code: 'AUTHENTICATION_REQUIRED', message: '请先登录后再确认正式导入。' }); return true }
     const validation = validateDurableImportCommit(previewId, body, { relationships: await relationshipSnapshot(ctx) })
     if (!validation.ok) { send(res, validation.status || 422, validation); return true }
     if (validation.replayed) { send(res, 200, { ...validation.result, replayed: true }); return true }
     try {
-      const changes = await applyDurableRows(ctx, validation, user.id)
-      send(res, 201, recordDurableImportCommit(validation, changes, { actor: user.id }))
+      const changes = await applyDurableRows(ctx, validation, authorization.identity.userId)
+      send(res, 201, recordDurableImportCommit(validation, changes, { actor: authorization.identity.userId }))
     } catch (error) {
       send(res, error.status || 422, { code: error.code || 'IMPORT_COMMIT_FAILED', message: error.message, details: error.details || [] })
     }
@@ -116,8 +118,10 @@ export async function handleImportPersistenceRoute(ctx) {
 
   const rollbackMatch = url.pathname.match(/^\/api\/import-batches\/([^/]+)\/rollback$/)
   if (req.method === 'POST' && rollbackMatch) {
+    const authorization = authorizeMutation(ctx, { allowedRoles: ['admin', 'manager'], action: 'rollback', resource: 'durable-import' })
+    if (authorization.blocked) return true
     const body = await readBody(req)
-    const result = rollbackImportBatch(decodeURIComponent(rollbackMatch[1]), body, { actor: user.name, role: roleFor(user) })
+    const result = rollbackImportBatch(decodeURIComponent(rollbackMatch[1]), body, { actor: authorization.identity.name, role: roleFor(authorization.identity) })
     send(res, result.ok ? 200 : result.status || 422, result)
     return true
   }

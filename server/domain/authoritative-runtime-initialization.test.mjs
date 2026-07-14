@@ -120,6 +120,7 @@ test('customer API supports empty list, create, update, deactivate and restart-s
     let response
     const ctx = {
       req: { method, headers: { 'x-flowchain-role': 'manager', 'x-flowchain-user': 'admin' } },
+      identity: { authenticated: true, userId: 'admin', name: 'Admin', role: 'manager' },
       res: {},
       url: new URL(path, 'http://localhost'),
       repositories: { masterData: repository },

@@ -65,10 +65,10 @@ export function createDurableSalesOrderRepository({ dataFile }) {
     },
     async getOrder(key) { return clone((await load()).orders.find(row => row.salesOrderId === decodeURIComponent(key)) || null) },
     async getSummary() { return summary((await load()).orders) },
-    async upsertOrder(input) {
+    async upsertOrder(input, actor = 'system') {
       return transact(doc => { const id = text(input.salesOrderId || input.id)
         if (!id) { const error = new Error('客户订单号必填'); Object.assign(error, { status: 400, code: 'SALES_ORDER_ID_REQUIRED' }); throw error }
-        const index = doc.orders.findIndex(row => row.salesOrderId === id); const row = normalize({ ...input, salesOrderId: id }, index >= 0 ? doc.orders[index] : {})
+        const index = doc.orders.findIndex(row => row.salesOrderId === id); const row = normalize({ ...input, salesOrderId: id, ...(index >= 0 ? {} : { createdBy: actor }), updatedBy: actor }, index >= 0 ? doc.orders[index] : {})
         if (index >= 0) doc.orders[index] = row; else doc.orders.unshift(row)
         return row
       })

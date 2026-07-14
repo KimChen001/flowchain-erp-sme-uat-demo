@@ -1,6 +1,7 @@
 import { createJsonInventoryReadRepository } from '../repositories/json-inventory-read-repository.mjs'
 import { buildRuntimeInventoryAllocation, getRuntimeSkuAvailability } from '../domain/runtime-inventory-allocation-read-model.mjs'
 import { readBusinessContext } from '../services/runtime-business-read-service.mjs'
+import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 
 function query(url) {
   return {
@@ -129,8 +130,10 @@ export async function handleInventoryRoute(ctx) {
   }
 
   if (req.method === 'POST' && url.pathname === '/api/inventory/items') {
+    const authorization = authorizeMutation(ctx, { allowedRoles: ['admin', 'manager', 'business-specialist'], action: 'inventory.item.upsert', resource: 'inventory' })
+    if (authorization.blocked) return true
     try {
-      const item = await repository.upsertItem(await ctx.readBody(req))
+      const item = await repository.upsertItem(await ctx.readBody(req), authorization.identity.userId)
       send(res, 201, { item })
     } catch (error) {
       send(res, error.status || 400, { error: error.message, code: error.code })

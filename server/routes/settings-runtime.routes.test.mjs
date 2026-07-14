@@ -18,7 +18,8 @@ test('settings API persists writes and returns explicit storage errors', async (
   assert.equal(responses.at(-1).status, 200)
   const company = responses.at(-1).body.company
 
-  assert.equal(await handleSettingsRuntimeRoute({ ...base, req: { method: 'PATCH' }, url: new URL('http://local/api/settings-runtime/company'), readBody: async () => ({ settings: { ...company, workspaceName: 'API 持久化工作区' }, actor: { id: 'USR-T', name: '测试员', role: '管理员' } }) }), true)
+  const identity = { authenticated: true, userId: 'USR-T', name: '测试员', role: 'admin' }
+  assert.equal(await handleSettingsRuntimeRoute({ ...base, identity, req: { method: 'PATCH' }, url: new URL('http://local/api/settings-runtime/company'), readBody: async () => ({ settings: { ...company, workspaceName: 'API 持久化工作区' }, actor: { id: 'FORGED', name: '伪造用户', role: 'admin' } }) }), true)
   assert.equal(responses.at(-1).status, 200)
   const restarted = createSettingsRuntimeRepository({ dataFile })
   assert.equal((await restarted.getSettingsRuntime()).company.workspaceName, 'API 持久化工作区')

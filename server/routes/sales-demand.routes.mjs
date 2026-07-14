@@ -1,3 +1,5 @@
+import { authorizeMutation } from '../domain/mutation-authorization.mjs'
+
 function query(url) {
   return { q: url.searchParams.get('q') || '', sku: url.searchParams.get('sku') || '', status: url.searchParams.get('status') || '', risk: url.searchParams.get('risk') || '' }
 }
@@ -16,8 +18,10 @@ export async function handleSalesDemandRoute(ctx) {
     return true
   }
   if (req.method === 'POST' && url.pathname === '/api/sales-demand/orders') {
+    const authorization = authorizeMutation(ctx, { allowedRoles: ['admin', 'manager', 'business-specialist'], action: 'sales.order.upsert', resource: 'sales-orders' })
+    if (authorization.blocked) return true
     try {
-      const order = await repository.upsertOrder(await ctx.readBody(req))
+      const order = await repository.upsertOrder(await ctx.readBody(req), authorization.identity.userId)
       send(res, 201, { order })
     } catch (error) {
       send(res, error.status || 400, { error: error.message, code: error.code })
