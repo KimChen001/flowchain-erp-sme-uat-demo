@@ -167,6 +167,38 @@ export function createDurableCustomerRepository({ dataFile }) {
       return row
       })
     },
+    async applyImportBatch(rows, actor, metadata) {
+      return transact(doc => {
+        const changes = []
+        for (const [index, input] of rows.entries()) {
+          try {
+            const existing = find(doc, input.code)
+            const valid = validate(doc, input, existing)
+            const timestamp = now()
+            if (existing) {
+              Object.assign(existing, input, { code: valid.code, name: valid.name, email: valid.email, status: valid.status, version: existing.version + 1, updatedBy: actor, updatedAt: timestamp, ...metadata })
+              doc.auditEvents.push({ id: `AUD-${randomUUID()}`, action: 'import_updated', customerId: existing.id, actor, timestamp, version: existing.version, ...metadata })
+              changes.push({ repository: 'customer-master-runtime', operation: 'update', entityId: existing.id })
+            } else {
+              const row = {
+                id: `CUS-${randomUUID().slice(0, 8).toUpperCase()}`, code: valid.code, name: valid.name,
+                contact: text(input.contact), email: valid.email, phone: text(input.phone), address: text(input.address),
+                currency: text(input.currency) || 'CNY', creditStatus: text(input.creditStatus) || 'normal',
+                paymentTerms: text(input.paymentTerms), paymentTermsId: text(input.paymentTermsId), status: valid.status,
+                version: 1, createdBy: actor, createdAt: timestamp, updatedBy: actor, updatedAt: timestamp, ...metadata,
+              }
+              doc.customers.push(row)
+              doc.auditEvents.push({ id: `AUD-${randomUUID()}`, action: 'import_created', customerId: row.id, actor, timestamp, version: 1, ...metadata })
+              changes.push({ repository: 'customer-master-runtime', operation: 'insert', entityId: row.id })
+            }
+          } catch (error) {
+            Object.assign(error, { failedRowNumber: index + 1 })
+            throw error
+          }
+        }
+        return changes
+      })
+    },
     async activateCustomer(key, expectedVersion, actor) {
       return api.updateCustomer(key, { status: 'active', expectedVersion }, actor)
     },

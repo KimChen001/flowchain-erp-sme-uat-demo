@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { withRuntimeFileMutex } from './runtime-file-mutex.mjs'
@@ -114,5 +115,33 @@ export function createDurableInventoryRepository({ dataFile }) {
         return { item: row, movement, auditEvent, operation: previous ? 'update' : 'insert' }
       })
     },
+    async applyImportBatch(rows, actor = 'system', metadata = {}) {
+      return transact(doc => {
+        const changes = []
+        for (const [index, input] of rows.entries()) {
+          try {
+            const sku = text(input.sku)
+            if (!sku) { const error = new Error('SKU 必填'); Object.assign(error, { status: 400, code: 'SKU_REQUIRED' }); throw error }
+            const quantity = Number(input.quantity)
+            if (!Number.isFinite(quantity)) { const error = new Error('库存数量必须是有效数字'); Object.assign(error, { status: 422, code: 'INVENTORY_QUANTITY_INVALID' }); throw error }
+            const itemIndex = doc.items.findIndex(row => row.sku === sku && text(row.warehouseId) === text(input.warehouseId || input.warehouse))
+            const previous = itemIndex >= 0 ? doc.items[itemIndex] : null
+            const previousQuantity = previous ? number(previous.onHandQuantity) : 0
+            const timestamp = new Date().toISOString()
+            const row = { ...previous, ...input, sku, itemId: text(input.itemId || previous?.itemId || sku), itemName: text(input.itemName || previous?.itemName || sku), warehouseId: text(input.warehouseId || input.warehouse), binId: text(input.binId || input.bin), onHandQuantity: quantity, availableQuantity: quantity - number(input.reservedQuantity ?? previous?.reservedQuantity), reservedQuantity: number(input.reservedQuantity ?? previous?.reservedQuantity), updatedAt: timestamp, ...metadata }
+            if (itemIndex >= 0) doc.items[itemIndex] = row; else doc.items.push(row)
+            const movement = { movementId: `IMV-${randomUUID()}`, movementType: previous ? 'inventory_adjustment' : 'opening_balance', sku, itemId: row.itemId, warehouseId: row.warehouseId, binId: row.binId, previousQuantity, quantity: quantity - previousQuantity, resultingQuantity: quantity, reason: text(input.reason || '正式库存余额导入'), operator: actor, timestamp, ...metadata }
+            const auditEvent = { id: `AUD-INV-${randomUUID()}`, action: 'inventory_balance_imported', entity: { type: 'inventory_item', id: sku }, actor, timestamp, metadata: { ...metadata, movementId: movement.movementId, previousQuantity, nextQuantity: quantity } }
+            doc.movements.unshift(movement); doc.auditEvents.unshift(auditEvent)
+            changes.push({ repository: 'inventory-runtime', operation: previous ? 'update' : 'insert', entityId: sku, movementId: movement.movementId, auditEventId: auditEvent.id })
+          } catch (error) {
+            Object.assign(error, { failedRowNumber: index + 1 })
+            throw error
+          }
+        }
+        return changes
+      })
+    },
+    async snapshot() { return clone(await load()) },
   }
 }

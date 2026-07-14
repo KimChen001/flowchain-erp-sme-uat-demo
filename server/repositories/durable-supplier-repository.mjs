@@ -224,6 +224,57 @@ export function createDurableSupplierRepository({ dataFile }) {
       })
     },
 
+    async applyImportBatch(rows, actor, metadata) {
+      return transact(doc => {
+        const changes = []
+        for (const [index, input] of rows.entries()) {
+          try {
+            const existing = findSupplier(doc, input.supplierCode)
+            if (existing) {
+              const valid = validateSupplier(doc, input, existing)
+              const timestamp = now()
+              Object.assign(existing, input, {
+                supplierCode: valid.supplierCode,
+                supplierName: valid.supplierName,
+                email: valid.email,
+                deliveryCycleDays: valid.deliveryCycleDays,
+                status: valid.status,
+                categories: Array.isArray(input.categories) ? input.categories.map(text).filter(Boolean) : existing.categories,
+                version: existing.version + 1,
+                updatedBy: actor,
+                updatedAt: timestamp,
+                ...metadata,
+              })
+              doc.auditEvents.push({ id: `AUD-${randomUUID()}`, action: 'import_updated', supplierId: existing.id, actor, timestamp, version: existing.version, ...metadata })
+              changes.push({ repository: 'supplier-master-runtime', operation: 'update', entityId: existing.id })
+            } else {
+              const valid = validateSupplier(doc, input)
+              const timestamp = now()
+              const row = {
+                id: `SUP-${randomUUID().slice(0, 8).toUpperCase()}`,
+                supplierCode: valid.supplierCode, supplierName: valid.supplierName,
+                shortName: '', mnemonicCode: '', status: valid.status, businessType: '',
+                categories: Array.isArray(input.categories) ? input.categories.map(text).filter(Boolean) : [],
+                contactName: text(input.contactName), telephone: text(input.telephone), email: valid.email,
+                fax: '', country: '', regionId: '', cityId: '', postalCode: '', address: '',
+                deliveryCycleDays: valid.deliveryCycleDays, defaultCurrency: text(input.defaultCurrency) || 'CNY',
+                paymentTermsId: text(input.paymentTermsId) || 'NET30', settlementMethod: '', creditCode: '',
+                taxIdentificationNumber: '', bankName: '', bankAccountName: '', bankAccountNumber: '', internalComment: '',
+                version: 1, createdBy: actor, createdAt: timestamp, updatedBy: actor, updatedAt: timestamp, ...metadata,
+              }
+              doc.suppliers.push(row)
+              doc.auditEvents.push({ id: `AUD-${randomUUID()}`, action: 'import_created', supplierId: row.id, actor, timestamp, version: 1, ...metadata })
+              changes.push({ repository: 'supplier-master-runtime', operation: 'insert', entityId: row.id })
+            }
+          } catch (error) {
+            Object.assign(error, { failedRowNumber: index + 1 })
+            throw error
+          }
+        }
+        return changes
+      })
+    },
+
     async selectSuppliers(filters = {}) {
       const doc = await load()
       const query = text(filters.query).toLowerCase()

@@ -7,7 +7,7 @@ import { createJsonMasterDataRepository } from '../repositories/json-master-data
 import { createDurableInventoryRepository } from '../repositories/durable-inventory-repository.mjs'
 import { createDurableProcurementRepository } from '../repositories/durable-procurement-repository.mjs'
 import { handleImportPersistenceRoute } from '../routes/import-persistence.routes.mjs'
-import { listImportAuditEvents } from '../repositories/import-persistence-repository.mjs'
+import { listImportAuditEvents, listImportBatches } from '../repositories/import-persistence-repository.mjs'
 
 function setup(directory) {
   return {
@@ -73,6 +73,37 @@ test('purchase request import remains preview-only and cannot claim a committed 
     assert.equal(result.status, 501)
     assert.equal(result.payload.code, 'PURCHASE_REQUEST_IMPORT_NOT_CONNECTED')
     assert.equal((await repositories.procurementRuntime.snapshot()).purchaseRequests.length, 0)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+test('atomic import failure reports row two, commits zero rows, and does not reserve idempotency success', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'flowchain-import-route-atomic-fail-'))
+  try {
+    const repositories = setup(directory)
+    const preview = await call(repositories, 'POST', '/api/imports/preview', {
+      businessObject: 'supplier-master',
+      rows: [1, 2, 3].map(index => ({ code: `SUP-ATOMIC-${index}`, name: `Atomic Supplier ${index}`, category: 'parts', contact: 'Owner', email: `atomic-${index}@example.com`, currency: 'CNY', status: 'active' })),
+      validationErrors: [], validationWarnings: [],
+    })
+    const batchesBefore = listImportBatches().length
+    const auditsBefore = listImportAuditEvents().length
+    const apply = repositories.masterData.applySupplierImportBatch
+    repositories.masterData.applySupplierImportBatch = (rows, actor, metadata) => apply(rows.map((row, index) => index === 1 ? { ...row, email: 'invalid-email' } : row), actor, metadata)
+    const input = { businessObject: 'supplier-master', snapshotHash: preview.payload.snapshotHash, idempotencyKey: `atomic-route-${directory}`, userConfirmation: true }
+    const failed = await call(repositories, 'POST', `/api/imports/${preview.payload.previewId}/commit`, input)
+    assert.equal(failed.status, 422)
+    assert.equal(failed.payload.code, 'IMPORT_BATCH_ATOMIC_COMMIT_FAILED')
+    assert.equal(failed.payload.failedRowNumber, 2)
+    assert.equal(failed.payload.committedRows, 0)
+    await assert.rejects(() => readFile(join(directory, 'suppliers.json'), 'utf8'), error => error.code === 'ENOENT')
+    assert.equal(listImportBatches().length, batchesBefore)
+    assert.equal(listImportAuditEvents().length, auditsBefore)
+
+    repositories.masterData.applySupplierImportBatch = apply
+    const retry = await call(repositories, 'POST', `/api/imports/${preview.payload.previewId}/commit`, input)
+    assert.equal(retry.status, 201)
+    assert.equal(retry.payload.atomic, true)
+    assert.equal(retry.payload.inserted, 3)
   } finally { await rm(directory, { recursive: true, force: true }) }
 })
 

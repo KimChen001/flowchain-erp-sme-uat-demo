@@ -220,7 +220,7 @@ export function validateDurableImportCommit(previewId, input = {}, options = {})
 
 export function recordDurableImportCommit(validation, changes = [], options = {}) {
   const preview = validation.preview
-  const importBatchId = `IMP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
+  const importBatchId = text(options.importBatchId) || `IMP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
   const inserted = changes.filter(change => change.operation === 'insert').length
   const updated = changes.filter(change => change.operation === 'update').length
   const batch = {
@@ -228,13 +228,13 @@ export function recordDurableImportCommit(validation, changes = [], options = {}
     originalFileName: preview.fileMetadata.name || '', sheetName: preview.sheetName, schemaVersion: preview.schemaVersion,
     fieldMapping: clone(preview.fieldMapping), inserted, updated, skipped: 0, failed: 0,
     warnings: clone(preview.validationWarnings), snapshotHash: preview.snapshotHash, status: 'committed',
-    rollbackAvailable: false, committedAt: new Date().toISOString(), actor: text(options.actor) || preview.actor,
+    atomic: true, rollbackAvailable: false, committedAt: new Date().toISOString(), actor: text(options.actor) || preview.actor,
     persistenceScope: 'process-memory-metadata', limitations: [...DURABLE_IMPORT_LIMITATIONS],
     targetRepositories: [...new Set(changes.map(change => change.repository))], changes: clone(changes),
   }
   state.batches.set(importBatchId, batch)
   const auditEvent = audit('import_batch_committed', { type: 'importBatch', id: importBatchId }, batch, batch.actor)
-  const result = { ok: true, importBatchId, businessObject: preview.businessObject, inserted, updated, skipped: 0, failed: 0, warnings: batch.warnings, auditEventId: auditEvent.id, rollbackAvailable: false, committedAt: batch.committedAt, targetRepositories: batch.targetRepositories }
+  const result = { ok: true, atomic: true, importBatchId, businessObject: preview.businessObject, inserted, updated, skipped: 0, failed: 0, warnings: batch.warnings, auditEventId: auditEvent.id, rollbackAvailable: false, committedAt: batch.committedAt, targetRepositories: batch.targetRepositories }
   state.idempotency.set(validation.idempotencyKey, result)
   return clone(result)
 }

@@ -198,6 +198,28 @@ export function createDurableItemMasterRepository({ dataFile }) {
       return next;
       });
     },
+    async applyImportBatch(rows, actor, metadata) {
+      return transact(doc => {
+        const changes = [];
+        for (const [index, input] of rows.entries()) {
+          try {
+            const existingIndex = doc.items.findIndex(row => row.sku.toLowerCase() === text(input.sku).toLowerCase());
+            const next = normalize(input, existingIndex >= 0 ? doc.items[existingIndex] : {}, actor);
+            if (!next.sku || !next.itemName || !next.baseUnit)
+              throw Object.assign(new Error("SKU、物料名称和基本单位必填"), { code: "VALIDATION_ERROR", status: 400 });
+            if (doc.items.some((row, rowIndex) => rowIndex !== existingIndex && row.sku.toLowerCase() === next.sku.toLowerCase()))
+              throw Object.assign(new Error("SKU 编码已存在"), { code: "DUPLICATE_ITEM", status: 409 });
+            Object.assign(next, metadata);
+            if (existingIndex >= 0) doc.items[existingIndex] = next; else doc.items.push(next);
+            changes.push({ repository: "item-master-runtime", operation: existingIndex >= 0 ? "update" : "insert", entityId: next.itemId });
+          } catch (error) {
+            Object.assign(error, { failedRowNumber: index + 1 });
+            throw error;
+          }
+        }
+        return changes;
+      });
+    },
     _dataFile: dataFile,
   };
 }
