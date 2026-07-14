@@ -7,6 +7,7 @@ import { createJsonMasterDataRepository } from '../repositories/json-master-data
 import { createDurableInventoryRepository } from '../repositories/durable-inventory-repository.mjs'
 import { createDurableProcurementRepository } from '../repositories/durable-procurement-repository.mjs'
 import { handleImportPersistenceRoute } from '../routes/import-persistence.routes.mjs'
+import { listImportAuditEvents } from '../repositories/import-persistence-repository.mjs'
 
 function setup(directory) {
   return {
@@ -72,5 +73,32 @@ test('purchase request import remains preview-only and cannot claim a committed 
     assert.equal(result.status, 501)
     assert.equal(result.payload.code, 'PURCHASE_REQUEST_IMPORT_NOT_CONNECTED')
     assert.equal((await repositories.procurementRuntime.snapshot()).purchaseRequests.length, 0)
+  } finally { await rm(directory, { recursive: true, force: true }) }
+})
+
+test('durable supplier import rejects fake rollback without changing formal data or audit history', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'flowchain-durable-rollback-'))
+  try {
+    const repositories = setup(directory)
+    const { committed } = await previewAndCommit(repositories, 'supplier-master', [{ code: 'SUP-NO-ROLLBACK', name: 'Durable Supplier', category: 'parts', contact: 'Owner', email: 'durable@example.com', currency: 'CNY', status: 'active' }], `supplier-no-rollback-${directory}`)
+    assert.equal(committed.status, 201)
+    assert.equal(committed.payload.rollbackAvailable, false)
+    const auditsBefore = listImportAuditEvents().length
+
+    const rollback = await call(repositories, 'POST', `/api/import-batches/${committed.payload.importBatchId}/rollback`, { reason: 'must not fake rollback' })
+    assert.equal(rollback.status, 409)
+    assert.equal(rollback.payload.code, 'DURABLE_IMPORT_ROLLBACK_NOT_SUPPORTED')
+    assert.equal(rollback.payload.rollbackAvailable, false)
+    assert.equal((await repositories.masterData.getSupplier('SUP-NO-ROLLBACK')).supplierName, 'Durable Supplier')
+    assert.equal(listImportAuditEvents().length, auditsBefore)
+    assert.equal(listImportAuditEvents().some(event => event.action === 'import_batch_rolled_back' && event.entity.id === committed.payload.importBatchId), false)
+
+    const batch = await call(repositories, 'GET', `/api/import-batches/${committed.payload.importBatchId}`)
+    assert.equal(batch.status, 200)
+    assert.equal(batch.payload.status, 'committed')
+    assert.equal(batch.payload.rollbackAvailable, false)
+    assert.equal(batch.payload.persistenceScope, 'process-memory-metadata')
+    assert.deepEqual(batch.payload.targetRepositories, ['supplier-master-runtime'])
+    assert.ok(batch.payload.limitations.length > 0)
   } finally { await rm(directory, { recursive: true, force: true }) }
 })

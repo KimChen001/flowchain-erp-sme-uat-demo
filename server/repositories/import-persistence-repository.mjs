@@ -19,6 +19,11 @@ const BUSINESS_CONFIG = Object.freeze({
   'inventory-balance': { businessObject: 'inventory_balance', key: (row) => `${row.warehouse}::${row.bin}::${row.sku}`, policy: 'inventory_adjustment', collection: 'inventoryBalances', required: ['sku', 'warehouse', 'bin', 'quantity', 'asOfDate', 'status'] },
 })
 
+const DURABLE_IMPORT_LIMITATIONS = Object.freeze([
+  '正式业务数据已经写入 authoritative repositories。',
+  '当前版本不支持自动回滚；请通过对应业务模块创建反向调整或人工修正。',
+])
+
 function clone(value) { return JSON.parse(JSON.stringify(value ?? null)) }
 function text(value = '') { return String(value ?? '').trim() }
 function stable(value) {
@@ -224,6 +229,7 @@ export function recordDurableImportCommit(validation, changes = [], options = {}
     fieldMapping: clone(preview.fieldMapping), inserted, updated, skipped: 0, failed: 0,
     warnings: clone(preview.validationWarnings), snapshotHash: preview.snapshotHash, status: 'committed',
     rollbackAvailable: false, committedAt: new Date().toISOString(), actor: text(options.actor) || preview.actor,
+    persistenceScope: 'process-memory-metadata', limitations: [...DURABLE_IMPORT_LIMITATIONS],
     targetRepositories: [...new Set(changes.map(change => change.repository))], changes: clone(changes),
   }
   state.batches.set(importBatchId, batch)
@@ -237,6 +243,13 @@ export function rollbackImportBatch(importBatchId, input = {}, options = {}) {
   const batch = state.batches.get(importBatchId)
   if (!batch) return { ok: false, status: 404, error: 'Import batch not found.' }
   if (!['admin', 'manager'].includes(text(options.role).toLowerCase())) return { ok: false, status: 403, error: 'Admin or manager permission is required.' }
+  if (batch.persistenceScope === 'process-memory-metadata') return {
+    ok: false,
+    status: 409,
+    code: 'DURABLE_IMPORT_ROLLBACK_NOT_SUPPORTED',
+    message: '该导入批次已经写入正式业务数据，当前版本不支持自动回滚。请通过对应业务模块创建反向调整或人工修正。',
+    rollbackAvailable: false,
+  }
   if (batch.status !== 'committed') return { ok: false, status: 409, error: `Batch status ${batch.status} cannot be rolled back.` }
   if (new Date(batch.rollbackDeadline).getTime() < Date.now()) return { ok: false, status: 409, error: 'Rollback window has expired.' }
   if (input.hasDownstreamReferences === true) return { ok: false, status: 409, error: 'Batch has downstream business references.', dependencyReasons: ['存在后续业务引用'] }

@@ -28,7 +28,7 @@ import { DataAccessQualityV2 } from "../../components/data-access/DataAccessQual
 import { fetchDataAccessQualityV2, type DataAccessQualityV2 as DataAccessQualityV2Payload } from "./dataAccessQuality";
 import { readImportTasks, type ImportTask } from "../../lib/excel/importTaskService";
 import { exportRowsToWorkbook } from "../../lib/excel/excelWorkbookService";
-import { fetchImportBatches, rollbackImportBatch, type ImportBatch as PersistedImportBatch } from "../../lib/excel/importPersistenceApi";
+import { fetchImportBatches, type ImportBatch as PersistedImportBatch } from "../../lib/excel/importPersistenceApi";
 
 type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "supplierPerformance" | "supplierCertification" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "contractPrices" | "forecastDemand" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
@@ -396,7 +396,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
                           <button onClick={() => setView("failed")} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.red }}>查看失败项</button>
                           {task.raw ? <button onClick={() => { const rows = task.raw!.validationErrors.map((issue) => ({ 原始行号: issue.rowNumber, 错误字段: issue.field, 错误原因: issue.reason, 修复建议: issue.suggestion })); rows.length ? exportRowsToWorkbook(`${task.raw!.businessObject}-failed-rows`, rows, "失败行") : toast.warning("当前任务没有失败行"); }} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.red }}>下载失败项</button> : <DisabledActionButton>下载失败项</DisabledActionButton>}
                           {task.raw ? <button onClick={() => window.location.assign(task.raw!.sourcePage)} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>重新上传</button> : <DisabledActionButton>重新上传</DisabledActionButton>}
-                          {task.batch?.status === "committed" && task.batch.rollbackAvailable ? <button onClick={async () => { if (!window.confirm(`确认回滚导入批次 ${task.batch!.importBatchId}？审计历史会保留。`)) return; try { await rollbackImportBatch(task.batch!.importBatchId); toast.success("导入批次已回滚"); refreshPersistedBatches(); } catch (error) { toast.error("无法回滚", { description: error instanceof Error ? error.message : "请检查权限和后续引用" }); } }} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#fff1f0", color: A.red }}>回滚批次</button> : null}
+                          {task.batch?.status === "committed" && !task.batch.rollbackAvailable ? <span className="px-2.5 py-1.5 text-[11px]" style={{ color: A.gray1 }} title={task.batch.limitations?.join(" ") || "正式数据需通过业务模块反向调整或人工修正"}>需业务反向调整</span> : null}
                         </div>
                       </td>
                     </tr>
