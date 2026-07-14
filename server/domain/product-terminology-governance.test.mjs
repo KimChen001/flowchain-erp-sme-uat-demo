@@ -57,6 +57,7 @@ const TECHNICAL_FILE_PATTERNS = [
   /^package\.json$/,
   /^server\/domain\/product-terminology-governance\.test\.mjs$/,
   /^server\/domain\/authoritative-runtime-initialization\.test\.mjs$/,
+  /^tests\/browser\/authoritative-runtime-initialization\.spec\.ts$/,
   /(^|\/)ai-runtime-provider/i,
   /(^|\/)ai-provider-safety/i,
   /(^|\/)ai-model-router/i,

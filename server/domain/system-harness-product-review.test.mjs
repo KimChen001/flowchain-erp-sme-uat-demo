@@ -142,9 +142,10 @@ test('system harness validates global search and canonical evidence target shape
   assert.equal(searchRoute.response.status, 200)
   const result = searchRoute.response.payload.results.find((item) => item.entityId === 'PO-2026-1301')
   assert.ok(result)
-  assert.equal(result.moduleId, 'procurement:orders')
   assert.equal(result.entityType, 'purchase_order')
-  assert.equal(result.deepLink, result.moduleId)
+  assert.equal(result.canonicalRoute, '/app/procurement/orders/PO-2026-1301')
+  assert.equal(result.deepLink, result.canonicalRoute)
+  assert.equal(result.sourceRepository, 'procurementRuntime')
   assert.ok(result.evidence.every((item) => item.label && item.value))
 })
 

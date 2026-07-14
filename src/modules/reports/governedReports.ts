@@ -6,7 +6,7 @@ export type ReportChartType = "line" | "bar" | "horizontal_bar" | "area" | "stac
 export type ReportChart = { id: string; title: string; type: ReportChartType; data?: Array<Record<string, string | number | undefined>>; series?: Array<{ key: string; label: string; data: Array<{ period: string; value: number }> }>; categoryKey?: string; valueKey?: string; seriesKeys?: string[]; valueFormat?: string; unit?: string; stack?: boolean; orientation?: string; legend?: boolean; tooltip?: boolean; colors?: string[]; drilldownPath: string; crossFilter?: string | null; emptyState?: string };
 export type ReportColumnDefinition = { key: string; label: string; type: string; subject: string; valueMap?: Record<string, string> };
 export type GovernedReport = {
-  query: Record<string, unknown>; generatedAt: string; dataScope: { label: string; company: string; currency: string; from: string; to: string; activeFilterCount: number; sourceLabel: string; completenessLabel: string };
+  query: Record<string, unknown>; generatedAt: string; dataScope: { label: string; company: string; currency: string; from: string; to: string; activeFilterCount: number; sourceLabel: string; completenessLabel: string; filterOptions: { companies: string[]; warehouses: string[]; suppliers: string[]; customers: string[]; categories: string[]; currencies: string[] } };
   kpis: MetricDefinition[]; charts: ReportChart[]; rankings: ReportChart[]; details: Record<string, unknown>[]; columnDefinitions: ReportColumnDefinition[]; warnings: string[]; limitations: string[];
   drilldowns: Array<{ metricId: string; path: string }>; exportRows: Record<string, unknown>[]; metricDefinitions: Omit<MetricDefinition, "value">[];
 };

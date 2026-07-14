@@ -15,9 +15,8 @@ test('overview page uses the authoritative procurement runtime without mounting 
   const overview = readSource(overviewPath)
 
   assert.match(overview, /function RuntimeHomepage\b/)
-  assert.match(overview, /"\/api\/procurement\/requests"/)
-  assert.match(overview, /"\/api\/procurement\/orders"/)
-  assert.match(overview, /"\/api\/procurement\/rfqs"/)
+  assert.match(overview, /"\/api\/home\/overview"/)
+  assert.doesNotMatch(overview, /"\/api\/procurement\/(requests|orders|rfqs)"/)
   assert.match(overview, /import AiSuggestionsPage from "\.\/AiSuggestionsPage"/)
   assert.match(overview, /<AiSuggestionsPage\b/)
   assert.doesNotMatch(overview, /<TodayCockpitPanel\b/)

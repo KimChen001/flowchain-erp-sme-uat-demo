@@ -17,6 +17,7 @@ import { getAiProviderSafetyState } from '../domain/ai-provider-safety.mjs'
 import { buildAiReadContext } from '../domain/ai-read-context.mjs'
 import { getAiToolRegistry } from '../domain/ai-tool-registry.mjs'
 import { buildUnknownGuidedFallbackResponse, classifyAiBusinessIntent, isTechnicalProviderDiagnosticPrompt } from '../domain/ai-business-intent-router.mjs'
+import { businessContextToReadDb, readBusinessContext } from '../services/runtime-business-read-service.mjs'
 import { buildMrpPlan } from './mrp.routes.mjs'
 import {
   ensureMarketPrices,
@@ -511,7 +512,8 @@ function providerFailureResponse({ body, db, ctx }) {
 }
 
 export async function handleAiRoute(ctx) {
-  const { req, res, url, db, send, readBody, writeDb, event, repositories, ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs } = ctx
+  const { req, res, url, db: legacyDb, send, readBody, writeDb, event, repositories, ensurePurchaseRequests, ensureInventoryMovements, ensureRfqs } = ctx
+  let db = legacyDb
   const dataMode = ctx.dataMode || db?.__dataMode || ''
 
   if (req.method === 'GET' && url.pathname === '/api/ai/tools') {
@@ -524,6 +526,13 @@ export async function handleAiRoute(ctx) {
     const body = await readBody(req)
     body.question = normalizeAiChatMessage(body)
     if (!body.question) return send(res, 400, { error: 'question is required' })
+
+    const authoritativeRuntime = repositories?.procurementRuntime || repositories?.inventoryRuntime || repositories?.salesOrders || typeof repositories?.masterData?.listManagedItems === 'function'
+    let businessReadContext = null
+    if (authoritativeRuntime) {
+      businessReadContext = await readBusinessContext(ctx)
+      db = businessContextToReadDb(businessReadContext)
+    }
 
     let branchStartedAt = Date.now()
     const responseContractV2 = detectCompoundBusinessQuery(body)
@@ -835,7 +844,7 @@ export async function handleAiRoute(ctx) {
       return true
     }
 
-    const aiReadContext = await buildAiReadContext(db, ctx)
+    const aiReadContext = await buildAiReadContext(db, { ...ctx, businessReadContext, businessReadDb: db })
     const readModelCache = aiReadContext.cache
 
     branchStartedAt = Date.now()

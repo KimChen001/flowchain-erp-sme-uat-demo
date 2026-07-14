@@ -23,9 +23,11 @@ test('R66 Alpha readiness classification is documented without production claims
 
 test('Overview work items use review-first runtime procurement wording', () => {
   const overview = readSource('src', 'modules', 'overview', 'Page.tsx')
+  const service = readSource('server', 'services', 'business-read-context-service.mjs')
 
-  assert.match(overview, /采购申请待审批/)
-  assert.match(overview, /Draft PO 待复核/)
+  assert.match(overview, /"\/api\/home\/overview"/)
+  assert.match(service, /采购申请待审批/)
+  assert.match(service, /Draft PO 待复核/)
   assert.doesNotMatch(overview, /title: "释放 MRP 计划订单"/)
   assert.doesNotMatch(overview, /suggestedAction: .*"生成补货 PR"/)
 })
