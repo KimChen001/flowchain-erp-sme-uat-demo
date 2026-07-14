@@ -1,10 +1,15 @@
 import { expect, test } from '@playwright/test'
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('flowchain:auth-token', 'runtime-read-model-gate')
-    localStorage.setItem('flowchain:current-user', JSON.stringify({ id: 'runtime-reader', name: 'Runtime Reader', role: '供应链经理' }))
-  })
+let managerHeaders: { authorization: string }
+test.beforeEach(async ({ page, request }) => {
+  const login = await request.post('/api/auth/login', { data: { company: '新辰智能制造', name: 'Runtime Reader', email: `runtime-reader-${Date.now()}@example.com` } })
+  expect(login.status()).toBe(200)
+  const session = await login.json()
+  managerHeaders = { authorization: `Bearer ${session.token}` }
+  await page.addInitScript(({ token, profile }) => {
+    localStorage.setItem('flowchain:auth-token', token)
+    localStorage.setItem('flowchain:current-user', JSON.stringify(profile))
+  }, { token: session.token, profile: session.user })
 })
 
 test('inventory search reports AI and evidence use the same runtime records without ghost fixtures', async ({ page, request }) => {
@@ -13,13 +18,13 @@ test('inventory search reports AI and evidence use the same runtime records with
   const salesOrderId = `SO-CUTOVER-${suffix}`
   const supplierCode = `SUP-CUTOVER-${suffix}`
 
-  const supplierResponse = await request.post('/api/master-data/suppliers', { headers: { 'x-flowchain-role': 'manager' }, data: { supplierCode, supplierName: `Runtime Supplier ${suffix}`, status: 'active' } })
+  const supplierResponse = await request.post('/api/master-data/suppliers', { headers: managerHeaders, data: { supplierCode, supplierName: `Runtime Supplier ${suffix}`, status: 'active' } })
   expect(supplierResponse.status()).toBe(201)
-  const itemResponse = await request.post('/api/master-data/items', { headers: { 'x-flowchain-role': 'manager' }, data: { sku, itemName: `Runtime Item ${suffix}`, baseUnit: '件', status: 'active', purchasable: true } })
+  const itemResponse = await request.post('/api/master-data/items', { headers: managerHeaders, data: { sku, itemName: `Runtime Item ${suffix}`, baseUnit: '件', status: 'active', purchasable: true } })
   expect(itemResponse.status()).toBe(201)
   const item = (await itemResponse.json()).item
-  expect((await request.post('/api/inventory/items', { data: { itemId: item.itemId, sku, itemName: item.itemName, onHandQuantity: 10, reservedQuantity: 2 } })).status()).toBe(201)
-  expect((await request.post('/api/sales-demand/orders', { data: { salesOrderId, customerName: `Runtime Customer ${suffix}`, itemId: item.itemId, sku, itemName: item.itemName, orderedQty: 20, reservedQty: 2, fulfilledQty: 0, statusLabel: '待交付' } })).status()).toBe(201)
+  expect((await request.post('/api/inventory/items', { headers: managerHeaders, data: { itemId: item.itemId, sku, itemName: item.itemName, onHandQuantity: 10, reservedQuantity: 2 } })).status()).toBe(201)
+  expect((await request.post('/api/sales-demand/orders', { headers: managerHeaders, data: { salesOrderId, customerName: `Runtime Customer ${suffix}`, itemId: item.itemId, sku, itemName: item.itemName, orderedQty: 20, reservedQty: 2, fulfilledQty: 0, statusLabel: '待交付' } })).status()).toBe(201)
 
   const allocation = await (await request.get(`/api/inventory/availability/${sku}`)).json()
   expect(allocation.availability).toMatchObject({ sku, onHand: 10, reserved: 2, available: 8, openSalesDemand: 20, shortage: 12 })

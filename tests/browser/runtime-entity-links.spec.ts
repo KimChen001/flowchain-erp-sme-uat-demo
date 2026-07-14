@@ -1,15 +1,20 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
 const ghosts = /PO-2026-1287|PO-2026-1286|PO-2026-1285|PO-2026-1284|RFQ-26-0042|INV-HD-260421|INV-SZ-260422|RTV-2026-0501|GRN-202605-0418/
 
-async function auth(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('flowchain:auth-token', 'runtime-links')
-    localStorage.setItem('flowchain:current-user', JSON.stringify({ id: 'runtime-links-user', name: 'Runtime User', role: 'manager' }))
-  })
+let managerHeaders: { authorization: string }
+async function auth(page: Page, request: APIRequestContext) {
+  const login = await request.post('/api/auth/login', { data: { company: '新辰智能制造', name: 'Runtime User', email: `runtime-links-${Date.now()}@example.com` } })
+  expect(login.status()).toBe(200)
+  const session = await login.json()
+  managerHeaders = { authorization: `Bearer ${session.token}` }
+  await page.addInitScript(({ token, profile }) => {
+    localStorage.setItem('flowchain:auth-token', token)
+    localStorage.setItem('flowchain:current-user', JSON.stringify(profile))
+  }, { token: session.token, profile: session.user })
 }
 
-test.beforeEach(async ({ page }) => auth(page))
+test.beforeEach(async ({ page, request }) => auth(page, request))
 
 test('UI and API expose the same development build identity', async ({ page, request }) => {
   const health = await (await request.get('/api/health')).json()
@@ -22,10 +27,10 @@ test('UI and API expose the same development build identity', async ({ page, req
 test('inventory is authoritative, links SKU to Item Master, and routes replenishment safely', async ({ page, request }) => {
   const suffix = Date.now()
   const sku = `RUNTIME-SKU-${suffix}`
-  const itemResponse = await request.post('/api/master-data/items', { headers: { 'x-flowchain-role': 'manager' }, data: { sku, itemName: '运行时补货物料', baseUnit: '台', status: 'active', purchasable: true, reorderPoint: 20, safetyStock: 10 } })
+  const itemResponse = await request.post('/api/master-data/items', { headers: managerHeaders, data: { sku, itemName: '运行时补货物料', baseUnit: '台', status: 'active', purchasable: true, reorderPoint: 20, safetyStock: 10 } })
   expect(itemResponse.status()).toBe(201)
   const item = (await itemResponse.json()).item
-  expect((await request.post('/api/inventory/items', { data: { itemId: item.itemId, sku, itemName: item.itemName, onHandQuantity: 2, availableQuantity: 2, safetyStock: 10, reorderPoint: 20, unit: '台' } })).status()).toBe(201)
+  expect((await request.post('/api/inventory/items', { headers: managerHeaders, data: { itemId: item.itemId, sku, itemName: item.itemName, onHandQuantity: 2, availableQuantity: 2, safetyStock: 10, reorderPoint: 20, unit: '台' } })).status()).toBe(201)
 
   await page.goto('/app/inventory/stock')
   await expect(page.getByText('SKU-00412', { exact: true })).toHaveCount(0)
@@ -44,8 +49,8 @@ test('inventory is authoritative, links SKU to Item Master, and routes replenish
   await inventoryRow.getByRole('link', { name: '维护供应商关系', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/app/master-data/items/${item.itemId}$`))
 
-  const supplier = (await (await request.post('/api/master-data/suppliers', { headers: { 'x-flowchain-role': 'manager' }, data: { supplierCode: `SUP-${suffix}`, supplierName: '运行时首选供应商', status: 'active' } })).json()).supplier
-  expect((await request.post(`/api/master-data/items/${item.itemId}/suppliers`, { headers: { 'x-flowchain-role': 'manager' }, data: { supplierId: supplier.id, active: true, approved: true, preferred: true, referencePrice: 66, leadTimeDays: 5, minimumOrderQuantity: 1 } })).status()).toBe(201)
+  const supplier = (await (await request.post('/api/master-data/suppliers', { headers: managerHeaders, data: { supplierCode: `SUP-${suffix}`, supplierName: '运行时首选供应商', status: 'active' } })).json()).supplier
+  expect((await request.post(`/api/master-data/items/${item.itemId}/suppliers`, { headers: managerHeaders, data: { supplierId: supplier.id, active: true, approved: true, preferred: true, referencePrice: 66, leadTimeDays: 5, minimumOrderQuantity: 1 } })).status()).toBe(201)
   await page.goto('/app/inventory/stock')
   await page.getByTestId(`inventory-item-${sku}`).getByRole('link', { name: '新建采购申请', exact: true }).click()
   await expect(page).toHaveURL(/\/app\/procurement\/requests\?.*itemId=/)
@@ -56,8 +61,8 @@ test('inventory is authoritative, links SKU to Item Master, and routes replenish
 
 test('sales runtime creates recoverable order and canonical SO/SKU links', async ({ page, request }) => {
   const suffix = Date.now(), sku = `SALES-SKU-${suffix}`, salesOrderId = `SO-RUNTIME-${suffix}`
-  const item = (await (await request.post('/api/master-data/items', { headers: { 'x-flowchain-role': 'manager' }, data: { sku, itemName: '运行时销售物料', baseUnit: '件', status: 'active', purchasable: true } })).json()).item
-  expect((await request.post('/api/sales-demand/orders', { data: { salesOrderId, customerName: '无客户主数据链接公司', sku, itemId: item.itemId, itemName: '运行时销售物料', orderedQty: 5, reservedQty: 5, fulfilledQty: 0, promisedDate: '2026-08-01', statusLabel: '待交付' } })).status()).toBe(201)
+  const item = (await (await request.post('/api/master-data/items', { headers: managerHeaders, data: { sku, itemName: '运行时销售物料', baseUnit: '件', status: 'active', purchasable: true } })).json()).item
+  expect((await request.post('/api/sales-demand/orders', { headers: managerHeaders, data: { salesOrderId, customerName: '无客户主数据链接公司', sku, itemId: item.itemId, itemName: '运行时销售物料', orderedQty: 5, reservedQty: 5, fulfilledQty: 0, promisedDate: '2026-08-01', statusLabel: '待交付' } })).status()).toBe(201)
   await page.goto('/app/sales/orders')
   for (const fixed of ['SO-2026-0412-A', 'SO-2026-1282', 'SO-2026-0412-B', 'SO-2026-SUP-RISK', 'SO-2026-0508']) await expect(page.getByText(fixed, { exact: true })).toHaveCount(0)
   const orderLink = page.getByRole('link', { name: salesOrderId, exact: true })
@@ -83,20 +88,20 @@ test('all procurement routes stay on runtime component and hide ghost records', 
 
 test('runtime PR PO and Supplier identifiers use canonical focusable links', async ({ page, request }) => {
   const suffix = Date.now()
-  const supplierResponse = await request.post('/api/master-data/suppliers', { headers: { 'x-flowchain-role': 'manager' }, data: { supplierCode: `LINK-${suffix}`, supplierName: `链接供应商-${suffix}`, status: 'active' } })
+  const supplierResponse = await request.post('/api/master-data/suppliers', { headers: managerHeaders, data: { supplierCode: `LINK-${suffix}`, supplierName: `链接供应商-${suffix}`, status: 'active' } })
   expect(supplierResponse.status()).toBe(201)
   const supplier = (await supplierResponse.json()).supplier
-  const createResponse = await request.post('/api/procurement/requests', { headers: { 'x-flowchain-role': 'manager', 'x-flowchain-user': 'runtime-links-user' }, data: { departmentId: 'operations', defaultCurrency: 'CNY', lines: [{ lineId: 'L1', sourceType: 'non_catalog_item', lineBasis: 'amount', supplierId: supplier.id, itemNameSnapshot: '实体链接测试服务', commodityId: 'service', estimatedAmount: 88, currency: 'CNY', targetWarehouseId: 'WH-MAIN', needByDate: '2026-08-01' }] } })
+  const createResponse = await request.post('/api/procurement/requests', { headers: managerHeaders, data: { departmentId: 'operations', defaultCurrency: 'CNY', lines: [{ lineId: 'L1', sourceType: 'non_catalog_item', lineBasis: 'amount', supplierId: supplier.id, itemNameSnapshot: '实体链接测试服务', commodityId: 'service', estimatedAmount: 88, currency: 'CNY', targetWarehouseId: 'WH-MAIN', needByDate: '2026-08-01' }] } })
   expect(createResponse.status()).toBe(201)
   let pr = await createResponse.json()
-  pr = await (await request.post(`/api/procurement/requests/${pr.id}/submit`, { headers: { 'x-flowchain-role': 'manager' }, data: { expectedVersion: pr.version } })).json()
+  pr = await (await request.post(`/api/procurement/requests/${pr.id}/submit`, { headers: managerHeaders, data: { expectedVersion: pr.version } })).json()
   await page.goto('/app/procurement/workbench')
   const prLink = page.getByRole('link', { name: pr.id, exact: true })
   await expect(prLink).toHaveAttribute('href', `/app/procurement/requests/${pr.id}`)
   await prLink.focus(); await expect(prLink).toBeFocused()
 
-  pr = await (await request.post(`/api/procurement/requests/${pr.id}/approve`, { headers: { 'x-flowchain-role': 'manager' }, data: { expectedVersion: pr.version } })).json()
-  const converted = await request.post(`/api/procurement/requests/${pr.id}/generate-purchase-orders`, { headers: { 'x-flowchain-role': 'manager' }, data: { expectedVersion: pr.version } })
+  pr = await (await request.post(`/api/procurement/requests/${pr.id}/approve`, { headers: managerHeaders, data: { expectedVersion: pr.version } })).json()
+  const converted = await request.post(`/api/procurement/requests/${pr.id}/generate-purchase-orders`, { headers: managerHeaders, data: { expectedVersion: pr.version } })
   expect(converted.status()).toBe(201)
   const po = (await converted.json()).createdPurchaseOrders[0]
   await page.goto('/app/procurement/orders')

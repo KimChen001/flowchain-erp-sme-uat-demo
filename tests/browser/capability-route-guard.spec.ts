@@ -66,6 +66,6 @@ test("refreshing a disabled route never renders its internal panel", async ({ pa
 
 test("unauthenticated direct URL shows login before capability state", async ({ page }) => {
   await page.goto("/app/finance/invoices");
-  await expect(page.getByRole("heading", { name: /进销存工作台/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "进入 FlowChain" })).toBeVisible();
   await expect(page.getByTestId("capability-route-blocked")).toHaveCount(0);
 });
