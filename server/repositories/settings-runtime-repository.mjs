@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalizeAuditEvent } from '../domain/audit-foundation.mjs'
+import { withRuntimeFileMutex } from './runtime-file-mutex.mjs'
 
 export const SETTINGS_SCHEMA_VERSION = 1
 
@@ -74,7 +75,13 @@ function validateDocument(document) {
   if (!document || typeof document !== 'object' || document.schemaVersion !== SETTINGS_SCHEMA_VERSION) throw storageError('系统设置文件版本无效')
   if (!document.settings || typeof document.settings !== 'object' || !Array.isArray(document.auditEntries)) throw storageError('系统设置文件结构无效')
   for (const section of Object.keys(settingsSeed)) validateSection(section, document.settings[section])
-  return { schemaVersion: SETTINGS_SCHEMA_VERSION, settings: snapshot(document.settings), auditEntries: snapshot(document.auditEntries) }
+  return {
+    schemaVersion: SETTINGS_SCHEMA_VERSION,
+    revision: Number(document.revision || 0),
+    updatedAt: document.updatedAt || null,
+    settings: snapshot(document.settings),
+    auditEntries: snapshot(document.auditEntries),
+  }
 }
 
 async function atomicWriteJson(dataFile, document) {
@@ -93,32 +100,30 @@ export function createSettingsRuntimeRepository({ dataFile }) {
   if (!dataFile) throw new Error('settings dataFile is required')
   let document = null
   let initialization = null
-  let writeQueue = Promise.resolve()
+
+  async function readLatest() {
+    try {
+      return validateDocument(JSON.parse(await readFile(dataFile, 'utf8')))
+    } catch (error) {
+      if (error?.code === 'ENOENT') return null
+      if (error?.code === 'settings_storage_error') throw error
+      throw storageError('系统设置文件无法读取或 JSON 无效', error)
+    }
+  }
 
   async function load() {
     if (document) return document
-    if (!initialization) initialization = (async () => {
-      try {
-        const raw = await readFile(dataFile, 'utf8')
-        document = validateDocument(JSON.parse(raw))
-      } catch (error) {
-        if (error?.code !== 'ENOENT') {
-          if (error?.code === 'settings_storage_error') throw error
-          throw storageError('系统设置文件无法读取或 JSON 无效', error)
-        }
-        const initial = { schemaVersion: SETTINGS_SCHEMA_VERSION, settings: snapshot(settingsSeed), auditEntries: [] }
+    if (!initialization) initialization = withRuntimeFileMutex(dataFile, async () => {
+      const latest = await readLatest()
+      if (latest) document = latest
+      else {
+        const initial = { schemaVersion: SETTINGS_SCHEMA_VERSION, revision: 0, updatedAt: null, settings: snapshot(settingsSeed), auditEntries: [] }
         await atomicWriteJson(dataFile, initial)
         document = initial
       }
       return document
-    })()
+    })
     try { return await initialization } catch (error) { initialization = null; throw error }
-  }
-
-  function enqueue(operation) {
-    const result = writeQueue.then(operation, operation)
-    writeQueue = result.catch(() => {})
-    return result
   }
 
   return {
@@ -127,8 +132,8 @@ export function createSettingsRuntimeRepository({ dataFile }) {
       return snapshot(current.settings)
     },
     async updateSettingsSection(section, next, actor = {}) {
-      return enqueue(async () => {
-        const current = await load()
+      return withRuntimeFileMutex(dataFile, async () => {
+        const current = await readLatest() || { schemaVersion: SETTINGS_SCHEMA_VERSION, revision: 0, updatedAt: null, settings: snapshot(settingsSeed), auditEntries: [] }
         validateSection(section, next)
         const before = snapshot(current.settings[section])
         const settings = { ...current.settings, [section]: snapshot(next) }
@@ -137,7 +142,13 @@ export function createSettingsRuntimeRepository({ dataFile }) {
           source: 'manual', module: 'settings', action: 'document_status_changed', entity: { type: 'settings_section', id: section },
           summary: `更新${section}设置`, before, after: settings[section],
         })
-        const nextDocument = { schemaVersion: SETTINGS_SCHEMA_VERSION, settings, auditEntries: [entry, ...current.auditEntries].slice(0, 500) }
+        const nextDocument = {
+          schemaVersion: SETTINGS_SCHEMA_VERSION,
+          revision: current.revision + 1,
+          updatedAt: new Date().toISOString(),
+          settings,
+          auditEntries: [entry, ...current.auditEntries].slice(0, 500),
+        }
         await atomicWriteJson(dataFile, nextDocument)
         document = nextDocument
         return { settings: snapshot(settings[section]), audit: snapshot(entry) }

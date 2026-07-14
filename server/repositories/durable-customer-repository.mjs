@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { withRuntimeFileMutex } from './runtime-file-mutex.mjs'
 
 const clone = value => structuredClone(value)
 const text = value => String(value ?? '').trim()
@@ -41,24 +42,35 @@ async function atomicWrite(file, document) {
 export function createDurableCustomerRepository({ dataFile }) {
   let document
 
-  async function load() {
-    if (document) return document
+  async function readLatest() {
+    let latest
     try {
-      document = JSON.parse(await readFile(dataFile, 'utf8'))
+      latest = JSON.parse(await readFile(dataFile, 'utf8'))
     } catch (error) {
       if (error.code !== 'ENOENT') throw error
-      document = emptyCustomerRuntime()
+      latest = emptyCustomerRuntime()
     }
-    document = { ...emptyCustomerRuntime(), ...document, initialized: true }
-    if (!Array.isArray(document.customers)) document.customers = []
-    if (!Array.isArray(document.auditEvents)) document.auditEvents = []
+    latest = { ...emptyCustomerRuntime(), ...latest, initialized: true }
+    if (!Array.isArray(latest.customers)) latest.customers = []
+    if (!Array.isArray(latest.auditEvents)) latest.auditEvents = []
+    return latest
+  }
+
+  async function load() {
+    if (!document) document = await readLatest()
     return document
   }
 
-  async function save() {
-    document.revision = Number(document.revision || 0) + 1
-    document.updatedAt = now()
-    await atomicWrite(dataFile, document)
+  async function transact(operation) {
+    return withRuntimeFileMutex(dataFile, async () => {
+      const working = clone(await readLatest())
+      const result = await operation(working)
+      working.revision = Number(working.revision || 0) + 1
+      working.updatedAt = now()
+      await atomicWrite(dataFile, working)
+      document = working
+      return clone(result)
+    })
   }
 
   const find = (doc, key) => doc.customers.find(row =>
@@ -96,7 +108,7 @@ export function createDurableCustomerRepository({ dataFile }) {
       return clone(find(await load(), decodeURIComponent(key)) || null)
     },
     async createCustomer(input, actor = 'system') {
-      const doc = await load()
+      return transact(doc => {
       const valid = validate(doc, input)
       const timestamp = now()
       const row = {
@@ -120,11 +132,11 @@ export function createDurableCustomerRepository({ dataFile }) {
       }
       doc.customers.push(row)
       doc.auditEvents.push({ id: `AUD-${randomUUID()}`, action: 'created', customerId: row.id, actor, timestamp, version: 1 })
-      await save()
-      return clone(row)
+      return row
+      })
     },
     async updateCustomer(key, input, actor = 'system') {
-      const doc = await load()
+      return transact(doc => {
       const row = find(doc, decodeURIComponent(key))
       if (!row) throw customerError('CUSTOMER_NOT_FOUND', '客户不存在', 404)
       if (Number(input.expectedVersion) !== row.version) {
@@ -152,8 +164,8 @@ export function createDurableCustomerRepository({ dataFile }) {
         timestamp: row.updatedAt,
         version: row.version,
       })
-      await save()
-      return clone(row)
+      return row
+      })
     },
     async activateCustomer(key, expectedVersion, actor) {
       return api.updateCustomer(key, { status: 'active', expectedVersion }, actor)

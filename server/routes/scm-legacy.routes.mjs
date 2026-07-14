@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { loadEnv } from '../config/env.mjs'
 import { createJsonDb } from '../repositories/json-db.mjs'
 import { createRepositoryRegistry, getPersistenceMode } from '../repositories/adapter-registry.mjs'
+import { runtimeFileMutexLimitations } from '../repositories/runtime-file-mutex.mjs'
 import { contentTypeFor, readBody, send, sendText } from '../utils/http.mjs'
 import { sendInternalServerError } from '../utils/safe-errors.mjs'
 import { createLocalSession, createLocalSessionSecret, issueLocalSessionToken, resolveRequestIdentity } from '../domain/local-signed-session.mjs'
@@ -933,6 +934,7 @@ export function createScmServer() {
         dataMode: dataMode.mode,
         readsDemoData: dataMode.readsDemoData,
         persistenceMode,
+        runtimeWriteCoordination: runtimeFileMutexLimitations,
         identityMode: 'local_signed_session',
         identityProvider: 'not_production_identity_provider',
         runtimeAdapters: {

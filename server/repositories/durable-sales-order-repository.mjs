@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { withRuntimeFileMutex } from './runtime-file-mutex.mjs'
 
 const clone = value => structuredClone(value)
 const text = value => String(value ?? '').trim()
@@ -48,14 +49,14 @@ function summary(orders) {
 
 export function createDurableSalesOrderRepository({ dataFile }) {
   let document
-  async function load() {
-    if (document) return document
-    try { document = JSON.parse(await readFile(dataFile, 'utf8')) }
-    catch (error) { if (error.code !== 'ENOENT') throw error; document = emptySalesRuntime() }
-    document = { ...emptySalesRuntime(), ...document, initialized: true }
-    return document
+  async function readLatest() {
+    let latest
+    try { latest = JSON.parse(await readFile(dataFile, 'utf8')) }
+    catch (error) { if (error.code !== 'ENOENT') throw error; latest = emptySalesRuntime() }
+    return { ...emptySalesRuntime(), ...latest, initialized: true }
   }
-  async function save() { document.revision = Number(document.revision || 0) + 1; document.updatedAt = new Date().toISOString(); await atomicWrite(dataFile, document) }
+  async function load() { if (!document) document = await readLatest(); return document }
+  async function transact(operation) { return withRuntimeFileMutex(dataFile, async () => { const working = clone(await readLatest()); const result = await operation(working); working.revision = Number(working.revision || 0) + 1; working.updatedAt = new Date().toISOString(); await atomicWrite(dataFile, working); document = working; return clone(result) }) }
   return {
     mode: 'json', adapter: 'durable-sales-order-runtime-v1', _dataFile: dataFile,
     async listOrders(filters = {}) {
@@ -65,11 +66,12 @@ export function createDurableSalesOrderRepository({ dataFile }) {
     async getOrder(key) { return clone((await load()).orders.find(row => row.salesOrderId === decodeURIComponent(key)) || null) },
     async getSummary() { return summary((await load()).orders) },
     async upsertOrder(input) {
-      const doc = await load(); const id = text(input.salesOrderId || input.id)
-      if (!id) { const error = new Error('客户订单号必填'); Object.assign(error, { status: 400, code: 'SALES_ORDER_ID_REQUIRED' }); throw error }
-      const index = doc.orders.findIndex(row => row.salesOrderId === id); const row = normalize({ ...input, salesOrderId: id }, index >= 0 ? doc.orders[index] : {})
-      if (index >= 0) doc.orders[index] = row; else doc.orders.unshift(row)
-      await save(); return clone(row)
+      return transact(doc => { const id = text(input.salesOrderId || input.id)
+        if (!id) { const error = new Error('客户订单号必填'); Object.assign(error, { status: 400, code: 'SALES_ORDER_ID_REQUIRED' }); throw error }
+        const index = doc.orders.findIndex(row => row.salesOrderId === id); const row = normalize({ ...input, salesOrderId: id }, index >= 0 ? doc.orders[index] : {})
+        if (index >= 0) doc.orders[index] = row; else doc.orders.unshift(row)
+        return row
+      })
     },
   }
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { withRuntimeFileMutex } from './runtime-file-mutex.mjs'
 
 const now = () => new Date().toISOString()
 const clone = value => structuredClone(value)
@@ -57,22 +58,32 @@ const selector = (supplier, relationship) => ({
 export function createDurableSupplierRepository({ dataFile }) {
   let document
 
-  async function load() {
-    if (document) return document
+  async function readLatest() {
+    let latest
     try {
-      document = JSON.parse(await readFile(dataFile, 'utf8'))
+      latest = JSON.parse(await readFile(dataFile, 'utf8'))
     } catch (error) {
       if (error.code !== 'ENOENT') throw error
-      document = emptySupplierRuntime()
+      latest = emptySupplierRuntime()
     }
-    document = { ...emptySupplierRuntime(), ...document, initialized: true }
+    return { ...emptySupplierRuntime(), ...latest, initialized: true }
+  }
+
+  async function load() {
+    if (!document) document = await readLatest()
     return document
   }
 
-  async function save() {
-    document.revision = Number(document.revision || 0) + 1
-    document.updatedAt = now()
-    await atomicWrite(dataFile, document)
+  async function transact(operation) {
+    return withRuntimeFileMutex(dataFile, async () => {
+      const working = clone(await readLatest())
+      const result = await operation(working)
+      working.revision = Number(working.revision || 0) + 1
+      working.updatedAt = now()
+      await atomicWrite(dataFile, working)
+      document = working
+      return clone(result)
+    })
   }
 
   const findSupplier = (doc, key) => doc.suppliers.find(row =>
@@ -142,7 +153,7 @@ export function createDurableSupplierRepository({ dataFile }) {
     },
 
     async createSupplier(input, actor) {
-      const doc = await load()
+      return transact(doc => {
       const valid = validateSupplier(doc, input)
       const timestamp = now()
       const row = {
@@ -181,12 +192,12 @@ export function createDurableSupplierRepository({ dataFile }) {
       }
       doc.suppliers.push(row)
       doc.auditEvents.push({ id: `AUD-${randomUUID()}`, action: 'created', supplierId: row.id, actor, timestamp, version: 1 })
-      await save()
-      return clone(sensitive(row))
+      return sensitive(row)
+      })
     },
 
     async updateSupplier(key, input, actor) {
-      const doc = await load()
+      return transact(doc => {
       const row = findSupplier(doc, decodeURIComponent(key))
       if (!row) fail('SUPPLIER_NOT_FOUND', '供应商不存在', 404)
       if (Number(input.expectedVersion) !== row.version) fail('VERSION_CONFLICT', '供应商已被其他用户更新', 409)
@@ -209,8 +220,8 @@ export function createDurableSupplierRepository({ dataFile }) {
         version: row.version,
         bankDetailsChanged: before.bankAccountNumber !== row.bankAccountNumber,
       })
-      await save()
-      return clone(sensitive(row))
+      return sensitive(row)
+      })
     },
 
     async selectSuppliers(filters = {}) {
@@ -238,7 +249,7 @@ export function createDurableSupplierRepository({ dataFile }) {
     },
 
     async createItemSupplier(itemId, input, actor, item) {
-      const doc = await load()
+      return transact(doc => {
       const supplier = findSupplier(doc, input.supplierId)
       if (!supplier) fail('SUPPLIER_NOT_FOUND', '供应商不存在', 404)
       if (doc.itemSupplierRelationships.some(row => row.itemId === itemId && row.supplierId === supplier.id)) {
@@ -270,12 +281,12 @@ export function createDurableSupplierRepository({ dataFile }) {
       }
       doc.itemSupplierRelationships.push(row)
       doc.auditEvents.push({ id: `AUD-${randomUUID()}`, action: 'item_relationship_added', supplierId: supplier.id, itemId, relationshipId: row.relationshipId, actor, timestamp })
-      await save()
-      return clone(row)
+      return row
+      })
     },
 
     async updateItemSupplier(itemId, relationshipId, input, actor, item) {
-      const doc = await load()
+      return transact(doc => {
       const row = doc.itemSupplierRelationships.find(candidate => candidate.itemId === itemId && candidate.relationshipId === relationshipId)
       if (!row) fail('RELATIONSHIP_NOT_FOUND', 'SKU–供应商关系不存在', 404)
       if (Number(input.expectedVersion) !== row.version) fail('VERSION_CONFLICT', '关系已被其他用户更新', 409)
@@ -290,8 +301,8 @@ export function createDurableSupplierRepository({ dataFile }) {
       row.updatedBy = actor
       row.updatedAt = now()
       doc.auditEvents.push({ id: `AUD-${randomUUID()}`, action: 'item_relationship_updated', supplierId: row.supplierId, itemId, relationshipId, actor, timestamp: row.updatedAt })
-      await save()
-      return clone(row)
+      return row
+      })
     },
 
     async approvedSuppliersForItem(itemId) {
