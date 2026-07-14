@@ -45,7 +45,11 @@ function value(id, all, inventory) {
   if (id === 'open_sales_demand') return all.sales_orders.reduce((total, row) => total + Math.max(0, row.quantity - row.fulfilled), 0)
   if (id === 'purchase_order_amount') return sum(all.purchase_orders, 'amount')
   if (id === 'open_po_count') return all.purchase_orders.filter(row => !['closed', 'cancelled', 'completed'].includes(row.status)).length
-  if (id === 'inventory_on_hand') return inventory.availability.every(row => row.onHand !== null) ? inventory.availability.reduce((total, row) => total + row.onHand, 0) : 0
+  if (id === 'inventory_on_hand') {
+    if (!inventory.availability.length) return 0
+    if (inventory.availability.some(row => row.onHand === null)) return null
+    return inventory.availability.reduce((total, row) => total + row.onHand, 0)
+  }
   if (id === 'inventory_risk_sku') return inventory.availability.filter(row => row.shortage !== null && row.shortage > 0).length
   if (id === 'invoice_amount') return sum(all.supplier_invoices, 'amount')
   if (id === 'supplier_count') return all.suppliers.length
@@ -55,7 +59,10 @@ function value(id, all, inventory) {
 function metric(id, all, inventory) {
   const [label, subject, unit, description, drilldownPath] = metricDefinitions[id]
   const currentValue = value(id, all, inventory)
-  return { id, label, subject, unit, format: unit, aggregation: description, numerator: description, denominator: null, dateField: 'date', applicableFilters: ['from', 'to', 'supplier', 'customer', 'currency'], drilldownPath, emptyValue: 0, version: '3.0.0-runtime', description, value: currentValue, currentValue, comparisonValue: null, comparisonDelta: null, comparisonRate: null, comparisonDirection: 'flat', comparisonLabel: '未比较', comparisonUnit: unit, calculationLabel: description, generatedAt: new Date().toISOString() }
+  const incomplete = id === 'inventory_on_hand' && currentValue === null
+  const dataStatus = incomplete ? 'incomplete' : id === 'inventory_on_hand' && !inventory.availability.length ? 'empty' : 'complete'
+  const limitations = incomplete ? ['inventory_on_hand_incomplete'] : []
+  return { id, label, subject, unit, format: unit, aggregation: description, numerator: description, denominator: null, dateField: 'date', applicableFilters: ['from', 'to', 'supplier', 'customer', 'currency'], drilldownPath, emptyValue: 0, version: '3.0.0-runtime', description, value: currentValue, currentValue, dataStatus, limitations, comparisonValue: null, comparisonDelta: null, comparisonRate: null, comparisonDirection: 'flat', comparisonLabel: incomplete ? '数据不足' : '未比较', comparisonUnit: unit, calculationLabel: description, generatedAt: new Date().toISOString() }
 }
 
 export function buildRuntimeGovernedReport(context, input = {}) {
@@ -66,10 +73,14 @@ export function buildRuntimeGovernedReport(context, input = {}) {
   const metricIds = array(input.measures).filter(id => metricDefinitions[id]).length ? input.measures.filter(id => metricDefinitions[id]) : dashboardMetrics[query.subject]
   const primaryKey = query.subject === 'sales' ? 'sales_orders' : query.subject === 'inventory' ? 'inventory_balances' : query.subject === 'finance' ? 'supplier_invoices' : query.subject === 'suppliers' ? 'suppliers' : 'purchase_orders'
   const details = all[primaryKey].slice(0, query.limit)
-  const chartData = details.map(row => ({ name: text(row.id), value: number(row.amount ?? row.quantity ?? 1) }))
+  const chartData = details.flatMap(row => {
+    const rawValue = row.amount ?? row.quantity
+    if (query.subject === 'inventory' && (rawValue === null || rawValue === undefined || !Number.isFinite(Number(rawValue)))) return []
+    return [{ name: text(row.id), value: rawValue === null || rawValue === undefined ? 1 : Number(rawValue) }]
+  })
   const charts = [{ id: `${query.subject}_runtime_records`, title: '当前范围真实记录', type: 'bar', data: chartData, categoryKey: 'name', valueKey: 'value', valueFormat: 'number', unit: 'number', legend: false, tooltip: true, colors: ['#2563eb'], drilldownPath: query.subject === 'sales' ? '/app/sales/orders' : query.subject === 'inventory' ? '/app/inventory' : query.subject === 'finance' ? '/app/finance/invoices' : query.subject === 'suppliers' ? '/app/master-data/suppliers' : '/app/procurement/orders', crossFilter: null, emptyState: '当前筛选范围暂无真实 runtime 记录。' }]
   const columns = [...new Set(details.flatMap(row => Object.keys(row)))].map(key => ({ key, label: ({ id: '业务编号', date: '业务日期', supplier: '供应商', customer: '客户', amount: '金额', quantity: '数量', status: '状态', currency: '币种', sku: 'SKU', available: '可用量', shortage: '缺口', availableToPromise: 'ATP' })[key] || key, type: ['amount'].includes(key) ? 'currency' : ['quantity', 'available', 'shortage', 'availableToPromise'].includes(key) ? 'number' : key === 'date' ? 'date' : key === 'id' ? 'business_link' : 'text', subject: primaryKey }))
-  const limitations = [...new Set([...array(context.dataLimitations), ...inventory.dataLimitations])]
+  const limitations = [...new Set([...array(context.dataLimitations), ...inventory.dataLimitations, ...(inventory.availability.length && inventory.availability.some(row => row.onHand === null) ? ['inventory_on_hand_incomplete'] : [])])]
   const distinct = values => [...new Set(values.map(text).filter(Boolean))]
   return { query, generatedAt: new Date().toISOString(), dataScope: { label: '当前工作区 runtime 数据', company: '—', currency: query.currency || '全部币种', from: query.from || '—', to: query.to || '—', activeFilterCount: ['from', 'to', 'supplier', 'customer', 'currency', 'status'].filter(key => query[key]).length, sourceLabel: 'BusinessReadContext', completenessLabel: details.length ? `已读取 ${details.length} 条真实记录` : '当前范围无真实业务记录', filterOptions: { companies: [], suppliers: distinct(array(context.suppliers).map(row => row.supplierName || row.name)), customers: distinct(array(context.customers).map(row => row.name || row.customerName)), warehouses: distinct(array(context.warehouses).map(row => row.name || row.warehouseName)), categories: distinct(array(context.items).map(row => row.category || row.categoryName)), currencies: distinct([...array(context.purchaseOrders), ...array(context.salesOrders), ...array(context.supplierInvoices)].map(row => row.currency || row.lines?.[0]?.currency)) } }, kpis: metricIds.map(id => metric(id, all, inventory)), charts, rankings: [], details, columnDefinitions: columns, warnings: limitations, limitations, drilldowns: metricIds.map(id => ({ metricId: id, path: metricDefinitions[id][4] })), exportRows: details, metricDefinitions: metricIds.map(id => metric(id, all, inventory)) }
 }
