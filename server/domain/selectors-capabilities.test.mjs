@@ -16,9 +16,9 @@ const repository = {
   listTaxCodes: async () => [{ id: 'VAT13', code: 'VAT13', label: '增值税 13%', rate: 0.13, status: 'active' }],
 }
 
-async function call(handler, path) {
+async function call(handler, path, extra = {}) {
   let response
-  const ctx = { req: { method: 'GET', headers: {} }, res: {}, url: new URL(path, 'http://local'), repositories: { masterData: repository }, db: {}, send(_res, status, payload) { response = { status, payload } } }
+  const ctx = { req: { method: 'GET', headers: {} }, res: {}, url: new URL(path, 'http://local'), repositories: { masterData: repository }, db: {}, ...extra, send(_res, status, payload) { response = { status, payload } } }
   assert.equal(await handler(ctx), true)
   return response
 }
@@ -41,4 +41,13 @@ test('capability registry hides preview and unavailable modules by default', asy
   assert.equal(byId.imports.maturity, 'beta')
   assert.equal(byId.forecast.enabled, false)
   assert.equal(byId.finance.enabled, false)
+  assert.equal(byId['receiving-posting'].enabled, false)
+  assert.equal(byId['receiving-posting'].databaseOnly, true)
+  assert.equal(byId['outbound-posting'].maturity, 'unavailable')
+  assert.equal(byId['stock-transfer'].maturity, 'unavailable')
+
+  const databaseEnabled = await call(handleCapabilitiesRoute, '/api/capabilities', { env: { FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: 'true' } })
+  const enabledById = Object.fromEntries(databaseEnabled.payload.capabilities.map(row => [row.id, row]))
+  assert.equal(enabledById['receiving-posting'].enabled, true)
+  assert.equal(enabledById['receiving-reversal'].enabled, true)
 })

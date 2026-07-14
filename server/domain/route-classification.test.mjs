@@ -21,6 +21,8 @@ test('route classification covers read preview legacy mutation and diagnostics r
   assert.equal(classifyRoute('POST', '/api/action-drafts/preview').classification, ROUTE_CLASSES.previewOnly)
   assert.equal(classifyRoute('POST', '/api/action-drafts').classification, ROUTE_CLASSES.controlledPersistence)
   assert.equal(classifyRoute('POST', '/api/action-drafts/save').databaseMode, 'allowed-db-persistence')
+  assert.equal(classifyRoute('POST', '/api/procurement/receiving/GRN-1/post').classification, ROUTE_CLASSES.controlledPersistence)
+  assert.equal(classifyRoute('POST', '/api/procurement/receiving/GRN-1/reverse').databaseMode, 'allowed-db-persistence')
   assert.equal(classifyRoute('GET', '/api/mrp-plan').classification, ROUTE_CLASSES.readOnly)
   assert.equal(classifyRoute('GET', '/api/mrp-plan').writesJson, false)
   assert.equal(classifyRoute('GET', '/api/sop-cycle').classification, ROUTE_CLASSES.readOnly)
@@ -33,7 +35,6 @@ test('route classification covers read preview legacy mutation and diagnostics r
 
 test('database mode blocks legacy mutation routes but allows read and preview routes', () => {
   const blocked = [
-    ['POST', '/api/auth/login'],
     ['POST', '/api/forecast-plans'],
     ['POST', '/api/sop-cycle'],
     ['POST', '/api/market-prices/refresh'],
@@ -65,6 +66,9 @@ test('database mode blocks legacy mutation routes but allows read and preview ro
     ['GET', '/api/mrp-plan'],
     ['GET', '/api/sop-cycle'],
     ['POST', '/api/action-drafts/preview'],
+    ['POST', '/api/auth/login'],
+    ['POST', '/api/procurement/receiving/GRN-1/post'],
+    ['POST', '/api/procurement/receiving/GRN-1/reverse'],
     ['POST', '/api/ai/chat'],
   ]
 

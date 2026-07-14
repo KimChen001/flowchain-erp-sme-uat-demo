@@ -1,0 +1,124 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { calculateMovementBalance, createReceivingPostingCommandService } from './receiving-posting-command-service.mjs'
+import { cleanupReceivingScenario, expectCommandError, seedReceivingScenario, withLiveReceivingDatabase } from './receiving-posting-live-test-helpers.mjs'
+
+test('inventory balance rebuild uses quantityIn - quantityOut + adjustmentQty', () => {
+  assert.equal(calculateMovementBalance([
+    { quantityIn: '10', quantityOut: '0', adjustmentQty: '0' },
+    { quantityIn: '0', quantityOut: '3', adjustmentQty: '0' },
+    { quantityIn: '0', quantityOut: '0', adjustmentQty: '-1.5' },
+  ]), '5.5000')
+})
+
+test('database receiving posting is atomic, idempotent, tenant-scoped, and concurrency-safe', async (t) => {
+  await withLiveReceivingDatabase(t, async ({ prisma }) => {
+    await t.test('partial posting creates immutable movement, balance, PO progress, GRN state, audit, and reconciliation', async () => {
+      const scenario = await seedReceivingScenario(prisma)
+      try {
+        const service = createReceivingPostingCommandService({ prisma })
+        const result = await service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'post-partial' }, { identity: scenario.actor })
+        assert.equal(result.receivingDocument.postingStatus, 'posted')
+        assert.equal(result.purchaseOrder.status, 'partially_received')
+        assert.equal(result.movements.length, 1)
+        assert.equal(result.movements[0].movementType, 'receipt_posting')
+        assert.equal(result.affectedBalances[0].onHandQuantity, '4.0000')
+        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId, action: 'receiving_posted' } }), 1)
+        const reconciliation = await service.reconcileInventoryBalance({ tenantId: scenario.tenantId, sku: scenario.items[0].sku, warehouseId: scenario.warehouseId, location: 'A-01' })
+        assert.equal(reconciliation.calculatedOnHandQuantity, '4.0000')
+        assert.equal(reconciliation.matches, true)
+      } finally {
+        await cleanupReceivingScenario(prisma, scenario)
+      }
+    })
+
+    await t.test('all PO lines completed produces fully_received', async () => {
+      const scenario = await seedReceivingScenario(prisma, { ordered: ['5', '7'], accepted: ['5', '7'] })
+      try {
+        const result = await createReceivingPostingCommandService({ prisma }).postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'post-full' }, { identity: scenario.actor })
+        assert.equal(result.purchaseOrder.status, 'fully_received')
+        assert.deepEqual(result.purchaseOrder.lines.map((line) => line.receivedQuantity), ['5.0000', '7.0000'])
+      } finally {
+        await cleanupReceivingScenario(prisma, scenario)
+      }
+    })
+
+    await t.test('over-receipt fails without movement, balance, PO, GRN, audit, or successful idempotency residue', async () => {
+      const scenario = await seedReceivingScenario(prisma, { ordered: ['10'], accepted: ['12'] })
+      try {
+        const service = createReceivingPostingCommandService({ prisma })
+        await expectCommandError(service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'post-over' }, { identity: scenario.actor }), 'RECEIVING_OVER_RECEIPT')
+        assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenario.tenantId } }), 0)
+        assert.equal(await prisma.inventoryBalance.count({ where: { tenantId: scenario.tenantId } }), 0)
+        assert.equal((await prisma.purchaseOrderLine.findUnique({ where: { id: scenario.poLines[0].id } })).receivedQuantity.toString(), '0')
+        assert.equal((await prisma.receivingDocument.findUnique({ where: { id: scenario.receivingDocumentId } })).postingStatus, 'unposted')
+        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId } }), 0)
+        assert.equal(await prisma.businessCommandExecution.count({ where: { tenantId: scenario.tenantId } }), 0)
+      } finally {
+        await cleanupReceivingScenario(prisma, scenario)
+      }
+    })
+
+    await t.test('injected failure rolls back the complete transaction', async () => {
+      const scenario = await seedReceivingScenario(prisma)
+      try {
+        const service = createReceivingPostingCommandService({ prisma, faultInjector: async (point) => { if (point === 'after_movements') throw new Error('injected transaction failure') } })
+        await assert.rejects(service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'post-fail' }, { identity: scenario.actor }), /injected transaction failure/)
+        assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenario.tenantId } }), 0)
+        assert.equal(await prisma.inventoryBalance.count({ where: { tenantId: scenario.tenantId } }), 0)
+        assert.equal((await prisma.purchaseOrderLine.findUnique({ where: { id: scenario.poLines[0].id } })).receivedQuantity.toString(), '0')
+        assert.equal((await prisma.receivingDocument.findUnique({ where: { id: scenario.receivingDocumentId } })).postingStatus, 'unposted')
+        assert.equal(await prisma.businessCommandExecution.count({ where: { tenantId: scenario.tenantId } }), 0)
+      } finally {
+        await cleanupReceivingScenario(prisma, scenario)
+      }
+    })
+
+    await t.test('same idempotency payload replays once and changed payload returns 409', async () => {
+      const scenario = await seedReceivingScenario(prisma)
+      try {
+        const service = createReceivingPostingCommandService({ prisma })
+        const first = await service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'post-idem', expectedVersion: 0 }, { identity: scenario.actor })
+        const replay = await service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'post-idem', expectedVersion: 0 }, { identity: scenario.actor })
+        assert.equal(first.idempotentReplay, false)
+        assert.equal(replay.idempotentReplay, true)
+        await expectCommandError(service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'post-idem', expectedVersion: 1 }, { identity: scenario.actor }), 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD')
+        assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenario.tenantId } }), 1)
+        assert.equal((await prisma.inventoryBalance.findFirst({ where: { tenantId: scenario.tenantId } })).onHandQuantity.toString(), '4')
+      } finally {
+        await cleanupReceivingScenario(prisma, scenario)
+      }
+    })
+
+    await t.test('two concurrent posts commit inventory at most once', async () => {
+      const scenario = await seedReceivingScenario(prisma)
+      try {
+        const service = createReceivingPostingCommandService({ prisma })
+        const attempts = await Promise.allSettled([
+          service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'post-concurrent-a' }, { identity: scenario.actor }),
+          service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'post-concurrent-b' }, { identity: scenario.actor }),
+        ])
+        assert.equal(attempts.filter((attempt) => attempt.status === 'fulfilled').length, 1)
+        assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenario.tenantId, movementType: 'receipt_posting' } }), 1)
+        assert.equal((await prisma.inventoryBalance.findFirst({ where: { tenantId: scenario.tenantId } })).onHandQuantity.toString(), '4')
+        assert.equal((await prisma.purchaseOrderLine.findUnique({ where: { id: scenario.poLines[0].id } })).receivedQuantity.toString(), '4')
+      } finally {
+        await cleanupReceivingScenario(prisma, scenario)
+      }
+    })
+
+    await t.test('tenant A cannot post tenant B receiving even with forged command payload fields', async () => {
+      const scenarioA = await seedReceivingScenario(prisma)
+      const scenarioB = await seedReceivingScenario(prisma)
+      try {
+        const service = createReceivingPostingCommandService({ prisma })
+        await expectCommandError(service.postReceiving({ receivingDocumentId: scenarioB.receivingDocumentId, idempotencyKey: 'cross-tenant', tenantId: scenarioB.tenantId }, { identity: scenarioA.actor }), 'RECEIVING_NOT_FOUND')
+        assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenarioB.tenantId } }), 0)
+        assert.equal((await prisma.receivingDocument.findUnique({ where: { id: scenarioB.receivingDocumentId } })).postingStatus, 'unposted')
+      } finally {
+        await cleanupReceivingScenario(prisma, scenarioA)
+        await cleanupReceivingScenario(prisma, scenarioB)
+      }
+    })
+  })
+})
