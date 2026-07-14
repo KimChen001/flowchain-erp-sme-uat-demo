@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ApiError, apiJson } from "../../lib/api-client";
 import { A, Card, Field, inputStyle } from "../../components/ui";
 import { EntityLink } from "../../components/business/EntityLink";
+import { tableLinkClass } from "../../components/ui/workbenchTable";
 
 type Item = {
   itemId: string;
@@ -803,7 +804,7 @@ export default function CanonicalProcurementPanel({
                 {rows.map((pr) => (
                   <tr key={pr.id} className="border-t">
                     <td className="p-3">
-                      <EntityLink kind="purchase_request" id={pr.id}>
+                      <EntityLink kind="purchase_request" id={pr.id} className={tableLinkClass}>
                         {pr.id}
                       </EntityLink>
                     </td>

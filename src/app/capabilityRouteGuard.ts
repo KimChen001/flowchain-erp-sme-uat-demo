@@ -37,11 +37,19 @@ const localCapabilityFallback: Record<string, ModuleCapability> = Object.fromEnt
   writeReady: false,
 } as ModuleCapability]));
 
-export function readExperimentalModuleIds(storage: Pick<Storage, "getItem"> = localStorage) {
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export function readExperimentalModuleIds(storage: Pick<Storage, "getItem"> = localStorage): Set<string> {
   try {
-    const saved = JSON.parse(storage.getItem(EXPERIMENTAL_MODULES_KEY) || "[]");
-    const ids = Array.isArray(saved) ? saved : Array.isArray(saved?.enabled) ? saved.enabled : [];
-    return new Set(ids.filter((id): id is string => typeof id === "string"));
+    const saved: unknown = JSON.parse(storage.getItem(EXPERIMENTAL_MODULES_KEY) || "[]");
+    const ids: unknown[] = Array.isArray(saved)
+      ? saved
+      : isUnknownRecord(saved) && Array.isArray(saved.enabled)
+        ? saved.enabled
+        : [];
+    return new Set<string>(ids.filter((id): id is string => typeof id === "string"));
   } catch {
     return new Set<string>();
   }

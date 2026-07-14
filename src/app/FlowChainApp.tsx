@@ -381,7 +381,7 @@ export default function FlowChainApp() {
   const [authToken, setAuthToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [capabilities, setCapabilities] = useState<Record<string, ModuleCapability>>({});
   const [capabilityLoadState, setCapabilityLoadState] = useState<CapabilityLoadState>("loading");
-  const [experimentalModuleIds, setExperimentalModuleIds] = useState(() => readExperimentalModuleIds());
+  const [experimentalModuleIds, setExperimentalModuleIds] = useState<Set<string>>(() => readExperimentalModuleIds());
   const [enabledModuleIds, setEnabledModuleIds] = useState<Set<string> | null>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("flowchain:module-settings") || "null");

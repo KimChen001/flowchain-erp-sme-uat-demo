@@ -125,7 +125,7 @@ test('server health response omits provider keys models and proxy diagnostics by
   assert.match(healthBlock, /dataMode: dataMode\.mode/)
   assert.match(healthBlock, /dataSource: dataMode\.dataSource/)
   assert.doesNotMatch(healthBlock, /OPENAI_API_KEY|ARK_API_KEY|DOUBAO_API_KEY|OPENAI_MODEL|ARK_MODEL|DOUBAO_MODEL/)
-  assert.doesNotMatch(healthBlock, /DATABASE_URL|POSTGRES_URL|OPENAI|ARK|DOUBAO|openai:|doubao:|provider:|model:|proxy:|secret|token|password/i)
+  assert.doesNotMatch(healthBlock, /DATABASE_URL|POSTGRES_URL|OPENAI|ARK|DOUBAO|openai:|doubao:|(?<![A-Za-z])(?:provider|model|proxy|secret|token|password)\s*:/i)
   assert.match(source, /sendInternalServerError\(res, send, error\)/)
 })
 

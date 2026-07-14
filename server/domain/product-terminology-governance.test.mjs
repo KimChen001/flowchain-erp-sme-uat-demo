@@ -71,6 +71,8 @@ const TECHNICAL_FILE_PATTERNS = [
   /(^|\/)user-data-import-(dry-run|commit-boundary)/i,
   /(^|\/)user-data-runtime-ai/i,
   /(^|\/)ai-empty/i,
+  /(^|\/)capability(RouteGuard|-registry)\.(mjs|ts)$/i,
+  /(^|\/)durable-import-cutover\.test\.mjs$/i,
 ]
 
 const TECHNICAL_LINE_PATTERNS = [

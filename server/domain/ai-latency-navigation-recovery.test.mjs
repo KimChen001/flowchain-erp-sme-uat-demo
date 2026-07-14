@@ -58,7 +58,7 @@ test('PO detail and draft review shell use shared recovery actions', () => {
 test('procurement PR RFQ and GRN details expose canonical recovery paths', () => {
   assert.match(purchaseRequestsSource, /返回采购申请列表/)
   assert.match(purchaseRequestsSource, /"procurement:orders"/)
-  assert.match(purchaseRequestsSource, /entityType:"purchase_order"/)
+  assert.match(purchaseRequestsSource, /entityType:\s*"purchase_order"/)
   assert.match(rfqSource, /<RecoveryActions/)
   assert.match(rfqSource, /返回采购工作台/)
   assert.match(receivingSource, /<RecoveryActions/)
