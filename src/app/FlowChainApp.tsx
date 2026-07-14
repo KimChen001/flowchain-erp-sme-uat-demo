@@ -353,7 +353,7 @@ export default function FlowChainApp() {
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    apiJson<{ commitSha: string; branch: string; runtimeMode: string; worktree?: string }>("/api/health").then(identity => {
+    apiJson<{ commitSha: string; branch: string; runtimeMode: string }>("/api/health").then(identity => {
       document.documentElement.dataset.flowchainCommit = identity.commitSha;
       document.documentElement.dataset.flowchainBranch = identity.branch;
       console.info("FlowChain build identity", identity);

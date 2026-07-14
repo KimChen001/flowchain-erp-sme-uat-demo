@@ -100,7 +100,6 @@ const buildIdentity = Object.freeze({
   commitSha: process.env.FLOWCHAIN_COMMIT_SHA || gitValue(['rev-parse', 'HEAD']),
   branch: process.env.FLOWCHAIN_BRANCH || gitValue(['branch', '--show-current'], 'detached'),
   runtimeMode: process.env.NODE_ENV === 'production' ? 'production' : 'local-dev',
-  worktree: root,
 })
 
 await loadEnv(root)
@@ -928,15 +927,11 @@ export function createScmServer() {
       return send(res, 200, {
         ok: true,
         service: 'flowchain-scm-api',
-        mode: 'local-dev',
         ...buildIdentity,
-        port,
         dataMode: dataMode.mode,
         readsDemoData: dataMode.readsDemoData,
         persistenceMode,
         runtimeWriteCoordination: runtimeFileMutexLimitations,
-        identityMode: 'local_signed_session',
-        identityProvider: 'not_production_identity_provider',
         runtimeAdapters: {
           masterData: repositories.masterData?.adapter || 'unavailable',
           items: repositories.masterData?.itemRuntime?.adapter || 'unavailable',
@@ -947,18 +942,6 @@ export function createScmServer() {
           procurement: repositories.procurementRuntime?.adapter || 'unavailable',
         },
         timestamp: new Date().toISOString(),
-        diagnostics: {
-          healthCheck: '/api/health',
-          aiChat: '/api/ai/chat',
-          dataMode: dataMode.mode,
-          dataSource: dataMode.dataSource,
-          readsDemoData: dataMode.readsDemoData,
-          runtimeDataSources: { inventory: 'inventory-runtime', salesOrders: 'sales-orders-runtime', suppliers: 'supplier-master-runtime', items: 'item-master-runtime', procurement: 'procurement-runtime' },
-        },
-        purchaseOrders: db.purchaseOrders.length,
-        purchaseRequests: ensurePurchaseRequests(db).length,
-        inventoryMovements: ensureInventoryMovements(db).length,
-        receivingDocs: db.receivingDocs.length,
       })
     }
 
