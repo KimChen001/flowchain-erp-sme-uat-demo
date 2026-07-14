@@ -1,5 +1,11 @@
-const capability = (id, maturity, readReady, writeReady, reason) => ({
-  id, enabled: maturity === 'stable' || maturity === 'beta', maturity, readReady, writeReady, reason,
+const capability = (id, maturity, readReady, writeReady, reason, options = {}) => ({
+  id,
+  enabled: options.requiresExplicitEnable ? false : maturity === 'stable' || maturity === 'beta',
+  maturity,
+  readReady,
+  writeReady,
+  reason,
+  ...options,
 })
 
 export const capabilityRegistry = [
@@ -8,6 +14,11 @@ export const capabilityRegistry = [
   capability('procurement', 'stable', true, true, 'Canonical PR and draft PO workflow'),
   capability('sales', 'stable', true, true, 'Durable sales order runtime'),
   capability('inventory', 'stable', true, true, 'Durable inventory balances and movements'),
+  capability('inventory-balance-adjustment', 'stable', true, true, 'Existing authoritative inventory adjustment behavior'),
+  capability('receiving-posting', 'beta', false, true, 'Database-only transactional receiving posting', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING' }),
+  capability('receiving-reversal', 'beta', false, true, 'Database-only transactional receiving reversal', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING' }),
+  capability('outbound-posting', 'unavailable', false, false, 'Formal sales outbound posting is not connected'),
+  capability('stock-transfer', 'unavailable', false, false, 'Formal stock transfer posting is not connected'),
   capability('finance', 'unavailable', false, false, 'Receipt, invoice, and settlement runtime is not fully connected'),
   capability('reports', 'stable', true, false, 'Authoritative runtime analytics'),
   capability('settings', 'beta', true, true, 'Local/UAT workspace settings'),
@@ -21,3 +32,16 @@ export const capabilityRegistry = [
 ]
 
 export const capabilityFor = id => capabilityRegistry.find(entry => entry.id === id)
+
+export function capabilityForEnvironment(id, env = process.env) {
+  const entry = capabilityFor(id)
+  if (!entry) return undefined
+  if (!entry.requiresExplicitEnable) return { ...entry }
+  const explicit = String(env[entry.environmentFlag] || '').trim().toLowerCase() === 'true'
+  const databaseMode = String(env.FLOWCHAIN_PERSISTENCE_MODE || '').trim().toLowerCase() === 'database'
+  return { ...entry, enabled: entry.maturity !== 'unavailable' && explicit && (!entry.databaseOnly || databaseMode) }
+}
+
+export function capabilityRegistryForEnvironment(env = process.env) {
+  return capabilityRegistry.map((entry) => capabilityForEnvironment(entry.id, env))
+}

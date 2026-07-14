@@ -961,15 +961,15 @@ export function createScmServer() {
       } catch (error) {
         return send(res, 400, { error: error.message })
       }
-      const session = createLocalSession(profile)
+      const session = createLocalSession(profile, { env: process.env })
       localSessions.set(session.sessionId, session)
       const token = issueLocalSessionToken(session, localSessionSecret)
-      return send(res, 200, { token, expiresAt: new Date(session.expiresAt).toISOString(), user: { id: session.userId, name: session.name, email: session.email, company: session.company, role: session.role } })
+      return send(res, 200, { token, expiresAt: new Date(session.expiresAt).toISOString(), user: { id: session.userId, name: session.name, email: session.email, company: session.company, role: session.role, tenantId: session.tenantId } })
     }
 
     if (req.method === 'GET' && url.pathname === '/api/auth/me') {
       if (!identity.authenticated || identity.source !== 'local_signed_session') return send(res, 401, { code: 'INVALID_SESSION', error: 'invalid or expired workspace session token' })
-      return send(res, 200, { id: identity.userId, name: identity.name, email: identity.email, role: identity.role, expiresAt: identity.expiresAt })
+      return send(res, 200, { id: identity.userId, name: identity.name, email: identity.email, role: identity.role, tenantId: identity.tenantId, expiresAt: identity.expiresAt })
     }
 
     if (req.method === 'GET' && url.pathname === '/api/forecast-plans') {

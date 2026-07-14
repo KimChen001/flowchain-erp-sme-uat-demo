@@ -1,3 +1,58 @@
+import { capabilityForEnvironment } from '../domain/capability-registry.mjs'
+import { authorizeMutation } from '../domain/mutation-authorization.mjs'
+import { createReceivingPostingCommandService, ReceivingCommandError } from '../domain/receiving-posting-command-service.mjs'
+import { getPrismaClient } from '../persistence/prisma-client.mjs'
+
+function sendCapabilityUnavailable(ctx, capabilityId) {
+  return ctx.send(ctx.res, 409, {
+    code: 'CAPABILITY_NOT_AVAILABLE',
+    message: `${capabilityId} requires database persistence and explicit server enablement.`,
+    capability: capabilityId,
+  })
+}
+
+async function commandService(ctx) {
+  if (ctx.receivingPostingService) return ctx.receivingPostingService
+  const prisma = await getPrismaClient(ctx.env || process.env)
+  return createReceivingPostingCommandService({ prisma })
+}
+
+async function handleFormalReceivingCommand(ctx) {
+  const match = ctx.url.pathname.match(/^\/api\/procurement\/receiving\/([^/]+)\/(post|reverse)$/)
+  if (ctx.req.method !== 'POST' || !match) return false
+  const receivingDocumentId = decodeURIComponent(match[1])
+  const operation = match[2]
+  const capabilityId = operation === 'post' ? 'receiving-posting' : 'receiving-reversal'
+  const capability = capabilityForEnvironment(capabilityId, ctx.env || process.env)
+  if (!capability?.enabled) {
+    sendCapabilityUnavailable(ctx, capabilityId)
+    return true
+  }
+  const authorization = authorizeMutation(ctx, {
+    allowedRoles: ['admin', 'manager'],
+    action: operation === 'post' ? 'post_receiving' : 'reverse_receiving',
+    resource: 'database-receiving',
+  })
+  if (authorization.blocked) return true
+  const body = await ctx.readBody(ctx.req)
+  const idempotencyKey = String(body.idempotencyKey || ctx.req.headers?.['idempotency-key'] || '').trim()
+  try {
+    const service = await commandService(ctx)
+    const result = operation === 'post'
+      ? await service.postReceiving({ receivingDocumentId, idempotencyKey, expectedVersion: body.expectedVersion }, { identity: authorization.identity })
+      : await service.reverseReceiving({ receivingDocumentId, idempotencyKey, reason: body.reason }, { identity: authorization.identity })
+    ctx.send(ctx.res, 200, result)
+  } catch (error) {
+    if (!(error instanceof ReceivingCommandError)) throw error
+    ctx.send(ctx.res, error.status || 400, {
+      code: error.code || 'RECEIVING_COMMAND_FAILED',
+      message: error.message,
+      ...(error.details ? { details: error.details } : {}),
+    })
+  }
+  return true
+}
+
 export async function handleReceivingRoute(ctx) {
   const {
     req, res, url, db, send, readBody, writeDb, event, todayLabel,
@@ -7,6 +62,8 @@ export async function handleReceivingRoute(ctx) {
     normalizePurchaseOrder, recordValidationBlocked,
     postedGrnProtectedChangeError, warehouseIdFor, toNumber,
   } = ctx
+
+  if (await handleFormalReceivingCommand(ctx)) return true
 
   if (req.method === 'GET' && url.pathname === '/api/receiving-docs') {
     normalizePurchaseOrders(db)
