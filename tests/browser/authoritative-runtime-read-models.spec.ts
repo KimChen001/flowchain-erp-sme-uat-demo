@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test'
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('scm-demo-token', 'runtime-read-model-gate')
-    localStorage.setItem('scm-demo-user', JSON.stringify({ id: 'runtime-reader', name: 'Runtime Reader', role: '供应链经理' }))
+    localStorage.setItem('flowchain:auth-token', 'runtime-read-model-gate')
+    localStorage.setItem('flowchain:current-user', JSON.stringify({ id: 'runtime-reader', name: 'Runtime Reader', role: '供应链经理' }))
   })
 })
 

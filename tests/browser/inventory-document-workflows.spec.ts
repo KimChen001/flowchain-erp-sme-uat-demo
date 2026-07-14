@@ -4,8 +4,8 @@ const ghostSku = /SKU-00412|SKU-00623|PO-2026-1287|GRN-202605-0418/;
 
 async function open(page: Page, path: string) {
   await page.addInitScript(() => {
-    localStorage.setItem("scm-demo-token", "inventory-doc-token");
-    localStorage.setItem("scm-demo-user", JSON.stringify({ id: "inventory-doc-user", name: "张磊", role: "供应链经理" }));
+    localStorage.setItem("flowchain:auth-token", "inventory-doc-token");
+    localStorage.setItem("flowchain:current-user", JSON.stringify({ id: "inventory-doc-user", name: "张磊", role: "供应链经理" }));
   });
   await page.goto(path);
   await expect(page.getByTestId("app-main")).toBeVisible();

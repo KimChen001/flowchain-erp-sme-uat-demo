@@ -16,8 +16,8 @@ const forbiddenTechnicalText =
 
 async function openLoggedInApp(page: Page) {
   await page.addInitScript((profile) => {
-    window.localStorage.setItem("scm-demo-token", "browser-ai-response-v2-token");
-    window.localStorage.setItem("scm-demo-user", JSON.stringify(profile));
+    window.localStorage.setItem("flowchain:auth-token", "browser-ai-response-v2-token");
+    window.localStorage.setItem("flowchain:current-user", JSON.stringify(profile));
   }, user);
   await page.goto("/");
   await page.waitForLoadState("domcontentloaded");

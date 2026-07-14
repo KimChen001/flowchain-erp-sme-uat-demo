@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-test.beforeEach(async({page})=>page.addInitScript(()=>{localStorage.setItem('scm-demo-token','detail');localStorage.setItem('scm-demo-user',JSON.stringify({id:'detail-user',name:'Detail User',role:'采购经理'}))}))
+test.beforeEach(async({page})=>page.addInitScript(()=>{localStorage.setItem('flowchain:auth-token','detail');localStorage.setItem('flowchain:current-user',JSON.stringify({id:'detail-user',name:'Detail User',role:'采购经理'}))}))
 
 test('procurement requisition list and detail use runtime business objects', async ({ page, request }) => {
   const code = `DETAIL-${Date.now()}`

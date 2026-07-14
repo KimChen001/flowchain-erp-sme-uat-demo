@@ -1,4 +1,5 @@
 import { createJsonMasterDataRepository } from '../repositories/json-master-data-repository.mjs'
+import { selectMasterData } from '../domain/master-data-selectors.mjs'
 
 function masterDataRepository(ctx) {
   return ctx.repositories?.masterData || createJsonMasterDataRepository(ctx.db)
@@ -10,6 +11,13 @@ export async function handleMasterDataRoute(ctx) {
   const role = String(ctx.identity?.role || req.headers?.['x-flowchain-role'] || 'manager').toLowerCase()
   const actor = String(ctx.identity?.userId || req.headers?.['x-flowchain-user'] || 'user-local')
   const canWrite = !['viewer'].includes(role)
+
+  const selectorMatch = url.pathname.match(/^\/api\/master-data\/(departments|currencies|units|commodities|warehouses|payment-terms|tax-codes)\/select$/)
+  if (req.method === 'GET' && selectorMatch) {
+    const options = await selectMasterData(repository, selectorMatch[1])
+    send(res, 200, { options })
+    return true
+  }
 
   if (req.method === 'GET' && url.pathname === '/api/master-data') {
     const [items, suppliers, customers, warehouses, paymentTerms, taxCodes] =

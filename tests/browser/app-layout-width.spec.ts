@@ -11,8 +11,8 @@ const user = {
 async function openLoggedInApp(page: Page) {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.addInitScript((profile) => {
-    window.localStorage.setItem("scm-demo-token", "browser-layout-width-token");
-    window.localStorage.setItem("scm-demo-user", JSON.stringify(profile));
+    window.localStorage.setItem("flowchain:auth-token", "browser-layout-width-token");
+    window.localStorage.setItem("flowchain:current-user", JSON.stringify(profile));
   }, user);
   await page.goto("/");
   await expect(page.getByTestId("app-main")).toBeVisible({ timeout: 15000 });

@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { procurementError } from '../domain/procurement-workflow.mjs'
+import { withRuntimeFileMutex } from './runtime-file-mutex.mjs'
 const clone = value => structuredClone(value)
 export const emptyProcurementRuntime = () => ({
   schemaVersion: 2, revision: 0, initialized: true, purchaseRequests: [], rfqs: [],
@@ -21,7 +22,7 @@ export function createDurableProcurementRepository({ dataFile, seed = emptyProcu
     mode:'json', adapter:'durable-procurement-runtime-v2',
     async list(kind){ return clone((await load())[collection(kind)]) },
     async get(kind,id){ return clone((await load())[collection(kind)].find(x => x.id===id) || null) },
-    async transact(fn){ const doc=await load(); const backup=clone(doc); try { const result=await fn(doc); await save(); return clone(result) } catch(e){ document=backup; throw e } },
+    async transact(fn){ return withRuntimeFileMutex(dataFile, async () => { const doc=await load(); const backup=clone(doc); try { const result=await fn(doc); await save(); return clone(result) } catch(e){ document=backup; throw e } }) },
     async findLinkedRfq(prId){ return clone((await load()).rfqs.find(x => x.sourcePrId===prId && !['cancelled','closed'].includes(x.status)) || null) },
     async findLinkedPo(prId){ return clone((await load()).purchaseOrders.find(x => x.sourcePrId===prId && x.status!=='cancelled') || null) },
     async findLinkedPos(prId){ return clone((await load()).purchaseOrders.filter(x => x.sourcePrId===prId && x.status!=='cancelled')) },

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const user = { id: "print-editor-user", company: "新辰智能制造", name: "张磊", email: "zhanglei@example.com", role: "供应链经理" };
-async function openLoggedInApp(page: Page) { await page.addInitScript((profile) => { localStorage.setItem("scm-demo-token", "print-editor-token"); localStorage.setItem("scm-demo-user", JSON.stringify(profile)); }, user); await page.goto("/"); await expect(page.getByTestId("app-main")).toBeVisible(); }
+async function openLoggedInApp(page: Page) { await page.addInitScript((profile) => { localStorage.setItem("flowchain:auth-token", "print-editor-token"); localStorage.setItem("flowchain:current-user", JSON.stringify(profile)); }, user); await page.goto("/"); await expect(page.getByTestId("app-main")).toBeVisible(); }
 async function openDeliveryEditor(page: Page) { const nav = page.locator("aside nav"); await nav.getByRole("button", { name: "销售管理", exact: true }).click(); await nav.getByRole("button", { name: "销售出库单 / 发货单", exact: true }).click(); await page.getByTestId("delivery-page").getByRole("button", { name: /打印发货单 DN-/ }).first().click(); await expect(page.getByTestId("print-layout-editor")).toBeVisible(); }
 
 test("delivery print editor binds data and edits layout", async ({ page }) => {

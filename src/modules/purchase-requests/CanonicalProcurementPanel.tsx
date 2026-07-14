@@ -28,7 +28,7 @@ type Supplier = {
   preferred?: boolean;
   defaultCurrency?: string;
 };
-type Warehouse = { id: string; name: string; status: string };
+type SelectorOption = { id: string; code: string; label: string; metadata?: Record<string, unknown> };
 type SupplierOption = Supplier & {
   supplierName?: string;
   supplierCode?: string;
@@ -110,7 +110,11 @@ export default function CanonicalProcurementPanel({
   const prefilled = useRef(false);
   const [items, setItems] = useState<Item[]>([]),
     [suppliers, setSuppliers] = useState<Supplier[]>([]),
-    [warehouses, setWarehouses] = useState<Warehouse[]>([]),
+    [warehouses, setWarehouses] = useState<SelectorOption[]>([]),
+    [departments, setDepartments] = useState<SelectorOption[]>([]),
+    [currencies, setCurrencies] = useState<SelectorOption[]>([]),
+    [units, setUnits] = useState<SelectorOption[]>([]),
+    [commodities, setCommodities] = useState<SelectorOption[]>([]),
     [rows, setRows] = useState<PR[]>([]);
   const [itemSuppliers, setItemSuppliers] = useState<
     Record<string, SupplierOption[]>
@@ -129,17 +133,17 @@ export default function CanonicalProcurementPanel({
       : null;
   const load = async () => {
     try {
-      const [prs, master, catalog, selector] = await Promise.all([
+      const [prs, catalog, selector, departmentSelector, currencySelector, unitSelector, commoditySelector, warehouseSelector] = await Promise.all([
         request<PR[]>("/api/procurement/requests"),
-        request<{
-          items: Item[];
-          suppliers: Supplier[];
-          warehouses: Warehouse[];
-        }>("/api/master-data"),
         request<{ items: Item[] }>("/api/master-data/items?purchasable=true"),
         request<{ suppliers: SupplierOption[] }>(
           "/api/master-data/suppliers/select",
         ),
+        request<{ options: SelectorOption[] }>("/api/master-data/departments/select"),
+        request<{ options: SelectorOption[] }>("/api/master-data/currencies/select"),
+        request<{ options: SelectorOption[] }>("/api/master-data/units/select"),
+        request<{ options: SelectorOption[] }>("/api/master-data/commodities/select"),
+        request<{ options: SelectorOption[] }>("/api/master-data/warehouses/select"),
       ]);
       setRows(prs);
       setItems(catalog.items);
@@ -149,7 +153,11 @@ export default function CanonicalProcurementPanel({
           name: s.name || s.supplierName || s.id,
         })),
       );
-      setWarehouses(master.warehouses.filter((w) => w.status !== "inactive"));
+      setDepartments(departmentSelector.options);
+      setCurrencies(currencySelector.options);
+      setUnits(unitSelector.options);
+      setCommodities(commoditySelector.options);
+      setWarehouses(warehouseSelector.options);
       setLoadError("");
     } catch (error: any) {
       setLoadError(error.message || "采购申请数据加载失败");
@@ -499,9 +507,7 @@ export default function CanonicalProcurementPanel({
               onChange={(e) => setDepartmentId(e.target.value)}
               style={inputStyle}
             >
-              <option value="operations">运营部</option>
-              <option value="finance">财务部</option>
-              <option value="sales">销售部</option>
+              {departments.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </Field>
           <Field label="默认币种">
@@ -511,9 +517,7 @@ export default function CanonicalProcurementPanel({
               onChange={(e) => setCurrency(e.target.value)}
               style={inputStyle}
             >
-              {["CNY", "USD", "EUR"].map((c) => (
-                <option key={c}>{c}</option>
-              ))}
+              {currencies.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </Field>
           <Field label="默认需求日期">
@@ -655,28 +659,14 @@ export default function CanonicalProcurementPanel({
                   />
                 </Field>
                 <Field label="品类">
-                  <input
-                    readOnly={line.sourceType === "catalog_item"}
-                    value={line.commodityId}
-                    onChange={(e) =>
-                      patchLine(index, { commodityId: e.target.value })
-                    }
-                    style={inputStyle}
-                  />
+                  {line.sourceType === "catalog_item" ? <input readOnly value={line.commodityId} style={inputStyle} /> : <select value={line.commodityId} onChange={(e) => patchLine(index, { commodityId: e.target.value })} style={inputStyle}><option value="">选择品类</option>{commodities.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>}
                 </Field>
               </div>
               <div className="mt-2 grid gap-2 md:grid-cols-6">
                 {line.lineBasis === "quantity" && (
                   <>
                     <Field label="单位">
-                      <input
-                        readOnly={line.sourceType === "catalog_item"}
-                        value={line.unitSnapshot || ""}
-                        onChange={(e) =>
-                          patchLine(index, { unitSnapshot: e.target.value })
-                        }
-                        style={inputStyle}
-                      />
+                      {line.sourceType === "catalog_item" ? <input readOnly value={line.unitSnapshot || ""} style={inputStyle} /> : <select value={line.unitSnapshot || ""} onChange={(e) => patchLine(index, { unitSnapshot: e.target.value })} style={inputStyle}><option value="">选择单位</option>{units.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>}
                     </Field>
                     <Field label="数量">
                       <input
@@ -742,7 +732,7 @@ export default function CanonicalProcurementPanel({
                     <option value="">选择地点</option>
                     {warehouses.map((w) => (
                       <option key={w.id} value={w.id}>
-                        {w.name}
+                        {w.label}
                       </option>
                     ))}
                   </select>

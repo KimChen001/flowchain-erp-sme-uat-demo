@@ -22,12 +22,14 @@ test('ApiError preserves structured workflow and optimistic-concurrency fields',
 })
 
 test('formal entity lists use route-addressable entity links', async () => {
-  const [requests, items, suppliers, orders] = await Promise.all([
+  const [requests, items, suppliers, orderList, orderDetail] = await Promise.all([
     read('src/modules/purchase-requests/CanonicalProcurementPanel.tsx'),
     read('src/modules/master-data/ItemMasterWorkbench.tsx'),
     read('src/modules/srm/Page.tsx'),
-    read('src/modules/procurement/Page.tsx'),
+    read('src/modules/procurement/PurchaseOrderList.tsx'),
+    read('src/modules/procurement/PurchaseOrderDetail.tsx'),
   ])
+  const orders = `${orderList}\n${orderDetail}`
   assert.match(requests, /kind="purchase_request"/)
   assert.match(requests, /kind="purchase_order"/)
   assert.match(items, /kind="item"/)

@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 test("sales demand uses explicit runtime order with recoverable SO and SKU links", async ({ page, request }) => {
   await page.addInitScript(() => {
-    localStorage.setItem("scm-demo-token", "sales-runtime-token");
-    localStorage.setItem("scm-demo-user", JSON.stringify({ id: "sales-runtime-user", name: "张磊", role: "供应链经理" }));
+    localStorage.setItem("flowchain:auth-token", "sales-runtime-token");
+    localStorage.setItem("flowchain:current-user", JSON.stringify({ id: "sales-runtime-user", name: "张磊", role: "供应链经理" }));
   });
   const suffix = Date.now();
   const sku = `SALES-DEMAND-${suffix}`;

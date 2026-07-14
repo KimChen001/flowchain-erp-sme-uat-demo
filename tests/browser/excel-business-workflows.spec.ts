@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const user = { id: "excel-user", company: "新辰智能制造", name: "张磊", email: "excel@example.com", role: "供应链经理" };
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript((profile) => { localStorage.setItem("scm-demo-token", "excel-token"); localStorage.setItem("scm-demo-user", JSON.stringify(profile)); }, user);
+  await page.addInitScript((profile) => { localStorage.setItem("flowchain:auth-token", "excel-token"); localStorage.setItem("flowchain:current-user", JSON.stringify(profile)); }, user);
   await page.goto("/app/finance/invoices");
   await expect(page.getByTestId("excel-import-actions")).toBeVisible();
 });

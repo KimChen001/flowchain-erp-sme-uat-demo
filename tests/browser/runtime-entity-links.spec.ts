@@ -4,8 +4,8 @@ const ghosts = /PO-2026-1287|PO-2026-1286|PO-2026-1285|PO-2026-1284|RFQ-26-0042|
 
 async function auth(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem('scm-demo-token', 'runtime-links')
-    localStorage.setItem('scm-demo-user', JSON.stringify({ id: 'runtime-links-user', name: 'Runtime User', role: 'manager' }))
+    localStorage.setItem('flowchain:auth-token', 'runtime-links')
+    localStorage.setItem('flowchain:current-user', JSON.stringify({ id: 'runtime-links-user', name: 'Runtime User', role: 'manager' }))
   })
 }
 

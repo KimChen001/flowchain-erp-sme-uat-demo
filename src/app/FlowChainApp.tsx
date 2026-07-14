@@ -31,6 +31,8 @@ import type {
   WorkspaceUser,
   PurchaseIntent,
 } from "../types/scm";
+
+type ModuleCapability = { id: string; enabled: boolean; maturity: "stable" | "beta" | "preview" | "unavailable"; readReady: boolean; writeReady: boolean; reason: string };
 import ReceivingPanel from "../modules/receiving/Page";
 import InventoryPanel from "../modules/inventory/Page";
 import ForecastPanel from "../modules/forecast/Page";
@@ -341,6 +343,7 @@ export default function FlowChainApp() {
   const [unreadCount] = useState(3);
   migrateLegacySessionStorage();
   const [authToken, setAuthToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
+  const [capabilities, setCapabilities] = useState<Record<string, ModuleCapability>>({});
   const [enabledModuleIds, setEnabledModuleIds] = useState<Set<string> | null>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("flowchain:module-settings") || "null");
@@ -384,6 +387,19 @@ export default function FlowChainApp() {
   const activeModule = activeRoute?.moduleId || "overview";
   const activeView = activeRoute?.viewId;
   const panelModule = activeRoute?.panelId || activeModule;
+
+  useEffect(() => {
+    apiJson<{ capabilities: ModuleCapability[] }>("/api/capabilities").then(({ capabilities: rows }) => {
+      const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
+      setCapabilities(byId);
+      let experimental = new Set<string>();
+      try {
+        const saved = JSON.parse(localStorage.getItem("flowchain:module-settings") || "null");
+        experimental = new Set(saved?.items?.filter((item: { enabled: boolean }) => item.enabled).map((item: { id: string }) => item.id) || []);
+      } catch { /* Invalid local experiment settings are ignored. */ }
+      setEnabledModuleIds(new Set(rows.filter((row) => row.enabled || (row.maturity === "preview" && experimental.has(row.id))).map((row) => row.id)));
+    }).catch(() => { /* Keep the local navigation fallback when capability discovery is unavailable. */ });
+  }, [authToken]);
 
   useEffect(() => {
     if (!activeRoute?.entityType || !activeRoute.entityIdParam) return;
@@ -738,6 +754,7 @@ export default function FlowChainApp() {
                               : { background: "transparent", color: A.sidebarSub }}>
                             <item.icon size={15} strokeWidth={isActive ? 2 : 1.8} />
                             <span className="truncate">{item.label}</span>
+                            {capabilities[item.id]?.maturity === "beta" && <span className="ml-auto rounded bg-blue-500/20 px-1.5 py-0.5 text-[9px] text-blue-100">Beta</span>}
                           </button>
                         </div>
                       );
@@ -974,13 +991,13 @@ export default function FlowChainApp() {
                   <BusinessBackLink context={focusReturnContext} onReturn={returnFromFocus} />
                 </div>
               )}
-              <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
+              {capabilities[activeModule]?.maturity === "unavailable" ? <Card className="p-10 text-center"><h1 className="text-base font-semibold">该模块尚未接通</h1><p className="mt-2 text-xs" style={{ color: A.sub }}>{capabilities[activeModule].reason}</p></Card> : <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
                 <React.Suspense fallback={<div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="模块加载中">{[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl" style={{ background: A.gray5 }} />)}</div>}>
                 {activeRoute.pageType === "detail" && activeRoute.entityType && !["purchase_request", "purchase_order", "supplier", "item"].includes(activeRoute.entityType)
                   ? <BusinessEntityDetailPage route={activeRoute} />
                   : panels[panelModule] || panels[activeModule] || panels.overview}
                 </React.Suspense>
-              </PanelErrorBoundary>
+              </PanelErrorBoundary>}
               </ModuleShell> : <NotFoundRecovery pathname={location.pathname} />}
             </div>
           </main>

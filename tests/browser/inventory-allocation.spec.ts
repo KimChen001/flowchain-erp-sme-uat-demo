@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 test("inventory availability is created explicitly and links to Item Master", async ({ page, request }) => {
   await page.addInitScript(() => {
-    localStorage.setItem("scm-demo-token", "inventory-runtime-token");
-    localStorage.setItem("scm-demo-user", JSON.stringify({ id: "inventory-runtime-user", name: "张磊", role: "供应链经理" }));
+    localStorage.setItem("flowchain:auth-token", "inventory-runtime-token");
+    localStorage.setItem("flowchain:current-user", JSON.stringify({ id: "inventory-runtime-user", name: "张磊", role: "供应链经理" }));
   });
   const suffix = Date.now();
   const sku = `ATP-RUNTIME-${suffix}`;

@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const user = { id: "sales-doc-user", company: "新辰智能制造", name: "张磊", email: "zhanglei@example.com", role: "供应链经理" };
 
 async function openLoggedInApp(page: Page) {
-  await page.addInitScript((profile) => { localStorage.setItem("scm-demo-token", "sales-doc-token"); localStorage.setItem("scm-demo-user", JSON.stringify(profile)); }, user);
+  await page.addInitScript((profile) => { localStorage.setItem("flowchain:auth-token", "sales-doc-token"); localStorage.setItem("flowchain:current-user", JSON.stringify(profile)); }, user);
   await page.goto("/"); await expect(page.getByTestId("app-main")).toBeVisible();
 }
 

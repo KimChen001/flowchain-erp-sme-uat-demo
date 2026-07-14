@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const user = { id: "bi-user", company: "新辰智能制造", name: "张磊", email: "bi@example.com", role: "供应链经理" };
-test.beforeEach(async ({ page }) => { await page.addInitScript((profile) => { localStorage.setItem("scm-demo-token", "bi-token"); localStorage.setItem("scm-demo-user", JSON.stringify(profile)); }, user); });
+test.beforeEach(async ({ page }) => { await page.addInitScript((profile) => { localStorage.setItem("flowchain:auth-token", "bi-token"); localStorage.setItem("flowchain:current-user", JSON.stringify(profile)); }, user); });
 
 test("BI filters persist in URL and across refresh", async ({ page }) => {
   await page.goto("/app/reports/overview");

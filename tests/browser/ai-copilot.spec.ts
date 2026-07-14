@@ -34,8 +34,8 @@ function installPageDiagnostics(page: Page) {
 async function openLoggedInApp(page: Page) {
   const describeFailure = installPageDiagnostics(page);
   await page.addInitScript((user) => {
-    window.localStorage.setItem("scm-demo-token", "browser-uat-token");
-    window.localStorage.setItem("scm-demo-user", JSON.stringify(user));
+    window.localStorage.setItem("flowchain:auth-token", "browser-uat-token");
+    window.localStorage.setItem("flowchain:current-user", JSON.stringify(user));
   }, demoUser);
   await page.goto("/");
   await page.waitForLoadState("domcontentloaded");

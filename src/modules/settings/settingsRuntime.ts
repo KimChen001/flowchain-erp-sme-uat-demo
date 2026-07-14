@@ -18,10 +18,8 @@ export type SettingsAuditEntry = {
 export const fetchSettingsRuntime = () => apiJson<SettingsRuntime>('/api/settings-runtime');
 
 export async function saveSettingsSection<K extends keyof SettingsRuntime>(section: K, settings: SettingsRuntime[K]) {
-  const rawUser = localStorage.getItem('scm-demo-user');
-  const actor = rawUser ? JSON.parse(rawUser) : undefined;
   return apiJson<{ settings: SettingsRuntime[K] }>(`/api/settings-runtime/${section}`, {
-    method: 'PATCH', body: JSON.stringify({ settings, actor }),
+    method: 'PATCH', body: JSON.stringify({ settings }),
   });
 }
 

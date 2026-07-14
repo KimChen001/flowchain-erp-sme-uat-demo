@@ -10,8 +10,8 @@ const businessUser = {
 
 async function openLoggedInApp(page: Page) {
   await page.addInitScript((user) => {
-    window.localStorage.setItem("scm-demo-token", "browser-data-access-token");
-    window.localStorage.setItem("scm-demo-user", JSON.stringify(user));
+    window.localStorage.setItem("flowchain:auth-token", "browser-data-access-token");
+    window.localStorage.setItem("flowchain:current-user", JSON.stringify(user));
   }, businessUser);
   await page.goto("/");
   await expect(page.getByTestId("app-main")).toBeVisible();
