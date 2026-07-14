@@ -4,6 +4,7 @@ const { join } = await import('node:path')
 const { tmpdir } = await import('node:os')
 
 process.env.SCM_API_PORT = port
+process.env.FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS = 'true'
 process.env.FLOWCHAIN_INVENTORY_RUNTIME_FILE = join(tmpdir(), `flowchain-browser-inventory-${port}.json`)
 process.env.FLOWCHAIN_SALES_RUNTIME_FILE = join(tmpdir(), `flowchain-browser-sales-${port}.json`)
 process.env.FLOWCHAIN_ITEM_RUNTIME_FILE = join(tmpdir(), `flowchain-browser-items-${port}.json`)

@@ -9,6 +9,7 @@ import { createJsonDb } from '../repositories/json-db.mjs'
 import { createRepositoryRegistry, getPersistenceMode } from '../repositories/adapter-registry.mjs'
 import { contentTypeFor, readBody, send, sendText } from '../utils/http.mjs'
 import { sendInternalServerError } from '../utils/safe-errors.mjs'
+import { createLocalSession, createLocalSessionSecret, issueLocalSessionToken, resolveRequestIdentity } from '../domain/local-signed-session.mjs'
 import {
   legacyMutationBlockedAuditEntry,
   recordDatabaseAuditBestEffort,
@@ -222,11 +223,10 @@ function normalizeLogin(body) {
   const email = String(body.email || '').trim().toLowerCase()
   const name = String(body.name || '').trim()
   const company = String(body.company || '').trim()
-  const role = String(body.role || '供应链经理').trim()
   if (!email || !name || !company) {
     throw new Error('company, name and email are required')
   }
-  return { email, name, company, role }
+  return { email, name, company }
 }
 
 function nextSequenceId(items, field, prefix, start) {
@@ -910,6 +910,7 @@ function supplierRecommendations(db, { sku = '', quantity = 0, currentSupplier =
 
 export function createScmServer() {
   const localSessions = new Map()
+  const localSessionSecret = createLocalSessionSecret(process.env)
   return http.createServer(async (req, res) => {
   try {
     if (req.method === 'OPTIONS') return send(res, 204, {})
@@ -919,6 +920,7 @@ export function createScmServer() {
     const persistenceMode = getPersistenceMode(process.env)
     const dataMode = resolveFlowchainDataMode(process.env)
     const repositories = createRepositoryRegistry({ db, env: process.env })
+    const identity = resolveRequestIdentity(req, localSessions, localSessionSecret, process.env)
 
     if (req.method === 'GET' && url.pathname === '/api/health') {
       return send(res, 200, {
@@ -930,6 +932,8 @@ export function createScmServer() {
         dataMode: dataMode.mode,
         readsDemoData: dataMode.readsDemoData,
         persistenceMode,
+        identityMode: 'local_signed_session',
+        identityProvider: 'not_production_identity_provider',
         runtimeAdapters: {
           masterData: repositories.masterData?.adapter || 'unavailable',
           items: repositories.masterData?.itemRuntime?.adapter || 'unavailable',
@@ -971,23 +975,15 @@ export function createScmServer() {
       } catch (error) {
         return send(res, 400, { error: error.message })
       }
-      const now = new Date().toISOString()
-      const user = {
-        id: `USR-${Date.now()}`,
-        token: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        createdAt: now,
-        ...profile,
-        lastLoginAt: now,
-      }
-      localSessions.set(user.token, user)
-      return send(res, 200, { token: user.token, user: publicUser(user) })
+      const session = createLocalSession(profile)
+      localSessions.set(session.sessionId, session)
+      const token = issueLocalSessionToken(session, localSessionSecret)
+      return send(res, 200, { token, expiresAt: new Date(session.expiresAt).toISOString(), user: { id: session.userId, name: session.name, email: session.email, company: session.company, role: session.role } })
     }
 
     if (req.method === 'GET' && url.pathname === '/api/auth/me') {
-      const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
-      const user = localSessions.get(token)
-      if (!user) return send(res, 401, { error: 'invalid workspace session token' })
-      return send(res, 200, publicUser(user))
+      if (!identity.authenticated || identity.source !== 'local_signed_session') return send(res, 401, { code: 'INVALID_SESSION', error: 'invalid or expired workspace session token' })
+      return send(res, 200, { id: identity.userId, name: identity.name, email: identity.email, role: identity.role, expiresAt: identity.expiresAt })
     }
 
     if (req.method === 'GET' && url.pathname === '/api/forecast-plans') {
@@ -1051,6 +1047,7 @@ export function createScmServer() {
       ensureEvents, ensureAuditLog,
       openaiDispatcher, arkDispatcher, aiMaxTokens,
       dataMode: dataMode.mode,
+      identity,
       supplierQuoteCount: Object.keys(supplierQuotes).length,
     }
 

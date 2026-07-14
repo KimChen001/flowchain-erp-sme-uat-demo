@@ -7,10 +7,8 @@ function masterDataRepository(ctx) {
 export async function handleMasterDataRoute(ctx) {
   const { req, res, url, send, readBody } = ctx
   const repository = masterDataRepository(ctx)
-  const role = String(
-    req.headers?.['x-flowchain-role'] || 'manager',
-  ).toLowerCase()
-  const actor = String(req.headers?.['x-flowchain-user'] || 'user-local')
+  const role = String(ctx.identity?.role || req.headers?.['x-flowchain-role'] || 'manager').toLowerCase()
+  const actor = String(ctx.identity?.userId || req.headers?.['x-flowchain-user'] || 'user-local')
   const canWrite = !['viewer'].includes(role)
 
   if (req.method === 'GET' && url.pathname === '/api/master-data') {

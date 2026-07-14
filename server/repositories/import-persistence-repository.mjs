@@ -196,6 +196,43 @@ export function commitImportPreview(previewId, input = {}, options = {}) {
   return clone(result)
 }
 
+export function validateDurableImportCommit(previewId, input = {}, options = {}) {
+  const preview = state.previews.get(previewId)
+  if (!preview) return { ok: false, status: 404, code: 'IMPORT_PREVIEW_NOT_FOUND', error: 'Import preview not found or expired.' }
+  if (new Date(preview.expiresAt).getTime() < Date.now()) return { ok: false, status: 410, code: 'IMPORT_PREVIEW_EXPIRED', error: 'Import preview has expired.' }
+  if (text(input.snapshotHash) !== preview.snapshotHash) return { ok: false, status: 409, code: 'IMPORT_SNAPSHOT_MISMATCH', error: 'Snapshot hash mismatch.' }
+  if (input.userConfirmation !== true) return { ok: false, status: 422, code: 'IMPORT_CONFIRMATION_REQUIRED', error: 'Explicit user confirmation is required.' }
+  if (preview.validationErrors.length || preview.duplicateRows.length) return { ok: false, status: 422, code: 'IMPORT_PREVIEW_BLOCKED', error: 'Preview contains blocking rows.' }
+  const relationships = options.relationships || preview.relationships
+  const revalidated = validateServerRows(BUSINESS_CONFIG[preview.schemaId], preview.normalizedRows, relationships)
+  if (revalidated.errors.length) return { ok: false, status: 422, code: 'IMPORT_REVALIDATION_FAILED', error: 'Server revalidation failed.', validationErrors: revalidated.errors }
+  if (preview.validationWarnings.length && (!Array.isArray(input.acceptedWarningCodes) || input.acceptedWarningCodes.length === 0)) return { ok: false, status: 422, code: 'IMPORT_WARNING_ACK_REQUIRED', error: 'Preview warnings require explicit acknowledgement.' }
+  const idempotencyKey = text(input.idempotencyKey)
+  if (!idempotencyKey) return { ok: false, status: 422, code: 'IDEMPOTENCY_KEY_REQUIRED', error: 'idempotencyKey is required.' }
+  if (state.idempotency.has(idempotencyKey)) return { ok: true, replayed: true, result: clone(state.idempotency.get(idempotencyKey)) }
+  return { ok: true, preview: clone(preview), config: BUSINESS_CONFIG[preview.schemaId], idempotencyKey }
+}
+
+export function recordDurableImportCommit(validation, changes = [], options = {}) {
+  const preview = validation.preview
+  const importBatchId = `IMP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
+  const inserted = changes.filter(change => change.operation === 'insert').length
+  const updated = changes.filter(change => change.operation === 'update').length
+  const batch = {
+    importBatchId, previewId: preview.previewId, businessObject: preview.businessObject, schemaId: preview.schemaId,
+    originalFileName: preview.fileMetadata.name || '', sheetName: preview.sheetName, schemaVersion: preview.schemaVersion,
+    fieldMapping: clone(preview.fieldMapping), inserted, updated, skipped: 0, failed: 0,
+    warnings: clone(preview.validationWarnings), snapshotHash: preview.snapshotHash, status: 'committed',
+    rollbackAvailable: false, committedAt: new Date().toISOString(), actor: text(options.actor) || preview.actor,
+    targetRepositories: [...new Set(changes.map(change => change.repository))], changes: clone(changes),
+  }
+  state.batches.set(importBatchId, batch)
+  const auditEvent = audit('import_batch_committed', { type: 'importBatch', id: importBatchId }, batch, batch.actor)
+  const result = { ok: true, importBatchId, businessObject: preview.businessObject, inserted, updated, skipped: 0, failed: 0, warnings: batch.warnings, auditEventId: auditEvent.id, rollbackAvailable: false, committedAt: batch.committedAt, targetRepositories: batch.targetRepositories }
+  state.idempotency.set(validation.idempotencyKey, result)
+  return clone(result)
+}
+
 export function rollbackImportBatch(importBatchId, input = {}, options = {}) {
   const batch = state.batches.get(importBatchId)
   if (!batch) return { ok: false, status: 404, error: 'Import batch not found.' }

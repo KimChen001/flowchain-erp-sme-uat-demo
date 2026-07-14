@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiJson } from "../../lib/api-client";
 import { A, Card, Field, inputStyle } from "../../components/ui";
+import { EntityLink } from "../../components/business/EntityLink";
 
 export type MasterItem = {
   itemId: string;
@@ -103,7 +104,9 @@ export default function ItemMasterWorkbench({
   const [type, setType] = useState("");
   const [category, setCategory] = useState("");
   const [error, setError] = useState("");
-  const [relationships, setRelationships] = useState<ItemSupplierRelationship[]>([]);
+  const [relationships, setRelationships] = useState<
+    ItemSupplierRelationship[]
+  >([]);
   const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
   const [relationshipError, setRelationshipError] = useState("");
   const [relationshipForm, setRelationshipForm] = useState({
@@ -127,9 +130,12 @@ export default function ItemMasterWorkbench({
     load().catch((cause) => setError(cause.message));
   }, []);
   useEffect(() => {
-    if (!focus?.entityId || focus.entityType !== "item" || !items.length) return;
+    if (!focus?.entityId || focus.entityType !== "item" || !items.length)
+      return;
     const key = focus.entityId.toLowerCase();
-    const item = items.find((row) => [row.itemId, row.sku].some((value) => value.toLowerCase() === key));
+    const item = items.find((row) =>
+      [row.itemId, row.sku].some((value) => value.toLowerCase() === key),
+    );
     if (item) setSelected(item);
   }, [focus?.at, focus?.entityId, focus?.entityType, items]);
   useEffect(() => {
@@ -138,13 +144,23 @@ export default function ItemMasterWorkbench({
       return;
     }
     Promise.all([
-      apiJson<{ relationships: ItemSupplierRelationship[] }>(`/api/master-data/items/${encodeURIComponent(selected.itemId)}/suppliers`),
-      apiJson<{ suppliers: SupplierOption[] }>("/api/master-data/suppliers/select"),
-    ]).then(([relationshipPayload, supplierPayload]) => {
-      setRelationships(relationshipPayload.relationships);
-      setSupplierOptions(supplierPayload.suppliers);
-      setRelationshipError("");
-    }).catch((cause) => setRelationshipError(cause instanceof Error ? cause.message : "SKU–供应商关系加载失败"));
+      apiJson<{ relationships: ItemSupplierRelationship[] }>(
+        `/api/master-data/items/${encodeURIComponent(selected.itemId)}/suppliers`,
+      ),
+      apiJson<{ suppliers: SupplierOption[] }>(
+        "/api/master-data/suppliers/select",
+      ),
+    ])
+      .then(([relationshipPayload, supplierPayload]) => {
+        setRelationships(relationshipPayload.relationships);
+        setSupplierOptions(supplierPayload.suppliers);
+        setRelationshipError("");
+      })
+      .catch((cause) =>
+        setRelationshipError(
+          cause instanceof Error ? cause.message : "SKU–供应商关系加载失败",
+        ),
+      );
   }, [selected?.itemId]);
   const shown = useMemo(
     () =>
@@ -184,39 +200,67 @@ export default function ItemMasterWorkbench({
   };
   const reloadRelationships = async () => {
     if (!selected) return;
-    const payload = await apiJson<{ relationships: ItemSupplierRelationship[] }>(`/api/master-data/items/${encodeURIComponent(selected.itemId)}/suppliers`);
+    const payload = await apiJson<{
+      relationships: ItemSupplierRelationship[];
+    }>(
+      `/api/master-data/items/${encodeURIComponent(selected.itemId)}/suppliers`,
+    );
     setRelationships(payload.relationships);
   };
   const createRelationship = async () => {
     if (!selected || !relationshipForm.supplierId) return;
     try {
-      await apiJson(`/api/master-data/items/${encodeURIComponent(selected.itemId)}/suppliers`, {
-        method: "POST",
-        body: JSON.stringify({
-          ...relationshipForm,
-          leadTimeDays: Number(relationshipForm.leadTimeDays || 0),
-          minimumOrderQuantity: Number(relationshipForm.minimumOrderQuantity || 1),
-          referencePrice: Number(relationshipForm.referencePrice || 0),
-        }),
-      });
-      setRelationshipForm((current) => ({ ...current, supplierId: "", supplierSku: "", preferred: false, referencePrice: "" }));
+      await apiJson(
+        `/api/master-data/items/${encodeURIComponent(selected.itemId)}/suppliers`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...relationshipForm,
+            leadTimeDays: Number(relationshipForm.leadTimeDays || 0),
+            minimumOrderQuantity: Number(
+              relationshipForm.minimumOrderQuantity || 1,
+            ),
+            referencePrice: Number(relationshipForm.referencePrice || 0),
+          }),
+        },
+      );
+      setRelationshipForm((current) => ({
+        ...current,
+        supplierId: "",
+        supplierSku: "",
+        preferred: false,
+        referencePrice: "",
+      }));
       setRelationshipError("");
       await reloadRelationships();
     } catch (cause) {
-      setRelationshipError(cause instanceof Error ? cause.message : "关系保存失败");
+      setRelationshipError(
+        cause instanceof Error ? cause.message : "关系保存失败",
+      );
     }
   };
-  const updateRelationship = async (relationship: ItemSupplierRelationship, patch: Partial<ItemSupplierRelationship>) => {
+  const updateRelationship = async (
+    relationship: ItemSupplierRelationship,
+    patch: Partial<ItemSupplierRelationship>,
+  ) => {
     if (!selected) return;
     try {
-      await apiJson(`/api/master-data/items/${encodeURIComponent(selected.itemId)}/suppliers/${encodeURIComponent(relationship.relationshipId)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ ...patch, expectedVersion: relationship.version }),
-      });
+      await apiJson(
+        `/api/master-data/items/${encodeURIComponent(selected.itemId)}/suppliers/${encodeURIComponent(relationship.relationshipId)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            ...patch,
+            expectedVersion: relationship.version,
+          }),
+        },
+      );
       setRelationshipError("");
       await reloadRelationships();
     } catch (cause) {
-      setRelationshipError(cause instanceof Error ? cause.message : "关系更新失败");
+      setRelationshipError(
+        cause instanceof Error ? cause.message : "关系更新失败",
+      );
     }
   };
   if (editing)
@@ -335,21 +379,200 @@ export default function ItemMasterWorkbench({
         </div>
         <div className="mt-5 border-t pt-5">
           <h3 className="text-sm font-semibold">可采购供应商</h3>
-          <p className="mt-1 text-xs text-slate-500">这里与供应商详情及采购申请共用同一 SKU–供应商关系。</p>
-          {relationshipError && <p role="alert" className="mt-3 text-xs text-red-600">{relationshipError}</p>}
+          <p className="mt-1 text-xs text-slate-500">
+            这里与供应商详情及采购申请共用同一 SKU–供应商关系。
+          </p>
+          {relationshipError && (
+            <p role="alert" className="mt-3 text-xs text-red-600">
+              {relationshipError}
+            </p>
+          )}
           <div className="mt-3 grid gap-2 md:grid-cols-4 lg:grid-cols-6">
-            <select aria-label="关系供应商" value={relationshipForm.supplierId} onChange={(event) => setRelationshipForm({ ...relationshipForm, supplierId: event.target.value })} style={inputStyle}>
+            <select
+              aria-label="关系供应商"
+              value={relationshipForm.supplierId}
+              onChange={(event) =>
+                setRelationshipForm({
+                  ...relationshipForm,
+                  supplierId: event.target.value,
+                })
+              }
+              style={inputStyle}
+            >
               <option value="">选择启用供应商</option>
-              {supplierOptions.filter((supplier) => !relationships.some((relationship) => relationship.supplierId === supplier.id)).map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.supplierCode} · {supplier.supplierName || supplier.name}</option>)}
+              {supplierOptions
+                .filter(
+                  (supplier) =>
+                    !relationships.some(
+                      (relationship) => relationship.supplierId === supplier.id,
+                    ),
+                )
+                .map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.supplierCode} ·{" "}
+                    {supplier.supplierName || supplier.name}
+                  </option>
+                ))}
             </select>
-            <input aria-label="供应商物料编码" placeholder="供应商物料编码" value={relationshipForm.supplierSku} onChange={(event) => setRelationshipForm({ ...relationshipForm, supplierSku: event.target.value })} style={inputStyle} />
-            <input aria-label="关系 Lead Time" type="number" min="0" placeholder="Lead Time" value={relationshipForm.leadTimeDays} onChange={(event) => setRelationshipForm({ ...relationshipForm, leadTimeDays: event.target.value })} style={inputStyle} />
-            <input aria-label="关系 MOQ" type="number" min="1" placeholder="MOQ" value={relationshipForm.minimumOrderQuantity} onChange={(event) => setRelationshipForm({ ...relationshipForm, minimumOrderQuantity: event.target.value })} style={inputStyle} />
-            <input aria-label="关系参考价" type="number" min="0" placeholder="参考价" value={relationshipForm.referencePrice} onChange={(event) => setRelationshipForm({ ...relationshipForm, referencePrice: event.target.value })} style={inputStyle} />
-            <button disabled={!relationshipForm.supplierId} onClick={createRelationship} className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white disabled:opacity-50">新增关系</button>
+            <input
+              aria-label="供应商物料编码"
+              placeholder="供应商物料编码"
+              value={relationshipForm.supplierSku}
+              onChange={(event) =>
+                setRelationshipForm({
+                  ...relationshipForm,
+                  supplierSku: event.target.value,
+                })
+              }
+              style={inputStyle}
+            />
+            <input
+              aria-label="关系 Lead Time"
+              type="number"
+              min="0"
+              placeholder="Lead Time"
+              value={relationshipForm.leadTimeDays}
+              onChange={(event) =>
+                setRelationshipForm({
+                  ...relationshipForm,
+                  leadTimeDays: event.target.value,
+                })
+              }
+              style={inputStyle}
+            />
+            <input
+              aria-label="关系 MOQ"
+              type="number"
+              min="1"
+              placeholder="MOQ"
+              value={relationshipForm.minimumOrderQuantity}
+              onChange={(event) =>
+                setRelationshipForm({
+                  ...relationshipForm,
+                  minimumOrderQuantity: event.target.value,
+                })
+              }
+              style={inputStyle}
+            />
+            <input
+              aria-label="关系参考价"
+              type="number"
+              min="0"
+              placeholder="参考价"
+              value={relationshipForm.referencePrice}
+              onChange={(event) =>
+                setRelationshipForm({
+                  ...relationshipForm,
+                  referencePrice: event.target.value,
+                })
+              }
+              style={inputStyle}
+            />
+            <button
+              disabled={!relationshipForm.supplierId}
+              onClick={createRelationship}
+              className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white disabled:opacity-50"
+            >
+              新增关系
+            </button>
           </div>
-          <label className="mt-2 inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={relationshipForm.preferred} onChange={(event) => setRelationshipForm({ ...relationshipForm, preferred: event.target.checked })} />设为 Preferred Supplier</label>
-          {relationships.length === 0 ? <div className="py-8 text-center text-xs text-slate-500">暂无可采购供应商</div> : <div className="mt-3 overflow-x-auto"><table className="w-full text-xs"><thead><tr>{["Supplier", "供应商物料编码", "Lead Time", "MOQ", "参考价", "状态", "操作"].map((label) => <th key={label} className="p-2 text-left">{label}</th>)}</tr></thead><tbody>{relationships.map((relationship) => <tr key={relationship.relationshipId} className="border-t"><td className="p-2"><button className="text-blue-600 underline" onClick={() => onNavigate?.("master-data:suppliers", { entityType: "supplier", entityId: relationship.supplierId })}>{relationship.supplier?.supplierCode || relationship.supplierId} · {relationship.supplier?.supplierName || relationship.supplier?.name}</button>{relationship.preferred && <span className="ml-2 rounded bg-blue-50 px-1.5 py-0.5 text-blue-700">Preferred</span>}</td><td className="p-2">{relationship.supplierSku || "-"}</td><td className="p-2">{relationship.leadTimeDays} 天</td><td className="p-2">{relationship.minimumOrderQuantity}</td><td className="p-2">{relationship.currency} {relationship.referencePrice}</td><td className="p-2">{relationship.active && relationship.approved ? "启用 · 已批准" : relationship.active ? "启用 · 待批准" : "停用"}</td><td className="p-2 space-x-2">{!relationship.preferred && <button onClick={() => updateRelationship(relationship, { preferred: true })}>设为首选</button>}<button onClick={() => updateRelationship(relationship, { active: !relationship.active })}>{relationship.active ? "停用" : "启用"}</button></td></tr>)}</tbody></table></div>}
+          <label className="mt-2 inline-flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={relationshipForm.preferred}
+              onChange={(event) =>
+                setRelationshipForm({
+                  ...relationshipForm,
+                  preferred: event.target.checked,
+                })
+              }
+            />
+            设为 Preferred Supplier
+          </label>
+          {relationships.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-500">
+              暂无可采购供应商
+            </div>
+          ) : (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr>
+                    {[
+                      "Supplier",
+                      "供应商物料编码",
+                      "Lead Time",
+                      "MOQ",
+                      "参考价",
+                      "状态",
+                      "操作",
+                    ].map((label) => (
+                      <th key={label} className="p-2 text-left">
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {relationships.map((relationship) => (
+                    <tr key={relationship.relationshipId} className="border-t">
+                      <td className="p-2">
+                        <EntityLink kind="supplier" id={relationship.supplierId} className="text-blue-600">
+                          {relationship.supplier?.supplierCode ||
+                            relationship.supplierId}{" "}
+                          ·{" "}
+                          {relationship.supplier?.supplierName ||
+                            relationship.supplier?.name}
+                        </EntityLink>
+                        {relationship.preferred && (
+                          <span className="ml-2 rounded bg-blue-50 px-1.5 py-0.5 text-blue-700">
+                            Preferred
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-2">{relationship.supplierSku || "-"}</td>
+                      <td className="p-2">{relationship.leadTimeDays} 天</td>
+                      <td className="p-2">
+                        {relationship.minimumOrderQuantity}
+                      </td>
+                      <td className="p-2">
+                        {relationship.currency} {relationship.referencePrice}
+                      </td>
+                      <td className="p-2">
+                        {relationship.active && relationship.approved
+                          ? "启用 · 已批准"
+                          : relationship.active
+                            ? "启用 · 待批准"
+                            : "停用"}
+                      </td>
+                      <td className="p-2 space-x-2">
+                        {!relationship.preferred && (
+                          <button
+                            onClick={() =>
+                              updateRelationship(relationship, {
+                                preferred: true,
+                              })
+                            }
+                          >
+                            设为首选
+                          </button>
+                        )}
+                        <button
+                          onClick={() =>
+                            updateRelationship(relationship, {
+                              active: !relationship.active,
+                            })
+                          }
+                        >
+                          {relationship.active ? "停用" : "启用"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
         <div className="mt-4 text-xs text-slate-500">
           创建：{selected.createdBy} · {selected.createdAt}
@@ -419,12 +642,9 @@ export default function ItemMasterWorkbench({
             {shown.map((item) => (
               <tr className="border-b" key={item.itemId}>
                 <td className="p-2">
-                  <button
-                    className="text-blue-600 hover:underline"
-                    onClick={() => setSelected(item)}
-                  >
+                  <EntityLink kind="item" id={item.itemId} className="text-blue-600">
                     {item.sku}
-                  </button>
+                  </EntityLink>
                 </td>
                 <td>{item.itemName}</td>
                 <td>{item.itemType}</td>

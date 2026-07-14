@@ -13,9 +13,9 @@ const workflowService = (ctx) => createProcurementWorkflowService({
     allowManagerOverride: true,
   }),
 });
-const actor = (ctx) => ctx.req.headers["x-flowchain-user"] || "user-local";
+const actor = (ctx) => ctx.identity?.userId || ctx.req.headers["x-flowchain-user"] || "user-local";
 const role = (ctx) =>
-  ctx.req.headers["x-flowchain-role"] || "procurement-manager";
+  ctx.identity?.role || ctx.req.headers["x-flowchain-role"] || "procurement-manager";
 const allowed = (ctx, action) => {
   const r = role(ctx);
   if (["manager", "admin", "procurement-manager"].includes(r)) return true;

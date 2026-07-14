@@ -14,7 +14,7 @@ import {
 import { navGroups, navItems } from "./routes";
 import { defaultRouteForModule, routeById, routeByPath, routePathForId } from "./routeRegistry";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
-import { apiJson } from "../lib/api-client";
+import { apiJson, AUTH_TOKEN_KEY, CURRENT_USER_KEY, migrateLegacySessionStorage } from "../lib/api-client";
 import {
   navigationIntentFromGlobalSearchResult,
   navigationIntentFromModule,
@@ -151,7 +151,6 @@ function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string
     company: "新辰智能制造",
     name: "张磊",
     email: "zhanglei@example.com",
-    role: "供应链经理",
   });
   const [loading, setLoading] = useState(false);
 
@@ -163,8 +162,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string
         method: "POST",
         body: JSON.stringify(form),
       });
-      localStorage.setItem("scm-demo-token", result.token);
-      localStorage.setItem("scm-demo-user", JSON.stringify(result.user));
+      localStorage.setItem(AUTH_TOKEN_KEY, result.token);
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(result.user));
       onLogin(result.user, result.token);
       toast.success("登录成功，用户档案已保存");
     } catch {
@@ -205,9 +204,9 @@ function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string
 
           <div className="grid grid-cols-3 gap-3 max-w-xl">
             {[
-              ["9", "采购订单"],
-              ["6", "收货单据"],
-              ["AI", "经营洞察"],
+              ["采", "采购协同"],
+              ["库", "库存管理"],
+              ["析", "经营洞察"],
             ].map(([value, label]) => (
               <div key={label} className="rounded-2xl px-4 py-3" style={{ background: A.white, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                 <div className="text-lg font-semibold" style={{ color: A.label }}>{value}</div>
@@ -233,7 +232,6 @@ function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string
             ["company", "公司名称"],
             ["name", "姓名"],
             ["email", "邮箱"],
-            ["role", "角色"],
           ] as const).map(([key, label]) => (
             <label key={key} className="block">
               <span className="text-xs font-medium" style={{ color: A.gray1 }}>{label}</span>
@@ -341,7 +339,8 @@ export default function FlowChainApp() {
   const [focusReturnContext, setFocusReturnContext] = useState<WorkflowContext | null>(null);
   const searchRef = useRef<HTMLFormElement | null>(null);
   const [unreadCount] = useState(3);
-  const [authToken, setAuthToken] = useState(() => localStorage.getItem("scm-demo-token") || "");
+  migrateLegacySessionStorage();
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [enabledModuleIds, setEnabledModuleIds] = useState<Set<string> | null>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("flowchain:module-settings") || "null");
@@ -350,7 +349,7 @@ export default function FlowChainApp() {
   });
   const [user, setUser] = useState<WorkspaceUser | null>(() => {
     try {
-      const raw = localStorage.getItem("scm-demo-user");
+      const raw = localStorage.getItem(CURRENT_USER_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -667,8 +666,8 @@ export default function FlowChainApp() {
   }
 
   function logout() {
-    localStorage.removeItem("scm-demo-token");
-    localStorage.removeItem("scm-demo-user");
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(CURRENT_USER_KEY);
     setAuthToken("");
     setUser(null);
   }
