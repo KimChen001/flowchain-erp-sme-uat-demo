@@ -31,8 +31,13 @@ import type {
   WorkspaceUser,
   PurchaseIntent,
 } from "../types/scm";
+import {
+  readExperimentalModuleIds,
+  resolveCapabilityRouteAccess,
+  type CapabilityLoadState,
+  type ModuleCapability,
+} from "./capabilityRouteGuard";
 
-type ModuleCapability = { id: string; enabled: boolean; maturity: "stable" | "beta" | "preview" | "unavailable"; readReady: boolean; writeReady: boolean; reason: string };
 import ReceivingPanel from "../modules/receiving/Page";
 import InventoryPanel from "../modules/inventory/Page";
 import ForecastPanel from "../modules/forecast/Page";
@@ -309,6 +314,38 @@ class PanelErrorBoundary extends React.Component<PanelErrorBoundaryProps, PanelE
   }
 }
 
+function CapabilityRouteStatus({
+  moduleLabel,
+  maturity,
+  reason,
+  loading = false,
+  onNavigate,
+}: {
+  moduleLabel: string;
+  maturity: ModuleCapability["maturity"];
+  reason: string;
+  loading?: boolean;
+  onNavigate: (path: string) => void;
+}) {
+  if (loading) {
+    return <Card className="p-10 text-center" data-testid="capability-route-loading" aria-live="polite">
+      <Loader2 size={20} className="mx-auto animate-spin" style={{ color: A.blue }} />
+      <h1 className="mt-3 text-base font-semibold" style={{ color: A.label }}>正在确认模块可用状态</h1>
+      <p className="mt-2 text-xs" style={{ color: A.sub }}>确认完成前不会加载 {moduleLabel} 的业务内容。</p>
+    </Card>;
+  }
+  return <Card className="p-10 text-center" data-testid="capability-route-blocked">
+    <AlertTriangle size={22} className="mx-auto" style={{ color: A.orange }} />
+    <h1 className="mt-3 text-base font-semibold" style={{ color: A.label }}>{moduleLabel} 当前不可进入</h1>
+    <p className="mt-2 text-xs" style={{ color: A.sub }}>当前 maturity：{maturity}</p>
+    <p className="mx-auto mt-3 max-w-2xl text-sm leading-6" style={{ color: A.gray1 }}>{reason}</p>
+    <div className="mt-6 flex flex-wrap justify-center gap-2">
+      <button type="button" onClick={() => onNavigate("/app/overview")} className="h-9 rounded-lg px-4 text-sm font-semibold text-white" style={{ background: A.blue }}>返回工作台</button>
+      <button type="button" onClick={() => onNavigate("/app/procurement")} className="h-9 rounded-lg px-4 text-sm font-semibold" style={{ background: A.gray6, color: A.label }}>返回可用模块</button>
+    </div>
+  </Card>;
+}
+
 export default function FlowChainApp() {
   const location = useLocation();
   const routerNavigate = useNavigate();
@@ -344,6 +381,8 @@ export default function FlowChainApp() {
   migrateLegacySessionStorage();
   const [authToken, setAuthToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [capabilities, setCapabilities] = useState<Record<string, ModuleCapability>>({});
+  const [capabilityLoadState, setCapabilityLoadState] = useState<CapabilityLoadState>("loading");
+  const [experimentalModuleIds, setExperimentalModuleIds] = useState(() => readExperimentalModuleIds());
   const [enabledModuleIds, setEnabledModuleIds] = useState<Set<string> | null>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("flowchain:module-settings") || "null");
@@ -367,7 +406,12 @@ export default function FlowChainApp() {
       } catch { setEnabledModuleIds(null); }
     };
     window.addEventListener("flowchain:module-settings", refreshModuleSettings);
-    return () => window.removeEventListener("flowchain:module-settings", refreshModuleSettings);
+    const refreshExperiments = () => setExperimentalModuleIds(readExperimentalModuleIds());
+    window.addEventListener("flowchain:experimental-modules", refreshExperiments);
+    return () => {
+      window.removeEventListener("flowchain:module-settings", refreshModuleSettings);
+      window.removeEventListener("flowchain:experimental-modules", refreshExperiments);
+    };
   }, []);
 
   useEffect(() => {
@@ -389,17 +433,18 @@ export default function FlowChainApp() {
   const panelModule = activeRoute?.panelId || activeModule;
 
   useEffect(() => {
+    setCapabilityLoadState("loading");
     apiJson<{ capabilities: ModuleCapability[] }>("/api/capabilities").then(({ capabilities: rows }) => {
       const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
       setCapabilities(byId);
-      let experimental = new Set<string>();
-      try {
-        const saved = JSON.parse(localStorage.getItem("flowchain:module-settings") || "null");
-        experimental = new Set(saved?.items?.filter((item: { enabled: boolean }) => item.enabled).map((item: { id: string }) => item.id) || []);
-      } catch { /* Invalid local experiment settings are ignored. */ }
-      setEnabledModuleIds(new Set(rows.filter((row) => row.enabled || (row.maturity === "preview" && experimental.has(row.id))).map((row) => row.id)));
-    }).catch(() => { /* Keep the local navigation fallback when capability discovery is unavailable. */ });
-  }, [authToken]);
+      setCapabilityLoadState("ready");
+      setEnabledModuleIds(new Set(rows.filter((row) => row.enabled || (row.maturity === "preview" && experimentalModuleIds.has(row.id))).map((row) => row.id)));
+    }).catch(() => {
+      setCapabilities({});
+      setCapabilityLoadState("failed");
+      setEnabledModuleIds(new Set(["overview", "master-data", "procurement", "sales", "inventory", "reports"]));
+    });
+  }, [authToken, experimentalModuleIds]);
 
   useEffect(() => {
     if (!activeRoute?.entityType || !activeRoute.entityIdParam) return;
@@ -417,6 +462,7 @@ export default function FlowChainApp() {
   const activeNavItem = navItems.find(navItemMatchesActive);
   const activeModuleLabel = activeRoute?.moduleLabel || activeNavItem?.label || activeModule;
   const activeChildLabel = activeRoute?.parentId ? activeRoute.label : undefined;
+  const capabilityAccess = resolveCapabilityRouteAccess({ moduleId: activeModule, loadState: capabilityLoadState, capabilities, experimentalModuleIds });
   const contentMaxWidthClass = panelModule === "srm"
     ? "max-w-[1440px]"
     : ["overview", "reports", "imports", "review-actions", "collaboration-drafts", "audit-history", "pilot-readiness", "settings"].includes(activeModule)
@@ -991,7 +1037,9 @@ export default function FlowChainApp() {
                   <BusinessBackLink context={focusReturnContext} onReturn={returnFromFocus} />
                 </div>
               )}
-              {capabilities[activeModule]?.maturity === "unavailable" ? <Card className="p-10 text-center"><h1 className="text-base font-semibold">该模块尚未接通</h1><p className="mt-2 text-xs" style={{ color: A.sub }}>{capabilities[activeModule].reason}</p></Card> : <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
+              {capabilityAccess.status === "loading" ? <CapabilityRouteStatus moduleLabel={activeModuleLabel} maturity={capabilityAccess.capability.maturity} reason={capabilityAccess.capability.reason} loading onNavigate={routerNavigate} />
+              : capabilityAccess.status === "blocked" ? <CapabilityRouteStatus moduleLabel={activeModuleLabel} maturity={capabilityAccess.capability.maturity} reason={capabilityAccess.reason} onNavigate={routerNavigate} />
+              : <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
                 <React.Suspense fallback={<div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="模块加载中">{[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl" style={{ background: A.gray5 }} />)}</div>}>
                 {activeRoute.pageType === "detail" && activeRoute.entityType && !["purchase_request", "purchase_order", "supplier", "item"].includes(activeRoute.entityType)
                   ? <BusinessEntityDetailPage route={activeRoute} />
