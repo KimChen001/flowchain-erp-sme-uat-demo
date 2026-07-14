@@ -12,7 +12,7 @@ export type ImportCommitResponse = {
 export type ImportBatch = ImportCommitResponse & {
   previewId: string; schemaId: string; originalFileName: string; sheetName: string; status: "committed" | "rolled_back";
   rollbackDeadline?: string; rolledBackAt?: string; persistenceScope?: "process-memory-metadata";
-  targetRepositories?: string[]; limitations?: string[];
+  targetRepositories?: string[]; limitations?: string[]; auditEventId?: string;
 };
 
 export function previewBusinessImport(input: Record<string, unknown>) {

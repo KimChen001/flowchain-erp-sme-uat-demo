@@ -234,6 +234,7 @@ export function recordDurableImportCommit(validation, changes = [], options = {}
   }
   state.batches.set(importBatchId, batch)
   const auditEvent = audit('import_batch_committed', { type: 'importBatch', id: importBatchId }, batch, batch.actor)
+  batch.auditEventId = auditEvent.id
   const result = { ok: true, atomic: true, importBatchId, businessObject: preview.businessObject, inserted, updated, skipped: 0, failed: 0, warnings: batch.warnings, auditEventId: auditEvent.id, rollbackAvailable: false, committedAt: batch.committedAt, targetRepositories: batch.targetRepositories }
   state.idempotency.set(validation.idempotencyKey, result)
   return clone(result)
