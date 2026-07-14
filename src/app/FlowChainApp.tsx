@@ -202,10 +202,10 @@ function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string
 
           <div>
             <h1 className="text-[38px] leading-tight font-semibold mb-4" style={{ color: A.label }}>
-              把采购、销售、库存和结算放进同一个进销存工作台。
+              把基础资料、采购、销售、库存和经营分析连接到同一个工作台。
             </h1>
             <p className="text-base leading-7 max-w-xl" style={{ color: A.sub }}>
-              FlowChain 是面向中小企业的 ERP 进销存协同平台，统一支撑基础资料、采购管理、销售管理、库存管理、结算管理、报表中心和系统管理。
+              FlowChain 是面向中小企业的 ERP 进销存协同平台，当前连接基础资料、采购、销售、库存和经营分析。发票、对账与结算将在正式财务数据链路接通后启用。
             </p>
           </div>
 
@@ -377,7 +377,6 @@ export default function FlowChainApp() {
   const [focusReturnActive, setFocusReturnActive] = useState("overview");
   const [focusReturnContext, setFocusReturnContext] = useState<WorkflowContext | null>(null);
   const searchRef = useRef<HTMLFormElement | null>(null);
-  const [unreadCount] = useState(3);
   migrateLegacySessionStorage();
   const [authToken, setAuthToken] = useState(() => localStorage.getItem(AUTH_TOKEN_KEY) || "");
   const [capabilities, setCapabilities] = useState<Record<string, ModuleCapability>>({});
@@ -961,14 +960,10 @@ export default function FlowChainApp() {
                 </div>
               )}
             </form>
-            <button className="relative p-2 rounded-md transition-colors hover:bg-slate-100"
+            <button type="button" disabled aria-label="通知中心尚未接入" title="通知中心尚未接入"
+              className="relative p-2 rounded-md opacity-45"
               style={{ color: A.gray1 }}>
               <Bell size={15} strokeWidth={1.8} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
             </button>
             <div className="relative">
               <button
