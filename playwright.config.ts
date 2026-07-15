@@ -27,7 +27,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "node scripts/browser-uat-api.mjs",
+      command: process.env.PLAYWRIGHT_RECEIVING_DB === "true" ? "node scripts/browser-receiving-api.mjs" : "node scripts/browser-uat-api.mjs",
       url: `http://127.0.0.1:${apiPort}/api/health`,
       reuseExistingServer: false,
       timeout: 30_000,

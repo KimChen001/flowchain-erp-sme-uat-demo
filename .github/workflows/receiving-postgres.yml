@@ -1,0 +1,39 @@
+name: Receiving PostgreSQL Workbench
+
+on:
+  push:
+    branches: ['codex/**']
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+        env:
+          DATABASE_URL: postgresql://generate_only:generate_only@127.0.0.1:55432/flowchain_generate_only?schema=public
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:db:receiving
+      - run: npm run test:api:receiving
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser:receiving
