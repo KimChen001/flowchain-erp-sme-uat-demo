@@ -78,6 +78,9 @@ const routeDefinitions = [
   { method: 'GET', pattern: /^\/api\/pilot\/exports\/[^/]+$/, group: 'pilot-exports', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-db-read' },
   { method: 'GET', pattern: /^\/api\/admin\/pilot-diagnostics$/, group: 'pilot-diagnostics', classification: ROUTE_CLASSES.diagnostics, writesJson: false, databaseMode: 'allowed-db-read' },
   { method: 'POST', pattern: /^\/api\/procurement\/receiving\/[^/]+\/(?:post|reverse)$/, group: 'receiving-posting', classification: ROUTE_CLASSES.controlledPersistence, writesJson: false, databaseMode: 'allowed-db-persistence' },
+  { method: 'GET', pattern: /^\/api\/sales\/(?:orders\/[^/]+\/outbound-state|shipments\/[^/]+\/posting-state)$/, group: 'sales-outbound-read', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-db-read' },
+  { method: 'POST', pattern: /^\/api\/sales\/(?:orders\/[^/]+\/(?:reservations\/(?:preview|release-preview)|shipments\/preview)|shipments\/[^/]+\/(?:cancel-preview|post-preview|reverse-preview))$/, group: 'sales-outbound-preview', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-db-read' },
+  { method: 'POST', pattern: /^\/api\/sales\/(?:orders\/[^/]+\/(?:reservations\/(?:reserve|release)|shipments)|shipments\/[^/]+\/(?:cancel|post|reverse))$/, group: 'sales-outbound-command', classification: ROUTE_CLASSES.controlledPersistence, writesJson: false, databaseMode: 'allowed-db-persistence' },
   { method: 'POST', pattern: /^\/api\/receiving-docs$/, group: 'receiving', classification: ROUTE_CLASSES.legacyMutation, writesJson: true, databaseMode: 'blocked' },
   { method: 'PATCH', pattern: /^\/api\/receiving-docs\/[^/]+$/, group: 'receiving', classification: ROUTE_CLASSES.legacyMutation, writesJson: true, databaseMode: 'blocked' },
 ]

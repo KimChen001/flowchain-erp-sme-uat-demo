@@ -27,6 +27,7 @@ import {
 import { handlePurchaseOrdersRoute } from './purchase-orders.routes.mjs'
 import { handlePurchaseRequestsRoute } from './purchase-requests.routes.mjs'
 import { handleReceivingRoute } from './receiving.routes.mjs'
+import { handleOutboundRoute } from './outbound.routes.mjs'
 import { handlePilotWorkspaceRoute } from './pilot-workspace.routes.mjs'
 import { handlePilotImportRoute } from './pilot-import.routes.mjs'
 import { handlePilotOperationsRoute } from './pilot-operations.routes.mjs'
@@ -1099,6 +1100,7 @@ export function createScmServer() {
     if (await handleRfqsRoute(routeContext)) return
     if (await handlePurchaseRequestsRoute(routeContext)) return
     if (await handlePurchaseOrdersRoute(routeContext)) return
+    if (await handleOutboundRoute(routeContext)) return
     if (await handleReceivingRoute(routeContext)) return
     if (await handleInventoryMovementsRoute(routeContext)) return
     if (await handleSupplierPerformanceRoute(routeContext)) return

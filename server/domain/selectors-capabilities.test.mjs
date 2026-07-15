@@ -43,11 +43,19 @@ test('capability registry hides preview and unavailable modules by default', asy
   assert.equal(byId.finance.enabled, false)
   assert.equal(byId['receiving-posting'].enabled, false)
   assert.equal(byId['receiving-posting'].databaseOnly, true)
-  assert.equal(byId['outbound-posting'].maturity, 'unavailable')
+  for (const id of ['sales-reservation', 'sales-shipment-draft', 'sales-shipment-posting', 'sales-shipment-reversal']) {
+    assert.equal(byId[id].maturity, 'beta')
+    assert.equal(byId[id].databaseOnly, true)
+    assert.equal(byId[id].enabled, false)
+  }
   assert.equal(byId['stock-transfer'].maturity, 'unavailable')
 
   const databaseEnabled = await call(handleCapabilitiesRoute, '/api/capabilities', { env: { FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: 'true' } })
   const enabledById = Object.fromEntries(databaseEnabled.payload.capabilities.map(row => [row.id, row]))
   assert.equal(enabledById['receiving-posting'].enabled, true)
   assert.equal(enabledById['receiving-reversal'].enabled, true)
+
+  const outboundEnabled = await call(handleCapabilitiesRoute, '/api/capabilities', { env: { FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true' } })
+  const outboundById = Object.fromEntries(outboundEnabled.payload.capabilities.map(row => [row.id, row]))
+  for (const id of ['sales-reservation', 'sales-shipment-draft', 'sales-shipment-posting', 'sales-shipment-reversal']) assert.equal(outboundById[id].enabled, true)
 })
