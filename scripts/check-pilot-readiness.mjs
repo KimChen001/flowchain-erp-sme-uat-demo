@@ -12,6 +12,7 @@ check('database_url', /^postgres(?:ql)?:\/\//i.test(String(env.DATABASE_URL || '
 check('session_secret', String(env.FLOWCHAIN_LOCAL_SESSION_SECRET || '').length >= 32, 'Set FLOWCHAIN_LOCAL_SESSION_SECRET to at least 32 random characters.')
 check('default_tenant', Boolean(String(env.FLOWCHAIN_DEFAULT_TENANT_ID || '').trim()), 'Set FLOWCHAIN_DEFAULT_TENANT_ID to the provisioned workspace id.')
 check('receiving_posting', env.FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING === 'true', 'Set FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING=true.')
+check('outbound_posting', env.FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING === 'true', 'Set FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING=true.')
 check('bootstrap_disabled', env.FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP !== 'true', 'Disable FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP outside disposable local tests.')
 check('identity_migration', existsSync(path.join(root, 'prisma/migrations/20260715020000_pilot_identity_foundation/migration.sql')), 'Deploy the Pilot identity migration.')
 check('import_migration', existsSync(path.join(root, 'prisma/migrations/20260715021000_pilot_import_foundation/migration.sql')), 'Deploy the Pilot import migration.')
