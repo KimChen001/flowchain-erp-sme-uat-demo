@@ -16,6 +16,19 @@ function collectRuntimeErrors(page: Page) {
   return errors
 }
 
+test('reports overview presents a business-safe empty amount state', async ({ page }) => {
+  await authenticate(page)
+  const errors = collectRuntimeErrors(page)
+  await page.goto('/app/reports/overview')
+  await expect(page.getByTestId('bi-dashboard')).toHaveAttribute('data-view', 'overview')
+  await expect(page.getByRole('button', { name: /采购订单金额/ })).toContainText('暂无金额数据')
+  await expect(page.getByTestId('reports-multi-currency-status')).toHaveCount(0)
+  await expect(page.getByText('请选择币种')).toHaveCount(0)
+  await expect(page.getByTestId('reports-data-scope-limitations')).toContainText('数据范围说明')
+  await expect(page.locator('body')).not.toContainText(/_runtime_|\b[a-z]+(?:_[a-z]+)+\b/)
+  expect(errors.join('\n')).not.toContain('Invalid currency code')
+})
+
 test('reports overview renders an unfiltered single-currency scope safely', async ({ page }) => {
   await authenticate(page)
   const errors = collectRuntimeErrors(page)

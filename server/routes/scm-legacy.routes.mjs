@@ -96,6 +96,7 @@ const dataFile = path.join(root, 'data', 'scm-demo.json')
 const jsonDb = createJsonDb(dataFile)
 const port = Number(process.env.SCM_API_PORT || 8787)
 const distDir = path.join(root, 'dist')
+const staticAssetPath = pathname => pathname.startsWith('/assets/') || /\.(?:js|css|map|json|png|jpe?g|svg|webp|ico|woff2?|ttf)$/i.test(pathname)
 
 function gitValue(args, fallback = 'unknown') {
   try { return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || fallback }
@@ -143,6 +144,10 @@ async function sendStatic(req, res, url) {
     const info = await stat(filePath)
     if (info.isDirectory()) filePath = path.join(filePath, 'index.html')
   } catch {
+    if (staticAssetPath(decodedPath)) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' })
+      return res.end(req.method === 'HEAD' ? undefined : 'Not found')
+    }
     filePath = path.join(distDir, 'index.html')
   }
 
