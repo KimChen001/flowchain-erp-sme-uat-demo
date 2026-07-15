@@ -6,6 +6,7 @@ import { createOutboundPostingCommandService, outboundRequestHash } from './outb
 import { createOutboundQueryService } from './outbound-query-service.mjs'
 import { buildSalesOrderReservationPlan, buildShipmentReversalPlan, outboundDecimalString, outboundDecimalUnits } from './outbound-transaction-policy.mjs'
 import { createSalesOrderReadService, createSalesOrderWorkbenchService } from './sales-order-workbench-service.mjs'
+import { createOutboundWorkbenchReadService } from './outbound-workbench-read-service.mjs'
 
 const realPostgres = Boolean(process.env.DATABASE_URL) && process.env.FLOWCHAIN_REQUIRE_REAL_POSTGRES_TESTS === 'true'
 const env = { ...process.env, FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true' }
@@ -120,6 +121,14 @@ test('authoritative reserve, draft, post, replay, and reversal close the Postgre
   assert.equal(await prisma.inventoryReservationEvent.count({ where: { tenantId: ids.tenantId } }), 4)
   const linkedEvents = await prisma.inventoryReservationEvent.findMany({ where: { tenantId: ids.tenantId }, include: { commandExecution: true } })
   assert.ok(linkedEvents.every((event) => event.commandExecutionId && event.commandExecution?.commandType === event.commandType && event.commandExecution?.idempotencyKey))
+  const workbench = await createOutboundWorkbenchReadService({ prisma }).orderWorkbench(ids.salesOrderId, identity(ids.tenantId, ids.actorId))
+  assert.equal(workbench.dataSource, 'Authoritative PostgreSQL')
+  assert.equal(workbench.reconciliation.status, 'matched')
+  assert.ok(workbench.evidence.some((event) => event.commandExecutionId && event.idempotencyKey))
+  assert.ok(workbench.smartLinks.some((link) => link.targetRouteId === 'inventory:movements' && link.filter.relatedSalesOrderId === ids.salesOrderId))
+  const shipmentWorkbench = await createOutboundWorkbenchReadService({ prisma }).shipmentWorkbench(shipmentId, identity(ids.tenantId, ids.actorId))
+  assert.equal(shipmentWorkbench.availableActions.canReverse, false)
+  assert.equal(shipmentWorkbench.movements.length, 2)
   await assertReconciled(ids)
 })
 

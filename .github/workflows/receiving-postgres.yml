@@ -26,6 +26,15 @@ jobs:
       - run: npm run test:api:receiving
       - run: npm run test:db:outbound
       - run: npm run test:api:outbound
+      - run: npm run pilot:check
+        env:
+          FLOWCHAIN_PERSISTENCE_MODE: database
+          DATABASE_URL: postgresql://readiness_only:readiness_only@127.0.0.1:55432/flowchain_readiness_only?schema=public
+          FLOWCHAIN_LOCAL_SESSION_SECRET: ci-readiness-check-secret-at-least-32-characters
+          FLOWCHAIN_DEFAULT_TENANT_ID: ci-readiness-tenant
+          FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: 'true'
+          FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true'
+          FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: 'false'
 
   browser:
     runs-on: ubuntu-latest
@@ -43,3 +52,4 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser:receiving
       - run: npm run test:browser:reports
+      - run: npm run test:browser:outbound
