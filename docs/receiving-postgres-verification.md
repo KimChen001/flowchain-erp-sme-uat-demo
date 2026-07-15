@@ -27,8 +27,8 @@ The cluster and all three databases are deleted when the command finishes. No pa
 
 On success, expect:
 
-- Fresh database: 15 tests passed, 0 failed, 0 skipped.
-- Baseline upgrade: 11 tests passed, 0 failed, 0 skipped.
+- Fresh database: 18 tests passed, 0 failed, 0 skipped.
+- Baseline upgrade: 13 tests passed, 0 failed, 0 skipped.
 - Duplicate preflight: one duplicate group found, additive migration rejected with `FLOWCHAIN_INVENTORY_BALANCE_DUPLICATES`, and both source rows retained.
 - Final line: `PostgreSQL receiving verification: PASS`.
 
@@ -99,3 +99,5 @@ Never run this harness against production, staging, a developer's business datab
 ## Recorded verification
 
 On 2026-07-15, the full command completed against real Embedded PostgreSQL 16.14 on Windows x64: fresh migration and transaction tests passed, baseline upgrade and transaction tests passed, duplicate preflight rejected the migration without changing either duplicate row, and no required DB test was skipped.
+
+Actor creation is fail-closed by default. `ACTOR_NOT_PROVISIONED` (HTTP 403) is returned when the signed actor does not exist. Automatic local actor bootstrap is allowed only under `NODE_ENV=test` or explicit `FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP=true`; it must remain false in acceptance and production environments.
