@@ -49,6 +49,11 @@ model Tenant {
   warehouseLocations    WarehouseLocation[]
   importBatches         ImportBatch[]
   importIssues          ImportIssue[]
+  salesOrders           SalesOrder[]
+  inventoryReservations InventoryReservation[]
+  reservationEvents     InventoryReservationEvent[]
+  shipmentDocuments     ShipmentDocument[]
+  shipmentAllocations   ShipmentAllocation[]
 }
 
 model User {
@@ -75,6 +80,10 @@ model User {
   invitationsSent    WorkspaceInvitation[] @relation("InvitationInviter")
   invitationsAccepted WorkspaceInvitation[] @relation("InvitationAcceptor")
   importBatches       ImportBatch[]
+  reservationsCreated InventoryReservation[]      @relation("ReservationReservedBy")
+  reservationEvents   InventoryReservationEvent[] @relation("ReservationEventActor")
+  shipmentsPosted     ShipmentDocument[]           @relation("ShipmentPostedBy")
+  shipmentsReversed   ShipmentDocument[]           @relation("ShipmentReversedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -117,6 +126,9 @@ model Item {
 
   tenant            Tenant    @relation(fields: [tenantId], references: [id])
   preferredSupplier Supplier? @relation(fields: [preferredSupplierId], references: [id])
+  salesOrderLines    SalesOrderLine[]
+  reservations      InventoryReservation[]
+  shipmentLines     ShipmentLine[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, name])
@@ -136,6 +148,8 @@ model Warehouse {
   defaultForUsers User[] @relation("UserDefaultWarehouse")
   userScopes UserWarehouseScope[]
   locations WarehouseLocation[]
+  reservations InventoryReservation[]
+  shipmentAllocations ShipmentAllocation[]
 
   @@unique([tenantId, code])
 }
@@ -834,6 +848,187 @@ model BusinessCommandExecution {
 
   @@unique([tenantId, commandType, idempotencyKey])
   @@index([tenantId, entityType, entityId])
+}
+
+model SalesOrder {
+  id                String   @id
+  tenantId          String
+  orderNumber       String
+  customerId        String?
+  customerName      String
+  workflowStatus    String   @default("draft")
+  reservationStatus String   @default("not_reserved")
+  fulfillmentStatus String   @default("not_fulfilled")
+  promisedDate      DateTime?
+  currency          String
+  version           Int      @default(0)
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant       Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  lines        SalesOrderLine[]
+  reservations InventoryReservation[]
+  shipments    ShipmentDocument[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, workflowStatus])
+  @@index([tenantId, reservationStatus])
+  @@index([tenantId, fulfillmentStatus])
+  @@index([tenantId, promisedDate])
+}
+
+model SalesOrderLine {
+  id                String   @id
+  salesOrderId      String
+  itemId            String
+  sku               String
+  itemName          String
+  orderedQuantity   Decimal  @db.Decimal(18, 4)
+  reservedQuantity  Decimal  @default(0) @db.Decimal(18, 4)
+  fulfilledQuantity Decimal  @default(0) @db.Decimal(18, 4)
+  unit              String
+  version           Int      @default(0)
+  metadata          Json?
+
+  salesOrder   SalesOrder            @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  item         Item                  @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  reservations InventoryReservation[]
+  shipmentLines ShipmentLine[]
+
+  @@index([salesOrderId])
+  @@index([itemId, sku])
+}
+
+model InventoryReservation {
+  id                  String   @id
+  tenantId            String
+  salesOrderId        String
+  salesOrderLineId    String
+  itemId              String
+  sku                 String
+  warehouseId         String
+  location            String?
+  locationKey         String   @default("")
+  reservedQuantity    Decimal  @db.Decimal(18, 4)
+  allocatedQuantity   Decimal  @default(0) @db.Decimal(18, 4)
+  consumedQuantity    Decimal  @default(0) @db.Decimal(18, 4)
+  releasedQuantity    Decimal  @default(0) @db.Decimal(18, 4)
+  status              String   @default("active")
+  version             Int      @default(0)
+  reservedById        String
+  reservedAt          DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  metadata            Json?
+
+  tenant         Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  salesOrder     SalesOrder                  @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  salesOrderLine SalesOrderLine              @relation(fields: [salesOrderLineId], references: [id], onDelete: Restrict)
+  item           Item                        @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  warehouse      Warehouse                   @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  reservedBy     User                        @relation("ReservationReservedBy", fields: [reservedById], references: [id], onDelete: Restrict)
+  events         InventoryReservationEvent[]
+  allocations    ShipmentAllocation[]
+
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, salesOrderLineId])
+  @@index([tenantId, sku, warehouseId, locationKey])
+  @@index([tenantId, status])
+}
+
+model InventoryReservationEvent {
+  id                 String   @id
+  tenantId           String
+  reservationId      String
+  eventType          String
+  quantity           Decimal  @db.Decimal(18, 4)
+  commandType        String
+  commandExecutionId String?
+  actorId            String
+  reason             String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reservation InventoryReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  actor       User                 @relation("ReservationEventActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, reservationId, createdAt])
+  @@index([tenantId, commandExecutionId])
+}
+
+model ShipmentDocument {
+  id             String    @id
+  tenantId       String
+  shipmentNumber String
+  salesOrderId   String
+  workflowStatus String    @default("draft")
+  postingStatus  String    @default("unposted")
+  postedAt       DateTime?
+  postedById     String?
+  reversedAt     DateTime?
+  reversedById   String?
+  reversalReason String?
+  version        Int       @default(0)
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  salesOrder SalesOrder  @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  postedBy   User?       @relation("ShipmentPostedBy", fields: [postedById], references: [id], onDelete: Restrict)
+  reversedBy User?       @relation("ShipmentReversedBy", fields: [reversedById], references: [id], onDelete: Restrict)
+  lines      ShipmentLine[]
+
+  @@unique([tenantId, shipmentNumber])
+  @@index([tenantId, salesOrderId])
+  @@index([tenantId, postingStatus])
+  @@index([tenantId, workflowStatus])
+}
+
+model ShipmentLine {
+  id                 String   @id
+  shipmentId         String
+  salesOrderLineId   String
+  itemId             String
+  sku                String
+  requestedQuantity  Decimal  @db.Decimal(18, 4)
+  postedQuantity     Decimal  @default(0) @db.Decimal(18, 4)
+  unit               String
+  version            Int      @default(0)
+  metadata           Json?
+
+  shipment      ShipmentDocument    @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  salesOrderLine SalesOrderLine      @relation(fields: [salesOrderLineId], references: [id], onDelete: Restrict)
+  item           Item                @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  allocations    ShipmentAllocation[]
+
+  @@index([shipmentId])
+  @@index([salesOrderLineId])
+}
+
+model ShipmentAllocation {
+  id             String   @id
+  tenantId       String
+  shipmentLineId String
+  reservationId  String
+  warehouseId    String
+  location       String?
+  locationKey    String   @default("")
+  quantity       Decimal  @db.Decimal(18, 4)
+  status         String   @default("allocated")
+  version        Int      @default(0)
+  metadata       Json?
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  shipmentLine ShipmentLine         @relation(fields: [shipmentLineId], references: [id], onDelete: Restrict)
+  reservation  InventoryReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  warehouse    Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, shipmentLineId])
+  @@index([tenantId, reservationId])
+  @@index([tenantId, warehouseId, locationKey])
+  @@index([tenantId, status])
 }
 
 model InventoryException {
