@@ -39,6 +39,7 @@ import {
 } from "./capabilityRouteGuard";
 
 import ReceivingPanel from "../modules/receiving/Page";
+import ReceivingPostingWorkbench from "../modules/receiving/ReceivingPostingWorkbench";
 import InventoryPanel from "../modules/inventory/Page";
 import ForecastPanel from "../modules/forecast/Page";
 import OverviewPanel from "../modules/overview/Page";
@@ -707,6 +708,7 @@ export default function FlowChainApp() {
     purchasing:  <ProcurementPanel view="orders" focus={searchFocus} onNavigate={navigateTo} />,
     rfq:         <ProcurementPanel view="rfq" focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     receiving:   <ReceivingPanel focus={searchFocus} onNavigate={navigateTo} />,
+    "receiving-workbench": <ReceivingPostingWorkbench receivingDocumentId={searchFocus?.entityType === "receiving_doc" ? searchFocus.entityId : decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "")} />,
     procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => navigateTo("procurement:rfq")} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     srm: <SrmPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     "master-data": <MasterDataPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
@@ -1036,7 +1038,8 @@ export default function FlowChainApp() {
               : capabilityAccess.status === "blocked" ? <CapabilityRouteStatus moduleLabel={activeModuleLabel} maturity={capabilityAccess.capability.maturity} reason={capabilityAccess.reason} onNavigate={routerNavigate} />
               : <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
                 <React.Suspense fallback={<div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="模块加载中">{[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl" style={{ background: A.gray5 }} />)}</div>}>
-                {activeRoute.pageType === "detail" && activeRoute.entityType && !["purchase_request", "purchase_order", "supplier", "item"].includes(activeRoute.entityType)
+                {activeRoute.panelId === "receiving-workbench" ? panels["receiving-workbench"]
+                  : activeRoute.pageType === "detail" && activeRoute.entityType && !["purchase_request", "purchase_order", "supplier", "item"].includes(activeRoute.entityType)
                   ? <BusinessEntityDetailPage route={activeRoute} />
                   : panels[panelModule] || panels[activeModule] || panels.overview}
                 </React.Suspense>
