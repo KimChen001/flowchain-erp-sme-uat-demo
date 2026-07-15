@@ -1,5 +1,7 @@
 # Outbound Posting Foundation
 
+> Phase 3.1 stabilization (2026-07-15): all outbound previews now enforce tenant-owned warehouse read scope; order Item/SKU and balance identity are revalidated; reversal verifies immutable posting movement facts; duplicate shipment numbers have a stable 409; reservation events link to command executions through an additive nullable/restrict FK; posting movements use authoritative item names; and Node 24 is the verified runtime. The product Workbench and lifecycle contracts are documented in `docs/outbound-posting-workbench.md`.
+
 ## Scope
 
 Phase 3 adds the authoritative PostgreSQL transaction path from a confirmed Sales Order through reservation, shipment allocation, physical outbound posting, fulfillment, audit, and reversal. It deliberately does not add an Outbound Workbench UI.
