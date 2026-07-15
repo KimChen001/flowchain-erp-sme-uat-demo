@@ -5,6 +5,7 @@ import { createPrismaClient } from '../persistence/prisma-client.mjs'
 import { createOutboundPostingCommandService, outboundRequestHash } from './outbound-posting-command-service.mjs'
 import { createOutboundQueryService } from './outbound-query-service.mjs'
 import { buildSalesOrderReservationPlan, buildShipmentReversalPlan, outboundDecimalString, outboundDecimalUnits } from './outbound-transaction-policy.mjs'
+import { createSalesOrderReadService, createSalesOrderWorkbenchService } from './sales-order-workbench-service.mjs'
 
 const realPostgres = Boolean(process.env.DATABASE_URL) && process.env.FLOWCHAIN_REQUIRE_REAL_POSTGRES_TESTS === 'true'
 const env = { ...process.env, FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true' }
@@ -23,6 +24,23 @@ test('stable request hashing ignores object insertion and business-array order',
   const a = { salesOrderId: 'SO-1', allocations: [{ warehouseId: 'B', quantity: '1' }, { quantity: '2', warehouseId: 'A' }] }
   const b = { allocations: [{ warehouseId: 'A', quantity: '2' }, { quantity: '1', warehouseId: 'B' }], salesOrderId: 'SO-1' }
   assert.equal(outboundRequestHash(a), outboundRequestHash(b))
+})
+
+test('authoritative sales order lifecycle creates, revises, confirms, holds, resumes, and paginates', async () => {
+  const base = await seed(), ctx = identity(base.tenantId, base.actorId), service = createSalesOrderWorkbenchService({ prisma })
+  const created = await service.createOrder({ orderNumber: `SO-LIFECYCLE-${randomUUID()}`, customerName: 'Lifecycle Customer', currency: 'USD', idempotencyKey: 'lifecycle-create', lines: [{ itemId: base.itemId, quantity: '2.5000' }] }, ctx)
+  assert.equal(created.order.workflowStatus, 'draft')
+  assert.deepEqual([created.order.lines[0].sku, created.order.lines[0].itemName, created.order.lines[0].orderedQuantity], [(await prisma.item.findUnique({ where: { id: base.itemId } })).sku, '出库测试物料', '2.5000'])
+  assert.equal((await service.createOrder({ orderNumber: created.order.orderNumber, customerName: 'Lifecycle Customer', currency: 'USD', idempotencyKey: 'lifecycle-create', lines: [{ itemId: base.itemId, quantity: '2.5000' }] }, ctx)).idempotentReplay, true)
+  const revised = await service.reviseOrder(created.order.id, { expectedOrderVersion: 0, idempotencyKey: 'lifecycle-revise', header: { customerName: 'Lifecycle Revised', currency: 'CNY' }, lines: [{ itemId: base.itemId, quantity: '3' }] }, ctx)
+  const confirmed = await service.confirmOrder(created.order.id, { expectedOrderVersion: revised.order.version, idempotencyKey: 'lifecycle-confirm' }, ctx)
+  const held = await service.holdOrder(created.order.id, { expectedOrderVersion: confirmed.order.version, idempotencyKey: 'lifecycle-hold' }, ctx)
+  const resumed = await service.resumeOrder(created.order.id, { expectedOrderVersion: held.order.version, idempotencyKey: 'lifecycle-resume' }, ctx)
+  assert.equal(resumed.order.workflowStatus, 'confirmed')
+  await assert.rejects(() => service.reviseOrder(created.order.id, { expectedOrderVersion: resumed.order.version, idempotencyKey: 'lifecycle-invalid-edit', header: {}, lines: [{ itemId: base.itemId, quantity: '1' }] }, ctx), (error) => error.code === 'SALES_ORDER_INVALID_STATE')
+  const listed = await createSalesOrderReadService({ prisma }).listOrders({ page: 1, pageSize: 1, search: 'Lifecycle Revised' }, ctx)
+  assert.deepEqual([listed.total, listed.orders.length, listed.dataSource], [1, 1, 'Authoritative PostgreSQL'])
+  assert.equal(await prisma.auditLog.count({ where: { tenantId: base.tenantId, entityId: created.order.id } }), 5)
 })
 
 async function seed({ stock = '10.0000', ordered = '10.0000', actorRole = 'manager', scope = 'operate', suffix = randomUUID() } = {}) {
