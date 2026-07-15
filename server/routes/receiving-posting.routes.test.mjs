@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import { ReceivingCommandError } from '../domain/receiving-posting-command-service.mjs'
 import { handleReceivingRoute } from './receiving.routes.mjs'
 
-function route({ path = '/api/procurement/receiving/GRN-1/post', role = 'manager', authenticated = true, tenantId = 'tenant-server', body = {}, headers = {}, env = {}, service } = {}) {
+function route({ path = '/api/procurement/receiving/GRN-1/post', method = 'POST', role = 'manager', authenticated = true, tenantId = 'tenant-server', body = {}, headers = {}, env = {}, service, queryService } = {}) {
   let response
   const identity = { authenticated, userId: authenticated ? 'actor-server' : 'anonymous', name: 'Server Actor', email: '', role, tenantId }
   const ctx = {
-    req: { method: 'POST', headers },
+    req: { method, headers },
     res: {},
     url: new URL(path, 'http://localhost'),
     db: {},
@@ -18,6 +18,7 @@ function route({ path = '/api/procurement/receiving/GRN-1/post', role = 'manager
     },
     identity,
     receivingPostingService: service,
+    receivingWorkbenchQueryService: queryService,
     readBody: async () => body,
     send(_res, status, payload) { response = { status, payload } },
   }
@@ -29,6 +30,33 @@ test('formal receiving routes fail closed when database capability is disabled',
   assert.equal(await handleReceivingRoute(call.ctx), true)
   assert.equal(call.response.status, 409)
   assert.equal(call.response.payload.code, 'CAPABILITY_NOT_AVAILABLE')
+})
+
+test('database workbench GET routes use server identity and preview remains a read call', async () => {
+  let captured
+  const queryService = {
+    async getReceivingDetail(input, context) { captured = { input, context }; return { receivingDocument: { id: input.receivingDocumentId } } },
+    async getReceivingImpactPreview(input, context) { captured = { input, context }; return { operation: input.operation, allowed: true } },
+  }
+  const detail = route({ method: 'GET', path: '/api/procurement/receiving/GRN-1?tenantId=forged', headers: { 'x-flowchain-tenant': 'forged' }, queryService })
+  await handleReceivingRoute(detail.ctx)
+  assert.equal(detail.response.status, 200)
+  assert.equal(captured.context.identity.tenantId, 'tenant-server')
+  assert.deepEqual(captured.input, { receivingDocumentId: 'GRN-1' })
+  const preview = route({ method: 'GET', path: '/api/procurement/receiving/GRN-1/impact-preview?operation=post', queryService })
+  await handleReceivingRoute(preview.ctx)
+  assert.equal(preview.response.status, 200)
+  assert.deepEqual(captured.input, { receivingDocumentId: 'GRN-1', operation: 'post' })
+})
+
+test('workbench GET routes enforce authentication and capability for preview', async () => {
+  const anonymous = route({ method: 'GET', path: '/api/procurement/receiving/GRN-1', authenticated: false, queryService: {} })
+  await handleReceivingRoute(anonymous.ctx)
+  assert.equal(anonymous.response.status, 401)
+  const disabled = route({ method: 'GET', path: '/api/procurement/receiving/GRN-1/impact-preview?operation=post', env: { FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: 'false' }, queryService: {} })
+  await handleReceivingRoute(disabled.ctx)
+  assert.equal(disabled.response.status, 409)
+  assert.equal(disabled.response.payload.code, 'CAPABILITY_NOT_AVAILABLE')
 })
 
 test('formal receiving routes enforce authentication and manager authorization', async () => {
@@ -85,4 +113,3 @@ test('missing tenant is rejected by the command boundary with TENANT_CONTEXT_REQ
   assert.equal(call.response.status, 403)
   assert.equal(call.response.payload.code, 'TENANT_CONTEXT_REQUIRED')
 })
-

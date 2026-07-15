@@ -67,6 +67,8 @@ const routeDefinitions = [
   { method: 'PATCH', pattern: /^\/api\/purchase-orders\/[^/]+\/status$/, group: 'purchase-orders', classification: ROUTE_CLASSES.legacyMutation, writesJson: true, databaseMode: 'blocked' },
 
   { method: 'GET', pattern: /^\/api\/receiving-docs$/, group: 'receiving', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed' },
+  { method: 'GET', pattern: /^\/api\/procurement\/receiving\/[^/]+(?:\/(?:impact-preview|evidence|links))?$/, group: 'receiving-workbench', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-db-read' },
+  { method: 'GET', pattern: /^\/api\/procurement\/purchase-orders\/[^/]+\/receiving-summary$/, group: 'receiving-workbench', classification: ROUTE_CLASSES.readOnly, writesJson: false, databaseMode: 'allowed-db-read' },
   { method: 'POST', pattern: /^\/api\/procurement\/receiving\/[^/]+\/(?:post|reverse)$/, group: 'receiving-posting', classification: ROUTE_CLASSES.controlledPersistence, writesJson: false, databaseMode: 'allowed-db-persistence' },
   { method: 'POST', pattern: /^\/api\/receiving-docs$/, group: 'receiving', classification: ROUTE_CLASSES.legacyMutation, writesJson: true, databaseMode: 'blocked' },
   { method: 'PATCH', pattern: /^\/api\/receiving-docs\/[^/]+$/, group: 'receiving', classification: ROUTE_CLASSES.legacyMutation, writesJson: true, databaseMode: 'blocked' },

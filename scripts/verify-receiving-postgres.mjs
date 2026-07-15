@@ -18,6 +18,7 @@ const prismaCli = join(root, 'node_modules', 'prisma', 'build', 'index.js')
 const testFiles = [
   'server/domain/receiving-posting-transaction.test.mjs',
   'server/domain/receiving-reversal-transaction.test.mjs',
+  'server/domain/receiving-workbench-query-service.test.mjs',
 ]
 
 function sanitize(value, secrets = []) {
@@ -73,6 +74,7 @@ function databaseEnv(url) {
     DATABASE_URL_TEST: url,
     FLOWCHAIN_PERSISTENCE_MODE: 'database',
     FLOWCHAIN_REQUIRE_REAL_POSTGRES_TESTS: 'true',
+    NODE_ENV: 'test',
   }
 }
 
