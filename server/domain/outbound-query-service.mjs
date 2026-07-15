@@ -1,4 +1,4 @@
-import { assertWarehouseAccess, resolveProvisionedActor } from './pilot-identity.mjs'
+import { assertWarehouseAccess, hasWarehouseAccess, resolveProvisionedActor } from './pilot-identity.mjs'
 import {
   buildReservationReleasePlan,
   buildSalesOrderReservationPlan,
@@ -26,6 +26,30 @@ function identityFrom(context) {
 
 function assertPreviewCapability(capabilities, id) {
   if (!capability(capabilities, id).enabled) fail('OUTBOUND_CAPABILITY_NOT_AVAILABLE', `${id} requires database persistence and explicit server enablement.`, 409)
+}
+
+function previewWarehouseIds(plan) {
+  const fromQuantityPlans = []
+  const visit = (value) => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) { value.forEach(visit); return }
+    if (value.warehouseId) fromQuantityPlans.push(value.warehouseId)
+    Object.values(value).forEach(visit)
+  }
+  visit(plan.quantityPlans)
+  return [...new Set([
+    ...fromQuantityPlans,
+    ...plan.balanceImpacts.map((impact) => impact.warehouseId || impact.allocation?.warehouseId || impact.reservation?.warehouseId),
+    ...plan.reservationImpacts.map((impact) => impact.reservation?.warehouseId),
+    ...(plan.shipment?.lines || []).flatMap((line) => (line.allocations || []).map((allocation) => allocation.warehouseId)),
+  ].map(text).filter(Boolean))]
+}
+
+async function assertPreviewWarehouseAccess(prisma, resolved, plan) {
+  const warehouseIds = previewWarehouseIds(plan)
+  const owned = warehouseIds.length ? await prisma.warehouse.count({ where: { tenantId: resolved.tenantId, id: { in: warehouseIds } } }) : 0
+  if (owned !== warehouseIds.length || !hasWarehouseAccess(resolved, warehouseIds, 'read')) fail('WAREHOUSE_SCOPE_DENIED', 'The requested outbound preview was not found.', 404)
+  return previewModel(plan)
 }
 
 function previewModel(plan) {
@@ -84,12 +108,12 @@ export function createOutboundQueryService({ prisma, capabilities = {} } = {}) {
     }
   }
 
-  async function previewSalesOrderReservation(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-reservation'); return previewModel(await buildSalesOrderReservationPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
-  async function previewReservationRelease(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-reservation'); return previewModel(await buildReservationReleasePlan({ prisma, tenantId: resolved.tenantId, ...input })) }
-  async function previewShipmentDraft(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-shipment-draft'); return previewModel(await buildShipmentDraftPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
-  async function previewShipmentCancellation(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-shipment-draft'); return previewModel(await buildShipmentCancellationPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
-  async function previewShipmentPosting(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-shipment-posting'); return previewModel(await buildShipmentPostingPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
-  async function previewShipmentReversal(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-shipment-reversal'); return previewModel(await buildShipmentReversalPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
+  async function previewSalesOrderReservation(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-reservation'); return assertPreviewWarehouseAccess(prisma, resolved, await buildSalesOrderReservationPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
+  async function previewReservationRelease(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-reservation'); return assertPreviewWarehouseAccess(prisma, resolved, await buildReservationReleasePlan({ prisma, tenantId: resolved.tenantId, ...input })) }
+  async function previewShipmentDraft(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-shipment-draft'); return assertPreviewWarehouseAccess(prisma, resolved, await buildShipmentDraftPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
+  async function previewShipmentCancellation(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-shipment-draft'); return assertPreviewWarehouseAccess(prisma, resolved, await buildShipmentCancellationPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
+  async function previewShipmentPosting(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-shipment-posting'); return assertPreviewWarehouseAccess(prisma, resolved, await buildShipmentPostingPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
+  async function previewShipmentReversal(input, context) { const resolved = await actor(context); assertPreviewCapability(capabilities, 'sales-shipment-reversal'); return assertPreviewWarehouseAccess(prisma, resolved, await buildShipmentReversalPlan({ prisma, tenantId: resolved.tenantId, ...input })) }
 
   return { getSalesOrderOutboundState, getShipmentPostingState, previewSalesOrderReservation, previewReservationRelease, previewShipmentDraft, previewShipmentCancellation, previewShipmentPosting, previewShipmentReversal }
 }

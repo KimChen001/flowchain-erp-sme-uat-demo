@@ -115,12 +115,26 @@ function projectOrderLines(order, impacts) {
   })
 }
 
+async function validateOrderItems(prisma, tenantId, order, blockingIssues) {
+  const itemIds = sorted(order.lines.map((line) => outboundText(line.itemId)))
+  const items = itemIds.length ? await prisma.item.findMany({ where: { tenantId, id: { in: itemIds } }, orderBy: { id: 'asc' } }) : []
+  const itemMap = new Map(items.map((item) => [item.id, item]))
+  for (const line of order.lines) {
+    const item = itemMap.get(line.itemId)
+    if (!item || item.tenantId !== tenantId || item.id !== line.itemId || item.sku !== line.sku || item.status !== 'active') {
+      blockingIssues.push(policyError('SALES_ORDER_ITEM_INVALID', `Sales order line ${line.id} does not reference an active tenant item with the same SKU.`, 422))
+    }
+  }
+  return itemMap
+}
+
 export async function buildSalesOrderReservationPlan({ prisma, tenantId, salesOrderId, allocations = [] }) {
   const blockingIssues = []
   const order = await loadOrder(prisma, tenantId, salesOrderId)
   if (!order) return basePlan('reserve', [policyError('SALES_ORDER_NOT_FOUND', 'Sales order was not found.', 404)])
   if (order.workflowStatus !== 'confirmed') blockingIssues.push(policyError('SALES_ORDER_NOT_CONFIRMED', 'Sales order must be confirmed before inventory can be reserved.', 409))
   if (!Array.isArray(allocations) || allocations.length === 0) blockingIssues.push(policyError('RESERVATION_VALIDATION_FAILED', 'At least one reservation allocation is required.'))
+  await validateOrderItems(prisma, tenantId, order, blockingIssues)
 
   const lines = new Map(order.lines.map((line) => [line.id, line]))
   const normalizedAllocations = []
@@ -152,7 +166,12 @@ export async function buildSalesOrderReservationPlan({ prisma, tenantId, salesOr
   for (const key of sorted([...byBalance.keys()])) {
     const allocation = normalizedAllocations.find((entry) => entry.balanceKey === key)
     const balance = await prisma.inventoryBalance.findUnique({ where: balanceWhere({ tenantId, ...allocation }) })
-    if (!balance) { blockingIssues.push(policyError('RESERVATION_INSUFFICIENT_AVAILABLE', `Inventory balance for ${allocation.sku} was not found.`)); continue }
+    if (!balance) {
+      const mismatched = await prisma.inventoryBalance.findFirst({ where: { tenantId, warehouseKey: allocation.warehouseId, locationKey: allocation.locationKey, itemId: allocation.itemId }, select: { id: true } })
+      blockingIssues.push(mismatched ? policyError('SALES_ORDER_ITEM_INVALID', 'Inventory balance SKU does not match the sales order item.', 422) : policyError('RESERVATION_INSUFFICIENT_AVAILABLE', `Inventory balance for ${allocation.sku} was not found.`))
+      continue
+    }
+    if (balance.itemId !== allocation.itemId || balance.sku !== allocation.sku) blockingIssues.push(policyError('SALES_ORDER_ITEM_INVALID', `Inventory balance ${balance.id} does not match the sales order item and SKU.`, 422))
     const onHand = safeUnits(balance.onHandQuantity, blockingIssues, `Balance ${balance.id} onHandQuantity`)
     const reserved = safeUnits(balance.reservedQuantity, blockingIssues, `Balance ${balance.id} reservedQuantity`)
     const available = safeUnits(balance.availableQuantity, blockingIssues, `Balance ${balance.id} availableQuantity`)
@@ -255,6 +274,11 @@ export async function buildShipmentDraftPlan({ prisma, tenantId, salesOrderId, s
   if (order.workflowStatus !== 'confirmed') blockingIssues.push(policyError('SALES_ORDER_NOT_CONFIRMED', 'Sales order must be confirmed before a shipment draft can be created.', 409))
   if (!outboundText(shipmentNumber)) blockingIssues.push(policyError('RESERVATION_VALIDATION_FAILED', 'shipmentNumber is required.'))
   if (!Array.isArray(lines) || lines.length === 0) blockingIssues.push(policyError('RESERVATION_VALIDATION_FAILED', 'At least one shipment line is required.'))
+  await validateOrderItems(prisma, tenantId, order, blockingIssues)
+  if (outboundText(shipmentNumber)) {
+    const duplicate = await prisma.shipmentDocument.findFirst({ where: { tenantId, shipmentNumber: outboundText(shipmentNumber) }, select: { id: true } })
+    if (duplicate) blockingIssues.push(policyError('SHIPMENT_NUMBER_CONFLICT', 'Shipment number is already in use for this workspace.', 409))
+  }
   const orderLines = new Map(order.lines.map((line) => [line.id, line]))
   const reservationIds = sorted((lines || []).flatMap((line) => (line.allocations || []).map((allocation) => outboundText(allocation.reservationId))))
   const reservations = reservationIds.length ? await prisma.inventoryReservation.findMany({ where: { tenantId, salesOrderId: order.id, id: { in: reservationIds } }, orderBy: { id: 'asc' } }) : []
@@ -313,6 +337,7 @@ export async function buildShipmentPostingPlan({ prisma, tenantId, shipmentId })
   const blockingIssues = []
   const shipment = await loadShipment(prisma, tenantId, shipmentId)
   if (!shipment) return basePlan('post_shipment', [policyError('SHIPMENT_NOT_FOUND', 'Shipment was not found.', 404)])
+  await validateOrderItems(prisma, tenantId, shipment.salesOrder, blockingIssues)
   if (shipment.postingStatus === 'posted') blockingIssues.push(policyError('SHIPMENT_ALREADY_POSTED', 'Shipment is already posted.', 409))
   else if (shipment.postingStatus === 'reversed') blockingIssues.push(policyError('SHIPMENT_ALREADY_REVERSED', 'Shipment is already reversed.', 409))
   else if (shipment.workflowStatus === 'cancelled') blockingIssues.push(policyError('SHIPMENT_ALREADY_CANCELLED', 'Cancelled shipment cannot be posted.', 409))
@@ -337,7 +362,8 @@ export async function buildShipmentPostingPlan({ prisma, tenantId, shipmentId })
   for (const key of sorted([...byBalance.keys()])) {
     const { allocation, quantity } = byBalance.get(key)
     const balance = await prisma.inventoryBalance.findUnique({ where: balanceWhere({ tenantId, ...allocation, sku: allocation.reservation.sku }) })
-    if (!balance) { blockingIssues.push(policyError('SHIPMENT_RESERVATION_INSUFFICIENT', 'Shipment inventory balance was not found.', 409)); continue }
+    if (!balance) { const mismatched = await prisma.inventoryBalance.findFirst({ where: { tenantId, warehouseKey: allocation.warehouseId, locationKey: allocation.locationKey, itemId: allocation.reservation.itemId }, select: { id: true } }); blockingIssues.push(mismatched ? policyError('SALES_ORDER_ITEM_INVALID', 'Inventory balance SKU does not match the shipment reservation item.', 422) : policyError('SHIPMENT_RESERVATION_INSUFFICIENT', 'Shipment inventory balance was not found.', 409)); continue }
+    if (balance.itemId !== allocation.reservation.itemId || balance.sku !== allocation.reservation.sku) blockingIssues.push(policyError('SALES_ORDER_ITEM_INVALID', `Inventory balance ${balance.id} does not match the shipment reservation item and SKU.`, 422))
     const onHand = outboundDecimalUnits(balance.onHandQuantity); const reserved = outboundDecimalUnits(balance.reservedQuantity); const available = outboundDecimalUnits(balance.availableQuantity)
     if (available !== onHand - reserved) blockingIssues.push(policyError('SHIPMENT_RESERVATION_INSUFFICIENT', `Balance ${balance.id} does not reconcile.`, 409))
     if (onHand < quantity || reserved < quantity) blockingIssues.push(policyError('SHIPMENT_RESERVATION_INSUFFICIENT', `Balance ${balance.id} is insufficient for posting.`, 409))
@@ -359,6 +385,7 @@ export async function buildShipmentReversalPlan({ prisma, tenantId, shipmentId, 
   const blockingIssues = []
   const shipment = await loadShipment(prisma, tenantId, shipmentId)
   if (!shipment) return basePlan('reverse_shipment', [policyError('SHIPMENT_NOT_FOUND', 'Shipment was not found.', 404)])
+  await validateOrderItems(prisma, tenantId, shipment.salesOrder, blockingIssues)
   if (!outboundText(reason)) blockingIssues.push(policyError('RESERVATION_VALIDATION_FAILED', 'A reversal reason is required.'))
   if (shipment.postingStatus === 'reversed') blockingIssues.push(policyError('SHIPMENT_ALREADY_REVERSED', 'Shipment is already reversed.', 409))
   else if (shipment.postingStatus !== 'posted') blockingIssues.push(policyError('SHIPMENT_REVERSAL_NOT_SAFE', 'Only a posted shipment can be reversed.', 409))
@@ -368,7 +395,27 @@ export async function buildShipmentReversalPlan({ prisma, tenantId, shipmentId, 
   const byReservation = new Map(), byBalance = new Map(), byOrderLine = new Map(), byShipmentLine = new Map()
   for (const allocation of allocations) {
     const movement = movementMap.get(allocation.id)
-    if (!movement || movement.reversedByMovementId || allocation.status !== 'consumed') { blockingIssues.push(policyError('SHIPMENT_REVERSAL_NOT_SAFE', `Original movement for allocation ${allocation.id} is missing or already reversed.`, 409)); continue }
+    const orderLine = shipment.salesOrder.lines.find((line) => line.id === allocation.shipmentLine.salesOrderLineId)
+    const movementMatches = movement
+      && movement.movementType === 'shipment_posting'
+      && movement.tenantId === tenantId
+      && movement.sourceDocumentType === 'ShipmentDocument'
+      && movement.sourceDocumentId === shipment.id
+      && movement.sourceDocumentLineId === allocation.id
+      && movement.relatedSalesOrderId === shipment.salesOrderId
+      && !movement.reversedByMovementId
+      && outboundDecimalUnits(movement.quantityOut) === outboundDecimalUnits(allocation.quantity)
+      && outboundDecimalUnits(movement.quantityIn) === ZERO
+      && movement.sku === allocation.reservation.sku
+      && movement.itemId === allocation.reservation.itemId
+      && movement.warehouseId === allocation.warehouseId
+      && outboundText(movement.locationKey) === outboundText(allocation.locationKey)
+      && outboundText(movement.unit) === outboundText(allocation.shipmentLine.unit)
+      && allocation.status === 'consumed'
+      && allocation.reservation.tenantId === tenantId
+      && allocation.reservation.salesOrderLineId === allocation.shipmentLine.salesOrderLineId
+      && orderLine?.itemId === allocation.reservation.itemId
+    if (!movementMatches) { blockingIssues.push(policyError('SHIPMENT_REVERSAL_NOT_SAFE', `Original posting facts for allocation ${allocation.id} do not match the shipment.`, 409)); continue }
     const quantity = outboundDecimalUnits(allocation.quantity)
     byReservation.set(allocation.reservationId, { reservation: allocation.reservation, quantity: (byReservation.get(allocation.reservationId)?.quantity || ZERO) + quantity })
     const key = balanceKey({ ...allocation, sku: allocation.reservation.sku }); byBalance.set(key, { allocation, quantity: (byBalance.get(key)?.quantity || ZERO) + quantity })
@@ -377,7 +424,7 @@ export async function buildShipmentReversalPlan({ prisma, tenantId, shipmentId, 
   }
   const reservationImpacts = sorted([...byReservation.keys()]).map((reservationId) => { const { reservation, quantity } = byReservation.get(reservationId); const consumed = outboundDecimalUnits(reservation.consumedQuantity); const allocated = outboundDecimalUnits(reservation.allocatedQuantity); if (consumed < quantity) blockingIssues.push(policyError('SHIPMENT_REVERSAL_NOT_SAFE', `Reservation ${reservationId} cannot be restored.`, 409)); return { reservation, reservationId, quantityUnits: quantity, consumedBefore: outboundDecimalString(consumed), consumedAfter: outboundDecimalString(consumed - quantity), allocatedBefore: outboundDecimalString(allocated), allocatedAfter: outboundDecimalString(allocated), statusAfter: outboundReservationStatus({ ...reservation, consumedQuantity: outboundDecimalString(consumed - quantity) }) } })
   const balanceImpacts = []
-  for (const key of sorted([...byBalance.keys()])) { const { allocation, quantity } = byBalance.get(key); const balance = await prisma.inventoryBalance.findUnique({ where: balanceWhere({ tenantId, ...allocation, sku: allocation.reservation.sku }) }); if (!balance) { blockingIssues.push(policyError('SHIPMENT_REVERSAL_NOT_SAFE', 'Shipment balance was not found.', 409)); continue } const onHand = outboundDecimalUnits(balance.onHandQuantity); const reserved = outboundDecimalUnits(balance.reservedQuantity); const available = outboundDecimalUnits(balance.availableQuantity); if (available !== onHand - reserved) blockingIssues.push(policyError('SHIPMENT_REVERSAL_NOT_SAFE', `Balance ${balance.id} does not reconcile.`, 409)); balanceImpacts.push({ balanceId: balance.id, allocation, quantityUnits: quantity, onHandBefore: outboundDecimalString(onHand), onHandAfter: outboundDecimalString(onHand + quantity), reservedBefore: outboundDecimalString(reserved), reservedAfter: outboundDecimalString(reserved + quantity), availableBefore: outboundDecimalString(available), availableAfter: outboundDecimalString(available), version: balance.version }) }
+  for (const key of sorted([...byBalance.keys()])) { const { allocation, quantity } = byBalance.get(key); const balance = await prisma.inventoryBalance.findUnique({ where: balanceWhere({ tenantId, ...allocation, sku: allocation.reservation.sku }) }); if (!balance) { const mismatched = await prisma.inventoryBalance.findFirst({ where: { tenantId, warehouseKey: allocation.warehouseId, locationKey: allocation.locationKey, itemId: allocation.reservation.itemId }, select: { id: true } }); blockingIssues.push(mismatched ? policyError('SALES_ORDER_ITEM_INVALID', 'Inventory balance SKU does not match the shipment reservation item.', 422) : policyError('SHIPMENT_REVERSAL_NOT_SAFE', 'Shipment balance was not found.', 409)); continue } if (balance.itemId !== allocation.reservation.itemId || balance.sku !== allocation.reservation.sku) blockingIssues.push(policyError('SALES_ORDER_ITEM_INVALID', `Inventory balance ${balance.id} does not match the shipment reservation item and SKU.`, 422)); const onHand = outboundDecimalUnits(balance.onHandQuantity); const reserved = outboundDecimalUnits(balance.reservedQuantity); const available = outboundDecimalUnits(balance.availableQuantity); if (available !== onHand - reserved) blockingIssues.push(policyError('SHIPMENT_REVERSAL_NOT_SAFE', `Balance ${balance.id} does not reconcile.`, 409)); balanceImpacts.push({ balanceId: balance.id, allocation, quantityUnits: quantity, onHandBefore: outboundDecimalString(onHand), onHandAfter: outboundDecimalString(onHand + quantity), reservedBefore: outboundDecimalString(reserved), reservedAfter: outboundDecimalString(reserved + quantity), availableBefore: outboundDecimalString(available), availableAfter: outboundDecimalString(available), version: balance.version }) }
   const orderLineMap = new Map(shipment.salesOrder.lines.map((line) => [line.id, line]))
   const salesOrderLineImpacts = sorted([...byOrderLine.keys()]).map((lineId) => { const line = orderLineMap.get(lineId); const quantity = byOrderLine.get(lineId); const reserved = outboundDecimalUnits(line.reservedQuantity); const fulfilled = outboundDecimalUnits(line.fulfilledQuantity); if (fulfilled < quantity) blockingIssues.push(policyError('SHIPMENT_REVERSAL_NOT_SAFE', `Sales order line ${lineId} cannot be reversed.`, 409)); return { salesOrderLineId: lineId, quantityUnits: quantity, reservedBefore: outboundDecimalString(reserved), reservedAfter: outboundDecimalString(reserved + quantity), fulfilledBefore: outboundDecimalString(fulfilled), fulfilledAfter: outboundDecimalString(fulfilled - quantity), version: line.version } })
   const shipmentLineImpacts = shipment.lines.map((line) => { const before = outboundDecimalUnits(line.postedQuantity); const quantity = byShipmentLine.get(line.id) || ZERO; if (before < quantity) blockingIssues.push(policyError('SHIPMENT_REVERSAL_NOT_SAFE', `Shipment line ${line.id} cannot be reversed.`, 409)); return { shipmentLineId: line.id, postedBefore: outboundDecimalString(before), postedAfter: outboundDecimalString(before - quantity), quantityUnits: quantity, version: line.version } })

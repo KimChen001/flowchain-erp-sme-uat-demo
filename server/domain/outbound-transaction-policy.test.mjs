@@ -17,7 +17,8 @@ const order = () => ({
   lines: [{ id: 'sol-1', salesOrderId: 'so-1', itemId: 'item-1', sku: 'SKU-1', itemName: 'Item', orderedQuantity: '10.0000', reservedQuantity: '0.0000', fulfilledQuantity: '0.0000', unit: 'EA', version: 0 }],
 })
 
-const balance = (overrides = {}) => ({ id: 'bal-1', tenantId: 'tenant-1', sku: 'SKU-1', warehouseId: 'wh-1', warehouseKey: 'wh-1', location: 'A-01', locationKey: 'a-01', onHandQuantity: '10.0000', reservedQuantity: '0.0000', availableQuantity: '10.0000', version: 0, ...overrides })
+const balance = (overrides = {}) => ({ id: 'bal-1', tenantId: 'tenant-1', itemId: 'item-1', sku: 'SKU-1', warehouseId: 'wh-1', warehouseKey: 'wh-1', location: 'A-01', locationKey: 'a-01', onHandQuantity: '10.0000', reservedQuantity: '0.0000', availableQuantity: '10.0000', version: 0, ...overrides })
+const itemApi = { findMany: async () => [{ id: 'item-1', tenantId: 'tenant-1', sku: 'SKU-1', name: 'Item', status: 'active' }] }
 
 test('outbound decimal arithmetic is fixed four-place BigInt arithmetic', () => {
   assert.equal(outboundDecimalUnits('123456789012.3456'), 1234567890123456n)
@@ -33,6 +34,7 @@ test('reservation and order statuses keep workflow dimensions separate', () => {
 test('reserve plan cumulatively checks one balance key and preserves on-hand identity', async () => {
   const prisma = {
     salesOrder: { findFirst: async () => order() },
+    item: itemApi,
     warehouse: { findMany: async () => [{ id: 'wh-1' }] },
     inventoryBalance: { findUnique: async () => balance() },
   }
@@ -52,6 +54,7 @@ test('reserve plan cumulatively checks one balance key and preserves on-hand ide
 test('reserve plan rejects cumulative over-allocation without floating point', async () => {
   const prisma = {
     salesOrder: { findFirst: async () => order() },
+    item: itemApi,
     warehouse: { findMany: async () => [{ id: 'wh-1' }] },
     inventoryBalance: { findUnique: async () => balance({ availableQuantity: '4.0000', onHandQuantity: '4.0000' }) },
   }
@@ -66,7 +69,7 @@ test('reserve plan rejects cumulative over-allocation without floating point', a
 const reserved = () => ({ id: 'res-1', tenantId: 'tenant-1', salesOrderId: 'so-1', salesOrderLineId: 'sol-1', itemId: 'item-1', sku: 'SKU-1', warehouseId: 'wh-1', location: 'A-01', locationKey: 'a-01', reservedQuantity: '4.0000', allocatedQuantity: '0.0000', consumedQuantity: '0.0000', releasedQuantity: '0.0000', status: 'active', version: 0 })
 
 test('shipment draft allocates reservation but has no balance or movement impact', async () => {
-  const prisma = { salesOrder: { findFirst: async () => order() }, inventoryReservation: { findMany: async () => [reserved()] } }
+  const prisma = { salesOrder: { findFirst: async () => order() }, item: itemApi, shipmentDocument: { findFirst: async () => null }, inventoryReservation: { findMany: async () => [reserved()] } }
   const plan = await buildShipmentDraftPlan({ prisma, tenantId: 'tenant-1', salesOrderId: 'so-1', shipmentNumber: 'SHIP-1', lines: [{ salesOrderLineId: 'sol-1', allocations: [{ reservationId: 'res-1', quantity: '4.0000' }] }] })
   assert.equal(plan.allowed, true)
   assert.equal(plan.balanceImpacts.length, 0)
@@ -77,11 +80,11 @@ test('shipment draft allocates reservation but has no balance or movement impact
 const shipment = (postingStatus = 'unposted', allocationStatus = 'allocated') => {
   const so = order(); so.lines[0].reservedQuantity = '4.0000'; so.reservationStatus = 'fully_reserved'
   const reservation = reserved(); reservation.allocatedQuantity = allocationStatus === 'allocated' ? '4.0000' : '0.0000'; reservation.consumedQuantity = allocationStatus === 'consumed' ? '4.0000' : '0.0000'
-  return { id: 'ship-1', tenantId: 'tenant-1', shipmentNumber: 'SHIP-1', salesOrderId: 'so-1', workflowStatus: 'ready', postingStatus, version: 0, salesOrder: so, lines: [{ id: 'sl-1', salesOrderLineId: 'sol-1', requestedQuantity: '4.0000', postedQuantity: postingStatus === 'posted' ? '4.0000' : '0.0000', version: 0, allocations: [{ id: 'alloc-1', reservationId: 'res-1', warehouseId: 'wh-1', location: 'A-01', locationKey: 'a-01', quantity: '4.0000', status: allocationStatus, reservation }] }] }
+  return { id: 'ship-1', tenantId: 'tenant-1', shipmentNumber: 'SHIP-1', salesOrderId: 'so-1', workflowStatus: 'ready', postingStatus, version: 0, salesOrder: so, lines: [{ id: 'sl-1', salesOrderLineId: 'sol-1', requestedQuantity: '4.0000', postedQuantity: postingStatus === 'posted' ? '4.0000' : '0.0000', unit: 'EA', version: 0, allocations: [{ id: 'alloc-1', reservationId: 'res-1', warehouseId: 'wh-1', location: 'A-01', locationKey: 'a-01', quantity: '4.0000', status: allocationStatus, reservation }] }] }
 }
 
 test('posting decreases on-hand and reserved together so available is unchanged', async () => {
-  const prisma = { shipmentDocument: { findFirst: async () => shipment() }, inventoryBalance: { findUnique: async () => balance({ reservedQuantity: '4.0000', availableQuantity: '6.0000' }) } }
+  const prisma = { shipmentDocument: { findFirst: async () => shipment() }, item: itemApi, inventoryBalance: { findUnique: async () => balance({ itemId: 'item-1', reservedQuantity: '4.0000', availableQuantity: '6.0000' }) } }
   const plan = await buildShipmentPostingPlan({ prisma, tenantId: 'tenant-1', shipmentId: 'ship-1' })
   assert.equal(plan.allowed, true)
   assert.deepEqual([plan.balanceImpacts[0].onHandBefore, plan.balanceImpacts[0].onHandAfter, plan.balanceImpacts[0].reservedBefore, plan.balanceImpacts[0].reservedAfter, plan.balanceImpacts[0].availableBefore, plan.balanceImpacts[0].availableAfter], ['10.0000', '6.0000', '4.0000', '0.0000', '6.0000', '6.0000'])
@@ -92,8 +95,9 @@ test('reversal restores reserved inventory without reallocation or changing avai
   const posted = shipment('posted', 'consumed'); posted.salesOrder.lines[0].reservedQuantity = '0.0000'; posted.salesOrder.lines[0].fulfilledQuantity = '4.0000'
   const prisma = {
     shipmentDocument: { findFirst: async () => posted },
-    inventoryMovement: { findMany: async () => [{ id: 'mov-1', sourceDocumentLineId: 'alloc-1', quantityOut: '4.0000', reversedByMovementId: null }] },
-    inventoryBalance: { findUnique: async () => balance({ onHandQuantity: '6.0000', reservedQuantity: '0.0000', availableQuantity: '6.0000' }) },
+    item: itemApi,
+    inventoryMovement: { findMany: async () => [{ id: 'mov-1', tenantId: 'tenant-1', movementType: 'shipment_posting', sourceDocumentType: 'ShipmentDocument', sourceDocumentId: 'ship-1', sourceDocumentLineId: 'alloc-1', relatedSalesOrderId: 'so-1', quantityIn: '0', quantityOut: '4.0000', sku: 'SKU-1', itemId: 'item-1', warehouseId: 'wh-1', locationKey: 'a-01', unit: 'EA', reversedByMovementId: null }] },
+    inventoryBalance: { findUnique: async () => balance({ itemId: 'item-1', onHandQuantity: '6.0000', reservedQuantity: '0.0000', availableQuantity: '6.0000' }) },
   }
   const plan = await buildShipmentReversalPlan({ prisma, tenantId: 'tenant-1', shipmentId: 'ship-1', reason: 'Customer correction' })
   assert.equal(plan.allowed, true)

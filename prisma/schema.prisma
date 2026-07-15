@@ -845,6 +845,7 @@ model BusinessCommandExecution {
   completedAt    DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  reservationEvents InventoryReservationEvent[]
 
   @@unique([tenantId, commandType, idempotencyKey])
   @@index([tenantId, entityType, entityId])
@@ -952,6 +953,7 @@ model InventoryReservationEvent {
   tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   reservation InventoryReservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
   actor       User                 @relation("ReservationEventActor", fields: [actorId], references: [id], onDelete: Restrict)
+  commandExecution BusinessCommandExecution? @relation(fields: [commandExecutionId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, reservationId, createdAt])
   @@index([tenantId, commandExecutionId])

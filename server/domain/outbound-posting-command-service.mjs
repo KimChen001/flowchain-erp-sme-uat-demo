@@ -91,6 +91,7 @@ function replay(execution, hash) {
 
 const isConcurrencyError = (error) => error?.code === 'P2034' || (error?.code === 'P2010' && /40001|40P01|serialization|deadlock/i.test(JSON.stringify(error?.meta || error))) || /serialization|deadlock|write conflict/i.test(text(error?.message))
 const isUniqueError = (error) => error?.code === 'P2002'
+const isShipmentNumberConflict = (error) => isUniqueError(error) && /shipmentNumber|ShipmentDocument_tenantId_shipmentNumber/i.test(JSON.stringify(error?.meta || error))
 
 async function lockIds(tx, table, tenantId, ids) {
   for (const id of [...new Set(ids.map(text).filter(Boolean))].sort()) {
@@ -157,7 +158,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
         if (insideReplay) return insideReplay
         const execution = await tx.businessCommandExecution.create({ data: { id: idFactory(), tenantId: scope.tenantId, commandType, idempotencyKey: normalized.idempotencyKey, requestHash: normalized.requestHash, status: 'pending' } })
         await tx.$queryRawUnsafe('SELECT "id" FROM "BusinessCommandExecution" WHERE "id" = $1 FOR UPDATE', execution.id)
-        const result = await work(tx, actor, normalized.payload, normalized)
+        const result = await work(tx, actor, normalized.payload, normalized, execution)
         await faultInjector('before_command_complete', { tx, commandType, result })
         await tx.businessCommandExecution.update({ where: { id: execution.id }, data: { status: 'completed', entityType: result.entityType, entityId: result.entityId, resultPayload: result, completedAt: now() } })
         return { ...result, idempotentReplay: false }
@@ -168,6 +169,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
         const concurrent = await prisma.businessCommandExecution.findUnique({ where: executionWhere(scope.tenantId, commandType, normalized.idempotencyKey) })
         const result = replay(concurrent, normalized.requestHash)
         if (result) return result
+        if (isShipmentNumberConflict(error)) fail('SHIPMENT_NUMBER_CONFLICT', 'Shipment number is already in use for this workspace.', 409)
       }
       if (isConcurrencyError(error)) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Outbound inventory changed in another transaction. Retry with fresh state.', 409)
       throw error
@@ -175,7 +177,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
   }
 
   async function reserveSalesOrderInventory(input, context) {
-    return execute(OUTBOUND_COMMAND_TYPES.reserve, input, context, async (tx, actor, payload, normalized) => {
+    return execute(OUTBOUND_COMMAND_TYPES.reserve, input, context, async (tx, actor, payload, normalized, execution) => {
       const lineIds = payload.allocations.map((entry) => entry.salesOrderLineId)
       await lockOrderAggregate(tx, actor.tenantId, payload.salesOrderId, lineIds)
       const order = await tx.salesOrder.findFirst({ where: { id: payload.salesOrderId, tenantId: actor.tenantId }, include: { lines: true } })
@@ -196,7 +198,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
       for (const entry of plan.quantityPlans) {
         const reservation = await tx.inventoryReservation.create({ data: { id: idFactory(), tenantId: actor.tenantId, salesOrderId: order.id, salesOrderLineId: entry.salesOrderLineId, itemId: entry.itemId, sku: entry.sku, warehouseId: entry.warehouseId, location: entry.location || null, locationKey: entry.locationKey, reservedQuantity: decimalString(entry.quantity), allocatedQuantity: '0', consumedQuantity: '0', releasedQuantity: '0', status: 'active', reservedById: actor.user.id } })
         reservations.push(reservation)
-        await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: reservation.id, eventType: 'reserved', quantity: decimalString(entry.quantity), commandType: OUTBOUND_COMMAND_TYPES.reserve, actorId: actor.user.id } })
+        await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: reservation.id, eventType: 'reserved', quantity: decimalString(entry.quantity), commandType: OUTBOUND_COMMAND_TYPES.reserve, commandExecutionId: execution.id, actorId: actor.user.id } })
       }
       const orderUpdated = await tx.salesOrder.updateMany({ where: { id: order.id, tenantId: actor.tenantId, version: order.version }, data: { reservationStatus: plan.salesOrderStatusImpacts.after.reservationStatus, version: { increment: 1 } } })
       if (orderUpdated.count !== 1) fail('SALES_ORDER_VERSION_CONFLICT', 'Sales order changed during reservation.', 409)
@@ -207,7 +209,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
   }
 
   async function releaseSalesOrderReservation(input, context) {
-    return execute(OUTBOUND_COMMAND_TYPES.release, input, context, async (tx, actor, payload, normalized) => {
+    return execute(OUTBOUND_COMMAND_TYPES.release, input, context, async (tx, actor, payload, normalized, execution) => {
       await lockOrderAggregate(tx, actor.tenantId, payload.salesOrderId)
       const order = await tx.salesOrder.findFirst({ where: { id: payload.salesOrderId, tenantId: actor.tenantId } })
       if (order.version !== payload.expectedOrderVersion) fail('SALES_ORDER_VERSION_CONFLICT', 'Sales order version does not match.', 409)
@@ -220,7 +222,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
       for (const impact of plan.balanceImpacts) { const updated = await tx.inventoryBalance.updateMany({ where: { id: impact.balanceId, version: impact.version, reservedQuantity: { gte: decimalString(impact.quantityUnits) } }, data: { reservedQuantity: impact.reservedAfter, availableQuantity: impact.availableAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Inventory balance changed during release.', 409) }
       for (const impact of plan.salesOrderLineImpacts) { const updated = await tx.salesOrderLine.updateMany({ where: { id: impact.salesOrderLineId, version: impact.version, reservedQuantity: { gte: decimalString(impact.quantityUnits) } }, data: { reservedQuantity: impact.reservedAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('RESERVATION_QUANTITY_CONFLICT', 'Sales order line changed during release.', 409) }
       const changed = []
-      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, tenantId: actor.tenantId, version: impact.reservation.version }, data: { releasedQuantity: impact.releasedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('RESERVATION_VERSION_CONFLICT', 'Reservation changed during release.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'released', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.release, actorId: actor.user.id, reason: payload.reason } }); changed.push({ ...impact.reservation, releasedQuantity: impact.releasedAfter, status: impact.statusAfter, version: impact.reservation.version + 1 }) }
+      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, tenantId: actor.tenantId, version: impact.reservation.version }, data: { releasedQuantity: impact.releasedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('RESERVATION_VERSION_CONFLICT', 'Reservation changed during release.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'released', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.release, commandExecutionId: execution.id, actorId: actor.user.id, reason: payload.reason } }); changed.push({ ...impact.reservation, releasedQuantity: impact.releasedAfter, status: impact.statusAfter, version: impact.reservation.version + 1 }) }
       await tx.salesOrder.update({ where: { id: order.id }, data: { reservationStatus: plan.salesOrderStatusImpacts.after.reservationStatus, version: { increment: 1 } } })
       const audit = auditData({ idFactory, tenantId: actor.tenantId, actorId: actor.user.id, action: 'sales_reservation_released', entityType: 'SalesOrder', entityId: order.id, summary: `Inventory reservation released: ${payload.reason}`, commandType: OUTBOUND_COMMAND_TYPES.release, idempotencyKey: normalized.idempotencyKey, metadata: { reservationIds: changed.map((entry) => entry.id), reason: payload.reason } }); await tx.auditLog.create({ data: audit })
       return { entityType: 'SalesOrder', entityId: order.id, salesOrder: { id: order.id, version: order.version + 1, reservationStatus: plan.salesOrderStatusImpacts.after.reservationStatus, fulfillmentStatus: order.fulfillmentStatus }, reservations: changed.map(plainReservation), auditEventId: audit.id }
@@ -228,7 +230,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
   }
 
   async function createShipmentDraft(input, context) {
-    return execute(OUTBOUND_COMMAND_TYPES.draft, input, context, async (tx, actor, payload, normalized) => {
+    return execute(OUTBOUND_COMMAND_TYPES.draft, input, context, async (tx, actor, payload, normalized, execution) => {
       await lockOrderAggregate(tx, actor.tenantId, payload.salesOrderId, payload.lines.map((line) => line.salesOrderLineId))
       const order = await tx.salesOrder.findFirst({ where: { id: payload.salesOrderId, tenantId: actor.tenantId } })
       if (order.version !== payload.expectedOrderVersion) fail('SALES_ORDER_VERSION_CONFLICT', 'Sales order version does not match.', 409)
@@ -242,7 +244,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
         const shipmentLine = await tx.shipmentLine.create({ data: { id: idFactory(), shipmentId: shipment.id, salesOrderLineId: linePlan.salesOrderLineId, itemId: linePlan.orderLine.itemId, sku: linePlan.orderLine.sku, requestedQuantity: decimalString(linePlan.requestedQuantityUnits), postedQuantity: '0', unit: linePlan.orderLine.unit } })
         for (const entry of linePlan.allocations) allocations.push(await tx.shipmentAllocation.create({ data: { id: idFactory(), tenantId: actor.tenantId, shipmentLineId: shipmentLine.id, reservationId: entry.reservationId, warehouseId: entry.reservation.warehouseId, location: entry.reservation.location, locationKey: entry.reservation.locationKey, quantity: decimalString(entry.quantityUnits), status: 'allocated' } }))
       }
-      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, version: impact.reservation.version }, data: { allocatedQuantity: impact.allocatedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Reservation changed during shipment allocation.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'allocated', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.draft, actorId: actor.user.id, metadata: { shipmentId: shipment.id } } }) }
+      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, version: impact.reservation.version }, data: { allocatedQuantity: impact.allocatedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Reservation changed during shipment allocation.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'allocated', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.draft, commandExecutionId: execution.id, actorId: actor.user.id, metadata: { shipmentId: shipment.id } } }) }
       await tx.salesOrder.update({ where: { id: order.id }, data: { version: { increment: 1 } } })
       const audit = auditData({ idFactory, tenantId: actor.tenantId, actorId: actor.user.id, action: 'shipment_draft_created', entityType: 'ShipmentDocument', entityId: shipment.id, summary: `Shipment ${shipment.shipmentNumber} draft created.`, commandType: OUTBOUND_COMMAND_TYPES.draft, idempotencyKey: normalized.idempotencyKey, metadata: { salesOrderId: order.id, allocationIds: allocations.map((entry) => entry.id) } }); await tx.auditLog.create({ data: audit })
       return { entityType: 'ShipmentDocument', entityId: shipment.id, shipment: { id: shipment.id, shipmentNumber: shipment.shipmentNumber, workflowStatus: 'ready', postingStatus: 'unposted', version: shipment.version }, salesOrderVersion: order.version + 1, allocationIds: allocations.map((entry) => entry.id), auditEventId: audit.id }
@@ -250,13 +252,13 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
   }
 
   async function cancelShipmentDraft(input, context) {
-    return execute(OUTBOUND_COMMAND_TYPES.cancel, input, context, async (tx, actor, payload, normalized) => {
+    return execute(OUTBOUND_COMMAND_TYPES.cancel, input, context, async (tx, actor, payload, normalized, execution) => {
       const locked = await lockShipmentAggregate(tx, actor.tenantId, payload.shipmentId)
       const shipment = await tx.shipmentDocument.findFirst({ where: { id: payload.shipmentId, tenantId: actor.tenantId } })
       if (shipment.version !== payload.expectedShipmentVersion) fail('SHIPMENT_VERSION_CONFLICT', 'Shipment version does not match.', 409)
       const plan = enforce(await buildShipmentCancellationPlan({ prisma: tx, tenantId: actor.tenantId, ...payload }))
       assertWarehouseAccess(actor, locked.allocations.map((entry) => entry.warehouseId), 'operate')
-      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, version: impact.reservation.version }, data: { allocatedQuantity: impact.allocatedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Reservation changed during cancellation.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'deallocated', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.cancel, actorId: actor.user.id, reason: payload.reason, metadata: { shipmentId: shipment.id } } }) }
+      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, version: impact.reservation.version }, data: { allocatedQuantity: impact.allocatedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Reservation changed during cancellation.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'deallocated', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.cancel, commandExecutionId: execution.id, actorId: actor.user.id, reason: payload.reason, metadata: { shipmentId: shipment.id } } }) }
       await tx.shipmentAllocation.updateMany({ where: { tenantId: actor.tenantId, shipmentLineId: { in: locked.lines.map((line) => line.id) }, status: 'allocated' }, data: { status: 'deallocated', version: { increment: 1 } } })
       await tx.shipmentDocument.update({ where: { id: shipment.id }, data: { workflowStatus: 'cancelled', version: { increment: 1 }, metadata: { cancellationReason: payload.reason } } })
       const audit = auditData({ idFactory, tenantId: actor.tenantId, actorId: actor.user.id, action: 'shipment_draft_cancelled', entityType: 'ShipmentDocument', entityId: shipment.id, summary: `Shipment ${shipment.shipmentNumber} cancelled: ${payload.reason}`, commandType: OUTBOUND_COMMAND_TYPES.cancel, idempotencyKey: normalized.idempotencyKey }); await tx.auditLog.create({ data: audit })
@@ -265,7 +267,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
   }
 
   async function postShipment(input, context) {
-    return execute(OUTBOUND_COMMAND_TYPES.post, input, context, async (tx, actor, payload, normalized) => {
+    return execute(OUTBOUND_COMMAND_TYPES.post, input, context, async (tx, actor, payload, normalized, execution) => {
       const initial = await tx.shipmentDocument.findFirst({ where: { id: payload.shipmentId, tenantId: actor.tenantId } })
       if (!initial) fail('SHIPMENT_NOT_FOUND', 'Shipment was not found.', 404)
       await lockOrderAggregate(tx, actor.tenantId, initial.salesOrderId)
@@ -279,10 +281,11 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
       const postingBatchId = idFactory(), occurredAt = now(), movements = []
       for (const entry of plan.quantityPlans) {
         const { allocation } = entry; const line = allocation.shipmentLine; const reservation = allocation.reservation
-        movements.push(await tx.inventoryMovement.create({ data: { id: idFactory(), tenantId: actor.tenantId, itemId: reservation.itemId, sku: reservation.sku, itemName: line.itemName || reservation.sku, warehouseId: allocation.warehouseId, location: allocation.location, locationKey: allocation.locationKey, movementType: 'shipment_posting', movementLabel: 'Sales shipment posted', movementDate: occurredAt, occurredAt, sourceDocument: plan.shipment.shipmentNumber, sourceDocumentType: 'ShipmentDocument', sourceDocumentId: plan.shipment.id, sourceDocumentLineId: allocation.id, quantityIn: '0', quantityOut: decimalString(entry.quantityUnits), adjustmentQty: '0', status: 'posted', owner: actor.user.id, actorId: actor.user.id, unit: line.unit, relatedSalesOrderId: plan.shipment.salesOrderId, postingBatchId, inventoryImpact: 'decrease_on_hand_and_reserved_available_unchanged_v1' } }))
+        const orderLine = plan.shipment.salesOrder.lines.find((candidate) => candidate.id === line.salesOrderLineId)
+        movements.push(await tx.inventoryMovement.create({ data: { id: idFactory(), tenantId: actor.tenantId, itemId: reservation.itemId, sku: reservation.sku, itemName: orderLine?.itemName || null, warehouseId: allocation.warehouseId, location: allocation.location, locationKey: allocation.locationKey, movementType: 'shipment_posting', movementLabel: 'Sales shipment posted', movementDate: occurredAt, occurredAt, sourceDocument: plan.shipment.shipmentNumber, sourceDocumentType: 'ShipmentDocument', sourceDocumentId: plan.shipment.id, sourceDocumentLineId: allocation.id, quantityIn: '0', quantityOut: decimalString(entry.quantityUnits), adjustmentQty: '0', status: 'posted', owner: actor.user.id, actorId: actor.user.id, unit: line.unit, relatedSalesOrderId: plan.shipment.salesOrderId, postingBatchId, inventoryImpact: 'decrease_on_hand_and_reserved_available_unchanged_v1' } }))
       }
       for (const impact of plan.balanceImpacts) { const updated = await tx.inventoryBalance.updateMany({ where: { id: impact.balanceId, version: impact.version, onHandQuantity: { gte: decimalString(impact.quantityUnits) }, reservedQuantity: { gte: decimalString(impact.quantityUnits) } }, data: { onHandQuantity: impact.onHandAfter, reservedQuantity: impact.reservedAfter, availableQuantity: impact.availableAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Inventory balance changed during posting.', 409) }
-      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, version: impact.reservation.version }, data: { allocatedQuantity: impact.allocatedAfter, consumedQuantity: impact.consumedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Reservation changed during posting.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'consumed', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.post, actorId: actor.user.id, metadata: { shipmentId: plan.shipment.id, postingBatchId } } }) }
+      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, version: impact.reservation.version }, data: { allocatedQuantity: impact.allocatedAfter, consumedQuantity: impact.consumedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Reservation changed during posting.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'consumed', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.post, commandExecutionId: execution.id, actorId: actor.user.id, metadata: { shipmentId: plan.shipment.id, postingBatchId } } }) }
       for (const impact of plan.salesOrderLineImpacts) { const updated = await tx.salesOrderLine.updateMany({ where: { id: impact.salesOrderLineId, version: impact.version }, data: { reservedQuantity: impact.reservedAfter, fulfilledQuantity: impact.fulfilledAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Sales order line changed during posting.', 409) }
       for (const impact of plan.shipmentLineImpacts) await tx.shipmentLine.update({ where: { id: impact.shipmentLineId }, data: { postedQuantity: impact.postedAfter, version: { increment: 1 } } })
       await tx.shipmentAllocation.updateMany({ where: { tenantId: actor.tenantId, shipmentLineId: { in: locked.lines.map((line) => line.id) }, status: 'allocated' }, data: { status: 'consumed', version: { increment: 1 } } })
@@ -294,7 +297,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
   }
 
   async function reverseShipment(input, context) {
-    return execute(OUTBOUND_COMMAND_TYPES.reverse, input, context, async (tx, actor, payload, normalized) => {
+    return execute(OUTBOUND_COMMAND_TYPES.reverse, input, context, async (tx, actor, payload, normalized, execution) => {
       const initial = await tx.shipmentDocument.findFirst({ where: { id: payload.shipmentId, tenantId: actor.tenantId } })
       if (!initial) fail('SHIPMENT_NOT_FOUND', 'Shipment was not found.', 404)
       await lockOrderAggregate(tx, actor.tenantId, initial.salesOrderId)
@@ -312,7 +315,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
         await tx.inventoryMovement.update({ where: { id: original.id }, data: { reversedByMovementId: reversal.id } }); movements.push(reversal)
       }
       for (const impact of plan.balanceImpacts) { const updated = await tx.inventoryBalance.updateMany({ where: { id: impact.balanceId, version: impact.version }, data: { onHandQuantity: impact.onHandAfter, reservedQuantity: impact.reservedAfter, availableQuantity: impact.availableAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Inventory balance changed during reversal.', 409) }
-      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, version: impact.reservation.version }, data: { consumedQuantity: impact.consumedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Reservation changed during reversal.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'restored', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.reverse, actorId: actor.user.id, reason: payload.reason, metadata: { shipmentId: plan.shipment.id, postingBatchId } } }) }
+      for (const impact of plan.reservationImpacts) { const updated = await tx.inventoryReservation.updateMany({ where: { id: impact.reservationId, version: impact.reservation.version }, data: { consumedQuantity: impact.consumedAfter, status: impact.statusAfter, version: { increment: 1 } } }); if (updated.count !== 1) fail('OUTBOUND_CONCURRENT_TRANSACTION_CONFLICT', 'Reservation changed during reversal.', 409); await tx.inventoryReservationEvent.create({ data: { id: idFactory(), tenantId: actor.tenantId, reservationId: impact.reservationId, eventType: 'restored', quantity: decimalString(impact.quantityUnits), commandType: OUTBOUND_COMMAND_TYPES.reverse, commandExecutionId: execution.id, actorId: actor.user.id, reason: payload.reason, metadata: { shipmentId: plan.shipment.id, postingBatchId } } }) }
       for (const impact of plan.salesOrderLineImpacts) await tx.salesOrderLine.update({ where: { id: impact.salesOrderLineId }, data: { reservedQuantity: impact.reservedAfter, fulfilledQuantity: impact.fulfilledAfter, version: { increment: 1 } } })
       for (const impact of plan.shipmentLineImpacts) await tx.shipmentLine.update({ where: { id: impact.shipmentLineId }, data: { postedQuantity: impact.postedAfter, version: { increment: 1 } } })
       await tx.shipmentAllocation.updateMany({ where: { tenantId: actor.tenantId, shipmentLineId: { in: locked.lines.map((line) => line.id) }, status: 'consumed' }, data: { status: 'reversed', version: { increment: 1 } } })
