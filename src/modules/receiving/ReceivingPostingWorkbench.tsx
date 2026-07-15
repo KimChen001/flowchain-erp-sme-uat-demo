@@ -7,14 +7,17 @@ type Capability = { enabled?: boolean; maturity?: string };
 type Detail = {
   receivingDocument: { id: string; documentNumber: string; workflowStatus: string; postingStatus: string; qualityStatus: string; version: number; arrivedAt?: string | null; postedAt?: string | null; postedById?: string | null; reversedAt?: string | null; reversedById?: string | null; reversalReason?: string | null; receiver?: string | null; supplier?: { name?: string }; warehouse?: { name?: string; code?: string } | null };
   purchaseOrder: { id: string; workflowStatus: string; fulfillmentStatus: string };
-  lines: Array<{ id: string; poLineId: string; sku: string; itemName: string; orderedQuantity: string; previouslyReceivedQuantity: string; acceptedQuantity: string; rejectedQuantity: string; remainingReceivableQuantity: string; unit?: string; warehouse?: { name?: string; code?: string } | null; location?: string; lotSerialCapability: { postingAvailable: boolean; message: string } }>;
+  lines: Array<{ id: string; poLineId: string; sku: string; itemName: string; orderedQuantity: string; previouslyReceivedQuantity: string; documentAcceptedQuantity: string; currentlyAppliedQuantity: string; acceptedQuantity: string; rejectedQuantity: string; remainingReceivableQuantity: string; unit?: string; warehouse?: { name?: string; code?: string } | null; location?: string; lotSerialCapability: { postingAvailable: boolean; message: string } }>;
   postingSummary: { acceptedQuantity: string; rejectedQuantity: string; lineCount: number };
   capabilities: { posting?: Capability; reversal?: Capability };
+  availableActions: { canPost: boolean; canReverse: boolean; canViewReversal: boolean; primaryAction: "post" | "reverse" | "view_reversal" | null; blockingReasonCodes: string[] };
   limitations: string[];
 };
 type Preview = { operation: "post" | "reverse"; allowed: boolean; blockingIssues: Array<{ code: string; message: string }>; warnings: Array<{ code: string; message: string }>; inventoryImpacts: Array<Record<string, string>>; purchaseOrderImpacts: Array<Record<string, string>>; statusImpact: Record<string, string>; factsToCreate: { inventoryMovementCount: number; auditEventCount: number; commandExecutionCount: number }; limitations: string[] };
-type Link = { label: string; count: number; targetType: string; targetId?: string; filter?: Record<string, string>; enabled: boolean };
+type Link = { label: string; count: number; targetRouteId: string; targetType: string; targetId?: string; filter?: Record<string, unknown>; enabled: boolean; unavailableReason?: string | null };
 type TimelineEvent = { id: string; type: string; event: string; occurredAt: string; label: string; actorId?: string; postedFact: boolean };
+type Reconciliation = { status: "matched" | "mismatch" | "unavailable"; reason?: string; entries: Array<{ sku: string; warehouseId?: string | null; locationKey: string; status: string; calculatedQuantity: string; recordedQuantity: string | null; differenceQuantity: string | null }> };
+type Navigate = (routeId: string, focus?: { entityType: string; entityId: string } | null, options?: { source?: string; entityLabel?: string }) => void;
 
 const label: Record<string, string> = {
   draft: "Draft", approved: "Approved", issued: "Issued", unposted: "Unposted", posted: "Posted", reversed: "Reversed",
@@ -45,10 +48,11 @@ function errorMessage(error: unknown) {
   return messages[error.code || ""] || error.message;
 }
 
-export default function ReceivingPostingWorkbench({ receivingDocumentId }: { receivingDocumentId: string }) {
+export default function ReceivingPostingWorkbench({ receivingDocumentId, onNavigate }: { receivingDocumentId: string; onNavigate?: Navigate }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [links, setLinks] = useState<Link[]>([]);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -61,21 +65,22 @@ export default function ReceivingPostingWorkbench({ receivingDocumentId }: { rec
     setLoading(true); setError("");
     try {
       const encoded = encodeURIComponent(receivingDocumentId);
-      const [nextDetail, nextLinks, nextEvidence] = await Promise.all([
+      const [nextDetail, nextLinks, nextEvidence, nextReconciliation] = await Promise.all([
         apiJson<Detail>(`/api/procurement/receiving/${encoded}`),
         apiJson<{ links: Link[] }>(`/api/procurement/receiving/${encoded}/links`),
         apiJson<{ events: TimelineEvent[] }>(`/api/procurement/receiving/${encoded}/evidence`),
+        apiJson<Reconciliation>(`/api/procurement/receiving/${encoded}/reconciliation`),
       ]);
-      setDetail(nextDetail); setLinks(nextLinks.links); setEvents(nextEvidence.events);
+      setDetail(nextDetail); setLinks(nextLinks.links); setEvents(nextEvidence.events); setReconciliation(nextReconciliation);
     } catch (nextError) { setError(errorMessage(nextError)); setDetail(null); }
     finally { setLoading(false); }
   }, [receivingDocumentId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const operation = detail?.receivingDocument.postingStatus === "posted" ? "reverse" : "post";
+  const operation = detail?.availableActions.primaryAction === "reverse" ? "reverse" : "post";
   const capability = operation === "post" ? detail?.capabilities.posting : detail?.capabilities.reversal;
-  const canOfferAction = Boolean(detail && capability?.enabled && ((operation === "post" && detail.receivingDocument.workflowStatus === "approved" && detail.receivingDocument.postingStatus === "unposted") || operation === "reverse"));
+  const canOfferAction = detail?.availableActions.primaryAction === "post" || detail?.availableActions.primaryAction === "reverse";
   const totals = useMemo(() => ({ movement: links.find((item) => item.label === "Movements")?.count, balances: links.find((item) => item.label === "Balances")?.count }), [links]);
 
   async function openPreview(nextOperation: "post" | "reverse") {
@@ -107,7 +112,7 @@ export default function ReceivingPostingWorkbench({ receivingDocumentId }: { rec
     <section className="rounded-2xl border bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><div className="mb-2 flex items-center gap-2"><h1 className="text-xl font-semibold">{grn.documentNumber}</h1><span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">Beta · PostgreSQL</span></div><p className="text-sm text-gray-500">{grn.supplier?.name || "Unknown supplier"} · PO <a className="text-blue-600 underline" href={`/app/procurement/orders/${encodeURIComponent(detail.purchaseOrder.id)}`}>{detail.purchaseOrder.id}</a></p></div>
-        <div className="flex gap-2">{canOfferAction && <button data-testid="receiving-primary-action" onClick={() => void openPreview(operation)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{operation === "post" ? "Post Receipt" : "Reverse Receipt"}</button>}{grn.postingStatus === "reversed" && <span className="rounded-lg bg-gray-100 px-4 py-2 text-sm">View Reversal</span>}</div>
+        <div className="flex gap-2">{canOfferAction && <button data-testid="receiving-primary-action" onClick={() => void openPreview(operation)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">{operation === "post" ? "Post Receipt" : "Reverse Receipt"}</button>}{detail.availableActions.canViewReversal && <button onClick={() => { const link = links.find((item) => item.label === 'Reversal'); if (link?.enabled) onNavigate?.(link.targetRouteId, { entityType: link.targetType, entityId: link.targetId || receivingDocumentId }, { source: 'receiving-smart-link' }); }} className="rounded-lg bg-gray-100 px-4 py-2 text-sm">View Reversal</button>}</div>
       </div>
       {!capability?.enabled && <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Read-only. Database receiving capability requires explicit administrator enablement.</div>}
       <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -116,12 +121,14 @@ export default function ReceivingPostingWorkbench({ receivingDocumentId }: { rec
     </section>
 
     <section className="grid gap-3 md:grid-cols-3">
-      {[['Total accepted', detail.postingSummary.acceptedQuantity], ['Total rejected', detail.postingSummary.rejectedQuantity], ['Movements', totals.movement === undefined ? 'Unknown' : String(totals.movement)], ['Affected balances', totals.balances === undefined ? 'Unknown' : String(totals.balances)], ['Posting status', pretty(grn.postingStatus)], ['Reconciliation', totals.movement ? 'Connected to movement facts' : 'Not connected']].map(([name, value]) => <div key={name} className="rounded-xl border bg-white p-4"><div className="text-xs text-gray-500">{name}</div><div className="mt-1 font-semibold">{value}</div></div>)}
+      {[['Total accepted', detail.postingSummary.acceptedQuantity], ['Total rejected', detail.postingSummary.rejectedQuantity], ['Movements', totals.movement === undefined ? 'Unknown' : String(totals.movement)], ['Affected balances', totals.balances === undefined ? 'Unknown' : String(totals.balances)], ['Posting status', pretty(grn.postingStatus)], ['Reconciliation', reconciliation ? pretty(reconciliation.status) : 'Unavailable']].map(([name, value]) => <div key={name} className="rounded-xl border bg-white p-4"><div className="text-xs text-gray-500">{name}</div><div className="mt-1 font-semibold">{value}</div></div>)}
     </section>
 
-    <section className="overflow-hidden rounded-2xl border bg-white"><div className="border-b p-4 font-semibold">Receiving lines</div><div className="overflow-x-auto"><table className="min-w-[980px] w-full text-left text-sm"><thead className="bg-gray-50 text-xs text-gray-500"><tr>{['SKU','Item','Ordered','Previously Received','Accepted','Rejected','Remaining','Warehouse','Location','Unit'].map((item) => <th key={item} className="px-3 py-2">{item}</th>)}</tr></thead><tbody>{detail.lines.map((line) => <tr key={line.id} className="border-t"><td className="px-3 py-3 font-mono text-xs">{line.sku}</td><td className="px-3 py-3">{line.itemName}</td><td className="px-3 py-3">{line.orderedQuantity}</td><td className="px-3 py-3">{line.previouslyReceivedQuantity}</td><td className="px-3 py-3 font-semibold text-green-700">{line.acceptedQuantity}</td><td className="px-3 py-3">{line.rejectedQuantity}</td><td className="px-3 py-3">{line.remainingReceivableQuantity}</td><td className="px-3 py-3">{line.warehouse?.code || 'Unavailable'}</td><td className="px-3 py-3">{line.location || 'Unavailable'}</td><td className="px-3 py-3">{line.unit || 'Unknown'}</td></tr>)}</tbody></table></div></section>
+    <section className="overflow-hidden rounded-2xl border bg-white"><div className="border-b p-4 font-semibold">Receiving lines</div><div className="overflow-x-auto"><table className="min-w-[1120px] w-full text-left text-sm"><thead className="bg-gray-50 text-xs text-gray-500"><tr>{['SKU','Item','Ordered','Previously Received','Accepted on Document','Currently Applied','Rejected','Remaining Receivable','Warehouse','Location','Unit'].map((item) => <th key={item} className="px-3 py-2">{item}</th>)}</tr></thead><tbody>{detail.lines.map((line) => <tr key={line.id} className="border-t"><td className="px-3 py-3 font-mono text-xs">{line.sku}</td><td className="px-3 py-3">{line.itemName}</td><td className="px-3 py-3">{line.orderedQuantity}</td><td className="px-3 py-3">{line.previouslyReceivedQuantity}</td><td className="px-3 py-3 font-semibold text-green-700">{line.documentAcceptedQuantity}</td><td className="px-3 py-3">{line.currentlyAppliedQuantity}</td><td className="px-3 py-3">{line.rejectedQuantity}</td><td className="px-3 py-3">{line.remainingReceivableQuantity}</td><td className="px-3 py-3">{line.warehouse?.code || 'Unavailable'}</td><td className="px-3 py-3">{line.location || 'Unavailable'}</td><td className="px-3 py-3">{line.unit || 'Unknown'}</td></tr>)}</tbody></table></div></section>
 
-    <section className="rounded-2xl border bg-white p-4"><div className="mb-3 flex items-center gap-2 font-semibold"><Link2 size={16} />Smart links</div><div className="flex flex-wrap gap-2">{links.map((link) => link.targetId ? <a key={link.label} href={link.targetType === 'purchase_order' ? `/app/procurement/orders/${encodeURIComponent(link.targetId)}` : '#evidence'} className={`rounded-lg border px-3 py-2 text-sm ${link.enabled ? 'text-blue-700' : 'text-gray-400'}`}>{link.label} · {link.count}</a> : <a key={link.label} href="#evidence" className={`rounded-lg border px-3 py-2 text-sm ${link.enabled ? 'text-blue-700' : 'text-gray-400'}`}>{link.label} · {link.count}</a>)}</div></section>
+    <section className="rounded-2xl border bg-white p-4"><div className="mb-3 flex items-center gap-2 font-semibold"><Link2 size={16} />Smart links</div><div className="flex flex-wrap gap-2">{links.map((link) => <button key={link.label} disabled={!link.enabled} title={link.unavailableReason || undefined} onClick={() => onNavigate?.(link.targetRouteId, { entityType: link.targetType, entityId: link.targetId || receivingDocumentId }, { source: 'receiving-smart-link', entityLabel: link.label })} className={`rounded-lg border px-3 py-2 text-sm ${link.enabled ? 'text-blue-700' : 'text-gray-400'}`}>{link.label} · {link.count}</button>)}</div></section>
+
+    <section className="rounded-2xl border bg-white p-4" data-testid="receiving-reconciliation"><div className="mb-3 font-semibold">Inventory reconciliation · {pretty(reconciliation?.status)}</div>{reconciliation?.entries.length ? <div className="space-y-2">{reconciliation.entries.map((entry) => <div key={`${entry.sku}-${entry.warehouseId || ''}-${entry.locationKey}`} className="grid gap-2 rounded-lg bg-gray-50 p-3 text-sm md:grid-cols-5"><span>{entry.sku}</span><span>{entry.warehouseId || 'No warehouse'} / {entry.locationKey || 'No location'}</span><span>Calculated {entry.calculatedQuantity}</span><span>Recorded {entry.recordedQuantity ?? 'Unavailable'}</span><span className={entry.status === 'matched' ? 'text-green-700' : 'text-red-700'}>{pretty(entry.status)}{entry.differenceQuantity != null ? ` · Δ ${entry.differenceQuantity}` : ''}</span></div>)}</div> : <div className="text-sm text-gray-500">{reconciliation?.reason || 'Reconciliation is unavailable.'}</div>}</section>
 
     <section id="evidence" className="rounded-2xl border bg-white p-4"><div className="mb-3 flex items-center gap-2 font-semibold"><ShieldCheck size={16} />Evidence timeline</div><div className="space-y-3">{events.length ? events.map((event) => <div key={event.id} className="flex gap-3 border-l-2 border-blue-200 pl-3" data-testid="evidence-event"><div className="min-w-24 text-xs text-gray-500">{stamp(event.occurredAt)}</div><div><div className="text-sm font-medium">{event.label}</div><div className="text-[11px] uppercase text-gray-500">{event.type.replace('_',' ')}{event.postedFact ? ' · Posted business fact' : ''}{event.actorId ? ` · ${event.actorId}` : ''}</div></div></div>) : <div className="text-sm text-gray-500">No evidence connected.</div>}</div></section>
     <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><strong>Beta limitation:</strong> {detail.limitations.join(' ')}</div>

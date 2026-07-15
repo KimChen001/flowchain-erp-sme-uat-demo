@@ -29,6 +29,7 @@ import { fetchDataAccessQualityV2, type DataAccessQualityV2 as DataAccessQuality
 import { readImportTasks, type ImportTask } from "../../lib/excel/importTaskService";
 import { exportRowsToWorkbook } from "../../lib/excel/excelWorkbookService";
 import { fetchImportBatches, type ImportBatch as PersistedImportBatch } from "../../lib/excel/importPersistenceApi";
+import PilotImportWorkbench from "./PilotImportWorkbench";
 
 type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "supplierPerformance" | "supplierCertification" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "contractPrices" | "forecastDemand" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
@@ -66,7 +67,7 @@ type ImportConfig = {
 };
 type ImportsPanelProps = {
   onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
-  initialView?: "templates" | "validation" | "failed" | "user-data";
+  initialView?: "pilot" | "templates" | "validation" | "failed" | "user-data";
 };
 
 type BusinessImportView = "tasks" | "mapping" | "quality" | "failed";
@@ -296,6 +297,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
 
   return (
     <div className="space-y-5" data-testid="data-access-business-page">
+      {(initialView === "pilot" || view === "tasks") && <PilotImportWorkbench />}
       <DataAccessQualityV2
         quality={qualityV2}
         loading={qualityV2Loading}

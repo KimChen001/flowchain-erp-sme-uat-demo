@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 test('receiving workbench posts and reverses through real PostgreSQL APIs', async ({ page, request }) => {
-  const login = await request.post('/api/auth/login', { data: { company: 'FlowChain Browser', name: 'Receiving Browser Manager', email: 'receiving-browser@flowchain.invalid' } })
+  const login = await request.post('/api/auth/login', { data: { company: 'Forged Browser Company', name: 'Forged Name', email: 'kim@example.com', role: 'admin', tenantId: 'forged' } })
   expect(login.ok()).toBeTruthy()
   const session = await login.json()
   await page.addInitScript(({ token, user }) => {
@@ -11,6 +11,8 @@ test('receiving workbench posts and reverses through real PostgreSQL APIs', asyn
 
   await page.goto('/app/procurement/receiving/browser-grn')
   await expect(page.getByTestId('receiving-workbench')).toBeVisible()
+  await expect(page.getByText('Kim', { exact: true })).toBeVisible()
+  await expect(page.getByText('供应链经理', { exact: true })).toBeVisible()
   await expect(page.getByText('Workflow').first()).toBeVisible()
   await expect(page.getByText('Approved', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('Posting', { exact: true }).first()).toBeVisible()
@@ -36,4 +38,10 @@ test('receiving workbench posts and reverses through real PostgreSQL APIs', asyn
   await expect(page.getByTestId('receiving-workbench')).toBeVisible()
   await expect(page.getByText('Reversed', { exact: true }).first()).toBeVisible()
   await expect(page.getByText(/receipt_reversal/)).toBeVisible()
+
+  await page.getByText('Kim', { exact: true }).click()
+  await page.getByRole('button', { name: '用户档案' }).click()
+  await expect(page.getByTestId('pilot-settings-profile')).toBeVisible()
+  await expect(page.locator('input[value="kim@example.com"]')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Role' })).toHaveValue('供应链经理')
 })

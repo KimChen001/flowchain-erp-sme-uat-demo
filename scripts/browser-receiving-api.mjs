@@ -13,7 +13,7 @@ const root = resolve(import.meta.dirname, '..')
 const node = process.execPath
 const prismaCli = join(root, 'node_modules', 'prisma', 'build', 'index.js')
 const tenantId = 'tenant-receiving-browser'
-const email = 'receiving-browser@flowchain.invalid'
+const email = 'kim@example.com'
 const actorId = `USR-${createHash('sha256').update(email).digest('hex').slice(0, 16)}`
 const apiPort = Number(process.env.PLAYWRIGHT_API_PORT || 18787)
 
@@ -44,8 +44,9 @@ try {
   await execFileAsync(node, [prismaCli, 'migrate', 'deploy'], { cwd: root, env: process.env, maxBuffer: 10 * 1024 * 1024 })
   prisma = await createPrismaClient(process.env)
   await prisma.tenant.create({ data: { id: tenantId, name: 'Receiving Browser Tenant' } })
-  await prisma.user.create({ data: { id: actorId, tenantId, email, name: 'Receiving Browser Manager', role: 'manager' } })
+  await prisma.user.create({ data: { id: actorId, tenantId, email, name: 'Kim', role: 'manager', jobTitle: '供应链经理' } })
   await prisma.warehouse.create({ data: { id: 'browser-warehouse', tenantId, code: 'BROWSER-WH', name: 'Browser Warehouse', status: 'active' } })
+  await prisma.userWarehouseScope.create({ data: { id: randomUUID(), tenantId, userId: actorId, warehouseId: 'browser-warehouse', accessLevel: 'operate' } })
   await prisma.item.create({ data: { id: 'browser-item', tenantId, sku: 'BROWSER-SKU', name: 'Browser Item', unit: 'EA' } })
   await prisma.purchaseOrder.create({ data: { id: 'browser-po', tenantId, status: 'issued', supplierName: 'Browser Supplier', currency: 'CNY', lines: { create: [{ id: 'browser-po-line', itemId: 'browser-item', sku: 'BROWSER-SKU', itemName: 'Browser Item', orderedQuantity: '10', receivedQuantity: '0', unit: 'EA' }] } } })
   await prisma.receivingDocument.create({ data: { id: 'browser-grn', tenantId, documentNumber: 'GRN-BROWSER-001', poId: 'browser-po', supplierName: 'Browser Supplier', status: 'receiving', workflowStatus: 'approved', postingStatus: 'unposted', warehouseId: 'browser-warehouse', receiver: 'Receiving Browser Manager', arrivedAt: new Date(), currency: 'CNY', lines: { create: [{ id: 'browser-grn-line', purchaseOrderLineId: 'browser-po-line', itemId: 'browser-item', sku: 'BROWSER-SKU', itemName: 'Browser Item', acceptedQty: '4', rejectedQty: '0', unit: 'EA', warehouseId: 'browser-warehouse', location: 'A-01', locationKey: 'a-01' }] } } })

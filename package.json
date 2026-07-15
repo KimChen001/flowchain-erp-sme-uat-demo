@@ -23,6 +23,8 @@
     "test:db:receiving": "node scripts/verify-receiving-postgres.mjs",
     "test:api:receiving": "node scripts/smoke-receiving-api.mjs",
     "db:generate": "prisma generate",
+    "pilot:setup": "node scripts/setup-pilot-workspace.mjs",
+    "pilot:check": "node scripts/check-pilot-readiness.mjs",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed:dry-run": "node scripts/seed-db.mjs --dry-run",

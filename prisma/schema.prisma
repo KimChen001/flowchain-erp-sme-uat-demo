@@ -7,12 +7,18 @@ datasource db {
 }
 
 model Tenant {
-  id        String   @id
-  name      String
-  locale    String   @default("zh-CN")
-  currency  String   @default("CNY")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                   String    @id
+  name                 String
+  legalName            String?
+  countryCode          String    @default("CN")
+  locale               String    @default("zh-CN")
+  currency             String    @default("CNY")
+  timezone             String    @default("Asia/Shanghai")
+  workspaceCompletedAt DateTime?
+  openingBalanceLockedAt DateTime?
+  version              Int       @default(0)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   users                User[]
   suppliers            Supplier[]
@@ -38,22 +44,37 @@ model Tenant {
   inventoryMovements   InventoryMovement[]
   inventoryExceptions  InventoryException[]
   commandExecutions    BusinessCommandExecution[]
+  userWarehouseScopes  UserWarehouseScope[]
+  workspaceInvitations WorkspaceInvitation[]
+  warehouseLocations    WarehouseLocation[]
+  importBatches         ImportBatch[]
+  importIssues          ImportIssue[]
 }
 
 model User {
-  id         String   @id
-  tenantId   String
-  email      String
-  name       String
-  role       String   @default("buyer")
-  department String?
-  locale     String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                 String    @id
+  tenantId           String
+  email              String
+  name               String
+  role               String    @default("buyer")
+  jobTitle            String?
+  status              String    @default("active")
+  department          String?
+  locale              String?
+  defaultWarehouseId  String?
+  profileCompletedAt DateTime?
+  version             Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   actionDrafts ActionDraft[]
   auditLogs    AuditLog[]
+  defaultWarehouse   Warehouse?            @relation("UserDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: Restrict)
+  warehouseScopes    UserWarehouseScope[]
+  invitationsSent    WorkspaceInvitation[] @relation("InvitationInviter")
+  invitationsAccepted WorkspaceInvitation[] @relation("InvitationAcceptor")
+  importBatches       ImportBatch[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -112,8 +133,109 @@ model Warehouse {
   updatedAt DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  defaultForUsers User[] @relation("UserDefaultWarehouse")
+  userScopes UserWarehouseScope[]
+  locations WarehouseLocation[]
 
   @@unique([tenantId, code])
+}
+
+model WarehouseLocation {
+  id          String   @id
+  tenantId    String
+  warehouseId String
+  code        String
+  locationKey String
+  name        String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, warehouseId, locationKey])
+  @@index([tenantId, warehouseId])
+}
+
+model ImportBatch {
+  id             String    @id
+  tenantId       String
+  importType     String
+  fileName       String
+  fileHash       String
+  status         String    @default("uploaded")
+  totalRows      Int       @default(0)
+  validRows      Int       @default(0)
+  invalidRows    Int       @default(0)
+  committedRows  Int       @default(0)
+  createdById    String
+  createdAt      DateTime  @default(now())
+  committedAt    DateTime?
+  idempotencyKey String?
+  mapping        Json?
+  summary        Json?
+  normalizedRows Json?
+
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy User          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  issues    ImportIssue[]
+
+  @@unique([tenantId, importType, idempotencyKey])
+  @@index([tenantId, status, createdAt])
+}
+
+model ImportIssue {
+  id            String   @id
+  tenantId      String
+  importBatchId String
+  rowNumber     Int
+  field         String?
+  code          String
+  message       String
+  rawValue      String?
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, importBatchId, rowNumber])
+}
+
+model UserWarehouseScope {
+  id          String   @id
+  tenantId    String
+  userId      String
+  warehouseId String
+  accessLevel String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, userId, warehouseId])
+  @@index([tenantId, warehouseId])
+}
+
+model WorkspaceInvitation {
+  id           String    @id
+  tenantId     String
+  email        String
+  role         String
+  tokenHash    String    @unique
+  status       String    @default("pending")
+  expiresAt    DateTime
+  invitedById  String
+  acceptedById String?
+  createdAt    DateTime  @default(now())
+  acceptedAt   DateTime?
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invitedBy  User   @relation("InvitationInviter", fields: [invitedById], references: [id], onDelete: Restrict)
+  acceptedBy User?  @relation("InvitationAcceptor", fields: [acceptedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, email, status])
 }
 
 model PaymentTerm {

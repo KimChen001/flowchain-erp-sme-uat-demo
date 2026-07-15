@@ -64,6 +64,25 @@ test('database receiving reversal preserves history, restores state, and fails c
       }
     })
 
+    for (const kind of ['lot', 'serial']) {
+      await t.test(`consumed ${kind} evidence blocks reversal`, async () => {
+        const scenario = await seedReceivingScenario(prisma)
+        try {
+          const service = createReceivingPostingCommandService({ prisma })
+          await service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: `post-before-consumed-${kind}` }, { identity: scenario.actor })
+          const shared = { id: `${kind}-${randomUUID()}`, tenantId: scenario.tenantId, itemId: scenario.items[0].itemId, sku: scenario.items[0].sku, warehouseId: scenario.warehouseId, location: 'A-01', sourceDocument: scenario.receivingDocumentId }
+          if (kind === 'lot') await prisma.inventoryLot.create({ data: { ...shared, quantity: '4', status: 'consumed' } })
+          else await prisma.inventorySerial.create({ data: { ...shared, status: 'consumed' } })
+          await expectCommandError(service.reverseReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: `reverse-consumed-${kind}`, reason: 'Must fail closed' }, { identity: scenario.actor }), 'RECEIVING_REVERSAL_NOT_SAFE')
+          assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenario.tenantId, movementType: 'receipt_reversal' } }), 0)
+        } finally {
+          await prisma.inventoryLot.deleteMany({ where: { tenantId: scenario.tenantId } })
+          await prisma.inventorySerial.deleteMany({ where: { tenantId: scenario.tenantId } })
+          await cleanupReceivingScenario(prisma, scenario)
+        }
+      })
+    }
+
     await t.test('tenant A cannot reverse tenant B receiving', async () => {
       const scenarioA = await seedReceivingScenario(prisma)
       const scenarioB = await seedReceivingScenario(prisma)

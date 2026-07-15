@@ -12,6 +12,13 @@ export function migrateLegacySessionStorage(storage: Storage = localStorage) {
   const legacyUser = storage.getItem(LEGACY_CURRENT_USER_KEY)
   if (!currentToken && legacyToken) storage.setItem(AUTH_TOKEN_KEY, legacyToken)
   if (!currentUser && legacyUser) storage.setItem(CURRENT_USER_KEY, legacyUser)
+  try {
+    const candidate = JSON.parse(storage.getItem(CURRENT_USER_KEY) || 'null')
+    if (candidate?.name === '张磊' && candidate?.email === 'zhanglei@example.com') {
+      storage.removeItem(AUTH_TOKEN_KEY)
+      storage.removeItem(CURRENT_USER_KEY)
+    }
+  } catch { /* Ignore malformed legacy session storage. */ }
   storage.removeItem(LEGACY_AUTH_TOKEN_KEY)
   storage.removeItem(LEGACY_CURRENT_USER_KEY)
 }

@@ -27,6 +27,11 @@ import {
 import { handlePurchaseOrdersRoute } from './purchase-orders.routes.mjs'
 import { handlePurchaseRequestsRoute } from './purchase-requests.routes.mjs'
 import { handleReceivingRoute } from './receiving.routes.mjs'
+import { handlePilotWorkspaceRoute } from './pilot-workspace.routes.mjs'
+import { handlePilotImportRoute } from './pilot-import.routes.mjs'
+import { handlePilotOperationsRoute } from './pilot-operations.routes.mjs'
+import { getPrismaClient } from '../persistence/prisma-client.mjs'
+import { roleLabel } from '../../shared/roles.mjs'
 import { handleRfqsRoute } from './rfqs.routes.mjs'
 import { handleInventoryRoute } from './inventory.routes.mjs'
 import { handleInventoryMovementsRoute } from './inventory-movements.routes.mjs'
@@ -961,10 +966,19 @@ export function createScmServer() {
       } catch (error) {
         return send(res, 400, { error: error.message })
       }
-      const session = createLocalSession(profile, { env: process.env })
+      if (persistenceMode === 'database') {
+        const tenantId = String(process.env.FLOWCHAIN_DEFAULT_TENANT_ID || '').trim()
+        if (!tenantId) return send(res, 403, { code: 'TENANT_CONTEXT_REQUIRED', message: 'Pilot workspace tenant is not configured.' })
+        const prisma = await getPrismaClient(process.env)
+        const provisioned = await prisma.user.findFirst({ where: { tenantId, email: String(profile.email || '').trim().toLowerCase() }, include: { tenant: true } })
+        if (!provisioned) return send(res, 403, { code: 'USER_NOT_PROVISIONED', message: 'This email is not provisioned for the Pilot workspace.' })
+        if (provisioned.status !== 'active') return send(res, 403, { code: 'USER_DISABLED', message: 'This workspace user is disabled.' })
+        profile = { id: provisioned.id, tenantId, name: provisioned.name, email: provisioned.email, company: provisioned.tenant.name, role: provisioned.role, version: provisioned.version }
+      }
+      const session = createLocalSession(profile, { env: process.env, authoritativeRole: persistenceMode === 'database' })
       localSessions.set(session.sessionId, session)
       const token = issueLocalSessionToken(session, localSessionSecret)
-      return send(res, 200, { token, expiresAt: new Date(session.expiresAt).toISOString(), user: { id: session.userId, name: session.name, email: session.email, company: session.company, role: session.role, tenantId: session.tenantId } })
+      return send(res, 200, { token, expiresAt: new Date(session.expiresAt).toISOString(), user: { id: session.userId, name: session.name, email: session.email, company: session.company, role: session.role, roleLabel: roleLabel(session.role), tenantId: session.tenantId } })
     }
 
     if (req.method === 'GET' && url.pathname === '/api/auth/me') {
@@ -1033,7 +1047,9 @@ export function createScmServer() {
       ensureEvents, ensureAuditLog,
       openaiDispatcher, arkDispatcher, aiMaxTokens,
       dataMode: dataMode.mode,
+      env: process.env,
       identity,
+      localSessions,
       supplierQuoteCount: Object.keys(supplierQuotes).length,
     }
 
@@ -1046,12 +1062,15 @@ export function createScmServer() {
     if (await handleEvidenceGraphRoute(routeContext)) return
     if (await handleDataAccessQualityRoute(routeContext)) return
     if (await handleReportsAnalyticsRoute(routeContext)) return
+    if (await handlePilotImportRoute(routeContext)) return
+    if (await handlePilotOperationsRoute(routeContext)) return
     if (await handleImportPersistenceRoute(routeContext)) return
     if (await handleReportViewsRoute(routeContext)) return
     if (await handleReviewFirstActionWorkflowRoute(routeContext)) return
     if (await handleAiSuggestionsWorkbenchRoute(routeContext)) return
     if (await handleCollaborationNotificationDraftsRoute(routeContext)) return
     if (await handleWorkspaceSetupConfigRoute(routeContext)) return
+    if (await handlePilotWorkspaceRoute(routeContext)) return
     if (await handleSettingsRuntimeRoute(routeContext)) return
     if (await handleUserRolePermissionVisibilityRoute(routeContext)) return
     if (await handleWorkspaceBoundaryVisibilityRoute(routeContext)) return

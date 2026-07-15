@@ -1,8 +1,11 @@
 export async function readBody(req) {
+  if (Object.prototype.hasOwnProperty.call(req, '__flowchainParsedBody')) return req.__flowchainParsedBody
   const chunks = []
   for await (const chunk of req) chunks.push(chunk)
   const raw = Buffer.concat(chunks).toString('utf8')
-  return raw ? JSON.parse(raw) : {}
+  const parsed = raw ? JSON.parse(raw) : {}
+  Object.defineProperty(req, '__flowchainParsedBody', { value: parsed, enumerable: false })
+  return parsed
 }
 
 export function send(res, status, payload) {

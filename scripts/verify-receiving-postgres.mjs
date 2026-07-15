@@ -17,8 +17,12 @@ const node = process.execPath
 const prismaCli = join(root, 'node_modules', 'prisma', 'build', 'index.js')
 const testFiles = [
   'server/domain/receiving-posting-transaction.test.mjs',
+  'server/domain/receiving-transaction-policy.test.mjs',
   'server/domain/receiving-reversal-transaction.test.mjs',
   'server/domain/receiving-workbench-query-service.test.mjs',
+  'server/domain/pilot-workspace.test.mjs',
+  'server/domain/pilot-import-service.test.mjs',
+  'server/domain/pilot-operations-service.test.mjs',
 ]
 
 function sanitize(value, secrets = []) {

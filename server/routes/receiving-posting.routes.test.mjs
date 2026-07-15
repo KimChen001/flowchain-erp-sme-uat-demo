@@ -37,6 +37,7 @@ test('database workbench GET routes use server identity and preview remains a re
   const queryService = {
     async getReceivingDetail(input, context) { captured = { input, context }; return { receivingDocument: { id: input.receivingDocumentId } } },
     async getReceivingImpactPreview(input, context) { captured = { input, context }; return { operation: input.operation, allowed: true } },
+    async getReceivingReconciliation(input, context) { captured = { input, context }; return { status: 'matched', entries: [] } },
   }
   const detail = route({ method: 'GET', path: '/api/procurement/receiving/GRN-1?tenantId=forged', headers: { 'x-flowchain-tenant': 'forged' }, queryService })
   await handleReceivingRoute(detail.ctx)
@@ -47,6 +48,10 @@ test('database workbench GET routes use server identity and preview remains a re
   await handleReceivingRoute(preview.ctx)
   assert.equal(preview.response.status, 200)
   assert.deepEqual(captured.input, { receivingDocumentId: 'GRN-1', operation: 'post' })
+  const reconciliation = route({ method: 'GET', path: '/api/procurement/receiving/GRN-1/reconciliation', queryService })
+  await handleReceivingRoute(reconciliation.ctx)
+  assert.equal(reconciliation.response.status, 200)
+  assert.deepEqual(captured.input, { receivingDocumentId: 'GRN-1' })
 })
 
 test('workbench GET routes enforce authentication and capability for preview', async () => {

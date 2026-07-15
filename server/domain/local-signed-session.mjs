@@ -52,8 +52,8 @@ export function resolveRequestIdentity(req, sessions, secret, env = process.env)
   return { authenticated: false, source: token ? 'invalid_session' : 'anonymous', userId: 'anonymous', name: 'Anonymous', email: '', role: 'viewer', tenantId: '' }
 }
 
-export function createLocalSession(profile, { ttlSeconds = 8 * 60 * 60, now = Date.now(), env = process.env } = {}) {
+export function createLocalSession(profile, { ttlSeconds = 8 * 60 * 60, now = Date.now(), env = process.env, authoritativeRole = false } = {}) {
   const normalizedEmail = String(profile.email || '').trim().toLowerCase()
-  const userId = `USR-${createHash('sha256').update(normalizedEmail || String(profile.name || '')).digest('hex').slice(0, 16)}`
-  return { sessionId: randomBytes(18).toString('base64url'), userId, tenantId: resolveServerTenantId(env), name: profile.name, email: profile.email, company: profile.company, role: 'manager', createdAt: new Date(now).toISOString(), expiresAt: now + ttlSeconds * 1000 }
+  const userId = String(profile.id || `USR-${createHash('sha256').update(normalizedEmail || String(profile.name || '')).digest('hex').slice(0, 16)}`)
+  return { sessionId: randomBytes(18).toString('base64url'), userId, tenantId: String(profile.tenantId || resolveServerTenantId(env)), name: profile.name, email: normalizedEmail, company: profile.company, role: authoritativeRole ? normalizedRole(profile.role) : 'manager', userVersion: profile.version ?? null, createdAt: new Date(now).toISOString(), expiresAt: now + ttlSeconds * 1000 }
 }

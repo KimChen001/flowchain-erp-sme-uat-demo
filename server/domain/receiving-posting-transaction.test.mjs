@@ -49,6 +49,7 @@ test('database receiving posting is atomic, idempotent, tenant-scoped, and concu
       const other = await seedReceivingScenario(prisma)
       try {
         await prisma.user.create({ data: { id: scenario.actor.userId, tenantId: scenario.tenantId, email: `${scenario.actor.userId}@test.invalid`, name: 'Provisioned Actor', role: 'manager' } })
+        await prisma.userWarehouseScope.create({ data: { id: randomUUID(), tenantId: scenario.tenantId, userId: scenario.actor.userId, warehouseId: scenario.warehouseId, accessLevel: 'operate' } })
         const service = createReceivingPostingCommandService({ prisma, env: { NODE_ENV: 'production' } })
         const result = await service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'actor-provisioned' }, { identity: scenario.actor })
         assert.equal(result.receivingDocument.postingStatus, 'posted')

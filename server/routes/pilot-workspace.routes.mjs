@@ -1,0 +1,151 @@
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { getPrismaClient } from '../persistence/prisma-client.mjs'
+import { PilotIdentityError, resolveProvisionedActor } from '../domain/pilot-identity.mjs'
+import { roleLabel } from '../../shared/roles.mjs'
+
+const text = value => String(value ?? '').trim()
+const email = value => text(value).toLowerCase()
+const hashToken = token => createHash('sha256').update(token).digest('hex')
+const ALLOWED_ROLES = new Set(['admin', 'manager', 'viewer', 'business-specialist', 'buyer'])
+
+const fail = (code, message, status = 400, details) => { throw new PilotIdentityError(code, message, status, details) }
+const publicUser = user => ({ id: user.id, email: user.email, name: user.name, role: user.role, roleLabel: roleLabel(user.role), jobTitle: user.jobTitle, status: user.status, defaultWarehouseId: user.defaultWarehouseId, profileCompletedAt: user.profileCompletedAt, version: user.version, ...(Array.isArray(user.warehouseScopes) ? { warehouseScopes: user.warehouseScopes.map(scope => ({ warehouseId: scope.warehouseId, accessLevel: scope.accessLevel })) } : {}) })
+const publicInvitation = invitation => ({ id: invitation.id, email: invitation.email, role: invitation.role, roleLabel: roleLabel(invitation.role), status: invitation.status, expiresAt: invitation.expiresAt, invitedById: invitation.invitedById, acceptedById: invitation.acceptedById, createdAt: invitation.createdAt, acceptedAt: invitation.acceptedAt })
+
+function sendError(ctx, error) {
+  if (!(error instanceof PilotIdentityError)) throw error
+  ctx.send(ctx.res, error.status, { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) })
+}
+
+async function adminActor(prisma, identity) {
+  const actor = await resolveProvisionedActor(prisma, identity)
+  if (actor.role !== 'admin') fail('PERMISSION_DENIED', 'Workspace administration requires the admin role.', 403)
+  return actor
+}
+
+async function validateDefaultWarehouse(prisma, actor, warehouseId) {
+  if (!warehouseId) return null
+  const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, tenantId: actor.tenantId, status: 'active' } })
+  if (!warehouse) fail('INVALID_DEFAULT_WAREHOUSE', 'Default warehouse must be active in this workspace.', 400)
+  if (!actor.allWarehouses && !actor.readWarehouseIds.has(warehouseId)) fail('WAREHOUSE_SCOPE_DENIED', 'Default warehouse must be within the user warehouse scope.', 403)
+  return warehouse.id
+}
+
+export async function handlePilotWorkspaceRoute(ctx) {
+  if (!ctx.url.pathname.startsWith('/api/me/') && !ctx.url.pathname.startsWith('/api/workspace')) return false
+  if (String((ctx.env || process.env).FLOWCHAIN_PERSISTENCE_MODE || '').toLowerCase() !== 'database') return false
+  const prisma = await getPrismaClient(ctx.env || process.env)
+  try {
+    const accept = ctx.url.pathname === '/api/workspace/invitations/accept'
+    if (!accept && !ctx.identity?.authenticated) fail('AUTHENTICATION_REQUIRED', 'Authentication is required.', 401)
+
+    if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/me/profile') {
+      const actor = await resolveProvisionedActor(prisma, ctx.identity)
+      ctx.send(ctx.res, 200, publicUser(actor.user)); return true
+    }
+    if (ctx.req.method === 'PATCH' && ctx.url.pathname === '/api/me/profile') {
+      const actor = await resolveProvisionedActor(prisma, ctx.identity)
+      const body = await ctx.readBody(ctx.req)
+      await validateDefaultWarehouse(prisma, actor, text(body.defaultWarehouseId) || null)
+      const result = await prisma.user.updateMany({ where: { id: actor.user.id, tenantId: actor.tenantId, version: Number(body.version) }, data: { name: text(body.name), jobTitle: text(body.jobTitle) || null, defaultWarehouseId: text(body.defaultWarehouseId) || null, profileCompletedAt: text(body.name) && text(body.jobTitle) ? new Date() : null, version: { increment: 1 } } })
+      if (result.count !== 1) fail('VERSION_CONFLICT', 'Profile changed concurrently.', 409)
+      ctx.send(ctx.res, 200, publicUser(await prisma.user.findUnique({ where: { id: actor.user.id }, include: { warehouseScopes: true } }))); return true
+    }
+    if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/workspace') {
+      const actor = await resolveProvisionedActor(prisma, ctx.identity)
+      const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } })
+      ctx.send(ctx.res, 200, { id: tenant.id, name: tenant.name, legalName: tenant.legalName, countryCode: tenant.countryCode, baseCurrency: tenant.currency, timezone: tenant.timezone, workspaceCompletedAt: tenant.workspaceCompletedAt, version: tenant.version }); return true
+    }
+    if (ctx.req.method === 'PATCH' && ctx.url.pathname === '/api/workspace') {
+      const actor = await adminActor(prisma, ctx.identity)
+      const body = await ctx.readBody(ctx.req)
+      const result = await prisma.tenant.updateMany({ where: { id: actor.tenantId, version: Number(body.version) }, data: { name: text(body.name), legalName: text(body.legalName) || null, countryCode: text(body.countryCode) || 'CN', currency: text(body.baseCurrency) || 'CNY', timezone: text(body.timezone) || 'Asia/Shanghai', workspaceCompletedAt: text(body.name) && text(body.countryCode) && text(body.baseCurrency) && text(body.timezone) ? new Date() : null, version: { increment: 1 } } })
+      if (result.count !== 1) fail('VERSION_CONFLICT', 'Workspace changed concurrently.', 409)
+      const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } })
+      ctx.send(ctx.res, 200, { id: tenant.id, name: tenant.name, legalName: tenant.legalName, countryCode: tenant.countryCode, baseCurrency: tenant.currency, timezone: tenant.timezone, workspaceCompletedAt: tenant.workspaceCompletedAt, version: tenant.version }); return true
+    }
+    if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/workspace/users') {
+      const actor = await adminActor(prisma, ctx.identity)
+      const users = await prisma.user.findMany({ where: { tenantId: actor.tenantId }, include: { warehouseScopes: true }, orderBy: { email: 'asc' } })
+      ctx.send(ctx.res, 200, { users: users.map(user => ({ ...publicUser(user), warehouseScopes: user.warehouseScopes.map(scope => ({ warehouseId: scope.warehouseId, accessLevel: scope.accessLevel })) })) }); return true
+    }
+    const userPatch = ctx.url.pathname.match(/^\/api\/workspace\/users\/([^/]+)$/)
+    if (ctx.req.method === 'PATCH' && userPatch) {
+      const actor = await adminActor(prisma, ctx.identity)
+      const userId = decodeURIComponent(userPatch[1]); const body = await ctx.readBody(ctx.req)
+      const target = await prisma.user.findFirst({ where: { id: userId, tenantId: actor.tenantId } })
+      if (!target) fail('USER_NOT_FOUND', 'Workspace user was not found.', 404)
+      const role = text(body.role || target.role).toLowerCase(); const status = text(body.status || target.status).toLowerCase()
+      if (!ALLOWED_ROLES.has(role) || !['active', 'disabled'].includes(status)) fail('USER_VALIDATION_FAILED', 'Role or status is invalid.')
+      if (target.role === 'admin' && (role !== 'admin' || status !== 'active')) {
+        const adminCount = await prisma.user.count({ where: { tenantId: actor.tenantId, role: 'admin', status: 'active' } })
+        if (adminCount <= 1) fail('LAST_ADMIN_REQUIRED', 'The last active admin cannot be disabled or demoted.', 409)
+      }
+      const result = await prisma.user.updateMany({ where: { id: target.id, tenantId: actor.tenantId, version: Number(body.version) }, data: { role, status, version: { increment: 1 } } })
+      if (result.count !== 1) fail('VERSION_CONFLICT', 'User changed concurrently.', 409)
+      for (const [sessionId, session] of ctx.localSessions || []) if (session.userId === target.id) ctx.localSessions.delete(sessionId)
+      ctx.send(ctx.res, 200, publicUser(await prisma.user.findUnique({ where: { id: target.id } }))); return true
+    }
+    if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/workspace/warehouses') {
+      const actor = await resolveProvisionedActor(prisma, ctx.identity)
+      const where = actor.allWarehouses ? { tenantId: actor.tenantId } : { tenantId: actor.tenantId, id: { in: [...actor.readWarehouseIds] } }
+      const warehouses = await prisma.warehouse.findMany({ where, orderBy: { code: 'asc' } })
+      ctx.send(ctx.res, 200, { warehouses }); return true
+    }
+    const scopesPut = ctx.url.pathname.match(/^\/api\/workspace\/users\/([^/]+)\/warehouse-scopes$/)
+    if (ctx.req.method === 'PUT' && scopesPut) {
+      const actor = await adminActor(prisma, ctx.identity)
+      const userId = decodeURIComponent(scopesPut[1]); const body = await ctx.readBody(ctx.req); const scopes = Array.isArray(body.scopes) ? body.scopes : []
+      const target = await prisma.user.findFirst({ where: { id: userId, tenantId: actor.tenantId } })
+      if (!target) fail('USER_NOT_FOUND', 'Workspace user was not found.', 404)
+      if (scopes.some(scope => !['read', 'operate'].includes(scope.accessLevel))) fail('WAREHOUSE_SCOPE_VALIDATION_FAILED', 'Warehouse accessLevel must be read or operate.')
+      const warehouseIds = [...new Set(scopes.map(scope => text(scope.warehouseId)).filter(Boolean))]
+      const validCount = await prisma.warehouse.count({ where: { tenantId: actor.tenantId, id: { in: warehouseIds } } })
+      if (validCount !== warehouseIds.length) fail('WAREHOUSE_SCOPE_VALIDATION_FAILED', 'Every warehouse must belong to the workspace.')
+      await prisma.$transaction(async tx => {
+        await tx.userWarehouseScope.deleteMany({ where: { tenantId: actor.tenantId, userId } })
+        for (const scope of scopes) await tx.userWarehouseScope.create({ data: { id: randomUUID(), tenantId: actor.tenantId, userId, warehouseId: text(scope.warehouseId), accessLevel: scope.accessLevel } })
+        if (target.defaultWarehouseId && !warehouseIds.includes(target.defaultWarehouseId)) await tx.user.update({ where: { id: target.id }, data: { defaultWarehouseId: null, version: { increment: 1 } } })
+      })
+      ctx.send(ctx.res, 200, { userId, scopes }); return true
+    }
+    if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/workspace/invitations') {
+      const actor = await adminActor(prisma, ctx.identity)
+      await prisma.workspaceInvitation.updateMany({ where: { tenantId: actor.tenantId, status: 'pending', expiresAt: { lte: new Date() } }, data: { status: 'expired' } })
+      const invitations = await prisma.workspaceInvitation.findMany({ where: { tenantId: actor.tenantId }, orderBy: { createdAt: 'desc' } })
+      ctx.send(ctx.res, 200, { invitations: invitations.map(publicInvitation), emailDeliveryConnected: false }); return true
+    }
+    if (ctx.req.method === 'POST' && ctx.url.pathname === '/api/workspace/invitations') {
+      const actor = await adminActor(prisma, ctx.identity); const body = await ctx.readBody(ctx.req)
+      const targetEmail = email(body.email); const role = text(body.role).toLowerCase(); const expiryHours = Math.min(168, Math.max(1, Number(body.expiryHours || 72)))
+      if (!targetEmail || !ALLOWED_ROLES.has(role)) fail('INVITATION_VALIDATION_FAILED', 'A valid email and canonical role are required.')
+      const token = randomBytes(32).toString('base64url')
+      let invitation
+      try { invitation = await prisma.workspaceInvitation.create({ data: { id: randomUUID(), tenantId: actor.tenantId, email: targetEmail, role, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + expiryHours * 3600_000), invitedById: actor.user.id } }) }
+      catch (error) { if (error?.code === 'P2002') fail('INVITATION_ALREADY_PENDING', 'An active invitation already exists for this email.', 409); throw error }
+      ctx.send(ctx.res, 201, { invitation: publicInvitation(invitation), invitationToken: token, invitationPath: `/accept-invitation?token=${encodeURIComponent(token)}`, emailDeliveryConnected: false }); return true
+    }
+    const revoke = ctx.url.pathname.match(/^\/api\/workspace\/invitations\/([^/]+)\/revoke$/)
+    if (ctx.req.method === 'POST' && revoke) {
+      const actor = await adminActor(prisma, ctx.identity)
+      const result = await prisma.workspaceInvitation.updateMany({ where: { id: decodeURIComponent(revoke[1]), tenantId: actor.tenantId, status: 'pending' }, data: { status: 'revoked' } })
+      if (result.count !== 1) fail('INVITATION_NOT_PENDING', 'Pending invitation was not found.', 404)
+      ctx.send(ctx.res, 200, { status: 'revoked' }); return true
+    }
+    if (ctx.req.method === 'POST' && accept) {
+      const body = await ctx.readBody(ctx.req); const tokenHash = hashToken(text(body.token)); const invitation = await prisma.workspaceInvitation.findUnique({ where: { tokenHash } })
+      if (!invitation || invitation.status !== 'pending') fail('INVITATION_INVALID', 'Invitation is invalid or no longer pending.', 400)
+      if (invitation.expiresAt <= new Date()) { await prisma.workspaceInvitation.update({ where: { id: invitation.id }, data: { status: 'expired' } }); fail('INVITATION_EXPIRED', 'Invitation has expired.', 410) }
+      const existing = await prisma.user.findFirst({ where: { tenantId: invitation.tenantId, email: invitation.email } })
+      if (existing?.status === 'disabled') fail('USER_DISABLED', 'The invited user is disabled.', 403)
+      const accepted = await prisma.$transaction(async tx => {
+        const user = existing || await tx.user.create({ data: { id: `USR-${randomUUID()}`, tenantId: invitation.tenantId, email: invitation.email, name: text(body.name) || invitation.email.split('@')[0], role: invitation.role, status: 'active' } })
+        const updated = await tx.workspaceInvitation.updateMany({ where: { id: invitation.id, status: 'pending' }, data: { status: 'accepted', acceptedById: user.id, acceptedAt: new Date() } })
+        if (updated.count !== 1) fail('INVITATION_INVALID', 'Invitation was already used.', 409)
+        return user
+      })
+      ctx.send(ctx.res, 200, { user: publicUser(accepted), status: 'accepted' }); return true
+    }
+    return false
+  } catch (error) { sendError(ctx, error); return true }
+}

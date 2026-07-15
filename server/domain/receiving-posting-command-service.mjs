@@ -1,17 +1,20 @@
 import { createHash, randomUUID } from 'node:crypto'
+import {
+  buildReceivingPostingPlan,
+  buildReceivingReversalPlan,
+  DOWNSTREAM_MOVEMENT_TYPES,
+  RECEIVABLE_PO_STATUSES,
+  RECEIVABLE_WORKFLOW_STATUSES,
+  receivingDecimalString as decimalString,
+  receivingDecimalUnits as decimalUnits,
+  receivingFulfillmentStatus,
+  receivingLocationKey as normalizeLocation,
+  receivingWorkflowStatus,
+} from './receiving-transaction-policy.mjs'
 
-const SCALE = 10_000n
 const POST_COMMAND = 'receiving.post'
 const REVERSE_COMMAND = 'receiving.reverse'
-export const RECEIVABLE_WORKFLOW_STATUSES = new Set(['approved', 'ready_for_receiving', 'partially_received'])
-export const RECEIVABLE_PO_STATUSES = new Set(['approved', 'issued', 'ready_for_receiving', 'partially_received'])
-export const DOWNSTREAM_MOVEMENT_TYPES = [
-  'outbound_posting',
-  'sales_outbound',
-  'transfer_out',
-  'reservation_consumption',
-  'sales_allocation_consumption',
-]
+export { DOWNSTREAM_MOVEMENT_TYPES, RECEIVABLE_PO_STATUSES, RECEIVABLE_WORKFLOW_STATUSES }
 
 export class ReceivingCommandError extends Error {
   constructor(code, message, status = 400, details = undefined) {
@@ -29,31 +32,6 @@ function fail(code, message, status = 400, details) {
 
 function text(value = '') {
   return String(value ?? '').trim()
-}
-
-function normalizeLocation(value = '') {
-  return text(value).toLowerCase()
-}
-
-function decimalUnits(value) {
-  const raw = text(value ?? '0') || '0'
-  if (!/^-?\d+(?:\.\d+)?$/.test(raw)) fail('RECEIVING_VALIDATION_FAILED', `Invalid decimal quantity: ${raw}`)
-  const negative = raw.startsWith('-')
-  const unsigned = negative ? raw.slice(1) : raw
-  const [whole, fraction = ''] = unsigned.split('.')
-  if (fraction.length > 4 && /[1-9]/.test(fraction.slice(4))) {
-    fail('RECEIVING_VALIDATION_FAILED', `Quantity exceeds four decimal places: ${raw}`)
-  }
-  const units = BigInt(whole) * SCALE + BigInt((fraction.slice(0, 4) + '0000').slice(0, 4))
-  return negative ? -units : units
-}
-
-function decimalString(units) {
-  const negative = units < 0n
-  const absolute = negative ? -units : units
-  const whole = absolute / SCALE
-  const fraction = String(absolute % SCALE).padStart(4, '0')
-  return `${negative ? '-' : ''}${whole}.${fraction}`
 }
 
 function stableValue(value) {
@@ -157,8 +135,10 @@ function isTransactionConflict(error) {
 async function ensureTenantAndActor(tx, { tenantId, actorId, identity }, { allowLocalActorBootstrap = false } = {}) {
   const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })
   if (!tenant) fail('TENANT_CONTEXT_REQUIRED', 'The authenticated tenant is not provisioned.', 403)
-  const existingActor = await tx.user.findUnique({ where: { id: actorId }, select: { tenantId: true } })
+  const existingActor = await tx.user.findUnique({ where: { id: actorId }, select: { tenantId: true, role: true, status: true } })
   if (existingActor && existingActor.tenantId !== tenantId) fail('TENANT_CONTEXT_REQUIRED', 'Actor and tenant context do not match.', 403)
+  if (existingActor?.status === 'disabled') fail('USER_DISABLED', 'The workspace user is disabled.', 403)
+  if (existingActor && text(existingActor.role).toLowerCase() !== text(identity.role).toLowerCase()) fail('SESSION_STALE', 'User authorization changed. Sign in again.', 401)
   if (!existingActor) {
     if (!allowLocalActorBootstrap) {
       fail('ACTOR_NOT_PROVISIONED', 'The authenticated actor is not provisioned for this tenant.', 403)
@@ -174,6 +154,15 @@ async function ensureTenantAndActor(tx, { tenantId, actorId, identity }, { allow
       },
     })
   }
+}
+
+async function assertOperateWarehouseScope(tx, scope, receivingDocument, { allowTestBypass = false } = {}) {
+  if (allowTestBypass && scope.identity.source === 'test') return
+  const actor = await tx.user.findFirst({ where: { id: scope.actorId, tenantId: scope.tenantId }, select: { role: true } })
+  if (text(actor?.role).toLowerCase() === 'admin') return
+  const warehouseIds = [...new Set([receivingDocument.warehouseId, ...receivingDocument.lines.map(line => line.warehouseId)].map(text).filter(Boolean))]
+  const scopeCount = await tx.userWarehouseScope.count({ where: { tenantId: scope.tenantId, userId: scope.actorId, warehouseId: { in: warehouseIds }, accessLevel: 'operate' } })
+  if (scopeCount !== warehouseIds.length) fail('WAREHOUSE_SCOPE_DENIED', 'The actor lacks operate access to every receiving warehouse.', 403)
 }
 
 function poStatus(lines, currentStatus, baseStatus) {
@@ -211,61 +200,31 @@ async function loadPostingAggregate(tx, tenantId, receivingDocumentId) {
   return { receivingDocument, purchaseOrder }
 }
 
-async function validatePostingLines(tx, tenantId, receivingDocument, purchaseOrder) {
-  if (!receivingDocument.lines.length) fail('RECEIVING_VALIDATION_FAILED', 'Receiving document has no lines.')
-  if (!RECEIVABLE_WORKFLOW_STATUSES.has(receivingDocument.workflowStatus)) {
-    fail('RECEIVING_VALIDATION_FAILED', `Workflow status ${receivingDocument.workflowStatus} does not allow posting.`)
-  }
-  if (!RECEIVABLE_PO_STATUSES.has(purchaseOrder.status)) {
-    fail('RECEIVING_VALIDATION_FAILED', `Purchase order status ${purchaseOrder.status} does not allow receiving.`)
-  }
-  const poLines = new Map(purchaseOrder.lines.map((line) => [line.id, line]))
-  const acceptedByPoLine = new Map()
-  const plans = []
-  for (const line of receivingDocument.lines) {
-    const accepted = decimalUnits(line.acceptedQty)
-    const rejected = decimalUnits(line.rejectedQty)
-    if (accepted <= 0n || rejected < 0n) fail('RECEIVING_VALIDATION_FAILED', 'acceptedQty must be positive and rejectedQty cannot be negative.')
-    const poLine = poLines.get(line.purchaseOrderLineId)
-    if (!poLine) fail('RECEIVING_VALIDATION_FAILED', `Receiving line ${line.id} does not reference a line on the related purchase order.`)
-    const sku = text(line.sku)
-    const itemId = text(line.itemId)
-    if (!sku || !itemId || sku !== text(poLine.sku) || itemId !== text(poLine.itemId)) {
-      fail('RECEIVING_VALIDATION_FAILED', `Receiving line ${line.id} does not match its purchase order item and SKU.`)
-    }
-    const item = await tx.item.findFirst({ where: { id: itemId, tenantId, sku }, select: { id: true } })
-    if (!item) fail('RECEIVING_VALIDATION_FAILED', `Item ${itemId} / ${sku} is not valid for this tenant.`)
-    const warehouseId = text(line.warehouseId || receivingDocument.warehouseId)
-    if (!warehouseId) fail('RECEIVING_VALIDATION_FAILED', `Receiving line ${line.id} requires a warehouse.`)
-    const warehouse = await tx.warehouse.findFirst({ where: { id: warehouseId, tenantId, status: 'active' }, select: { id: true } })
-    if (!warehouse) fail('RECEIVING_VALIDATION_FAILED', `Warehouse ${warehouseId} is not active for this tenant.`)
-    const ordered = decimalUnits(poLine.orderedQuantity)
-    const previouslyReceived = decimalUnits(poLine.receivedQuantity)
-    const acceptedInDocument = (acceptedByPoLine.get(poLine.id) || 0n) + accepted
-    if (previouslyReceived + acceptedInDocument > ordered) {
-      fail('RECEIVING_OVER_RECEIPT', `Receiving line ${line.id} exceeds the purchase order quantity.`, 409)
-    }
-    acceptedByPoLine.set(poLine.id, acceptedInDocument)
-    const location = text(line.location)
-    plans.push({ line, poLine, sku, itemId, warehouseId, location, locationKey: normalizeLocation(location), accepted, rejected })
-  }
-  return plans
+function enforcePolicy(plan) {
+  const blocked = plan.blockingIssues[0]
+  if (blocked) fail(blocked.code, blocked.message, blocked.status || 400, blocked.details)
+  return plan
 }
 
 function auditMetadata({ action, before, after, purchaseOrder, receivingDocument, postingBatchId, idempotencyKey, movements, balances, reason }) {
-  const purchaseOrderLineChanges = movements.map((movement) => {
+  const deltasByPoLine = new Map()
+  for (const movement of movements) {
     const receivingLine = receivingDocument.lines.find((line) => line.id === movement.sourceDocumentLineId)
-    const purchaseOrderLine = purchaseOrder.lines.find((line) => line.id === receivingLine?.poLineId)
-    if (!purchaseOrderLine) return null
+    const purchaseOrderLine = purchaseOrder.lines.find((line) => line.id === receivingLine?.purchaseOrderLineId)
+    if (!purchaseOrderLine) continue
     const delta = decimalUnits(movement.quantityIn) - decimalUnits(movement.quantityOut)
+    deltasByPoLine.set(purchaseOrderLine.id, (deltasByPoLine.get(purchaseOrderLine.id) || 0n) + delta)
+  }
+  const purchaseOrderLineChanges = [...deltasByPoLine.entries()].map(([purchaseOrderLineId, delta]) => {
+    const purchaseOrderLine = purchaseOrder.lines.find((line) => line.id === purchaseOrderLineId)
     const receivedBefore = decimalUnits(purchaseOrderLine.receivedQuantity)
     return {
-      purchaseOrderLineId: purchaseOrderLine.id,
+      purchaseOrderLineId,
       receivedBefore: decimalString(receivedBefore),
       receivedDelta: decimalString(delta),
       receivedAfter: decimalString(receivedBefore + delta),
     }
-  }).filter(Boolean)
+  })
   return {
     source: 'receiving_command_service',
     action,
@@ -275,6 +234,10 @@ function auditMetadata({ action, before, after, purchaseOrder, receivingDocument
     idempotencyKey,
     before,
     after,
+    poWorkflowBefore: before.poWorkflowStatus ?? null,
+    poWorkflowAfter: after.poWorkflowStatus ?? null,
+    poFulfillmentBefore: before.poFulfillmentStatus ?? null,
+    poFulfillmentAfter: after.poFulfillmentStatus ?? null,
     movementIds: movements.map((movement) => movement.id),
     purchaseOrderLineChanges,
     balanceChanges: balances.map((balance, index) => {
@@ -369,13 +332,15 @@ export function createReceivingPostingCommandService({ prisma, now = () => new D
       context,
       work: async (tx, scope, normalized) => {
         const { receivingDocument, purchaseOrder } = await loadPostingAggregate(tx, scope.tenantId, normalized.receivingDocumentId)
+        await assertOperateWarehouseScope(tx, scope, receivingDocument, { allowTestBypass: text(env.NODE_ENV).toLowerCase() === 'test' })
         if (receivingDocument.postingStatus !== 'unposted') {
           fail('RECEIVING_ALREADY_POSTED', 'Receiving document is already posted.', 409)
         }
         if (input.expectedVersion !== undefined && Number(input.expectedVersion) !== receivingDocument.version) {
           fail('RECEIVING_VERSION_CONFLICT', 'Receiving document version does not match.', 409)
         }
-        const plans = await validatePostingLines(tx, scope.tenantId, receivingDocument, purchaseOrder)
+        const policy = enforcePolicy(await buildReceivingPostingPlan({ prisma: tx, tenantId: scope.tenantId, receivingDocument, purchaseOrder }))
+        const plans = policy.quantityPlans
         const postingBatchId = idFactory()
         const occurredAt = now()
         const movements = []
@@ -469,8 +434,8 @@ export function createReceivingPostingCommandService({ prisma, now = () => new D
             module: 'procurement_receiving', action: 'receiving_posted', entityType: 'ReceivingDocument', entityId: receivingDocument.id,
             summary: `Receiving ${receivingDocument.documentNumber || receivingDocument.id} posted to inventory.`,
             metadata: auditMetadata({
-              action: 'receiving_posted', before: { postingStatus: receivingDocument.postingStatus, poStatus: purchaseOrder.status },
-              after: { postingStatus: 'posted', poStatus: nextPoStatus }, purchaseOrder, receivingDocument,
+              action: 'receiving_posted', before: { postingStatus: receivingDocument.postingStatus, poStatus: purchaseOrder.status, poWorkflowStatus: receivingWorkflowStatus(purchaseOrder), poFulfillmentStatus: receivingFulfillmentStatus(purchaseOrder.lines) },
+              after: { postingStatus: 'posted', poStatus: nextPoStatus, poWorkflowStatus: receivingWorkflowStatus({ ...purchaseOrder, status: nextPoStatus, receivingBaseStatus: purchaseOrder.receivingBaseStatus || purchaseOrder.status }), poFulfillmentStatus: receivingFulfillmentStatus(poLines) }, purchaseOrder, receivingDocument,
               postingBatchId, idempotencyKey: normalized.idempotencyKey, movements, balances,
             }),
           },
@@ -492,28 +457,9 @@ export function createReceivingPostingCommandService({ prisma, now = () => new D
       context,
       work: async (tx, scope, normalized) => {
         const { receivingDocument, purchaseOrder } = await loadPostingAggregate(tx, scope.tenantId, normalized.receivingDocumentId)
-        if (receivingDocument.postingStatus === 'reversed') fail('RECEIVING_ALREADY_REVERSED', 'Receiving document is already reversed.', 409)
-        if (receivingDocument.postingStatus !== 'posted') fail('RECEIVING_REVERSAL_NOT_SAFE', 'Only a posted receiving document can be reversed.', 409)
-        const originalMovements = await tx.inventoryMovement.findMany({
-          where: { tenantId: scope.tenantId, relatedGrnId: receivingDocument.id, movementType: 'receipt_posting' },
-          orderBy: { createdAt: 'asc' },
-        })
-        if (!originalMovements.length || originalMovements.some((movement) => movement.reversedByMovementId)) {
-          fail('RECEIVING_REVERSAL_NOT_SAFE', 'Original receipt movements are missing or already reversed.', 409)
-        }
-        for (const movement of originalMovements) {
-          const downstream = await tx.inventoryMovement.findFirst({
-            where: {
-              tenantId: scope.tenantId, sku: movement.sku, warehouseId: movement.warehouseId,
-              occurredAt: { gt: movement.occurredAt }, movementType: { in: DOWNSTREAM_MOVEMENT_TYPES },
-            },
-            select: { id: true },
-          })
-          const downstreamSources = [movement.id, receivingDocument.id]
-          const consumedSerial = await tx.inventorySerial.findFirst({ where: { tenantId: scope.tenantId, sku: movement.sku, warehouseId: movement.warehouseId, sourceDocument: { in: downstreamSources }, status: { not: 'in_stock' } }, select: { id: true } })
-          const consumedLot = await tx.inventoryLot.findFirst({ where: { tenantId: scope.tenantId, sku: movement.sku, warehouseId: movement.warehouseId, sourceDocument: { in: downstreamSources }, status: { not: 'available' } }, select: { id: true } })
-          if (downstream || consumedSerial || consumedLot) fail('RECEIVING_REVERSAL_NOT_SAFE', 'Downstream inventory consumption makes this receiving reversal unsafe.', 409)
-        }
+        await assertOperateWarehouseScope(tx, scope, receivingDocument, { allowTestBypass: text(env.NODE_ENV).toLowerCase() === 'test' })
+        const policy = enforcePolicy(await buildReceivingReversalPlan({ prisma: tx, tenantId: scope.tenantId, receivingDocument, purchaseOrder }))
+        const originalMovements = policy.originalMovements
 
         const postingBatchId = idFactory()
         const occurredAt = now()
@@ -588,8 +534,8 @@ export function createReceivingPostingCommandService({ prisma, now = () => new D
             module: 'procurement_receiving', action: 'receiving_reversed', entityType: 'ReceivingDocument', entityId: receivingDocument.id,
             summary: `Receiving ${receivingDocument.documentNumber || receivingDocument.id} reversed: ${normalized.payload.reason}`,
             metadata: auditMetadata({
-              action: 'receiving_reversed', before: { postingStatus: receivingDocument.postingStatus, poStatus: purchaseOrder.status },
-              after: { postingStatus: 'reversed', poStatus: nextPoStatus }, purchaseOrder, receivingDocument,
+              action: 'receiving_reversed', before: { postingStatus: receivingDocument.postingStatus, poStatus: purchaseOrder.status, poWorkflowStatus: receivingWorkflowStatus(purchaseOrder), poFulfillmentStatus: receivingFulfillmentStatus(purchaseOrder.lines) },
+              after: { postingStatus: 'reversed', poStatus: nextPoStatus, poWorkflowStatus: receivingWorkflowStatus({ ...purchaseOrder, status: nextPoStatus }), poFulfillmentStatus: receivingFulfillmentStatus(nextPoLines) }, purchaseOrder, receivingDocument,
               postingBatchId, idempotencyKey: normalized.idempotencyKey, movements: reversalMovements, balances, reason: normalized.payload.reason,
             }),
           },

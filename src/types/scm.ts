@@ -320,6 +320,11 @@ export type WorkspaceUser = {
   name: string;
   email: string;
   role: string;
+  roleLabel?: string;
+  jobTitle?: string;
+  status?: string;
+  defaultWarehouseId?: string;
+  version?: number;
   createdAt?: string;
   lastLoginAt?: string;
 };

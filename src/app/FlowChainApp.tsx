@@ -15,6 +15,7 @@ import { navGroups, navItems } from "./routes";
 import { defaultRouteForModule, routeById, routeByPath, routePathForId } from "./routeRegistry";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "../lib/constants";
 import { apiJson, AUTH_TOKEN_KEY, CURRENT_USER_KEY, migrateLegacySessionStorage } from "../lib/api-client";
+import { roleLabel } from "../../shared/roles.mjs";
 import {
   navigationIntentFromGlobalSearchResult,
   navigationIntentFromModule,
@@ -156,9 +157,9 @@ function searchGroupKey(type: string) {
 
 function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string) => void }) {
   const [form, setForm] = useState({
-    company: "新辰智能制造",
-    name: "张磊",
-    email: "zhanglei@example.com",
+    company: "FlowChain Pilot Workspace",
+    name: "Kim",
+    email: "kim@example.com",
   });
   const [loading, setLoading] = useState(false);
 
@@ -174,8 +175,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: WorkspaceUser, token: string
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(result.user));
       onLogin(result.user, result.token);
       toast.success("登录成功，用户档案已保存");
-    } catch {
-      toast.error("登录失败，请检查服务连接状态");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "登录失败，请检查服务连接状态");
     } finally {
       setLoading(false);
     }
@@ -708,7 +709,7 @@ export default function FlowChainApp() {
     purchasing:  <ProcurementPanel view="orders" focus={searchFocus} onNavigate={navigateTo} />,
     rfq:         <ProcurementPanel view="rfq" focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     receiving:   <ReceivingPanel focus={searchFocus} onNavigate={navigateTo} />,
-    "receiving-workbench": <ReceivingPostingWorkbench receivingDocumentId={searchFocus?.entityType === "receiving_doc" ? searchFocus.entityId : decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "")} />,
+    "receiving-workbench": <ReceivingPostingWorkbench receivingDocumentId={searchFocus?.entityType === "receiving_doc" ? searchFocus.entityId : decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "")} onNavigate={navigateTo} />,
     procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => navigateTo("procurement:rfq")} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     srm: <SrmPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     "master-data": <MasterDataPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
@@ -977,7 +978,7 @@ export default function FlowChainApp() {
                 </div>
                 <div className="hidden sm:block text-left">
                   <div className="text-[12px] font-medium leading-tight" style={{ color: A.label }}>{user.name}</div>
-                  <div className="fc-caption leading-tight" style={{ color: A.gray2 }}>{user.role}</div>
+                  <div className="fc-caption leading-tight" style={{ color: A.gray2 }}>{user.roleLabel || roleLabel(user.role)}</div>
                 </div>
               </button>
 
@@ -986,8 +987,8 @@ export default function FlowChainApp() {
                   <div className="fixed inset-0 z-10" onClick={() => setProfileOpen(false)} />
                   <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20">
                     {[
-                      { icon: User, label: "用户档案", onClick: () => toast("用户档案", { description: "用户档案页待接入" }) },
-                      { icon: Settings, label: "设置", onClick: () => toast("设置", { description: "设置页待接入" }) },
+                      { icon: User, label: "用户档案", onClick: () => navigateTo("settings:profile") },
+                      { icon: Settings, label: "设置", onClick: () => navigateTo("settings:workspace") },
                       { icon: LogOut, label: "退出登录", onClick: logout },
                     ].map(({ icon: Icon, label, onClick }) => (
                       <button

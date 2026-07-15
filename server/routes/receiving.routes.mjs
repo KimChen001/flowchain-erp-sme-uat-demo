@@ -3,6 +3,7 @@ import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 import { createReceivingPostingCommandService, ReceivingCommandError } from '../domain/receiving-posting-command-service.mjs'
 import { createReceivingWorkbenchQueryService } from '../domain/receiving-workbench-query-service.mjs'
 import { getPrismaClient } from '../persistence/prisma-client.mjs'
+import { PilotIdentityError } from '../domain/pilot-identity.mjs'
 
 function sendCapabilityUnavailable(ctx, capabilityId) {
   return ctx.send(ctx.res, 409, {
@@ -29,7 +30,7 @@ async function queryService(ctx) {
 }
 
 function sendStructuredError(ctx, error) {
-  if (!(error instanceof ReceivingCommandError)) throw error
+  if (!(error instanceof ReceivingCommandError) && !(error instanceof PilotIdentityError)) throw error
   ctx.send(ctx.res, error.status || 400, { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) })
 }
 
@@ -43,8 +44,9 @@ async function handleFormalReceivingRead(ctx) {
   const preview = ctx.url.pathname.match(/^\/api\/procurement\/receiving\/([^/]+)\/impact-preview$/)
   const evidence = ctx.url.pathname.match(/^\/api\/procurement\/receiving\/([^/]+)\/evidence$/)
   const links = ctx.url.pathname.match(/^\/api\/procurement\/receiving\/([^/]+)\/links$/)
+  const reconciliation = ctx.url.pathname.match(/^\/api\/procurement\/receiving\/([^/]+)\/reconciliation$/)
   const poSummary = ctx.url.pathname.match(/^\/api\/procurement\/purchase-orders\/([^/]+)\/receiving-summary$/)
-  if (!detail && !preview && !evidence && !links && !poSummary) return false
+  if (!detail && !preview && !evidence && !links && !reconciliation && !poSummary) return false
   try {
     const service = await queryService(ctx)
     const identity = { identity: ctx.identity }
@@ -58,6 +60,7 @@ async function handleFormalReceivingRead(ctx) {
     }
     if (evidence) result = await service.getReceivingEvidenceTimeline({ receivingDocumentId: decodeURIComponent(evidence[1]) }, identity)
     if (links) result = await service.getReceivingSmartLinks({ receivingDocumentId: decodeURIComponent(links[1]) }, identity)
+    if (reconciliation) result = await service.getReceivingReconciliation({ receivingDocumentId: decodeURIComponent(reconciliation[1]) }, identity)
     if (poSummary) result = await service.getPurchaseOrderReceivingSummary({ purchaseOrderId: decodeURIComponent(poSummary[1]) }, identity)
     ctx.send(ctx.res, 200, result)
   } catch (error) { sendStructuredError(ctx, error) }

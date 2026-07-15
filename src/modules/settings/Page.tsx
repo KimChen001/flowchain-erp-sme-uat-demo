@@ -4,6 +4,7 @@ import { A, Card, RecoveryActions } from '../../components/ui';
 import { BusinessEntityLink } from '../../components/business/BusinessEntityLink';
 import { businessEntityRouteRegistry, type BusinessEntityType } from '../../components/business/businessEntityRoutes';
 import { fetchSettingsAudit, fetchSettingsRuntime, saveSettingsSection, type SettingsAuditEntry, type SettingsRuntime } from './settingsRuntime';
+import PilotWorkspaceSettings from './PilotWorkspaceSettings';
 
 type View = keyof SettingsRuntime | 'audit';
 type NavigateFn = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null) => void;
@@ -102,6 +103,7 @@ function Audit() {
 }
 
 export default function SettingsPage({ initialView }: { initialView?: string; onNavigate: NavigateFn }) {
+  if (['profile', 'workspace', 'pilot-users', 'warehouse-access', 'pilot-setup'].includes(initialView || '')) return <PilotWorkspaceSettings view={initialView || 'profile'} />;
   const view = ((initialView === 'boundaries' ? 'advanced' : initialView) || 'company') as View;
   const [data, setData] = useState<SettingsRuntime | null>(null); const [draft, setDraft] = useState<SettingsRuntime | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState(false); const [notice, setNotice] = useState('');
   useEffect(() => { setLoading(true); fetchSettingsRuntime().then(next => { setData(next); setDraft(next); setError(''); }).catch(err => setError(err instanceof Error ? err.message : '设置加载失败')).finally(() => setLoading(false)); }, []);
