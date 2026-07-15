@@ -1,13 +1,21 @@
 import { randomUUID } from 'node:crypto'
 import { shouldSkipDbTests, withTestDatabase } from '../persistence/test-db-harness.mjs'
+import { disconnectPrismaClient } from '../persistence/prisma-client.mjs'
 
 export async function withLiveReceivingDatabase(t, callback) {
   const availability = shouldSkipDbTests(process.env)
   if (availability.skip) {
+    if (process.env.FLOWCHAIN_REQUIRE_REAL_POSTGRES_TESTS === 'true') {
+      throw new Error(`Real PostgreSQL tests are required: ${availability.reason}`)
+    }
     t.skip(availability.reason)
     return
   }
-  await withTestDatabase(process.env, callback)
+  try {
+    await withTestDatabase(process.env, callback)
+  } finally {
+    await disconnectPrismaClient()
+  }
 }
 
 export function identity(tenantId, suffix = randomUUID()) {
@@ -46,10 +54,9 @@ export async function seedReceivingScenario(prisma, {
     const receivingLineId = `grn-line-${index}-${suffix}`
     await prisma.item.create({ data: { id: itemId, tenantId, sku, name: `Item ${index}`, unit: 'EA' } })
     items.push({ itemId, sku })
-    poLines.push({ id: poLineId, purchaseOrderId: poId, itemId, sku, itemName: `Item ${index}`, orderedQuantity: ordered[index], receivedQuantity: '0', unit: 'EA' })
+    poLines.push({ id: poLineId, itemId, sku, itemName: `Item ${index}`, orderedQuantity: ordered[index], receivedQuantity: '0', unit: 'EA' })
     receivingLines.push({
       id: receivingLineId,
-      receivingDocumentId,
       purchaseOrderLineId: poLineId,
       itemId,
       sku,
@@ -106,4 +113,3 @@ export async function expectCommandError(promise, code) {
   }
   throw new Error(`Expected command error ${code}`)
 }
-
