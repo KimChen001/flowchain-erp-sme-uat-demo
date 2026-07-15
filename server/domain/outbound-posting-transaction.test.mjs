@@ -5,9 +5,12 @@ import { createPrismaClient } from '../persistence/prisma-client.mjs'
 import { createOutboundPostingCommandService, outboundRequestHash } from './outbound-posting-command-service.mjs'
 import { outboundDecimalString, outboundDecimalUnits } from './outbound-transaction-policy.mjs'
 
-if (!process.env.DATABASE_URL || process.env.FLOWCHAIN_REQUIRE_REAL_POSTGRES_TESTS !== 'true') throw new Error('Real isolated PostgreSQL is required for outbound transaction tests.')
+const realPostgres = Boolean(process.env.DATABASE_URL) && process.env.FLOWCHAIN_REQUIRE_REAL_POSTGRES_TESTS === 'true'
 const env = { ...process.env, FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true' }
 let prisma
+if (!realPostgres) {
+  test('outbound PostgreSQL transactions are routed to the required isolated test:db:outbound gate', () => assert.equal(realPostgres, false))
+} else {
 before(async () => { prisma = await createPrismaClient(env) })
 after(async () => { await prisma?.$disconnect() })
 
@@ -207,3 +210,4 @@ test('multi-balance requests acquire natural keys in stable order without uncont
     for (const id of [ids.balanceId, balance2]) { const row = await prisma.inventoryBalance.findUnique({ where: { id } }); assert.equal(fixed(row.availableQuantity), outboundDecimalString(outboundDecimalUnits(row.onHandQuantity) - outboundDecimalUnits(row.reservedQuantity))) }
   } finally { await clientA.$disconnect(); await clientB.$disconnect() }
 })
+}

@@ -6,7 +6,7 @@ Phase 3 adds the authoritative PostgreSQL transaction path from a confirmed Sale
 
 ## Authoritative data boundary
 
-Formal outbound commands only use PostgreSQL `SalesOrder` aggregates. The legacy file Sales runtime remains a demo/read path and is never copied, converted, or used as a fallback by these commands. Authoritative Sales Order creation/maintenance experience is a Phase 3.5 boundary.
+Formal outbound commands only use PostgreSQL `SalesOrder` aggregates. The legacy file Sales runtime remains a read-only compatibility path and is never copied, converted, or used as a fallback by these commands. Authoritative Sales Order creation/maintenance experience is a Phase 3.5 boundary.
 
 ## Inventory mathematics
 
