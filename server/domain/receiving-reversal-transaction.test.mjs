@@ -20,6 +20,8 @@ test('database receiving reversal preserves history, restores state, and fails c
         const original = await prisma.inventoryMovement.findUnique({ where: { id: originalMovementId } })
         assert.equal(original.quantityIn.toString(), '4')
         assert.equal(original.reversedByMovementId, reversed.movements[0].id)
+        const reversalMovement = await prisma.inventoryMovement.findUnique({ where: { id: reversed.movements[0].id } })
+        assert.equal(reversalMovement.reason, 'Incorrect receiving quantity')
         const balance = await prisma.inventoryBalance.findFirst({ where: { tenantId: scenario.tenantId } })
         assert.equal(balance.onHandQuantity.toString(), '0')
         assert.equal(balance.availableQuantity.toString(), '0')
@@ -29,6 +31,7 @@ test('database receiving reversal preserves history, restores state, and fails c
         assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId } }), 2)
         await expectCommandError(service.reverseReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'reverse-twice', reason: 'Duplicate reversal' }, { identity: scenario.actor }), 'RECEIVING_ALREADY_REVERSED')
         assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenario.tenantId, movementType: 'receipt_reversal' } }), 1)
+        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId } }), 2)
       } finally {
         await cleanupReceivingScenario(prisma, scenario)
       }
@@ -52,10 +55,29 @@ test('database receiving reversal preserves history, restores state, and fails c
         assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenario.tenantId, movementType: 'receipt_reversal' } }), 0)
         assert.equal((await prisma.receivingDocument.findUnique({ where: { id: scenario.receivingDocumentId } })).postingStatus, 'posted')
         assert.equal((await prisma.inventoryMovement.findUnique({ where: { id: posted.movements[0].id } })).quantityIn.toString(), '4')
+        assert.equal((await prisma.inventoryBalance.findFirst({ where: { tenantId: scenario.tenantId } })).onHandQuantity.toString(), '4')
+        assert.equal((await prisma.purchaseOrderLine.findUnique({ where: { id: scenario.poLines[0].id } })).receivedQuantity.toString(), '4')
+        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId } }), 1)
+        assert.equal(await prisma.businessCommandExecution.count({ where: { tenantId: scenario.tenantId, commandType: 'receiving.reverse' } }), 0)
       } finally {
         await cleanupReceivingScenario(prisma, scenario)
       }
     })
+
+    await t.test('tenant A cannot reverse tenant B receiving', async () => {
+      const scenarioA = await seedReceivingScenario(prisma)
+      const scenarioB = await seedReceivingScenario(prisma)
+      try {
+        const service = createReceivingPostingCommandService({ prisma })
+        await service.postReceiving({ receivingDocumentId: scenarioB.receivingDocumentId, idempotencyKey: 'post-tenant-b' }, { identity: scenarioB.actor })
+        await expectCommandError(service.reverseReceiving({ receivingDocumentId: scenarioB.receivingDocumentId, idempotencyKey: 'reverse-cross-tenant', reason: 'Forged tenant attempt', tenantId: scenarioB.tenantId }, { identity: scenarioA.actor }), 'RECEIVING_NOT_FOUND')
+        assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenarioB.tenantId, movementType: 'receipt_reversal' } }), 0)
+        assert.equal((await prisma.receivingDocument.findUnique({ where: { id: scenarioB.receivingDocumentId } })).postingStatus, 'posted')
+        assert.equal((await prisma.inventoryBalance.findFirst({ where: { tenantId: scenarioB.tenantId } })).onHandQuantity.toString(), '4')
+      } finally {
+        await cleanupReceivingScenario(prisma, scenarioA)
+        await cleanupReceivingScenario(prisma, scenarioB)
+      }
+    })
   })
 })
-
