@@ -40,3 +40,4 @@ jobs:
           DATABASE_URL: postgresql://generate_only:generate_only@127.0.0.1:55432/flowchain_generate_only?schema=public
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser:receiving
+      - run: npm run test:browser:reports

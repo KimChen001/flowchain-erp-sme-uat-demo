@@ -64,7 +64,9 @@ test('reports API and KPI UI preserve null and present data insufficiency withou
 
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
   const dashboard = await readFile(join(root, 'src/modules/reports/BiDashboard.tsx'), 'utf8')
-  assert.match(dashboard, /if \(value === null\) return "—"/)
+  const currencyFormatting = await readFile(join(root, 'src/modules/reports/currencyFormatting.mjs'), 'utf8')
+  assert.match(currencyFormatting, /if \(value === null\) return '—'/)
+  assert.match(dashboard, /import \{ formatMetric \} from "\.\/currencyFormatting\.mjs"/)
   assert.match(dashboard, /item\.dataStatus === "incomplete" \? "数据不足"/)
   assert.match(dashboard, /item\.dataStatus === "incomplete" \? "库存数据不完整"/)
   assert.match(dashboard, /\?\.value \?\? null/)
