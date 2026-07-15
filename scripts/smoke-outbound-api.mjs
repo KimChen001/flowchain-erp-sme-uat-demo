@@ -1,0 +1,90 @@
+import assert from 'node:assert/strict'
+import { execFile, spawn } from 'node:child_process'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { createServer } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { promisify } from 'node:util'
+import EmbeddedPostgres from 'embedded-postgres'
+import { createPrismaClient } from '../server/persistence/prisma-client.mjs'
+
+const execFileAsync = promisify(execFile), root = resolve(import.meta.dirname, '..'), node = process.execPath
+const prismaCli = join(root, 'node_modules', 'prisma', 'build', 'index.js')
+const tenantId = 'tenant-outbound-api-smoke', email = 'outbound-smoke@flowchain.invalid'
+const actorId = `USR-${createHash('sha256').update(email).digest('hex').slice(0, 16)}`
+
+async function freePort() { return new Promise((resolvePort, reject) => { const server = createServer().on('error', reject); server.listen(0, '127.0.0.1', () => { const { port } = server.address(); server.close(() => resolvePort(port)) }) }) }
+async function waitFor(url, timeout = 20_000) { const started = Date.now(); while (Date.now() - started < timeout) { try { if ((await fetch(url)).ok) return } catch {} await new Promise((resolveWait) => setTimeout(resolveWait, 100)) } throw new Error('API server did not become ready') }
+async function stop(child) { if (!child || child.exitCode !== null) return; child.kill('SIGTERM'); await Promise.race([new Promise((resolveExit) => child.once('exit', resolveExit)), new Promise((resolveWait) => setTimeout(resolveWait, 3_000))]); if (child.exitCode === null) child.kill('SIGKILL') }
+function startApi(env) { const child = spawn(node, ['server/index.mjs'], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] }); child.stdout.on('data', () => {}); child.stderr.on('data', (chunk) => { const safe = String(chunk).replace(/postgres(?:ql)?:\/\/[^\s]+/gi, '[REDACTED_DATABASE_URL]'); if (safe.trim()) process.stderr.write(safe) }); return child }
+
+async function raw(base, path, { token, method = 'GET', body } = {}) { const response = await fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); return { response, payload: await response.json() } }
+async function request(base, path, options) { const result = await raw(base, path, options); if (!result.response.ok) throw new Error(`${options?.method || 'GET'} ${path} failed: ${result.payload.code || result.response.status} ${result.payload.message || ''}`); return result.payload }
+async function login(base) { const result = await request(base, '/api/auth/login', { method: 'POST', body: { email, name: 'Outbound Smoke Manager', company: 'FlowChain Test' } }); assert.equal(result.user.id, actorId); assert.equal(result.user.tenantId, tenantId); return result.token }
+
+async function main() {
+  const pgPort = await freePort(), apiPort = await freePort(), password = `local-${randomUUID()}`, database = 'flowchain_outbound_api_smoke_test'
+  const directory = await mkdtemp(join(tmpdir(), 'flowchain-outbound-api-'))
+  const url = `postgresql://flowchain_outbound_smoke:${encodeURIComponent(password)}@127.0.0.1:${pgPort}/${database}?schema=public`
+  const pg = new EmbeddedPostgres({ databaseDir: directory, user: 'flowchain_outbound_smoke', password, port: pgPort, persistent: false, onLog: () => {}, onError: () => {} })
+  let api, prisma
+  const env = { ...process.env, DATABASE_URL: url, DATABASE_URL_TEST: url, FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true', FLOWCHAIN_DEFAULT_TENANT_ID: tenantId, FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: 'false', FLOWCHAIN_LOCAL_SESSION_SECRET: `smoke-${randomUUID()}`, SCM_API_PORT: String(apiPort), NODE_ENV: 'production' }
+  const base = `http://127.0.0.1:${apiPort}`
+  try {
+    await pg.initialise(); await pg.start(); await pg.createDatabase(database)
+    await execFileAsync(node, [prismaCli, 'migrate', 'deploy'], { cwd: root, env, maxBuffer: 10 * 1024 * 1024 })
+    prisma = await createPrismaClient(env)
+    await prisma.tenant.create({ data: { id: tenantId, name: 'Outbound API Smoke' } })
+    await prisma.user.create({ data: { id: actorId, tenantId, email, name: 'Outbound Smoke Manager', role: 'manager' } })
+    await prisma.warehouse.create({ data: { id: 'outbound-smoke-warehouse', tenantId, code: 'OUT-SMOKE', name: 'Outbound Smoke Warehouse', status: 'active' } })
+    const scope = await prisma.userWarehouseScope.create({ data: { id: randomUUID(), tenantId, userId: actorId, warehouseId: 'outbound-smoke-warehouse', accessLevel: 'operate' } })
+    await prisma.item.create({ data: { id: 'outbound-smoke-item', tenantId, sku: 'OUT-SMOKE-SKU', name: 'Outbound Smoke Item', unit: 'EA' } })
+    await prisma.inventoryBalance.create({ data: { id: 'outbound-smoke-balance', tenantId, itemId: 'outbound-smoke-item', sku: 'OUT-SMOKE-SKU', itemName: 'Outbound Smoke Item', warehouseId: 'outbound-smoke-warehouse', warehouseKey: 'outbound-smoke-warehouse', location: 'A-01', locationKey: 'a-01', onHandQuantity: '10', reservedQuantity: '0', availableQuantity: '10', unit: 'EA' } })
+    await prisma.inventoryMovement.create({ data: { id: 'outbound-opening', tenantId, itemId: 'outbound-smoke-item', sku: 'OUT-SMOKE-SKU', warehouseId: 'outbound-smoke-warehouse', location: 'A-01', locationKey: 'a-01', movementType: 'opening_balance', sourceDocument: 'Smoke Seed', sourceDocumentType: 'TestSeed', sourceDocumentId: 'outbound-smoke-balance', sourceDocumentLineId: 'outbound-smoke-balance', quantityIn: '10', quantityOut: '0', adjustmentQty: '0', status: 'posted', unit: 'EA' } })
+    await prisma.salesOrder.create({ data: { id: 'outbound-smoke-order', tenantId, orderNumber: 'SO-OUT-SMOKE', customerName: 'Smoke Customer', workflowStatus: 'confirmed', currency: 'CNY', lines: { create: { id: 'outbound-smoke-line', itemId: 'outbound-smoke-item', sku: 'OUT-SMOKE-SKU', itemName: 'Outbound Smoke Item', orderedQuantity: '4', unit: 'EA' } } } })
+
+    api = startApi(env); await waitFor(`${base}/api/health`); let token = await login(base)
+    assert.equal((await raw(base, '/api/sales/orders/outbound-smoke-order/outbound-state')).response.status, 401)
+    let state = await request(base, '/api/sales/orders/outbound-smoke-order/outbound-state?tenantId=forged', { token })
+    assert.equal(state.salesOrder.id, 'outbound-smoke-order'); assert.equal(state.lines[0].orderedQuantity, '4.0000')
+    const allocation = { salesOrderLineId: 'outbound-smoke-line', warehouseId: 'outbound-smoke-warehouse', location: 'A-01', quantity: '4' }
+    assert.equal((await request(base, '/api/sales/orders/outbound-smoke-order/reservations/preview', { token, method: 'POST', body: { tenantId: 'forged', allocations: [allocation] } })).allowed, true)
+    const reserveKey = `reserve-${randomUUID()}`
+    const reserved = await request(base, '/api/sales/orders/outbound-smoke-order/reservations/reserve', { token, method: 'POST', body: { expectedOrderVersion: 0, idempotencyKey: reserveKey, allocations: [allocation] } })
+    const reservationId = reserved.reservations[0].id
+    state = await request(base, '/api/sales/orders/outbound-smoke-order/outbound-state', { token }); assert.equal(state.reservations[0].allocatableQuantity, '4.0000')
+    const changed = await raw(base, '/api/sales/orders/outbound-smoke-order/reservations/reserve', { token, method: 'POST', body: { expectedOrderVersion: 0, idempotencyKey: reserveKey, allocations: [{ ...allocation, quantity: '3' }] } })
+    assert.equal(changed.response.status, 409); assert.equal(changed.payload.code, 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD')
+    const draftBody = { shipmentNumber: 'SHIP-OUT-SMOKE', expectedOrderVersion: 1, idempotencyKey: `draft-${randomUUID()}`, lines: [{ salesOrderLineId: 'outbound-smoke-line', allocations: [{ reservationId, quantity: '4' }] }] }
+    assert.equal((await request(base, '/api/sales/orders/outbound-smoke-order/shipments/preview', { token, method: 'POST', body: draftBody })).allowed, true)
+    const balanceBeforeDraft = await prisma.inventoryBalance.findUnique({ where: { id: 'outbound-smoke-balance' } })
+    const drafted = await request(base, '/api/sales/orders/outbound-smoke-order/shipments', { token, method: 'POST', body: draftBody })
+    const shipmentId = drafted.shipment.id
+    const balanceAfterDraft = await prisma.inventoryBalance.findUnique({ where: { id: 'outbound-smoke-balance' } })
+    assert.deepEqual([balanceBeforeDraft.onHandQuantity.toString(), balanceBeforeDraft.availableQuantity.toString()], [balanceAfterDraft.onHandQuantity.toString(), balanceAfterDraft.availableQuantity.toString()])
+    assert.equal((await request(base, `/api/sales/shipments/${shipmentId}/post-preview`, { token, method: 'POST', body: {} })).allowed, true)
+    const postKey = `post-${randomUUID()}`
+    const posted = await request(base, `/api/sales/shipments/${shipmentId}/post`, { token, method: 'POST', body: { expectedShipmentVersion: 0, idempotencyKey: postKey } })
+    assert.equal(posted.shipment.postingStatus, 'posted')
+    assert.equal((await request(base, `/api/sales/shipments/${shipmentId}/post`, { token, method: 'POST', body: { expectedShipmentVersion: 0, idempotencyKey: postKey } })).idempotentReplay, true)
+    let postingState = await request(base, `/api/sales/shipments/${shipmentId}/posting-state`, { token }); assert.equal(postingState.allocations[0].movementId !== null, true)
+    let balance = await prisma.inventoryBalance.findUnique({ where: { id: 'outbound-smoke-balance' } }); assert.deepEqual([balance.onHandQuantity.toString(), balance.reservedQuantity.toString(), balance.availableQuantity.toString()], ['6', '0', '6'])
+    assert.equal(await prisma.inventoryReservationEvent.count({ where: { tenantId } }), 3); assert.equal(await prisma.auditLog.count({ where: { tenantId } }), 3); assert.equal(await prisma.businessCommandExecution.count({ where: { tenantId, status: 'completed' } }), 3)
+    assert.equal((await request(base, `/api/sales/shipments/${shipmentId}/reverse-preview`, { token, method: 'POST', body: { reason: 'API smoke correction' } })).allowed, true)
+    await request(base, `/api/sales/shipments/${shipmentId}/reverse`, { token, method: 'POST', body: { expectedShipmentVersion: 1, idempotencyKey: `reverse-${randomUUID()}`, reason: 'API smoke correction' } })
+    balance = await prisma.inventoryBalance.findUnique({ where: { id: 'outbound-smoke-balance' } }); assert.deepEqual([balance.onHandQuantity.toString(), balance.reservedQuantity.toString(), balance.availableQuantity.toString()], ['10', '4', '6'])
+    postingState = await request(base, `/api/sales/shipments/${shipmentId}/posting-state`, { token }); assert.equal(postingState.shipment.postingStatus, 'reversed'); assert.equal(postingState.allocations[0].reversalMovementId !== null, true)
+
+    await stop(api); api = startApi(env); await waitFor(`${base}/api/health`); token = await login(base)
+    assert.equal((await request(base, '/api/sales/orders/outbound-smoke-order/outbound-state', { token })).salesOrder.fulfillmentStatus, 'not_fulfilled')
+    assert.equal((await request(base, `/api/sales/shipments/${shipmentId}/posting-state`, { token })).shipment.postingStatus, 'reversed')
+    assert.equal((await request(base, '/api/sales/orders/outbound-smoke-order/reservations/reserve', { token, method: 'POST', body: { expectedOrderVersion: 0, idempotencyKey: reserveKey, allocations: [allocation] } })).idempotentReplay, true)
+    await prisma.userWarehouseScope.update({ where: { id: scope.id }, data: { accessLevel: 'read' } })
+    const denied = await raw(base, '/api/sales/orders/outbound-smoke-order/reservations/release', { token, method: 'POST', body: { expectedOrderVersion: 4, idempotencyKey: 'denied-release', reason: 'Scope test', releases: [{ reservationId, quantity: '1', expectedReservationVersion: 3 }] } })
+    assert.equal(denied.response.status, 403); assert.equal(denied.payload.code, 'WAREHOUSE_SCOPE_DENIED')
+    console.log('Outbound API smoke: PASS (real server, PostgreSQL, signed session, restart persistence)')
+  } finally { await stop(api); await prisma?.$disconnect().catch(() => {}); await pg.stop().catch(() => {}); await rm(directory, { recursive: true, force: true }).catch(() => {}) }
+}
+
+main().catch((error) => { console.error(`Outbound API smoke: FAIL\n${String(error?.stack || error).replace(/postgres(?:ql)?:\/\/[^\s]+/gi, '[REDACTED_DATABASE_URL]')}`); process.exit(1) })

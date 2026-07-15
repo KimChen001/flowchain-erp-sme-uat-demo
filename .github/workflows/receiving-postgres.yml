@@ -24,6 +24,8 @@ jobs:
       - run: npm test
       - run: npm run test:db:receiving
       - run: npm run test:api:receiving
+      - run: npm run test:db:outbound
+      - run: npm run test:api:outbound
 
   browser:
     runs-on: ubuntu-latest
