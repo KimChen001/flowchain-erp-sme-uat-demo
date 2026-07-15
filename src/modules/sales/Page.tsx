@@ -20,6 +20,7 @@ import { BusinessDocumentForm } from "../../components/business/BusinessDocument
 import { Link, useLocation, useSearchParams } from "react-router";
 import { ActionableMetricCard } from "../../components/cards/ActionableMetricCard";
 import { EntityLink } from "../../components/business/EntityLink";
+import OutboundWorkbench from "./OutboundWorkbench";
 
 type SalesOrder = {
   salesOrderId: string;
@@ -107,6 +108,7 @@ function viewFromInitial(initialView?: string): SalesView {
 
 export default function SalesDemandPage(props: SalesDemandPageProps) {
   const location = useLocation();
+  if (location.pathname === "/app/sales/orders" || location.pathname === "/app/sales/orders/new" || /^\/app\/sales\/orders\/[^/]+$/.test(location.pathname) || /^\/app\/sales\/shipments\/[^/]+$/.test(location.pathname)) return <OutboundWorkbench />;
   const documentId = decodeURIComponent(location.pathname.split("/").at(-2) || "");
   if (props.initialView === "delivery-new") return <BusinessDocumentForm documentLabel="发货单" listPath="/app/sales/deliveries" />;
   if (props.initialView === "delivery-edit") return <BusinessDocumentForm mode="edit" documentLabel="发货单" documentId={documentId} listPath="/app/sales/deliveries" />;

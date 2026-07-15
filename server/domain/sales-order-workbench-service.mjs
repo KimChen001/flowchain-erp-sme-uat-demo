@@ -132,5 +132,10 @@ export function createSalesOrderReadService({ prisma } = {}) {
     const [total, rows] = await Promise.all([prisma.salesOrder.count({ where }), prisma.salesOrder.findMany({ where, include: { lines: true }, orderBy: [{ [sort]: direction }, { id: 'asc' }], skip: (page - 1) * pageSize, take: pageSize } )])
     return { dataSource: 'Authoritative PostgreSQL', page, pageSize, total, orders: rows.map((row) => { const order = publicOrder(row); return { ...order, totalLines: row.lines.length, orderedQuantity: fixed(row.lines.reduce((sum, line) => sum + units(line.orderedQuantity), 0n)), reservedQuantity: fixed(row.lines.reduce((sum, line) => sum + units(line.reservedQuantity), 0n)), fulfilledQuantity: fixed(row.lines.reduce((sum, line) => sum + units(line.fulfilledQuantity), 0n)) } }) }
   }
-  return { listOrders }
+  async function entryData(context) {
+    const actor = await actorFor(prisma, context)
+    const items = await prisma.item.findMany({ where: { tenantId: actor.tenantId, status: 'active' }, select: { id: true, sku: true, name: true, unit: true }, orderBy: { sku: 'asc' }, take: 200 })
+    return { dataSource: 'Authoritative PostgreSQL', items }
+  }
+  return { listOrders, entryData }
 }

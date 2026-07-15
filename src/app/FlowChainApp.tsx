@@ -58,6 +58,7 @@ import AuditHistoryPage from "../modules/audit-history/Page";
 import PilotReadinessPage from "../modules/pilot-readiness/Page";
 import { ReviewFirstActionWorkflowV2 } from "../components/actions/ReviewFirstActionWorkflowV2";
 import { BusinessEntityDetailPage } from "../components/business/BusinessEntityDetailPage";
+import OutboundWorkbench from "../modules/sales/OutboundWorkbench";
 
 const ReportsPanel = React.lazy(() => import("../modules/reports/Page"));
 const ImportsPanel = React.lazy(() => import("../modules/imports/Page"));
@@ -710,6 +711,7 @@ export default function FlowChainApp() {
     rfq:         <ProcurementPanel view="rfq" focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     receiving:   <ReceivingPanel focus={searchFocus} onNavigate={navigateTo} />,
     "receiving-workbench": <ReceivingPostingWorkbench receivingDocumentId={searchFocus?.entityType === "receiving_doc" ? searchFocus.entityId : decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-1) || "")} onNavigate={navigateTo} />,
+    "outbound-workbench": <OutboundWorkbench />,
     procurement: <ProcurementPanel view={activeView as any} intent={purchaseIntent} focus={searchFocus} onOpenRfq={() => navigateTo("procurement:rfq")} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     srm: <SrmPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
     "master-data": <MasterDataPage initialView={activeView as any} focus={searchFocus} onNavigate={navigateTo} onActiveContextChange={setAiActiveContext} />,
@@ -1040,6 +1042,7 @@ export default function FlowChainApp() {
               : <PanelErrorBoundary key={location.pathname} moduleLabel={activeChildLabel || activeModuleLabel}>
                 <React.Suspense fallback={<div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="模块加载中">{[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl" style={{ background: A.gray5 }} />)}</div>}>
                 {activeRoute.panelId === "receiving-workbench" ? panels["receiving-workbench"]
+                  : activeRoute.panelId === "outbound-workbench" ? panels["outbound-workbench"]
                   : activeRoute.pageType === "detail" && activeRoute.entityType && !["purchase_request", "purchase_order", "supplier", "item"].includes(activeRoute.entityType)
                   ? <BusinessEntityDetailPage route={activeRoute} />
                   : panels[panelModule] || panels[activeModule] || panels.overview}
