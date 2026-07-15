@@ -92,7 +92,7 @@ export default function PilotImportWorkbench() {
     </div>
 
     <div className="mt-4 grid grid-cols-2 lg:grid-cols-6 gap-2">
-      {(Object.keys(CONFIG) as ImportType[]).map(type => <button key={type} onClick={() => resetRun(type)} className="rounded-xl p-3 text-left" style={{ border: `1px solid ${type === importType ? A.blue : A.border}`, background: type === importType ? "#f0f6ff" : A.white }}><div className="text-xs font-semibold" style={{ color: type === importType ? A.blue : A.label }}>{CONFIG[type].label}</div><div className="mt-1 text-[10px] leading-4" style={{ color: A.sub }}>{CONFIG[type].description}</div></button>)}
+      {(Object.keys(CONFIG) as ImportType[]).map(type => <button key={type} onClick={() => resetRun(type)} className="rounded-xl p-3 text-left" style={{ border: `1px solid ${type === importType ? A.blue : A.border}`, background: type === importType ? "#f0f6ff" : A.white }}><div className="text-xs font-semibold" style={{ color: type === importType ? A.blue : A.label }}>{CONFIG[type].label}</div><div className="mt-1 text-[11px] leading-4" style={{ color: A.sub }}>{CONFIG[type].description}</div></button>)}
     </div>
 
     {config.dangerous && <div className="mt-3 flex gap-2 rounded-xl p-3 text-xs" style={{ background: "#fff8f0", color: A.orange }}><Lock size={15} className="shrink-0" /><span>期初库存只允许成功提交一次；提交会创建正式库存事务、更新余额并锁定工作区，之后不得重新导入。</span></div>}
