@@ -154,7 +154,13 @@ test('GET /api/master-data/items returns item collection', async () => {
 })
 
 test('GET /api/master-data/items/:id returns one item', async () => {
-  const route = createRouteContext('GET', '/api/master-data/items/ITEM-A100', createDb())
+  const db = createDb()
+  const route = createRouteContext('GET', '/api/master-data/items/ITEM-A100', db, {
+    masterData: {
+      getManagedItem: async () => null,
+      getItem: (id) => findMasterItem(db, id),
+    },
+  })
   const handled = await handleMasterDataRoute(route.ctx)
 
   assert.ok(handled)

@@ -131,9 +131,11 @@ export async function handleMasterDataRoute(ctx) {
 
   const itemMatch = url.pathname.match(/^\/api\/master-data\/items\/([^/]+)$/)
   if (req.method === 'GET' && itemMatch) {
-    const item = await (repository.getManagedItem || repository.getItem)(
-      itemMatch[1],
-    )
+    const itemId = itemMatch[1]
+    const managedItem = repository.getManagedItem
+      ? await repository.getManagedItem(itemId)
+      : null
+    const item = managedItem || await repository.getItem(itemId)
     if (!item) {
       send(res, 404, { error: 'Item not found' })
       return true
