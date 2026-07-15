@@ -30,7 +30,7 @@ async function closeServer(server) {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 }
 
-async function requestJson(port, method, pathname, body) {
+async function requestJson(port, method, pathname, body, headers = {}) {
   const raw = body === undefined ? '' : JSON.stringify(body)
   return await new Promise((resolve, reject) => {
     const req = http.request({
@@ -39,9 +39,10 @@ async function requestJson(port, method, pathname, body) {
       method,
       path: pathname,
       headers: raw ? {
+        ...headers,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(raw),
-      } : {},
+      } : headers,
     }, (res) => {
       const chunks = []
       res.on('data', (chunk) => chunks.push(chunk))
@@ -182,13 +183,20 @@ test('database mode blocks legacy writes while allowing health and preview route
 test('database mode returns clean config error when DB audit adapter is invoked without DATABASE_URL', async () => {
   const previousMode = process.env.FLOWCHAIN_PERSISTENCE_MODE
   const previousDatabaseUrl = process.env.DATABASE_URL
+  const previousTestHeaders = process.env.FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS
+  const previousTenantId = process.env.FLOWCHAIN_DEFAULT_TENANT_ID
   process.env.FLOWCHAIN_PERSISTENCE_MODE = 'database'
+  process.env.FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS = 'true'
+  process.env.FLOWCHAIN_DEFAULT_TENANT_ID = 'tenant-backend-foundation'
   delete process.env.DATABASE_URL
   const server = createScmServer()
 
   try {
     const port = await listen(server)
-    const audit = await requestJson(port, 'GET', '/api/audit-log')
+    const audit = await requestJson(port, 'GET', '/api/audit-log', undefined, {
+      'x-flowchain-user': 'backend-foundation-test',
+      'x-flowchain-role': 'admin',
+    })
 
     assert.equal(audit.status, 500)
     assert.deepEqual(audit.payload, {
@@ -206,6 +214,16 @@ test('database mode returns clean config error when DB audit adapter is invoked 
       delete process.env.DATABASE_URL
     } else {
       process.env.DATABASE_URL = previousDatabaseUrl
+    }
+    if (previousTestHeaders === undefined) {
+      delete process.env.FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS
+    } else {
+      process.env.FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS = previousTestHeaders
+    }
+    if (previousTenantId === undefined) {
+      delete process.env.FLOWCHAIN_DEFAULT_TENANT_ID
+    } else {
+      process.env.FLOWCHAIN_DEFAULT_TENANT_ID = previousTenantId
     }
     await closeServer(server)
   }

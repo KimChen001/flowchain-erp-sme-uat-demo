@@ -4,10 +4,8 @@ let prismaClient
 
 export async function createPrismaClient(env = process.env) {
   validateDatabasePersistenceConfig(env)
-  const [{ PrismaClient }, { PrismaPg }] = await Promise.all([
-    import('@prisma/client'),
-    import('@prisma/adapter-pg'),
-  ])
+  const { PrismaClient } = await import('@prisma/client')
+  const { PrismaPg } = await import('@prisma/adapter-pg')
   const adapter = new PrismaPg({ connectionString: env.DATABASE_URL })
   return new PrismaClient({ adapter })
 }

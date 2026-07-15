@@ -3,9 +3,9 @@ import { createHash, randomUUID } from 'node:crypto'
 const SCALE = 10_000n
 const POST_COMMAND = 'receiving.post'
 const REVERSE_COMMAND = 'receiving.reverse'
-const RECEIVABLE_WORKFLOW_STATUSES = new Set(['approved', 'ready_for_receiving', 'partially_received'])
-const RECEIVABLE_PO_STATUSES = new Set(['approved', 'issued', 'ready_for_receiving', 'partially_received'])
-const DOWNSTREAM_MOVEMENT_TYPES = [
+export const RECEIVABLE_WORKFLOW_STATUSES = new Set(['approved', 'ready_for_receiving', 'partially_received'])
+export const RECEIVABLE_PO_STATUSES = new Set(['approved', 'issued', 'ready_for_receiving', 'partially_received'])
+export const DOWNSTREAM_MOVEMENT_TYPES = [
   'outbound_posting',
   'sales_outbound',
   'transfer_out',
@@ -154,12 +154,15 @@ function isTransactionConflict(error) {
   return error?.code === 'P2034' || /serialization|deadlock|write conflict/i.test(text(error?.message))
 }
 
-async function ensureTenantAndActor(tx, { tenantId, actorId, identity }) {
+async function ensureTenantAndActor(tx, { tenantId, actorId, identity }, { allowLocalActorBootstrap = false } = {}) {
   const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })
   if (!tenant) fail('TENANT_CONTEXT_REQUIRED', 'The authenticated tenant is not provisioned.', 403)
   const existingActor = await tx.user.findUnique({ where: { id: actorId }, select: { tenantId: true } })
   if (existingActor && existingActor.tenantId !== tenantId) fail('TENANT_CONTEXT_REQUIRED', 'Actor and tenant context do not match.', 403)
   if (!existingActor) {
+    if (!allowLocalActorBootstrap) {
+      fail('ACTOR_NOT_PROVISIONED', 'The authenticated actor is not provisioned for this tenant.', 403)
+    }
     const safeActor = actorId.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 80) || 'actor'
     await tx.user.create({
       data: {
@@ -250,6 +253,19 @@ async function validatePostingLines(tx, tenantId, receivingDocument, purchaseOrd
 }
 
 function auditMetadata({ action, before, after, purchaseOrder, receivingDocument, postingBatchId, idempotencyKey, movements, balances, reason }) {
+  const purchaseOrderLineChanges = movements.map((movement) => {
+    const receivingLine = receivingDocument.lines.find((line) => line.id === movement.sourceDocumentLineId)
+    const purchaseOrderLine = purchaseOrder.lines.find((line) => line.id === receivingLine?.poLineId)
+    if (!purchaseOrderLine) return null
+    const delta = decimalUnits(movement.quantityIn) - decimalUnits(movement.quantityOut)
+    const receivedBefore = decimalUnits(purchaseOrderLine.receivedQuantity)
+    return {
+      purchaseOrderLineId: purchaseOrderLine.id,
+      receivedBefore: decimalString(receivedBefore),
+      receivedDelta: decimalString(delta),
+      receivedAfter: decimalString(receivedBefore + delta),
+    }
+  }).filter(Boolean)
   return {
     source: 'receiving_command_service',
     action,
@@ -260,6 +276,7 @@ function auditMetadata({ action, before, after, purchaseOrder, receivingDocument
     before,
     after,
     movementIds: movements.map((movement) => movement.id),
+    purchaseOrderLineChanges,
     balanceChanges: balances.map((balance, index) => {
       const movement = movements[index]
       const delta = movement
@@ -295,7 +312,9 @@ export function calculateMovementBalance(movements = []) {
   ), 0n))
 }
 
-export function createReceivingPostingCommandService({ prisma, now = () => new Date(), idFactory = randomUUID, faultInjector = async () => {} } = {}) {
+export { decimalUnits as receivingDecimalUnits, decimalString as receivingDecimalString }
+
+export function createReceivingPostingCommandService({ prisma, now = () => new Date(), idFactory = randomUUID, faultInjector = async () => {}, env = process.env } = {}) {
   if (!prisma) throw new Error('Prisma client is required for receiving posting commands.')
 
   async function execute({ commandType, input, context, work }) {
@@ -308,7 +327,8 @@ export function createReceivingPostingCommandService({ prisma, now = () => new D
 
     try {
       return await prisma.$transaction(async (tx) => {
-        await ensureTenantAndActor(tx, scope)
+        const allowLocalActorBootstrap = text(env.NODE_ENV).toLowerCase() === 'test' || ['1', 'true', 'yes'].includes(text(env.FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP).toLowerCase())
+        await ensureTenantAndActor(tx, scope, { allowLocalActorBootstrap })
         const executionId = idFactory()
         await tx.businessCommandExecution.create({
           data: {
@@ -526,6 +546,8 @@ export function createReceivingPostingCommandService({ prisma, now = () => new D
             },
           })
           reversalMovements.push(reversal)
+          // Posted movement facts are immutable. Reversal may only append the
+          // reverse link; quantities, source identity, and movement type stay unchanged.
           await tx.inventoryMovement.update({ where: { id: original.id }, data: { reversedByMovementId: reversalId } })
           const balanceUpdated = await tx.inventoryBalance.updateMany({
             where: { id: balance.id, tenantId: scope.tenantId, version: balance.version, onHandQuantity: { gte: decimalString(quantity) }, availableQuantity: { gte: decimalString(quantity) } },

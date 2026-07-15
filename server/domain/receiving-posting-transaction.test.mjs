@@ -34,6 +34,28 @@ test('database receiving posting is atomic, idempotent, tenant-scoped, and concu
       }
     })
 
+    await t.test('actor provisioning is fail-closed outside test/local bootstrap', async () => {
+      const scenario = await seedReceivingScenario(prisma)
+      try {
+        const service = createReceivingPostingCommandService({ prisma, env: { NODE_ENV: 'production', FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: 'false' } })
+        await expectCommandError(service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'actor-disabled' }, { identity: scenario.actor }), 'ACTOR_NOT_PROVISIONED')
+        assert.equal(await prisma.user.count({ where: { id: scenario.actor.userId } }), 0)
+        assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenario.tenantId } }), 0)
+      } finally { await cleanupReceivingScenario(prisma, scenario) }
+    })
+
+    await t.test('provisioned actor works with bootstrap disabled and wrong-tenant actor is rejected', async () => {
+      const scenario = await seedReceivingScenario(prisma)
+      const other = await seedReceivingScenario(prisma)
+      try {
+        await prisma.user.create({ data: { id: scenario.actor.userId, tenantId: scenario.tenantId, email: `${scenario.actor.userId}@test.invalid`, name: 'Provisioned Actor', role: 'manager' } })
+        const service = createReceivingPostingCommandService({ prisma, env: { NODE_ENV: 'production' } })
+        const result = await service.postReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'actor-provisioned' }, { identity: scenario.actor })
+        assert.equal(result.receivingDocument.postingStatus, 'posted')
+        await expectCommandError(service.postReceiving({ receivingDocumentId: other.receivingDocumentId, idempotencyKey: 'actor-wrong-tenant' }, { identity: { ...other.actor, userId: scenario.actor.userId } }), 'TENANT_CONTEXT_REQUIRED')
+      } finally { await cleanupReceivingScenario(prisma, scenario); await cleanupReceivingScenario(prisma, other) }
+    })
+
     await t.test('all PO lines completed produces fully_received', async () => {
       const scenario = await seedReceivingScenario(prisma, { ordered: ['5', '7'], accepted: ['5', '7'] })
       try {
