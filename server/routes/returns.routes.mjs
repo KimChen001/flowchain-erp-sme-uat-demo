@@ -144,6 +144,7 @@ async function services(ctx) {
 export async function handleReturnsRoute(ctx) {
   const path = ctx.url.pathname;
   if (
+    path !== "/api/returns/entry-data" &&
     !path.startsWith("/api/returns/requests") &&
     !path.startsWith("/api/returns/authorizations") &&
     !path.startsWith("/api/returns/postings")
@@ -164,6 +165,22 @@ export async function handleReturnsRoute(ctx) {
     } = await services(ctx);
     if (ctx.req.method === "GET" && path === "/api/returns/requests") {
       ctx.send(ctx.res, 200, await read.listRequests(query(ctx.url), ctx));
+      return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/returns/entry-data") {
+      ctx.send(ctx.res, 200, await read.entryData(ctx));
+      return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/returns/authorizations") {
+      ctx.send(
+        ctx.res,
+        200,
+        await read.listAuthorizations(query(ctx.url), ctx),
+      );
+      return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/returns/postings") {
+      ctx.send(ctx.res, 200, await read.listPostings(query(ctx.url), ctx));
       return true;
     }
     if (

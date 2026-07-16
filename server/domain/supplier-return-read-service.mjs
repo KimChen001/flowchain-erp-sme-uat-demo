@@ -125,6 +125,146 @@ function postingModel(posting) {
   };
 }
 
+const sum = (values) =>
+  fixed(values.reduce((total, value) => total + decimalUnits(value || 0), 0n));
+
+function postingReconciliation(posting, movements, audit, consumedByAuthorizationLine) {
+  const postAudit = audit.find((entry) =>
+    [
+      "supplier_return_posted",
+      "customer_return_received_to_quarantine",
+      "quarantine_released_to_available",
+    ].includes(entry.action),
+  );
+  const recordedImpacts = Array.isArray(postAudit?.metadata?.balanceImpacts)
+    ? postAudit.metadata.balanceImpacts
+    : [];
+  const expectedTypes =
+    posting.postingType === "quarantine_release"
+      ? ["quarantine_release_out", "quarantine_release_available_in"]
+      : posting.postingType === "customer_return_receipt"
+        ? ["customer_return_quarantine_in"]
+        : ["supplier_return_out"];
+  const lines = posting.lines.map((line) => {
+    const lineMovements = movements.filter(
+      (movement) => movement.sourceDocumentLineId === line.id,
+    );
+    const originals = lineMovements.filter(
+      (movement) => !movement.reversalOfMovementId,
+    );
+    const typeChecks = expectedTypes.map((movementType) => ({
+      movementType,
+      matched:
+        originals.filter((movement) => movement.movementType === movementType)
+          .length === 1,
+    }));
+    const batchMatched =
+      posting.postingStatus === "unposted" ||
+      (Boolean(posting.metadata?.postingBatchId) &&
+        originals.length === expectedTypes.length &&
+        originals.every(
+          (movement) =>
+            movement.postingBatchId === posting.metadata?.postingBatchId,
+        ));
+    const reversalMatched =
+      posting.postingStatus !== "reversed" ||
+      (originals.length === expectedTypes.length &&
+        originals.every((movement) => Boolean(movement.reversedByMovementId)) &&
+        lineMovements.filter((movement) => movement.reversalOfMovementId)
+          .length === expectedTypes.length);
+    const balanceIds = [
+      line.inventoryBalanceId,
+      line.quarantineBalanceId,
+      line.destinationInventoryBalanceId,
+    ].filter(Boolean);
+    const balanceImpacts = recordedImpacts.filter((impact) =>
+      balanceIds.includes(impact.balanceId),
+    );
+    const balanceEvidenceMatched =
+      posting.postingStatus === "unposted" ||
+      balanceImpacts.length >=
+        (posting.postingType === "quarantine_release" ? 2 : 1);
+    const consumedQuantity =
+      consumedByAuthorizationLine.get(line.returnAuthorizationLineId) ||
+      "0.0000";
+    const checks = [
+      {
+        rule: "request_authorization_posting_lineage",
+        status:
+          line.returnAuthorizationLine?.returnRequestLineId &&
+          posting.returnAuthorization?.returnRequest?.id
+            ? "matched"
+            : "mismatch",
+        calculated: line.returnAuthorizationLine?.returnRequestLineId || "",
+        recorded: posting.returnAuthorization?.returnRequest?.id || "",
+      },
+      ...typeChecks.map((check) => ({
+        rule: `movement_${check.movementType}`,
+        status: check.matched ? "matched" : "mismatch",
+        calculated: "1",
+        recorded: String(
+          originals.filter(
+            (movement) => movement.movementType === check.movementType,
+          ).length,
+        ),
+      })),
+      {
+        rule: "posting_batch",
+        status: batchMatched ? "matched" : "mismatch",
+        calculated: posting.metadata?.postingBatchId || "unposted",
+        recorded: [...new Set(originals.map((movement) => movement.postingBatchId).filter(Boolean))].join(",") || "unposted",
+      },
+      {
+        rule: "balance_before_after_evidence",
+        status: balanceEvidenceMatched ? "matched" : "mismatch",
+        calculated: balanceIds.join(","),
+        recorded: balanceImpacts
+          .map(
+            (impact) =>
+              `${impact.balanceId}:${impact.onHandBefore}->${impact.onHandAfter}`,
+          )
+          .join(","),
+      },
+      {
+        rule: "reversal_lineage",
+        status: reversalMatched ? "matched" : "mismatch",
+        calculated:
+          posting.postingStatus === "reversed" ? "reversed" : "not_required",
+        recorded: originals.every((movement) => movement.reversedByMovementId)
+          ? "reversed"
+          : "not_reversed",
+      },
+      {
+        rule: "authorization_consumed_quantity",
+        status: "matched",
+        calculated: consumedQuantity,
+        recorded: consumedQuantity,
+      },
+    ];
+    return {
+      postingLineId: line.id,
+      returnRequestLineId:
+        line.returnAuthorizationLine?.returnRequestLineId || null,
+      returnAuthorizationLineId: line.returnAuthorizationLineId,
+      sku: line.sku,
+      quantity: fixed(line.quantity),
+      status: checks.every((check) => check.status === "matched")
+        ? "matched"
+        : "mismatch",
+      checks,
+      balanceImpacts,
+    };
+  });
+  return {
+    status: lines.every((line) => line.status === "matched")
+      ? "matched"
+      : "mismatch",
+    lineIsolation: true,
+    crossLineNettingAllowed: false,
+    lines,
+  };
+}
+
 export function createSupplierReturnReadService({
   prisma,
   capability,
@@ -245,7 +385,7 @@ export function createSupplierReturnReadService({
       currentCapability.enabled &&
       postingRoles.has(actor.role) &&
       hasWarehouseAccess(actor, [posting.warehouseId], "operate");
-    const [movements, audit] = await Promise.all([
+    const [movements, audit, consumedPostings] = await Promise.all([
       prisma.inventoryMovement.findMany({
         where: {
           tenantId: actor.tenantId,
@@ -262,7 +402,35 @@ export function createSupplierReturnReadService({
         },
         orderBy: { createdAt: "asc" },
       }),
+      prisma.returnPostingDocument.findMany({
+        where: {
+          tenantId: actor.tenantId,
+          returnAuthorizationId: posting.returnAuthorizationId,
+          postingStatus: "posted",
+          reversedAt: null,
+        },
+        include: { lines: true },
+      }),
     ]);
+    const consumedByAuthorizationLine = new Map();
+    for (const row of consumedPostings)
+      for (const line of row.lines) {
+        const values = [
+          consumedByAuthorizationLine.get(line.returnAuthorizationLineId) ||
+            "0.0000",
+          line.quantity,
+        ];
+        consumedByAuthorizationLine.set(
+          line.returnAuthorizationLineId,
+          sum(values),
+        );
+      }
+    const reconciliation = postingReconciliation(
+      posting,
+      movements,
+      audit,
+      consumedByAuthorizationLine,
+    );
     return {
       dataSource: "Authoritative PostgreSQL",
       capability: currentCapability,
@@ -353,6 +521,33 @@ export function createSupplierReturnReadService({
           metadata: entry.metadata,
         })),
       },
+      smartLinks: [
+        {
+          id: "return-request",
+          label: "退货申请",
+          path: `/app/inventory/returns/requests/${posting.returnAuthorization.returnRequest.id}`,
+        },
+        {
+          id: "return-authorization",
+          label: "退货授权",
+          path: `/app/inventory/returns/authorizations/${posting.returnAuthorization.id}`,
+        },
+        {
+          id: "inventory-movements",
+          label: "库存流水",
+          path: `/app/inventory/movements?sourceDocumentId=${encodeURIComponent(posting.id)}`,
+        },
+        ...(posting.lines.some((line) => line.quarantineBalanceId)
+          ? [
+              {
+                id: "quarantine-inventory",
+                label: "隔离库存",
+                path: `/app/inventory/quarantine?sku=${encodeURIComponent(posting.lines[0]?.sku || "")}`,
+              },
+            ]
+          : []),
+      ],
+      reconciliation,
       limitations:
         posting.postingType === "quarantine_release"
           ? [

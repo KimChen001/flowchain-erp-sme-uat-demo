@@ -632,7 +632,13 @@ export function createCustomerReturnCommandService({
         summary: `Customer return receipt ${posting.postingNumber} posted to quarantine.`,
         commandType: TYPES.post, idempotencyKey: normalized.idempotencyKey,
         before: model(posting), after: model(updated),
-        metadata: { postingBatchId, movementIds: movements.map((row) => row.id) },
+        metadata: {
+          postingBatchId,
+          movementIds: movements.map((row) => row.id),
+          balanceImpacts: plan.balanceImpacts.map(
+            ({ quantityUnits, ...impact }) => impact,
+          ),
+        },
       });
       await tx.auditLog.create({ data: event });
       return {

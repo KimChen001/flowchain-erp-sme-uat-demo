@@ -119,7 +119,9 @@ function balanceWhere(actor, query = {}) {
 function availableBalanceSelectorWhere(actor, query = {}) {
   return {
     tenantId: actor.tenantId,
-    availableQuantity: { gt: 0 },
+    ...(String(query.includeZero || "").toLowerCase() === "true"
+      ? {}
+      : { availableQuantity: { gt: 0 } }),
     AND: [
       scopedWhere(actor),
       {
@@ -139,7 +141,14 @@ function availableBalanceSelectorWhere(actor, query = {}) {
 function quarantineBalanceWhere(actor, query = {}, { selector = false } = {}) {
   return {
     tenantId: actor.tenantId,
-    ...(selector ? { status: "active", onHandQuantity: { gt: 0 } } : {}),
+    ...(selector
+      ? {
+          status: "active",
+          ...(String(query.includeZero || "").toLowerCase() === "true"
+            ? {}
+            : { onHandQuantity: { gt: 0 } }),
+        }
+      : {}),
     AND: [
       scopedWhere(actor),
       {

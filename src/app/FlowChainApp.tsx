@@ -87,6 +87,7 @@ import { ReviewFirstActionWorkflowV2 } from "../components/actions/ReviewFirstAc
 import { BusinessEntityDetailPage } from "../components/business/BusinessEntityDetailPage";
 import OutboundWorkbench from "../modules/sales/OutboundWorkbench";
 import InventoryOperationsWorkbench from "../modules/inventory/InventoryOperationsWorkbench";
+import ReturnQuarantineWorkbench from "../modules/inventory/ReturnQuarantineWorkbench";
 
 const ReportsPanel = React.lazy(() => import("../modules/reports/Page"));
 const ImportsPanel = React.lazy(() => import("../modules/imports/Page"));
@@ -1123,6 +1124,7 @@ export default function FlowChainApp() {
     ),
     "outbound-workbench": <OutboundWorkbench />,
     "inventory-operations": <InventoryOperationsWorkbench />,
+    "returns-quarantine": <ReturnQuarantineWorkbench />,
     procurement: (
       <ProcurementPanel
         view={activeView as any}
@@ -1809,6 +1811,8 @@ export default function FlowChainApp() {
                           panels["outbound-workbench"]
                         ) : activeRoute.panelId === "inventory-operations" ? (
                           panels["inventory-operations"]
+                        ) : activeRoute.panelId === "returns-quarantine" ? (
+                          panels["returns-quarantine"]
                         ) : activeRoute.pageType === "detail" &&
                           activeRoute.entityType &&
                           ![

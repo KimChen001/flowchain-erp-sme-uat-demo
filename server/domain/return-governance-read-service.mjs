@@ -42,6 +42,13 @@ function page(query = {}) {
   return { page: number, pageSize: size, skip: (number - 1) * size };
 }
 
+function order(query = {}, fields = {}) {
+  const requested = text(query.sort);
+  const field = fields[requested] || fields.updatedAt || "updatedAt";
+  const direction = text(query.direction).toLowerCase() === "asc" ? "asc" : "desc";
+  return [{ [field]: direction }, { id: "asc" }];
+}
+
 function warehouseIds(lines = []) {
   return [
     ...new Set(
@@ -151,6 +158,9 @@ function actionModel(actor, request, capabilities) {
   const activeAuthorization = request.authorizations?.some((row) =>
     ["draft", "approved", "partially_executed"].includes(row.workflowStatus),
   );
+  const releaseAuthorizationAllowed =
+    request.returnType === "customer_return" &&
+    request.workflowStatus === "executed";
   return {
     revise:
       requestEnabled &&
@@ -168,7 +178,7 @@ function actionModel(actor, request, capabilities) {
     authorize:
       authorizationEnabled &&
       manager &&
-      request.workflowStatus === "submitted" &&
+      (request.workflowStatus === "submitted" || releaseAuthorizationAllowed) &&
       !activeAuthorization,
     reject:
       authorizationEnabled &&
@@ -434,7 +444,12 @@ export function createReturnGovernanceReadService({
     const candidates = await prisma.returnRequest.findMany({
       where,
       include: { lines: true, authorizations: true },
-      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      orderBy: order(query, {
+        updatedAt: "updatedAt",
+        createdAt: "createdAt",
+        requestNumber: "requestNumber",
+        workflowStatus: "workflowStatus",
+      }),
     });
     const search = text(query.q).toLowerCase();
     const visible = candidates.filter(
@@ -466,6 +481,242 @@ export function createReturnGovernanceReadService({
           ),
           warehouseIds: warehouseIds(row.lines),
         })),
+    };
+  }
+
+  async function listAuthorizations(query, context) {
+    const resolved = await actor(context);
+    const paging = page(query);
+    const candidates = await prisma.returnAuthorization.findMany({
+      where: {
+        tenantId: resolved.tenantId,
+        ...(text(query.workflowStatus)
+          ? { workflowStatus: text(query.workflowStatus) }
+          : {}),
+        ...(text(query.returnType)
+          ? { returnRequest: { returnType: text(query.returnType) } }
+          : {}),
+      },
+      include: {
+        lines: { orderBy: { id: "asc" } },
+        postings: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+        returnRequest: { include: { lines: true } },
+      },
+      orderBy: order(query, {
+        updatedAt: "updatedAt",
+        createdAt: "createdAt",
+        authorizationNumber: "authorizationNumber",
+        workflowStatus: "workflowStatus",
+      }),
+    });
+    const search = text(query.q).toLowerCase();
+    const visible = candidates.filter(
+      (row) =>
+        canRead(resolved, warehouseIds(row.returnRequest.lines)) &&
+        (!search ||
+          [
+            row.authorizationNumber,
+            row.returnRequest.requestNumber,
+            row.returnRequest.partnerNameSnapshot,
+            row.returnRequest.sourceDocumentNumber,
+          ].some((value) => text(value).toLowerCase().includes(search))),
+    );
+    return {
+      dataSource: "Authoritative PostgreSQL",
+      page: paging.page,
+      pageSize: paging.pageSize,
+      total: visible.length,
+      capabilities,
+      authorizations: visible
+        .slice(paging.skip, paging.skip + paging.pageSize)
+        .map((row) => ({
+          ...authorizationModel(row),
+          request: requestModel(row.returnRequest),
+          postingCount: row.postings.length,
+          postingStatuses: row.postings.map((posting) => posting.postingStatus),
+          warehouseIds: warehouseIds(row.returnRequest.lines),
+        })),
+    };
+  }
+
+  async function listPostings(query, context) {
+    const resolved = await actor(context);
+    const paging = page(query);
+    const candidates = await prisma.returnPostingDocument.findMany({
+      where: {
+        tenantId: resolved.tenantId,
+        ...(text(query.postingType)
+          ? { postingType: text(query.postingType) }
+          : {}),
+        ...(text(query.postingStatus)
+          ? { postingStatus: text(query.postingStatus) }
+          : {}),
+        ...(text(query.workflowStatus)
+          ? { workflowStatus: text(query.workflowStatus) }
+          : {}),
+      },
+      include: {
+        lines: { orderBy: { id: "asc" } },
+        returnAuthorization: {
+          include: { returnRequest: { include: { lines: true } } },
+        },
+      },
+      orderBy: order(query, {
+        updatedAt: "updatedAt",
+        createdAt: "createdAt",
+        postingNumber: "postingNumber",
+        postingStatus: "postingStatus",
+      }),
+    });
+    const search = text(query.q).toLowerCase();
+    const visible = candidates.filter(
+      (row) =>
+        canRead(resolved, [row.warehouseId]) &&
+        canRead(
+          resolved,
+          warehouseIds(row.returnAuthorization.returnRequest.lines),
+        ) &&
+        (!search ||
+          [
+            row.postingNumber,
+            row.returnAuthorization.authorizationNumber,
+            row.returnAuthorization.returnRequest.requestNumber,
+            ...row.lines.flatMap((line) => [line.sku, line.itemName]),
+          ].some((value) => text(value).toLowerCase().includes(search))),
+    );
+    return {
+      dataSource: "Authoritative PostgreSQL",
+      page: paging.page,
+      pageSize: paging.pageSize,
+      total: visible.length,
+      capabilities,
+      postings: visible
+        .slice(paging.skip, paging.skip + paging.pageSize)
+        .map((row) => ({
+          id: row.id,
+          postingNumber: row.postingNumber,
+          postingType: row.postingType,
+          workflowStatus: row.workflowStatus,
+          postingStatus: row.postingStatus,
+          warehouseId: row.warehouseId,
+          version: row.version,
+          postedAt: iso(row.postedAt),
+          reversedAt: iso(row.reversedAt),
+          updatedAt: iso(row.updatedAt),
+          lineCount: row.lines.length,
+          authorization: {
+            id: row.returnAuthorization.id,
+            authorizationNumber:
+              row.returnAuthorization.authorizationNumber,
+          },
+          request: {
+            id: row.returnAuthorization.returnRequest.id,
+            requestNumber:
+              row.returnAuthorization.returnRequest.requestNumber,
+            returnType: row.returnAuthorization.returnRequest.returnType,
+          },
+        })),
+    };
+  }
+
+  async function entryData(context) {
+    const resolved = await actor(context);
+    const [shipments, receivings] = await Promise.all([
+      prisma.shipmentDocument.findMany({
+        where: {
+          tenantId: resolved.tenantId,
+          postingStatus: "posted",
+          reversedAt: null,
+        },
+        include: {
+          salesOrder: true,
+          lines: {
+            include: { item: true, allocations: true },
+            orderBy: { id: "asc" },
+          },
+        },
+        orderBy: [{ postedAt: "desc" }, { id: "asc" }],
+        take: 200,
+      }),
+      prisma.receivingDocument.findMany({
+        where: {
+          tenantId: resolved.tenantId,
+          postingStatus: "posted",
+          reversedAt: null,
+        },
+        include: { lines: { orderBy: { id: "asc" } } },
+        orderBy: [{ postedAt: "desc" }, { id: "asc" }],
+        take: 200,
+      }),
+    ]);
+    const customerSources = shipments
+      .map((row) => ({
+        id: row.id,
+        documentType: "ShipmentDocument",
+        documentNumber: row.shipmentNumber,
+        contextDocumentType: "SalesOrder",
+        contextDocumentId: row.salesOrderId,
+        partnerId: row.salesOrder.customerId,
+        partnerName: row.salesOrder.customerName,
+        postedAt: iso(row.postedAt),
+        lines: row.lines.map((line) => ({
+          id: line.id,
+          itemId: line.itemId,
+          sku: line.sku,
+          itemName: line.item?.name || line.sku,
+          quantity: fixed(units(line.postedQuantity)),
+          unit: line.unit,
+          warehouseIds: [
+            ...new Set(line.allocations.map((allocation) => allocation.warehouseId)),
+          ].sort(),
+        })),
+      }))
+      .filter(
+        (row) =>
+          row.lines.length > 0 &&
+          row.lines.every((line) => canRead(resolved, line.warehouseIds)),
+      );
+    const supplierSources = receivings
+      .map((row) => ({
+        id: row.id,
+        documentType: "ReceivingDocument",
+        documentNumber: row.documentNumber || row.id,
+        contextDocumentType: "PurchaseOrder",
+        contextDocumentId: row.poId,
+        partnerId: row.supplierId,
+        partnerName: row.supplierName,
+        postedAt: iso(row.postedAt),
+        lines: row.lines.map((line) => ({
+          id: line.id,
+          itemId: line.itemId,
+          sku: line.sku,
+          itemName: line.itemName || line.sku,
+          quantity: fixed(units(line.acceptedQty || 0)),
+          unit: line.unit,
+          warehouseIds: [text(line.warehouseId || row.warehouseId)].filter(Boolean),
+        })),
+      }))
+      .filter(
+        (row) =>
+          row.lines.length > 0 &&
+          row.lines.every((line) => canRead(resolved, line.warehouseIds)),
+      );
+    return {
+      dataSource: "Authoritative PostgreSQL",
+      capabilities,
+      sources: {
+        customer_return: customerSources,
+        supplier_return: supplierSources,
+      },
+      availableActions: {
+        createCustomerReturn: canRequest(resolved, "customer_return"),
+        createSupplierReturn: canRequest(resolved, "supplier_return"),
+      },
+      selectionPolicy: {
+        explicitSourceDocumentRequired: true,
+        explicitSourceLineRequired: true,
+        implicitFirstSelection: false,
+      },
     };
   }
 
@@ -565,11 +816,14 @@ export function createReturnGovernanceReadService({
   }
 
   return {
+    entryData,
     previewRequest,
     previewSubmit,
     previewCancel,
     previewAuthorization,
     listRequests,
+    listAuthorizations,
+    listPostings,
     requestWorkbench,
     authorizationWorkbench,
   };
