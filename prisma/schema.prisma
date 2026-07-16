@@ -20,44 +20,45 @@ model Tenant {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  users                 User[]
-  suppliers             Supplier[]
-  items                 Item[]
-  warehouses            Warehouse[]
-  paymentTerms          PaymentTerm[]
-  taxCodes              TaxCode[]
-  actionDrafts          ActionDraft[]
-  auditLogs             AuditLog[]
-  aiEvidence            AiEvidence[]
-  purchaseRequests      PurchaseRequest[]
-  rfqs                  Rfq[]
-  supplierQuotations    SupplierQuotation[]
-  purchaseOrders        PurchaseOrder[]
-  receivingDocuments    ReceivingDocument[]
-  supplierInvoices      SupplierInvoice[]
-  threeWayMatches       ThreeWayMatch[]
-  documentLinks         DocumentLink[]
-  procurementFollowups  ProcurementFollowup[]
-  inventoryBalances     InventoryBalance[]
-  inventoryLots         InventoryLot[]
-  inventorySerials      InventorySerial[]
-  inventoryMovements    InventoryMovement[]
-  inventoryExceptions   InventoryException[]
-  commandExecutions     BusinessCommandExecution[]
-  userWarehouseScopes   UserWarehouseScope[]
-  workspaceInvitations  WorkspaceInvitation[]
-  warehouseLocations    WarehouseLocation[]
-  importBatches         ImportBatch[]
-  importIssues          ImportIssue[]
-  salesOrders           SalesOrder[]
-  inventoryReservations InventoryReservation[]
-  reservationEvents     InventoryReservationEvent[]
-  shipmentDocuments     ShipmentDocument[]
-  shipmentAllocations   ShipmentAllocation[]
-  quarantineBalances    QuarantineInventoryBalance[]
-  returnRequests        ReturnRequest[]
-  returnAuthorizations  ReturnAuthorization[]
-  returnPostings        ReturnPostingDocument[]
+  users                            User[]
+  suppliers                        Supplier[]
+  items                            Item[]
+  warehouses                       Warehouse[]
+  paymentTerms                     PaymentTerm[]
+  taxCodes                         TaxCode[]
+  actionDrafts                     ActionDraft[]
+  auditLogs                        AuditLog[]
+  aiEvidence                       AiEvidence[]
+  purchaseRequests                 PurchaseRequest[]
+  rfqs                             Rfq[]
+  supplierQuotations               SupplierQuotation[]
+  purchaseOrders                   PurchaseOrder[]
+  receivingDocuments               ReceivingDocument[]
+  supplierInvoices                 SupplierInvoice[]
+  threeWayMatches                  ThreeWayMatch[]
+  documentLinks                    DocumentLink[]
+  procurementFollowups             ProcurementFollowup[]
+  inventoryBalances                InventoryBalance[]
+  inventoryLots                    InventoryLot[]
+  inventorySerials                 InventorySerial[]
+  inventoryMovements               InventoryMovement[]
+  inventoryExceptions              InventoryException[]
+  commandExecutions                BusinessCommandExecution[]
+  userWarehouseScopes              UserWarehouseScope[]
+  workspaceInvitations             WorkspaceInvitation[]
+  warehouseLocations               WarehouseLocation[]
+  importBatches                    ImportBatch[]
+  importIssues                     ImportIssue[]
+  salesOrders                      SalesOrder[]
+  inventoryReservations            InventoryReservation[]
+  reservationEvents                InventoryReservationEvent[]
+  shipmentDocuments                ShipmentDocument[]
+  shipmentAllocations              ShipmentAllocation[]
+  quarantineBalances               QuarantineInventoryBalance[]
+  returnRequests                   ReturnRequest[]
+  returnAuthorizations             ReturnAuthorization[]
+  returnPostings                   ReturnPostingDocument[]
+  quarantineDispositionAllocations QuarantineDispositionAllocation[]
 }
 
 model User {
@@ -762,10 +763,11 @@ model QuarantineInventoryBalance {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  item               Item                @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  warehouse          Warehouse           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-  returnPostingLines ReturnPostingLine[]
+  tenant                           Tenant                            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  item                             Item                              @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  warehouse                        Warehouse                         @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  returnPostingLines               ReturnPostingLine[]
+  quarantineDispositionAllocations QuarantineDispositionAllocation[]
 
   @@unique([tenantId, sku, warehouseKey, locationKey])
   @@index([tenantId, sku])
@@ -858,7 +860,10 @@ model InventoryMovement {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant                         Tenant                            @relation(fields: [tenantId], references: [id])
+  quarantineDispositionSources   QuarantineDispositionAllocation[] @relation("QuarantineDispositionSource")
+  quarantineDispositionConsumers QuarantineDispositionAllocation[] @relation("QuarantineDispositionConsumer")
+  quarantineDispositionReversals QuarantineDispositionAllocation[] @relation("QuarantineDispositionReversal")
 
   @@unique([tenantId, movementType, sourceDocumentLineId])
   @@index([tenantId, sku])
@@ -1212,6 +1217,32 @@ model ReturnPostingLine {
   @@index([quarantineBalanceId])
   @@index([destinationInventoryBalanceId])
   @@index([warehouseId, locationKey])
+}
+
+model QuarantineDispositionAllocation {
+  id                   String    @id
+  tenantId             String
+  quarantineBalanceId  String
+  sourceMovementId     String
+  consumerMovementId   String
+  quantity             Decimal   @db.Decimal(18, 4)
+  status               String    @default("active")
+  reversedAt           DateTime?
+  reversedByMovementId String?
+  metadata             Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  quarantineBalance  QuarantineInventoryBalance @relation(fields: [quarantineBalanceId], references: [id], onDelete: Restrict)
+  sourceMovement     InventoryMovement          @relation("QuarantineDispositionSource", fields: [sourceMovementId], references: [id], onDelete: Restrict)
+  consumerMovement   InventoryMovement          @relation("QuarantineDispositionConsumer", fields: [consumerMovementId], references: [id], onDelete: Restrict)
+  reversedByMovement InventoryMovement?         @relation("QuarantineDispositionReversal", fields: [reversedByMovementId], references: [id], onDelete: Restrict)
+
+  @@unique([sourceMovementId, consumerMovementId])
+  @@index([tenantId, quarantineBalanceId, status])
+  @@index([sourceMovementId, status])
+  @@index([consumerMovementId, status])
 }
 
 model BusinessCommandExecution {

@@ -346,10 +346,16 @@ export function createSupplierReturnReadService({
           metadata: entry.metadata,
         })),
       },
-      limitations: [
-        "Phase 4B.2 supports supplier return dispatch from available or quarantine inventory.",
-        "Customer return receipt and quarantine release remain unavailable until their transaction gates pass.",
-      ],
+      limitations:
+        posting.postingType === "customer_return_receipt"
+          ? [
+              "Phase 4B.3 customer return receipts increase quarantine inventory only.",
+              "Quarantine release to available inventory remains unavailable until its transaction gate passes.",
+            ]
+          : [
+              "Phase 4B.2 supports supplier return dispatch from available or quarantine inventory.",
+              "Quarantine release to available inventory remains unavailable until its transaction gate passes.",
+            ],
     };
   }
 

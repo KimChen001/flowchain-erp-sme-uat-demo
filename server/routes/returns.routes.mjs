@@ -15,6 +15,11 @@ import {
   createSupplierReturnReadService,
   SupplierReturnReadError,
 } from "../domain/supplier-return-read-service.mjs";
+import {
+  createCustomerReturnCommandService,
+  CustomerReturnCommandError,
+} from "../domain/customer-return-command-service.mjs";
+import { createCustomerReturnReadService } from "../domain/customer-return-read-service.mjs";
 import { PilotIdentityError } from "../domain/pilot-identity.mjs";
 import { getPrismaClient } from "../persistence/prisma-client.mjs";
 
@@ -44,6 +49,7 @@ function knownError(ctx, error) {
     error instanceof ReturnGovernanceReadError ||
     error instanceof SupplierReturnCommandError ||
     error instanceof SupplierReturnReadError ||
+    error instanceof CustomerReturnCommandError ||
     error instanceof PilotIdentityError
   ) {
     ctx.send(ctx.res, error.status || 400, {
@@ -89,6 +95,7 @@ async function services(ctx) {
     ctx.inventoryOperationsPrisma ||
     (await getPrismaClient(env));
   return {
+    prisma,
     read:
       ctx.returnGovernanceReadService ||
       createReturnGovernanceReadService({
@@ -107,6 +114,15 @@ async function services(ctx) {
     postingCommand:
       ctx.supplierReturnCommandService ||
       createSupplierReturnCommandService({ prisma, env }),
+    customerPostingRead:
+      ctx.customerReturnReadService ||
+      createCustomerReturnReadService({
+        prisma,
+        capability: capabilityForEnvironment("return-posting", env),
+      }),
+    customerPostingCommand:
+      ctx.customerReturnCommandService ||
+      createCustomerReturnCommandService({ prisma, env }),
   };
 }
 
@@ -120,7 +136,15 @@ export async function handleReturnsRoute(ctx) {
     return false;
   if (!ensureDatabaseAndIdentity(ctx)) return true;
   try {
-    const { read, command, postingRead, postingCommand } = await services(ctx);
+    const {
+      prisma,
+      read,
+      command,
+      postingRead,
+      postingCommand,
+      customerPostingRead,
+      customerPostingCommand,
+    } = await services(ctx);
     if (ctx.req.method === "GET" && path === "/api/returns/requests") {
       ctx.send(ctx.res, 200, await read.listRequests(query(ctx.url), ctx));
       return true;
@@ -247,12 +271,25 @@ export async function handleReturnsRoute(ctx) {
       );
       const action = authorizationPostingMatch[2] || "";
       const body = await ctx.readBody(ctx.req);
+      const authorizationType = await prisma.returnAuthorization.findFirst({
+        where: {
+          id: authorizationId,
+          tenantId: ctx.identity.tenantId,
+        },
+        select: { returnRequest: { select: { returnType: true } } },
+      });
+      const customer =
+        authorizationType?.returnRequest?.returnType === "customer_return";
       if (ctx.req.method === "POST" && action === "preview") {
         if (!ensureCapability(ctx, "return-posting")) return true;
         ctx.send(
           ctx.res,
           200,
-          await postingRead.previewDraft(authorizationId, body, ctx),
+          await (customer ? customerPostingRead : postingRead).previewDraft(
+            authorizationId,
+            body,
+            ctx,
+          ),
         );
         return true;
       }
@@ -261,10 +298,15 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           201,
-          await postingCommand.createPostingDraft(
-            { ...body, authorizationId },
-            ctx,
-          ),
+          await (customer
+            ? customerPostingCommand.createDraft(
+                { ...body, authorizationId },
+                ctx,
+              )
+            : postingCommand.createPostingDraft(
+                { ...body, authorizationId },
+                ctx,
+              )),
         );
         return true;
       }
@@ -314,6 +356,13 @@ export async function handleReturnsRoute(ctx) {
     if (postingMatch) {
       const postingId = decodeURIComponent(postingMatch[1]);
       const action = postingMatch[2] || "";
+      const postingType = await prisma.returnPostingDocument.findFirst({
+        where: { id: postingId, tenantId: ctx.identity.tenantId },
+        select: { postingType: true },
+      });
+      const customer =
+        postingType?.postingType === "customer_return_receipt";
+      const selectedRead = customer ? customerPostingRead : postingRead;
       if (
         ctx.req.method === "GET" &&
         (!action || action === "workbench")
@@ -331,7 +380,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await postingCommand.revisePostingDraft(postingId, body, ctx),
+          await (customer
+            ? customerPostingCommand.reviseDraft(postingId, body, ctx)
+            : postingCommand.revisePostingDraft(postingId, body, ctx)),
         );
         return true;
       }
@@ -340,7 +391,7 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await postingRead.previewReady(postingId, ctx),
+          await selectedRead.previewReady(postingId, ctx),
         );
         return true;
       }
@@ -349,7 +400,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await postingCommand.readyPosting(postingId, body, ctx),
+          await (customer
+            ? customerPostingCommand.readyPosting(postingId, body, ctx)
+            : postingCommand.readyPosting(postingId, body, ctx)),
         );
         return true;
       }
@@ -358,7 +411,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await postingCommand.cancelPosting(postingId, body, ctx),
+          await (customer
+            ? customerPostingCommand.cancelPosting(postingId, body, ctx)
+            : postingCommand.cancelPosting(postingId, body, ctx)),
         );
         return true;
       }
@@ -367,7 +422,7 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await postingRead.previewPost(postingId, ctx),
+          await selectedRead.previewPost(postingId, ctx),
         );
         return true;
       }
@@ -376,7 +431,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await postingCommand.postSupplierReturn(postingId, body, ctx),
+          await (customer
+            ? customerPostingCommand.postReceipt(postingId, body, ctx)
+            : postingCommand.postSupplierReturn(postingId, body, ctx)),
         );
         return true;
       }
@@ -385,7 +442,7 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await postingRead.previewReverse(postingId, ctx),
+          await selectedRead.previewReverse(postingId, ctx),
         );
         return true;
       }
@@ -394,7 +451,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await postingCommand.reverseSupplierReturn(postingId, body, ctx),
+          await (customer
+            ? customerPostingCommand.reverseReceipt(postingId, body, ctx)
+            : postingCommand.reverseSupplierReturn(postingId, body, ctx)),
         );
         return true;
       }

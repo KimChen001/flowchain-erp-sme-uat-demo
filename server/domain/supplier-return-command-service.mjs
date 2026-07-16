@@ -8,6 +8,15 @@ import {
   buildSupplierReturnPostingPlan,
   buildSupplierReturnReversalPlan,
 } from "./supplier-return-transaction-policy.mjs";
+import {
+  allocateTrackedQuarantineConsumption,
+  QuarantineLineageError,
+  reverseTrackedQuarantineConsumption,
+} from "./quarantine-disposition-lineage.mjs";
+import {
+  outboundDecimalString as decimalString,
+  outboundDecimalUnits as decimalUnits,
+} from "./outbound-transaction-policy.mjs";
 
 export const SUPPLIER_RETURN_COMMAND_TYPES = Object.freeze({
   create: "create_supplier_return_posting_draft",
@@ -479,6 +488,8 @@ export function createSupplierReturnCommandService({
         { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 },
       );
     } catch (error) {
+      if (error instanceof QuarantineLineageError)
+        fail(error.code, error.message, error.status, error.details);
       if (
         error instanceof SupplierReturnCommandError ||
         error?.name === "PilotIdentityError"
@@ -872,6 +883,17 @@ export function createSupplierReturnCommandService({
         const postingBatchId = idFactory();
         const occurredAt = now();
         const movements = [];
+        const quarantineRemaining = new Map(
+          plan.normalizedPlan.lines
+            .filter((line) => line.balanceType === "quarantine" && line.balance)
+            .map((line) => [
+              line.balanceId,
+              {
+                balance: line.balance,
+                units: decimalUnits(line.balance.onHandQuantity),
+              },
+            ]),
+        );
         for (const fact of plan.movementFacts) {
           const movement = await tx.inventoryMovement.create({
             data: {
@@ -916,6 +938,21 @@ export function createSupplierReturnCommandService({
             },
           });
           movements.push(movement);
+          if (fact.balanceType === "quarantine") {
+            const layerState = quarantineRemaining.get(fact.balanceId);
+            await allocateTrackedQuarantineConsumption({
+              tx,
+              tenantId: actor.tenantId,
+              quarantineBalance: {
+                ...layerState.balance,
+                onHandQuantity: decimalString(layerState.units),
+              },
+              consumerMovement: movement,
+              quantity: fact.quantity,
+              idFactory,
+            });
+            layerState.units -= decimalUnits(fact.quantity);
+          }
         }
         for (const impact of plan.balanceImpacts) {
           if (impact.balanceType === "available") {
@@ -1207,6 +1244,14 @@ export function createSupplierReturnCommandService({
             where: { id: fact.originalMovementId },
             data: { reversedByMovementId: reversal.id },
           });
+          if (fact.balanceType === "quarantine")
+            await reverseTrackedQuarantineConsumption({
+              tx,
+              tenantId: actor.tenantId,
+              consumerMovementId: fact.originalMovementId,
+              reversalMovementId: reversal.id,
+              reversedAt: occurredAt,
+            });
           movements.push(reversal);
         }
         await tx.returnAuthorization.update({
