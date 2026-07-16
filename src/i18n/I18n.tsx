@@ -1,0 +1,388 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { apiJson, AUTH_TOKEN_KEY } from "../lib/api-client";
+import type { AppRouteDefinition } from "../app/routeRegistry";
+
+export type SupportedLanguage = "zh-CN" | "en-US";
+export type SupportedLocale = "zh-CN" | "en-US";
+
+type LocalizationPayload = {
+  languagePreference: SupportedLanguage | null;
+  defaultLanguage: SupportedLanguage;
+  effectiveLanguage: SupportedLanguage;
+  locale: SupportedLocale;
+  timezone: string;
+  workspaceName: string;
+};
+
+const zh = {
+  "nav.primary": "主导航",
+  "nav.advanced": "高级与内部",
+  "nav.ai": "AI 助手",
+  "nav.overview": "首页",
+  "nav.master-data": "基础资料",
+  "nav.procurement": "采购管理",
+  "nav.sales": "销售管理",
+  "nav.inventory": "库存管理",
+  "nav.finance": "结算管理",
+  "nav.reports": "报表中心",
+  "nav.settings": "系统管理",
+  "nav.forecast": "预测与 MRP",
+  "nav.imports": "数据接入与质量",
+  "nav.exception-cases": "异常处理工单",
+  "nav.collaboration-drafts": "协同通知草稿",
+  "nav.review-actions": "行动草稿与人工复核",
+  "nav.audit-history": "业务审计与历史",
+  "nav.pilot-readiness": "试点准备度",
+  "settings.profile": "我的资料",
+  "settings.company": "公司与工作区",
+  "settings.roles": "用户与角色",
+  "settings.warehouse": "仓库与权限",
+  "settings.readiness": "系统就绪状态",
+  "settings.numbering": "编号规则",
+  "settings.review": "复核策略",
+  "settings.modules": "菜单与模块",
+  "settings.ai": "AI 治理",
+  "settings.audit": "操作日志",
+  "settings.advanced": "高级设置",
+  "settings.saved": "已保存",
+  "settings.cancel": "取消",
+  "settings.save": "保存更改",
+  "settings.saving": "正在保存…",
+  "settings.savedAt": "已保存于 {time}",
+  "settings.saveFailed": "保存失败，请重试",
+  "settings.loading": "正在加载设置…",
+  "settings.loadFailed": "设置加载失败",
+  "settings.reload": "重新加载",
+  "settings.workspaceOnly": "仅管理员可以修改工作区设置。",
+  "settings.companyName": "公司名称",
+  "settings.workspaceName": "工作区名称",
+  "settings.defaultLanguage": "默认界面语言",
+  "settings.interfaceLanguage": "界面语言",
+  "settings.followWorkspace": "跟随工作区默认语言",
+  "settings.locale": "区域格式",
+  "settings.timezone": "时区",
+  "settings.currency": "本位币",
+  "settings.currencyLocked": "已有正式过账交易，本位币已锁定。",
+  "settings.chinese": "简体中文",
+  "settings.english": "English",
+  "settings.profileName": "姓名",
+  "settings.jobTitle": "职位",
+  "settings.email": "邮箱",
+  "settings.role": "角色",
+  "settings.defaultWarehouse": "默认仓库",
+  "settings.none": "无",
+  "settings.status": "状态",
+  "settings.enabled": "已启用",
+  "settings.disabled": "已停用",
+  "settings.user": "用户",
+  "settings.warehouseScope": "仓库权限",
+  "settings.allWarehouses": "全部仓库",
+  "settings.noAccess": "无权限",
+  "settings.read": "只读",
+  "settings.operate": "可操作",
+  "settings.saveAccess": "保存权限",
+  "settings.invitation": "用户邀请",
+  "settings.createInvitation": "创建邀请",
+  "settings.copyInvitation": "复制邀请链接",
+  "settings.revoke": "撤销",
+  "settings.systemReadiness": "系统就绪状态",
+  "settings.ready": "就绪",
+  "settings.needsSetup": "需要设置",
+  "settings.profileSection": "用户资料",
+  "settings.workspaceSection": "工作区配置",
+  "settings.accessSection": "仓库权限",
+  "settings.auditHint": "所有保存操作都会记录操作者、时间以及变更前后值。",
+  "settings.document": "单据",
+  "settings.prefix": "前缀",
+  "settings.datePattern": "日期",
+  "settings.separator": "分隔符",
+  "settings.sequenceLength": "流水位数",
+  "settings.preview": "预览",
+  "settings.noDate": "无日期",
+  "settings.conflict": "与现有规则冲突",
+  "settings.amountThreshold": "金额复核阈值",
+  "settings.inventoryTolerance": "库存差异容差（%）",
+  "settings.riskLevels": "触发风险等级",
+  "settings.reviewerRoles": "复核角色",
+  "settings.enableReview": "启用复核策略",
+  "settings.policySimulation": "策略模拟",
+  "settings.simulatedAmount": "模拟单据金额",
+  "settings.standardFlow": "可按标准流程继续",
+  "settings.reviewRequired": "需要 {roles} 复核",
+  "settings.reviewPolicyList": "当前轻量复核策略",
+  "settings.setDefault": "设为默认",
+  "settings.sidebarPreview": "侧边栏预览",
+  "settings.capabilityId": "能力 ID",
+  "settings.evidenceRequired": "回答必须附业务证据",
+  "settings.retentionDays": "记录保留天数",
+  "settings.sessionTimeout": "会话超时（分钟）",
+  "settings.exportLimit": "单次导出上限",
+  "settings.dateFormat": "日期格式",
+  "settings.blockNegative": "阻止负库存过账",
+  "settings.maintenanceNotice": "维护公告",
+  "settings.searchAudit": "搜索操作日志",
+  "settings.auditPlaceholder": "搜索操作者、摘要或实体",
+  "settings.moduleFilter": "模块筛选",
+  "settings.allModules": "全部模块",
+  "settings.systemActor": "系统",
+  "settings.before": "变更前",
+  "settings.after": "变更后",
+  "settings.openEntity": "打开关联实体",
+  "settings.noAudit": "没有符合条件的日志",
+  "top.search": "搜索业务记录",
+  "top.profile": "我的资料",
+  "top.settings": "设置",
+  "top.logout": "退出登录",
+  "breadcrumb": "面包屑",
+  "capability.loading": "正在确认模块可用状态",
+  "capability.loadingBody": "确认完成前不会加载 {module} 的业务内容。",
+  "capability.blocked": "{module} 当前不可进入",
+  "capability.maturity": "当前成熟度：{maturity}",
+  "capability.reason": "该能力当前未启用；页面保持只读并按安全策略关闭写操作。",
+  "capability.back": "返回工作台",
+  "capability.available": "返回可用模块",
+  "common.loading": "加载中…",
+  "common.empty": "暂无数据",
+} as const;
+
+const en: Record<keyof typeof zh, string> = {
+  "nav.primary": "Main Navigation",
+  "nav.advanced": "Advanced & Internal",
+  "nav.ai": "AI Assistant",
+  "nav.overview": "Home",
+  "nav.master-data": "Master Data",
+  "nav.procurement": "Procurement",
+  "nav.sales": "Sales",
+  "nav.inventory": "Inventory",
+  "nav.finance": "Finance",
+  "nav.reports": "Reports",
+  "nav.settings": "System Administration",
+  "nav.forecast": "Forecast & MRP",
+  "nav.imports": "Data & Imports",
+  "nav.exception-cases": "Exception Cases",
+  "nav.collaboration-drafts": "Collaboration Drafts",
+  "nav.review-actions": "Review Actions",
+  "nav.audit-history": "Audit History",
+  "nav.pilot-readiness": "Readiness",
+  "settings.profile": "My Profile",
+  "settings.company": "Company & Workspace",
+  "settings.roles": "Users & Roles",
+  "settings.warehouse": "Warehouse Access",
+  "settings.readiness": "System Readiness",
+  "settings.numbering": "Numbering Rules",
+  "settings.review": "Review Policies",
+  "settings.modules": "Menu & Modules",
+  "settings.ai": "AI Governance",
+  "settings.audit": "Audit Log",
+  "settings.advanced": "Advanced Settings",
+  "settings.saved": "Saved",
+  "settings.cancel": "Cancel",
+  "settings.save": "Save changes",
+  "settings.saving": "Saving…",
+  "settings.savedAt": "Saved at {time}",
+  "settings.saveFailed": "Save failed. Please try again.",
+  "settings.loading": "Loading settings…",
+  "settings.loadFailed": "Settings could not be loaded",
+  "settings.reload": "Reload",
+  "settings.workspaceOnly": "Only administrators can change workspace settings.",
+  "settings.companyName": "Company name",
+  "settings.workspaceName": "Workspace name",
+  "settings.defaultLanguage": "Default interface language",
+  "settings.interfaceLanguage": "Interface language",
+  "settings.followWorkspace": "Follow workspace default",
+  "settings.locale": "Regional format",
+  "settings.timezone": "Timezone",
+  "settings.currency": "Base currency",
+  "settings.currencyLocked": "Base currency is locked because posted transactions exist.",
+  "settings.chinese": "简体中文",
+  "settings.english": "English",
+  "settings.profileName": "Name",
+  "settings.jobTitle": "Job title",
+  "settings.email": "Email",
+  "settings.role": "Role",
+  "settings.defaultWarehouse": "Default warehouse",
+  "settings.none": "None",
+  "settings.status": "Status",
+  "settings.enabled": "Enabled",
+  "settings.disabled": "Disabled",
+  "settings.user": "User",
+  "settings.warehouseScope": "Warehouse scope",
+  "settings.allWarehouses": "All warehouses",
+  "settings.noAccess": "No access",
+  "settings.read": "Read",
+  "settings.operate": "Operate",
+  "settings.saveAccess": "Save access",
+  "settings.invitation": "Invitation",
+  "settings.createInvitation": "Create invitation",
+  "settings.copyInvitation": "Copy invitation link",
+  "settings.revoke": "Revoke",
+  "settings.systemReadiness": "System Readiness",
+  "settings.ready": "Ready",
+  "settings.needsSetup": "Needs setup",
+  "settings.profileSection": "Profile",
+  "settings.workspaceSection": "Workspace",
+  "settings.accessSection": "Warehouse access",
+  "settings.auditHint": "Every save records the actor, timestamp, before value, and after value.",
+  "settings.document": "Document",
+  "settings.prefix": "Prefix",
+  "settings.datePattern": "Date segment",
+  "settings.separator": "Separator",
+  "settings.sequenceLength": "Sequence length",
+  "settings.preview": "Preview",
+  "settings.noDate": "No date",
+  "settings.conflict": "Conflicts with an existing rule",
+  "settings.amountThreshold": "Amount review threshold",
+  "settings.inventoryTolerance": "Inventory variance tolerance (%)",
+  "settings.riskLevels": "Trigger risk levels",
+  "settings.reviewerRoles": "Reviewer roles",
+  "settings.enableReview": "Enable review policies",
+  "settings.policySimulation": "Policy simulation",
+  "settings.simulatedAmount": "Simulated document amount",
+  "settings.standardFlow": "May continue through the standard flow",
+  "settings.reviewRequired": "Review required from {roles}",
+  "settings.reviewPolicyList": "Active lightweight review policies",
+  "settings.setDefault": "Set as default",
+  "settings.sidebarPreview": "Sidebar preview",
+  "settings.capabilityId": "Capability ID",
+  "settings.evidenceRequired": "Require business evidence in answers",
+  "settings.retentionDays": "Retention days",
+  "settings.sessionTimeout": "Session timeout (minutes)",
+  "settings.exportLimit": "Export row limit",
+  "settings.dateFormat": "Date format",
+  "settings.blockNegative": "Block negative inventory posting",
+  "settings.maintenanceNotice": "Maintenance notice",
+  "settings.searchAudit": "Search audit log",
+  "settings.auditPlaceholder": "Search actor, summary, or entity",
+  "settings.moduleFilter": "Module filter",
+  "settings.allModules": "All modules",
+  "settings.systemActor": "System",
+  "settings.before": "Before",
+  "settings.after": "After",
+  "settings.openEntity": "Open related entity",
+  "settings.noAudit": "No matching audit entries",
+  "top.search": "Search business records",
+  "top.profile": "My Profile",
+  "top.settings": "Settings",
+  "top.logout": "Sign out",
+  "breadcrumb": "Breadcrumb",
+  "capability.loading": "Checking module availability",
+  "capability.loadingBody": "{module} content will remain unloaded until the check completes.",
+  "capability.blocked": "{module} is currently unavailable",
+  "capability.maturity": "Current maturity: {maturity}",
+  "capability.reason": "This capability is not enabled. The page remains read-only and write actions are closed by policy.",
+  "capability.back": "Back to workspace",
+  "capability.available": "Back to available modules",
+  "common.loading": "Loading…",
+  "common.empty": "No data",
+};
+
+const routeKeys: Record<string, keyof typeof zh> = {
+  overview: "nav.overview",
+  "master-data": "nav.master-data",
+  procurement: "nav.procurement",
+  sales: "nav.sales",
+  inventory: "nav.inventory",
+  finance: "nav.finance",
+  reports: "nav.reports",
+  settings: "nav.settings",
+  forecast: "nav.forecast",
+  imports: "nav.imports",
+  "exception-cases": "nav.exception-cases",
+  "collaboration-drafts": "nav.collaboration-drafts",
+  "review-actions": "nav.review-actions",
+  "audit-history": "nav.audit-history",
+  "pilot-readiness": "nav.pilot-readiness",
+  "settings:profile": "settings.profile",
+  "settings:company": "settings.company",
+  "settings:roles": "settings.roles",
+  "settings:warehouse-access": "settings.warehouse",
+  "settings:readiness": "settings.readiness",
+  "settings:numbering": "settings.numbering",
+  "settings:review": "settings.review",
+  "settings:modules": "settings.modules",
+  "settings:ai": "settings.ai",
+  "settings:audit": "settings.audit",
+  "settings:advanced": "settings.advanced",
+};
+
+type I18nValue = {
+  language: SupportedLanguage;
+  locale: SupportedLocale;
+  timezone: string;
+  workspaceName: string;
+  defaultLanguage: SupportedLanguage;
+  t: (key: keyof typeof zh, variables?: Record<string, string | number>) => string;
+  routeLabel: (route: AppRouteDefinition, module?: boolean) => string;
+  formatDateTime: (value: string | Date) => string;
+  formatNumber: (value: number) => string;
+  refresh: () => Promise<void>;
+};
+
+const fallback: I18nValue = {
+  language: "zh-CN",
+  locale: "zh-CN",
+  timezone: "Asia/Shanghai",
+  workspaceName: "",
+  defaultLanguage: "zh-CN",
+  t: key => zh[key],
+  routeLabel: route => route.label,
+  formatDateTime: value => new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Shanghai" }).format(new Date(value)),
+  formatNumber: value => new Intl.NumberFormat("zh-CN").format(value),
+  refresh: async () => {},
+};
+
+const I18nContext = createContext<I18nValue>(fallback);
+
+export function I18nProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = useState<LocalizationPayload>({
+    languagePreference: null,
+    defaultLanguage: "zh-CN",
+    effectiveLanguage: "zh-CN",
+    locale: "zh-CN",
+    timezone: "Asia/Shanghai",
+    workspaceName: "",
+  });
+  const refresh = useCallback(async () => {
+    if (!localStorage.getItem(AUTH_TOKEN_KEY)) {
+      setState(current => ({ ...current, effectiveLanguage: "zh-CN", locale: "zh-CN", timezone: "Asia/Shanghai", workspaceName: "" }));
+      return;
+    }
+    try {
+      setState(await apiJson<LocalizationPayload>("/api/me/localization"));
+    } catch {
+      setState(current => ({ ...current, effectiveLanguage: current.effectiveLanguage || "zh-CN" }));
+    }
+  }, []);
+  useEffect(() => {
+    void refresh();
+    const listener = () => void refresh();
+    window.addEventListener("flowchain:localization-changed", listener);
+    return () => window.removeEventListener("flowchain:localization-changed", listener);
+  }, [refresh]);
+  useEffect(() => {
+    document.documentElement.lang = state.effectiveLanguage;
+  }, [state.effectiveLanguage]);
+  const value = useMemo<I18nValue>(() => {
+    const dictionary = state.effectiveLanguage === "en-US" ? en : zh;
+    const t = (key: keyof typeof zh, variables: Record<string, string | number> = {}) =>
+      Object.entries(variables).reduce((output, [name, replacement]) => output.replaceAll(`{${name}}`, String(replacement)), dictionary[key] || zh[key]);
+    return {
+      language: state.effectiveLanguage,
+      locale: state.locale,
+      timezone: state.timezone,
+      workspaceName: state.workspaceName,
+      defaultLanguage: state.defaultLanguage,
+      t,
+      routeLabel: (route, module = false) => {
+        const key = routeKeys[module ? route.moduleId : route.id] || routeKeys[route.id];
+        return key ? t(key) : (module ? route.moduleLabel : route.label);
+      },
+      formatDateTime: value => new Intl.DateTimeFormat(state.locale, { dateStyle: "medium", timeStyle: "short", timeZone: state.timezone }).format(new Date(value)),
+      formatNumber: value => new Intl.NumberFormat(state.locale).format(value),
+      refresh,
+    };
+  }, [refresh, state]);
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+export const useI18n = () => useContext(I18nContext);

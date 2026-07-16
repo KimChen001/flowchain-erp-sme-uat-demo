@@ -3,9 +3,11 @@ import { Link, useNavigate } from "react-router";
 import { defaultRouteForModule, moduleRoute, recoveryModuleForPath, routesForModule, type AppRouteDefinition } from "../../app/routeRegistry";
 import { A } from "../ui";
 import { AppBreadcrumb } from "./AppBreadcrumb";
+import { useI18n } from "../../i18n/I18n";
 
 export function ModuleShell({ route, children }: { route: AppRouteDefinition; children: React.ReactNode }) {
   const navigate = useNavigate();
+  const { routeLabel, workspaceName, language } = useI18n();
   const root = moduleRoute(route.moduleId) || route;
   const subRoutes = routesForModule(route.moduleId);
   const activeMenuId = route.currentActiveMenuId || route.id;
@@ -14,22 +16,22 @@ export function ModuleShell({ route, children }: { route: AppRouteDefinition; ch
   return (
     <div className="fc-module-shell" data-testid="module-shell" data-route-id={route.id}>
       <AppBreadcrumb route={route} />
-      {!showModuleHeader && <span className="sr-only" data-testid="module-title">{root.moduleLabel}</span>}
+      {!showModuleHeader && <span className="sr-only" data-testid="module-title">{routeLabel(root, true)}</span>}
       {showModuleHeader && <div className="fc-module-header">
         <div>
-          <h1 className="fc-module-title" data-testid="module-title">{root.moduleLabel}</h1>
+          <h1 className="fc-module-title" data-testid="module-title">{route.moduleId === "settings" && workspaceName ? workspaceName : routeLabel(root, true)}</h1>
           <p className="fc-page-subtitle mt-1">{root.description}</p>
         </div>
       </div>}
       {subRoutes.length > 0 && (
-        <nav className="fc-module-subnav" aria-label={`${root.moduleLabel}二级导航`} data-testid="module-subnav">
-          {subRoutes.map((item) => <Link key={item.id} to={item.path} aria-current={activeMenuId === item.id ? "page" : undefined} className={activeMenuId === item.id ? "is-active" : ""}>{item.label}</Link>)}
+        <nav className="fc-module-subnav" aria-label={language === "en-US" ? `${routeLabel(root, true)} navigation` : `${routeLabel(root, true)}二级导航`} data-testid="module-subnav">
+          {subRoutes.map((item) => <Link key={item.id} to={item.path} aria-current={activeMenuId === item.id ? "page" : undefined} className={activeMenuId === item.id ? "is-active" : ""}>{routeLabel(item)}</Link>)}
         </nav>
       )}
       {showPageHeader && (
         <div className="fc-page-header" data-testid="page-header">
           <div className="min-w-0">
-            <h1 className="fc-page-title" data-testid="page-title">{route.label}</h1>
+            <h1 className="fc-page-title" data-testid="page-title">{workspaceName && route.moduleId === "settings" ? `${workspaceName} · ${routeLabel(route)}` : routeLabel(route)}</h1>
             <p className="fc-page-subtitle mt-1">{route.description}</p>
           </div>
         </div>

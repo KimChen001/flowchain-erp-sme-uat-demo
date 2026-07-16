@@ -88,6 +88,7 @@ import { BusinessEntityDetailPage } from "../components/business/BusinessEntityD
 import OutboundWorkbench from "../modules/sales/OutboundWorkbench";
 import InventoryOperationsWorkbench from "../modules/inventory/InventoryOperationsWorkbench";
 import ReturnQuarantineWorkbench from "../modules/inventory/ReturnQuarantineWorkbench";
+import { useI18n } from "../i18n/I18n";
 
 const ReportsPanel = React.lazy(() => import("../modules/reports/Page"));
 const ImportsPanel = React.lazy(() => import("../modules/imports/Page"));
@@ -191,7 +192,7 @@ function LoginScreen({
   onLogin: (user: WorkspaceUser, token: string) => void;
 }) {
   const [form, setForm] = useState({
-    company: "FlowChain Pilot Workspace",
+    company: "FlowChain Workspace",
     name: "Kim",
     email: "kim@example.com",
   });
@@ -447,6 +448,7 @@ function CapabilityRouteStatus({
   loading?: boolean;
   onNavigate: (path: string) => void;
 }) {
+  const { t } = useI18n();
   if (loading) {
     return (
       <Card
@@ -460,10 +462,10 @@ function CapabilityRouteStatus({
           style={{ color: A.blue }}
         />
         <h1 className="mt-3 text-base font-semibold" style={{ color: A.label }}>
-          正在确认模块可用状态
+          {t("capability.loading")}
         </h1>
         <p className="mt-2 text-xs" style={{ color: A.sub }}>
-          确认完成前不会加载 {moduleLabel} 的业务内容。
+          {t("capability.loadingBody", { module: moduleLabel })}
         </p>
       </Card>
     );
@@ -476,16 +478,16 @@ function CapabilityRouteStatus({
         style={{ color: A.orange }}
       />
       <h1 className="mt-3 text-base font-semibold" style={{ color: A.label }}>
-        {moduleLabel} 当前不可进入
+        {t("capability.blocked", { module: moduleLabel })}
       </h1>
       <p className="mt-2 text-xs" style={{ color: A.sub }}>
-        当前 maturity：{maturity}
+        {t("capability.maturity", { maturity })}
       </p>
       <p
         className="mx-auto mt-3 max-w-2xl text-sm leading-6"
         style={{ color: A.gray1 }}
       >
-        {reason}
+        {t("capability.reason")}
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-2">
         <button
@@ -494,7 +496,7 @@ function CapabilityRouteStatus({
           className="h-9 rounded-lg px-4 text-sm font-semibold text-white"
           style={{ background: A.blue }}
         >
-          返回工作台
+          {t("capability.back")}
         </button>
         <button
           type="button"
@@ -502,7 +504,7 @@ function CapabilityRouteStatus({
           className="h-9 rounded-lg px-4 text-sm font-semibold"
           style={{ background: A.gray6, color: A.label }}
         >
-          返回可用模块
+          {t("capability.available")}
         </button>
       </div>
     </Card>
@@ -510,6 +512,7 @@ function CapabilityRouteStatus({
 }
 
 export default function FlowChainApp() {
+  const { t, routeLabel, workspaceName } = useI18n();
   const location = useLocation();
   const routerNavigate = useNavigate();
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(
@@ -711,7 +714,19 @@ export default function FlowChainApp() {
     );
   }, [activeRoute?.id, location.pathname]);
 
-  function navItemMatchesActive(item: (typeof navItems)[number]) {
+  const localizedNavItems = useMemo(() => navItems.map(item => {
+    const root = routeById(item.routeId);
+    return {
+      ...item,
+      label: root ? routeLabel(root, true) : item.label,
+      children: item.children?.map(child => {
+        const route = routeById(child.id);
+        return { ...child, label: route ? routeLabel(route) : child.label };
+      }),
+    };
+  }), [routeLabel]);
+
+  function navItemMatchesActive(item: (typeof localizedNavItems)[number]) {
     return (
       item.id === activeModule ||
       Boolean(
@@ -722,11 +737,11 @@ export default function FlowChainApp() {
     );
   }
 
-  const activeNavItem = navItems.find(navItemMatchesActive);
+  const activeNavItem = localizedNavItems.find(navItemMatchesActive);
   const activeModuleLabel =
-    activeRoute?.moduleLabel || activeNavItem?.label || activeModule;
+    (activeRoute ? routeLabel(activeRoute, true) : "") || activeNavItem?.label || activeModule;
   const activeChildLabel = activeRoute?.parentId
-    ? activeRoute.label
+    ? routeLabel(activeRoute)
     : undefined;
   const capabilityAccess = resolveCapabilityRouteAccess({
     moduleId: activeModule,
@@ -1176,6 +1191,7 @@ export default function FlowChainApp() {
   function handleLogin(nextUser: WorkspaceUser, token: string) {
     setUser(nextUser);
     setAuthToken(token);
+    window.dispatchEvent(new Event("flowchain:localization-changed"));
   }
 
   function logout() {
@@ -1183,6 +1199,7 @@ export default function FlowChainApp() {
     localStorage.removeItem(CURRENT_USER_KEY);
     setAuthToken("");
     setUser(null);
+    window.dispatchEvent(new Event("flowchain:localization-changed"));
   }
 
   if (!authToken || !user) {
@@ -1255,7 +1272,7 @@ export default function FlowChainApp() {
                     className="w-full flex items-center justify-between gap-2 fc-caption font-semibold uppercase tracking-widest px-2 mb-2"
                     style={{ color: "rgba(148,163,184,0.58)" }}
                   >
-                    <span>{group.label}</span>
+                    <span>{group.label === "主导航" ? t("nav.primary") : t("nav.advanced")}</span>
                     <ChevronRight
                       size={12}
                       className="transition-transform"
@@ -1271,13 +1288,13 @@ export default function FlowChainApp() {
                     className="fc-caption font-semibold uppercase tracking-widest px-2 mb-2"
                     style={{ color: "rgba(148,163,184,0.58)" }}
                   >
-                    {group.label}
+                    {group.label === "主导航" ? t("nav.primary") : t("nav.advanced")}
                   </div>
                 )}
                 {isExpanded && (
                   <div className="space-y-0.5">
                     {group.itemIds.map((itemId) => {
-                      const item = navItems.find(
+                      const item = localizedNavItems.find(
                         (entry) => entry.id === itemId,
                       );
                       if (
@@ -1337,7 +1354,7 @@ export default function FlowChainApp() {
             style={{ background: "transparent", color: A.sidebarSub }}
           >
             <Sparkles size={15} strokeWidth={1.8} />
-            <span>AI 助手</span>
+            <span>{t("nav.ai")}</span>
           </button>
         </div>
       </aside>
@@ -1353,12 +1370,12 @@ export default function FlowChainApp() {
         >
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <select
-              aria-label="移动端模块导航"
+              aria-label={t("nav.primary")}
               value={activeModule}
               onChange={(event) => navigateTo(event.target.value)}
               className="max-w-[150px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs lg:hidden"
             >
-              {navItems
+              {localizedNavItems
                 .filter(
                   (item) => !enabledModuleIds || enabledModuleIds.has(item.id),
                 )
@@ -1369,7 +1386,7 @@ export default function FlowChainApp() {
                 ))}
             </select>
             <span className="fc-label font-medium" style={{ color: A.label }}>
-              {user.company}
+              {workspaceName || user.company}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -1388,7 +1405,7 @@ export default function FlowChainApp() {
                 <button
                   type="submit"
                   className="shrink-0"
-                  aria-label="搜索业务记录"
+                  aria-label={t("top.search")}
                 >
                   {searchLoading ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -1438,7 +1455,7 @@ export default function FlowChainApp() {
                       openSearchResult(visibleSearchResults[activeSearchIndex]);
                     }
                   }}
-                  placeholder="搜索业务记录"
+                  placeholder={t("top.search")}
                   className="w-full bg-transparent outline-none text-xs"
                   style={{ color: A.label }}
                 />
@@ -1660,15 +1677,15 @@ export default function FlowChainApp() {
                     {[
                       {
                         icon: User,
-                        label: "用户档案",
+                        label: t("top.profile"),
                         onClick: () => navigateTo("settings:profile"),
                       },
                       {
                         icon: Settings,
-                        label: "设置",
-                        onClick: () => navigateTo("settings:workspace"),
+                        label: t("top.settings"),
+                        onClick: () => navigateTo("settings:company"),
                       },
-                      { icon: LogOut, label: "退出登录", onClick: logout },
+                      { icon: LogOut, label: t("top.logout"), onClick: logout },
                     ].map(({ icon: Icon, label, onClick }) => (
                       <button
                         key={label}

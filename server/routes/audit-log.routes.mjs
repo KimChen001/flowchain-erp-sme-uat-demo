@@ -15,8 +15,9 @@ export async function handleAuditLogRoute(ctx) {
     const entityType = url.searchParams.get('entityType') || ''
     const entityId = url.searchParams.get('entityId') || ''
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') || 100)))
-    const entries = await repository.listAuditEntries({ entityType, entityId, limit })
-    const settingsAudit = await (ctx.repositories?.settingsRuntime || getDefaultSettingsRuntimeRepository()).listSettingsAuditEntries()
+    const entries = await repository.listAuditEntries({ ...(ctx.identity?.tenantId ? { tenantId: ctx.identity.tenantId } : {}), entityType, entityId, limit })
+    const databaseMode = String((ctx.env || process.env).FLOWCHAIN_PERSISTENCE_MODE || '').toLowerCase() === 'database'
+    const settingsAudit = databaseMode ? [] : await (ctx.repositories?.settingsRuntime || getDefaultSettingsRuntimeRepository()).listSettingsAuditEntries()
     send(res, 200, [...listImportAuditEvents(), ...listReportViewAuditEvents(), ...settingsAudit, ...entries].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, limit))
     return true
   }

@@ -2,6 +2,18 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { getPrismaClient } from '../persistence/prisma-client.mjs'
 import { PilotIdentityError, resolveProvisionedActor } from '../domain/pilot-identity.mjs'
 import { roleLabel } from '../../shared/roles.mjs'
+import {
+  assertSupportedCurrency,
+  assertSupportedLanguage,
+  assertSupportedLocale,
+  assertSupportedTimezone,
+  effectiveLanguage,
+  normalizeLanguagePreference,
+  SUPPORTED_CURRENCIES,
+  SUPPORTED_LANGUAGES,
+  SUPPORTED_LOCALES,
+  SUPPORTED_TIMEZONES,
+} from '../domain/workspace-settings-contract.mjs'
 
 const text = value => String(value ?? '').trim()
 const email = value => text(value).toLowerCase()
@@ -9,12 +21,61 @@ const hashToken = token => createHash('sha256').update(token).digest('hex')
 const ALLOWED_ROLES = new Set(['admin', 'manager', 'viewer', 'business-specialist', 'buyer'])
 
 const fail = (code, message, status = 400, details) => { throw new PilotIdentityError(code, message, status, details) }
-const publicUser = user => ({ id: user.id, email: user.email, name: user.name, role: user.role, roleLabel: roleLabel(user.role), jobTitle: user.jobTitle, status: user.status, defaultWarehouseId: user.defaultWarehouseId, profileCompletedAt: user.profileCompletedAt, version: user.version, ...(Array.isArray(user.warehouseScopes) ? { warehouseScopes: user.warehouseScopes.map(scope => ({ warehouseId: scope.warehouseId, accessLevel: scope.accessLevel })) } : {}) })
+const publicUser = user => ({ id: user.id, email: user.email, name: user.name, role: user.role, roleLabel: roleLabel(user.role), jobTitle: user.jobTitle, status: user.status, languagePreference: user.languagePreference, defaultWarehouseId: user.defaultWarehouseId, profileCompletedAt: user.profileCompletedAt, version: user.version, ...(Array.isArray(user.warehouseScopes) ? { warehouseScopes: user.warehouseScopes.map(scope => ({ warehouseId: scope.warehouseId, accessLevel: scope.accessLevel })) } : {}) })
 const publicInvitation = invitation => ({ id: invitation.id, email: invitation.email, role: invitation.role, roleLabel: roleLabel(invitation.role), status: invitation.status, expiresAt: invitation.expiresAt, invitedById: invitation.invitedById, acceptedById: invitation.acceptedById, createdAt: invitation.createdAt, acceptedAt: invitation.acceptedAt })
+const publicWorkspace = (tenant, baseCurrencyLocked = false) => ({
+  id: tenant.id,
+  name: tenant.name,
+  workspaceName: tenant.name,
+  legalName: tenant.legalName,
+  companyName: tenant.legalName || tenant.name,
+  countryCode: tenant.countryCode,
+  baseCurrency: tenant.currency,
+  timezone: tenant.timezone,
+  locale: tenant.locale,
+  defaultLanguage: tenant.defaultLanguage,
+  baseCurrencyLocked,
+  workspaceCompletedAt: tenant.workspaceCompletedAt,
+  version: tenant.version,
+  options: {
+    languages: SUPPORTED_LANGUAGES,
+    locales: SUPPORTED_LOCALES,
+    timezones: SUPPORTED_TIMEZONES,
+    currencies: SUPPORTED_CURRENCIES,
+  },
+})
 
 function sendError(ctx, error) {
-  if (!(error instanceof PilotIdentityError)) throw error
-  ctx.send(ctx.res, error.status, { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) })
+  if (!(error instanceof PilotIdentityError) && !error?.code) throw error
+  ctx.send(ctx.res, error.status || 400, { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) })
+}
+
+const auditData = ({ actor, action, entityType, entityId, summary, before, after }) => ({
+  id: randomUUID(),
+  tenantId: actor.tenantId,
+  source: 'workspace_settings',
+  module: 'settings',
+  action,
+  entityType,
+  entityId,
+  actorId: actor.user.id,
+  summary,
+  metadata: {
+    actor: { id: actor.user.id, name: actor.user.name, role: actor.role },
+    before,
+    after,
+  },
+})
+
+async function hasPostedTransactions(prisma, tenantId, tenant) {
+  if (tenant.openingBalanceLockedAt) return true
+  const [movementCount, receivingCount, shipmentCount, returnCount] = await Promise.all([
+    prisma.inventoryMovement.count({ where: { tenantId, status: 'posted' } }),
+    prisma.receivingDocument.count({ where: { tenantId, postingStatus: 'posted' } }),
+    prisma.shipmentDocument.count({ where: { tenantId, postingStatus: 'posted' } }),
+    prisma.returnPostingDocument.count({ where: { tenantId, postingStatus: 'posted' } }),
+  ])
+  return movementCount + receivingCount + shipmentCount + returnCount > 0
 }
 
 async function adminActor(prisma, identity) {
@@ -41,28 +102,61 @@ export async function handlePilotWorkspaceRoute(ctx) {
 
     if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/me/profile') {
       const actor = await resolveProvisionedActor(prisma, ctx.identity)
-      ctx.send(ctx.res, 200, publicUser(actor.user)); return true
+      const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } })
+      ctx.send(ctx.res, 200, { ...publicUser(actor.user), effectiveLanguage: effectiveLanguage(actor.user, tenant), locale: tenant.locale, timezone: tenant.timezone }); return true
+    }
+    if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/me/localization') {
+      const actor = await resolveProvisionedActor(prisma, ctx.identity)
+      const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } })
+      ctx.send(ctx.res, 200, {
+        languagePreference: actor.user.languagePreference,
+        defaultLanguage: tenant.defaultLanguage,
+        effectiveLanguage: effectiveLanguage(actor.user, tenant),
+        locale: tenant.locale,
+        timezone: tenant.timezone,
+        workspaceName: tenant.name,
+      }); return true
     }
     if (ctx.req.method === 'PATCH' && ctx.url.pathname === '/api/me/profile') {
       const actor = await resolveProvisionedActor(prisma, ctx.identity)
       const body = await ctx.readBody(ctx.req)
       await validateDefaultWarehouse(prisma, actor, text(body.defaultWarehouseId) || null)
-      const result = await prisma.user.updateMany({ where: { id: actor.user.id, tenantId: actor.tenantId, version: Number(body.version) }, data: { name: text(body.name), jobTitle: text(body.jobTitle) || null, defaultWarehouseId: text(body.defaultWarehouseId) || null, profileCompletedAt: text(body.name) && text(body.jobTitle) ? new Date() : null, version: { increment: 1 } } })
-      if (result.count !== 1) fail('VERSION_CONFLICT', 'Profile changed concurrently.', 409)
+      const languagePreference = Object.hasOwn(body, 'languagePreference') ? normalizeLanguagePreference(body.languagePreference) : actor.user.languagePreference
+      const before = publicUser(actor.user)
+      const result = await prisma.$transaction(async tx => {
+        const updated = await tx.user.updateMany({ where: { id: actor.user.id, tenantId: actor.tenantId, version: Number(body.version) }, data: { name: text(body.name), jobTitle: text(body.jobTitle) || null, languagePreference, defaultWarehouseId: text(body.defaultWarehouseId) || null, profileCompletedAt: text(body.name) && text(body.jobTitle) ? new Date() : null, version: { increment: 1 } } })
+        if (updated.count !== 1) fail('VERSION_CONFLICT', 'Profile changed concurrently.', 409)
+        const user = await tx.user.findUnique({ where: { id: actor.user.id }, include: { warehouseScopes: true } })
+        await tx.auditLog.create({ data: auditData({ actor, action: 'profile_settings_updated', entityType: 'User', entityId: actor.user.id, summary: 'User profile and language preference updated.', before, after: publicUser(user) }) })
+        return user
+      }, { isolationLevel: 'Serializable' })
       ctx.send(ctx.res, 200, publicUser(await prisma.user.findUnique({ where: { id: actor.user.id }, include: { warehouseScopes: true } }))); return true
     }
     if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/workspace') {
       const actor = await resolveProvisionedActor(prisma, ctx.identity)
       const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } })
-      ctx.send(ctx.res, 200, { id: tenant.id, name: tenant.name, legalName: tenant.legalName, countryCode: tenant.countryCode, baseCurrency: tenant.currency, timezone: tenant.timezone, workspaceCompletedAt: tenant.workspaceCompletedAt, version: tenant.version }); return true
+      ctx.send(ctx.res, 200, publicWorkspace(tenant, await hasPostedTransactions(prisma, actor.tenantId, tenant))); return true
     }
     if (ctx.req.method === 'PATCH' && ctx.url.pathname === '/api/workspace') {
       const actor = await adminActor(prisma, ctx.identity)
       const body = await ctx.readBody(ctx.req)
-      const result = await prisma.tenant.updateMany({ where: { id: actor.tenantId, version: Number(body.version) }, data: { name: text(body.name), legalName: text(body.legalName) || null, countryCode: text(body.countryCode) || 'CN', currency: text(body.baseCurrency) || 'CNY', timezone: text(body.timezone) || 'Asia/Shanghai', workspaceCompletedAt: text(body.name) && text(body.countryCode) && text(body.baseCurrency) && text(body.timezone) ? new Date() : null, version: { increment: 1 } } })
-      if (result.count !== 1) fail('VERSION_CONFLICT', 'Workspace changed concurrently.', 409)
-      const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId } })
-      ctx.send(ctx.res, 200, { id: tenant.id, name: tenant.name, legalName: tenant.legalName, countryCode: tenant.countryCode, baseCurrency: tenant.currency, timezone: tenant.timezone, workspaceCompletedAt: tenant.workspaceCompletedAt, version: tenant.version }); return true
+      const result = await prisma.$transaction(async tx => {
+        const current = await tx.tenant.findUnique({ where: { id: actor.tenantId } })
+        const workspaceName = text(body.workspaceName ?? body.name)
+        const companyName = text(body.companyName ?? body.legalName)
+        const baseCurrency = assertSupportedCurrency(body.baseCurrency || current.currency)
+        const timezone = assertSupportedTimezone(body.timezone || current.timezone)
+        const locale = assertSupportedLocale(body.locale || current.locale)
+        const defaultLanguage = assertSupportedLanguage(body.defaultLanguage || current.defaultLanguage)
+        const locked = await hasPostedTransactions(tx, actor.tenantId, current)
+        if (locked && baseCurrency !== current.currency) fail('BASE_CURRENCY_LOCKED', 'Base currency cannot change after posted transactions exist.', 409)
+        const updated = await tx.tenant.updateMany({ where: { id: actor.tenantId, version: Number(body.version) }, data: { name: workspaceName, legalName: companyName || null, countryCode: text(body.countryCode) || current.countryCode || 'CN', currency: baseCurrency, timezone, locale, defaultLanguage, workspaceCompletedAt: workspaceName && companyName && baseCurrency && timezone ? new Date() : null, version: { increment: 1 } } })
+        if (updated.count !== 1) fail('VERSION_CONFLICT', 'Workspace changed concurrently.', 409)
+        const next = await tx.tenant.findUnique({ where: { id: actor.tenantId } })
+        await tx.auditLog.create({ data: auditData({ actor, action: 'workspace_settings_updated', entityType: 'Tenant', entityId: actor.tenantId, summary: 'Company, workspace, locale, language, timezone, or base currency settings updated.', before: publicWorkspace(current, locked), after: publicWorkspace(next, locked) }) })
+        return { tenant: next, locked }
+      }, { isolationLevel: 'Serializable' })
+      ctx.send(ctx.res, 200, publicWorkspace(result.tenant, result.locked)); return true
     }
     if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/workspace/users') {
       const actor = await adminActor(prisma, ctx.identity)

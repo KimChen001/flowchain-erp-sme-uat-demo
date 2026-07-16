@@ -14,6 +14,8 @@ model Tenant {
   locale                 String    @default("zh-CN")
   currency               String    @default("CNY")
   timezone               String    @default("Asia/Shanghai")
+  defaultLanguage        String    @default("zh-CN")
+  operationalSettings    Json      @default("{}")
   workspaceCompletedAt   DateTime?
   openingBalanceLockedAt DateTime?
   version                Int       @default(0)
@@ -71,6 +73,7 @@ model User {
   status             String    @default("active")
   department         String?
   locale             String?
+  languagePreference String?
   defaultWarehouseId String?
   profileCompletedAt DateTime?
   version            Int       @default(0)
