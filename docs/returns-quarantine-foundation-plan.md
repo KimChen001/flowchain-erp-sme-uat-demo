@@ -761,5 +761,5 @@ Phase 4B will not implement:
 
 These exclusions must remain visible in capability metadata, product copy, API
 errors, and acceptance documentation. No unsupported behavior may be simulated
-with adjustments, fake exchange rates, metadata-only inventory, or JSON
+with adjustments, invented exchange rates, metadata-only inventory, or JSON
 authoritative transactions.
