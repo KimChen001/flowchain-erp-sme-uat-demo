@@ -490,9 +490,10 @@ export async function buildReturnAuthorizationPlan({
     include: {
       lines: { orderBy: { id: "asc" } },
       authorizations: {
-        where: {
-          workflowStatus: {
-            in: ["draft", "approved", "partially_executed"],
+        include: {
+          lines: true,
+          postings: {
+            include: { lines: true },
           },
         },
       },
@@ -502,15 +503,33 @@ export async function buildReturnAuthorizationPlan({
     return basePlan("return_authorization", [
       issue("RETURN_REQUEST_NOT_FOUND", "Return request was not found.", 404),
     ]);
-  if (request.workflowStatus !== "submitted")
+  const inputLines = Array.isArray(input.lines) ? input.lines : [];
+  const releaseOnly =
+    inputLines.length > 0 &&
+    inputLines.every(
+      (entry) =>
+        text(entry.dispositionRoute) ===
+        "release_quarantine_to_available",
+    );
+  const validRequestState =
+    request.workflowStatus === "submitted" ||
+    (request.returnType === "customer_return" &&
+      request.workflowStatus === "executed" &&
+      releaseOnly);
+  if (!validRequestState)
     blockingIssues.push(
       issue(
         "RETURN_REQUEST_NOT_SUBMITTED",
-        "Only a submitted return request can be authorized.",
+        "Only a submitted return request, or an executed customer return awaiting governed quarantine release, can be authorized.",
         409,
       ),
     );
-  if (request.authorizations.length)
+  const activeAuthorizations = request.authorizations.filter((authorization) =>
+    ["draft", "approved", "partially_executed"].includes(
+      authorization.workflowStatus,
+    ),
+  );
+  if (activeAuthorizations.length)
     blockingIssues.push(
       issue(
         "RETURN_AUTHORIZATION_ALREADY_ACTIVE",
@@ -526,7 +545,6 @@ export async function buildReturnAuthorizationPlan({
         "authorizationNumber is required.",
       ),
     );
-  const inputLines = Array.isArray(input.lines) ? input.lines : [];
   if (!inputLines.length)
     blockingIssues.push(
       issue(
@@ -543,6 +561,36 @@ export async function buildReturnAuthorizationPlan({
       ),
     );
   const requestLines = new Map(request.lines.map((row) => [row.id, row]));
+  const releasedByRequestLine = new Map();
+  const receivedByRequestLine = new Map();
+  for (const historicalAuthorization of request.authorizations) {
+    const requestLineByAuthorizationLine = new Map(
+      historicalAuthorization.lines.map((line) => [
+        line.id,
+        line.returnRequestLineId,
+      ]),
+    );
+    for (const posting of historicalAuthorization.postings) {
+      if (posting.postingStatus !== "posted") continue;
+      const target =
+        posting.postingType === "customer_return_receipt"
+          ? receivedByRequestLine
+          : posting.postingType === "quarantine_release"
+            ? releasedByRequestLine
+            : null;
+      if (!target) continue;
+      for (const line of posting.lines) {
+        const requestLineId = requestLineByAuthorizationLine.get(
+          line.returnAuthorizationLineId,
+        );
+        if (!requestLineId) continue;
+        target.set(
+          requestLineId,
+          (target.get(requestLineId) || ZERO) + units(line.quantity),
+        );
+      }
+    }
+  }
   const normalized = [];
   for (const entry of inputLines) {
     const requestLine = requestLines.get(text(entry.returnRequestLineId));
@@ -574,15 +622,31 @@ export async function buildReturnAuthorizationPlan({
     const dispositionRoute = text(entry.dispositionRoute);
     const allowedRoutes =
       request.returnType === "customer_return"
-        ? ["receive_to_quarantine"]
+        ? releaseOnly
+          ? ["release_quarantine_to_available"]
+          : ["receive_to_quarantine"]
         : ["return_from_available", "return_from_quarantine"];
     if (!allowedRoutes.includes(dispositionRoute))
       blockingIssues.push(
         issue(
           "RETURN_DISPOSITION_NOT_ALLOWED",
-          "The disposition route is not allowed for this return type in Phase 4B.1.",
+          "The disposition route is not allowed for the current return type and lifecycle stage.",
         ),
       );
+    if (dispositionRoute === "release_quarantine_to_available") {
+      const releasable =
+        (receivedByRequestLine.get(requestLine.id) || ZERO) -
+        (releasedByRequestLine.get(requestLine.id) || ZERO);
+      if (authorized !== null && authorized > releasable)
+        blockingIssues.push(
+          issue(
+            "RETURN_RELEASE_EXCEEDS_RECEIVED_QUARANTINE",
+            `Release authorization exceeds received, unreleased quarantine quantity for line ${requestLine.id}.`,
+            409,
+            { releasableQuantity: fixed(releasable) },
+          ),
+        );
+    }
     normalized.push({
       returnRequestLineId: requestLine.id,
       authorizedQuantity: fixed(authorized || ZERO),

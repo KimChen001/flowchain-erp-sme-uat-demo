@@ -295,11 +295,18 @@ export function createSupplierReturnReadService({
         warehouseId: line.warehouseId,
         location: line.location,
         locationKey: line.locationKey,
-        balanceType: line.inventoryBalanceId
-          ? "available"
-          : "quarantine",
+        balanceType:
+          posting.postingType === "quarantine_release"
+            ? "quarantine_to_available"
+            : line.inventoryBalanceId
+              ? "available"
+              : "quarantine",
         balanceId:
           line.inventoryBalanceId || line.quarantineBalanceId,
+        sourceBalanceId:
+          line.inventoryBalanceId || line.quarantineBalanceId,
+        destinationBalanceId:
+          line.destinationInventoryBalanceId || null,
         dispositionRoute:
           line.returnAuthorizationLine.dispositionRoute,
       })),
@@ -347,10 +354,15 @@ export function createSupplierReturnReadService({
         })),
       },
       limitations:
-        posting.postingType === "customer_return_receipt"
+        posting.postingType === "quarantine_release"
+          ? [
+              "Phase 4B.4 supports governed quarantine release to an existing available balance.",
+              "Scrap, repair, refurbishment, destruction, and automatic disposition remain unavailable.",
+            ]
+          : posting.postingType === "customer_return_receipt"
           ? [
               "Phase 4B.3 customer return receipts increase quarantine inventory only.",
-              "Quarantine release to available inventory remains unavailable until its transaction gate passes.",
+              "Release requires a separate governed quarantine release authorization.",
             ]
           : [
               "Phase 4B.2 supports supplier return dispatch from available or quarantine inventory.",

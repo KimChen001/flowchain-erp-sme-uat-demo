@@ -20,6 +20,11 @@ import {
   CustomerReturnCommandError,
 } from "../domain/customer-return-command-service.mjs";
 import { createCustomerReturnReadService } from "../domain/customer-return-read-service.mjs";
+import {
+  createQuarantineReleaseCommandService,
+  QuarantineReleaseCommandError,
+} from "../domain/quarantine-release-command-service.mjs";
+import { createQuarantineReleaseReadService } from "../domain/quarantine-release-read-service.mjs";
 import { PilotIdentityError } from "../domain/pilot-identity.mjs";
 import { getPrismaClient } from "../persistence/prisma-client.mjs";
 
@@ -50,6 +55,7 @@ function knownError(ctx, error) {
     error instanceof SupplierReturnCommandError ||
     error instanceof SupplierReturnReadError ||
     error instanceof CustomerReturnCommandError ||
+    error instanceof QuarantineReleaseCommandError ||
     error instanceof PilotIdentityError
   ) {
     ctx.send(ctx.res, error.status || 400, {
@@ -123,6 +129,15 @@ async function services(ctx) {
     customerPostingCommand:
       ctx.customerReturnCommandService ||
       createCustomerReturnCommandService({ prisma, env }),
+    releasePostingRead:
+      ctx.quarantineReleaseReadService ||
+      createQuarantineReleaseReadService({
+        prisma,
+        capability: capabilityForEnvironment("return-posting", env),
+      }),
+    releasePostingCommand:
+      ctx.quarantineReleaseCommandService ||
+      createQuarantineReleaseCommandService({ prisma, env }),
   };
 }
 
@@ -144,6 +159,8 @@ export async function handleReturnsRoute(ctx) {
       postingCommand,
       customerPostingRead,
       customerPostingCommand,
+      releasePostingRead,
+      releasePostingCommand,
     } = await services(ctx);
     if (ctx.req.method === "GET" && path === "/api/returns/requests") {
       ctx.send(ctx.res, 200, await read.listRequests(query(ctx.url), ctx));
@@ -276,16 +293,31 @@ export async function handleReturnsRoute(ctx) {
           id: authorizationId,
           tenantId: ctx.identity.tenantId,
         },
-        select: { returnRequest: { select: { returnType: true } } },
+        select: {
+          returnRequest: { select: { returnType: true } },
+          lines: { select: { dispositionRoute: true } },
+        },
       });
+      const release =
+        authorizationType?.lines?.length > 0 &&
+        authorizationType.lines.every(
+          (line) =>
+            line.dispositionRoute ===
+            "release_quarantine_to_available",
+        );
       const customer =
         authorizationType?.returnRequest?.returnType === "customer_return";
+      const selectedDraftRead = release
+        ? releasePostingRead
+        : customer
+          ? customerPostingRead
+          : postingRead;
       if (ctx.req.method === "POST" && action === "preview") {
         if (!ensureCapability(ctx, "return-posting")) return true;
         ctx.send(
           ctx.res,
           200,
-          await (customer ? customerPostingRead : postingRead).previewDraft(
+          await selectedDraftRead.previewDraft(
             authorizationId,
             body,
             ctx,
@@ -298,7 +330,12 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           201,
-          await (customer
+          await (release
+            ? releasePostingCommand.createDraft(
+                { ...body, authorizationId },
+                ctx,
+              )
+            : customer
             ? customerPostingCommand.createDraft(
                 { ...body, authorizationId },
                 ctx,
@@ -362,7 +399,12 @@ export async function handleReturnsRoute(ctx) {
       });
       const customer =
         postingType?.postingType === "customer_return_receipt";
-      const selectedRead = customer ? customerPostingRead : postingRead;
+      const release = postingType?.postingType === "quarantine_release";
+      const selectedRead = release
+        ? releasePostingRead
+        : customer
+          ? customerPostingRead
+          : postingRead;
       if (
         ctx.req.method === "GET" &&
         (!action || action === "workbench")
@@ -380,7 +422,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await (customer
+          await (release
+            ? releasePostingCommand.reviseDraft(postingId, body, ctx)
+            : customer
             ? customerPostingCommand.reviseDraft(postingId, body, ctx)
             : postingCommand.revisePostingDraft(postingId, body, ctx)),
         );
@@ -400,7 +444,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await (customer
+          await (release
+            ? releasePostingCommand.readyPosting(postingId, body, ctx)
+            : customer
             ? customerPostingCommand.readyPosting(postingId, body, ctx)
             : postingCommand.readyPosting(postingId, body, ctx)),
         );
@@ -411,7 +457,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await (customer
+          await (release
+            ? releasePostingCommand.cancelPosting(postingId, body, ctx)
+            : customer
             ? customerPostingCommand.cancelPosting(postingId, body, ctx)
             : postingCommand.cancelPosting(postingId, body, ctx)),
         );
@@ -431,7 +479,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await (customer
+          await (release
+            ? releasePostingCommand.postRelease(postingId, body, ctx)
+            : customer
             ? customerPostingCommand.postReceipt(postingId, body, ctx)
             : postingCommand.postSupplierReturn(postingId, body, ctx)),
         );
@@ -451,7 +501,9 @@ export async function handleReturnsRoute(ctx) {
         ctx.send(
           ctx.res,
           200,
-          await (customer
+          await (release
+            ? releasePostingCommand.reverseRelease(postingId, body, ctx)
+            : customer
             ? customerPostingCommand.reverseReceipt(postingId, body, ctx)
             : postingCommand.reverseSupplierReturn(postingId, body, ctx)),
         );
