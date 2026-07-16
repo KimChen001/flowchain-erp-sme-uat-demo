@@ -83,14 +83,16 @@ export function createSalesOrderWorkbenchService({ prisma, idFactory = randomUUI
   }
 
   async function reviseOrder(id, input, context) {
-    const payload = { id: text(id), expectedOrderVersion: Number(input.expectedOrderVersion), header: input.header || {}, lines: input.lines || [] }
+    const payload = { id: text(id), expectedOrderVersion: Number(input.expectedOrderVersion), revisionMode: text(input.revisionMode), expectedLineIds: Array.isArray(input.expectedLineIds) ? input.expectedLineIds.map(text) : [], header: input.header || {}, lines: input.lines || [] }
     if (!Number.isInteger(payload.expectedOrderVersion) || payload.expectedOrderVersion < 0) fail('SALES_ORDER_VALIDATION_FAILED', 'expectedOrderVersion is required.', 422)
     return execute('revise_sales_order_draft', input.idempotencyKey, payload, context, async (tx, actor) => {
-      const current = await tx.salesOrder.findFirst({ where: { id: payload.id, tenantId: actor.tenantId }, include: { reservations: true, shipments: true } })
+      const current = await tx.salesOrder.findFirst({ where: { id: payload.id, tenantId: actor.tenantId }, include: { lines: { orderBy: { id: 'asc' } }, reservations: true, shipments: true } })
       if (!current) fail('SALES_ORDER_NOT_FOUND', 'Sales order was not found.', 404)
       if (current.workflowStatus !== 'draft') fail('SALES_ORDER_INVALID_STATE', 'Only draft sales orders can be edited.', 409)
       if (current.version !== payload.expectedOrderVersion) fail('SALES_ORDER_VERSION_CONFLICT', 'Sales order version does not match.', 409)
       if (current.reservations.length || current.shipments.length) fail('SALES_ORDER_INVALID_STATE', 'Lines cannot be edited after fulfillment activity exists.', 409)
+      const expectedIds = [...payload.expectedLineIds].sort(), currentIds = current.lines.map((line) => line.id).sort()
+      if (payload.revisionMode !== 'replace_all' || expectedIds.length !== currentIds.length || expectedIds.some((id, index) => id !== currentIds[index])) fail('SALES_ORDER_DRAFT_REVISION_INCOMPLETE', 'Sales order lines changed and an incomplete draft replacement was blocked. Refresh before editing again.', 409)
       const lines = await authoritativeLines(tx, actor.tenantId, payload.lines)
       const currency = text(payload.header.currency || current.currency).toUpperCase()
       if (!/^[A-Z]{3}$/.test(currency)) fail('SALES_ORDER_VALIDATION_FAILED', 'Currency must be a three-letter code.', 422)
@@ -120,7 +122,7 @@ export function createSalesOrderWorkbenchService({ prisma, idFactory = randomUUI
   return { createOrder, reviseOrder, confirmOrder: (id, input, context) => transition(id, 'confirm', input, context), holdOrder: (id, input, context) => transition(id, 'hold', input, context), resumeOrder: (id, input, context) => transition(id, 'resume', input, context) }
 }
 
-export function createSalesOrderReadService({ prisma } = {}) {
+export function createSalesOrderReadService({ prisma, lifecycleCapability = { enabled: false } } = {}) {
   if (!prisma) throw new Error('prisma is required')
   async function listOrders(query, context) {
     const actor = await actorFor(prisma, context), page = Math.max(1, Number(query.page) || 1), pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 20))
@@ -130,12 +132,12 @@ export function createSalesOrderReadService({ prisma } = {}) {
     if (text(query.customer)) where.customerName = { contains: text(query.customer), mode: 'insensitive' }
     const sort = ['promisedDate', 'orderNumber'].includes(query.sort) ? query.sort : 'updatedAt', direction = query.direction === 'asc' ? 'asc' : 'desc'
     const [total, rows] = await Promise.all([prisma.salesOrder.count({ where }), prisma.salesOrder.findMany({ where, include: { lines: true }, orderBy: [{ [sort]: direction }, { id: 'asc' }], skip: (page - 1) * pageSize, take: pageSize } )])
-    return { dataSource: 'Authoritative PostgreSQL', page, pageSize, total, orders: rows.map((row) => { const order = publicOrder(row); return { ...order, totalLines: row.lines.length, orderedQuantity: fixed(row.lines.reduce((sum, line) => sum + units(line.orderedQuantity), 0n)), reservedQuantity: fixed(row.lines.reduce((sum, line) => sum + units(line.reservedQuantity), 0n)), fulfilledQuantity: fixed(row.lines.reduce((sum, line) => sum + units(line.fulfilledQuantity), 0n)) } }) }
+    return { dataSource: 'Authoritative PostgreSQL', page, pageSize, total, capabilities: { salesOrderLifecycle: lifecycleCapability }, orders: rows.map((row) => { const order = publicOrder(row); return { ...order, totalLines: row.lines.length, orderedQuantity: fixed(row.lines.reduce((sum, line) => sum + units(line.orderedQuantity), 0n)), reservedQuantity: fixed(row.lines.reduce((sum, line) => sum + units(line.reservedQuantity), 0n)), fulfilledQuantity: fixed(row.lines.reduce((sum, line) => sum + units(line.fulfilledQuantity), 0n)) } }) }
   }
   async function entryData(context) {
     const actor = await actorFor(prisma, context)
     const items = await prisma.item.findMany({ where: { tenantId: actor.tenantId, status: 'active' }, select: { id: true, sku: true, name: true, unit: true }, orderBy: { sku: 'asc' }, take: 200 })
-    return { dataSource: 'Authoritative PostgreSQL', items }
+    return { dataSource: 'Authoritative PostgreSQL', capabilities: { salesOrderLifecycle: lifecycleCapability }, items: lifecycleCapability.enabled ? items : [] }
   }
   return { listOrders, entryData }
 }
