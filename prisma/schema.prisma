@@ -1030,28 +1030,34 @@ model InventoryAdjustmentLine {
 }
 
 model ReturnRequest {
-  id                  String    @id
-  tenantId            String
-  requestNumber       String
-  returnType          String
-  partnerId           String?
-  partnerNameSnapshot String?
-  sourceDocumentType  String
-  sourceDocumentId    String
-  reasonCode          String
-  reasonDetail        String?
-  workflowStatus      String    @default("draft")
-  requestedAt         DateTime  @default(now())
-  requestedById       String
-  submittedAt         DateTime?
-  submittedById       String?
-  cancelledAt         DateTime?
-  cancelledById       String?
-  cancellationReason  String?
-  version             Int       @default(0)
-  metadata            Json?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                   String    @id
+  tenantId             String
+  requestNumber        String
+  returnType           String
+  partnerId            String?
+  partnerNameSnapshot  String?
+  sourceDocumentType   String
+  sourceDocumentId     String
+  sourceDocumentNumber String?
+  contextDocumentType  String?
+  contextDocumentId    String?
+  reasonCode           String
+  reasonDetail         String?
+  workflowStatus       String    @default("draft")
+  requestedAt          DateTime  @default(now())
+  requestedById        String
+  submittedAt          DateTime?
+  submittedById        String?
+  rejectedAt           DateTime?
+  rejectedById         String?
+  rejectionReason      String?
+  cancelledAt          DateTime?
+  cancelledById        String?
+  cancellationReason   String?
+  version              Int       @default(0)
+  metadata             Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   lines          ReturnRequestLine[]
@@ -1064,17 +1070,21 @@ model ReturnRequest {
 }
 
 model ReturnRequestLine {
-  id                   String  @id
+  id                   String   @id
   returnRequestId      String
+  sourceDocumentType   String?
+  sourceDocumentId     String?
   sourceDocumentLineId String
+  sourceQuantity       Decimal? @db.Decimal(18, 4)
+  sourceWarehouseIds   Json?
   itemId               String
   sku                  String
   itemName             String
-  requestedQuantity    Decimal @db.Decimal(18, 4)
+  requestedQuantity    Decimal  @db.Decimal(18, 4)
   unit                 String?
   reasonCode           String
   conditionCode        String?
-  version              Int     @default(0)
+  version              Int      @default(0)
   metadata             Json?
 
   returnRequest      ReturnRequest             @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
@@ -1096,7 +1106,12 @@ model ReturnAuthorization {
   rejectedAt          DateTime?
   rejectedById        String?
   rejectionReason     String?
+  cancelledAt         DateTime?
+  cancelledById       String?
+  cancellationReason  String?
   expiresAt           DateTime?
+  expiredAt           DateTime?
+  expiredById         String?
   version             Int       @default(0)
   metadata            Json?
   createdAt           DateTime  @default(now())

@@ -31,6 +31,7 @@ const normalizedRole = value => {
   const role = String(value || '').toLowerCase()
   if (/admin|管理员/.test(role)) return 'admin'
   if (/manager|经理|approver/.test(role)) return 'manager'
+  if (/buyer|采购员/.test(role)) return 'buyer'
   if (/viewer|只读/.test(role)) return 'viewer'
   return 'business-specialist'
 }
