@@ -112,3 +112,21 @@ The authoritative list supports URL-persisted search, workflow/reservation/fulfi
 ## 27. Phase 4 boundary
 
 Phase 4 may introduce controlled picking and richer multi-line entry only after preserving the transaction kernel, warehouse authorization, evidence, reconciliation, idempotency, and browser gates documented here.
+
+## 28. Multi-line draft safety
+
+Draft revision is an explicit whole-document replacement contract. Clients must send `revisionMode: "replace_all"`, the complete current `expectedLineIds` set, and the complete replacement line set. The server compares the sorted expected IDs with the authoritative order lines before deleting anything. Missing, extra, stale, or foreign line IDs return `SALES_ORDER_DRAFT_REVISION_INCOMPLETE`; the existing draft remains unchanged. Idempotent replay does not repeat line deletion or creation.
+
+The current narrow editor remains available only for one-line drafts. Multi-line drafts return `canEditDraft: false` with `MULTI_LINE_DRAFT_EDITOR_NOT_AVAILABLE`, explain why editing is blocked, and never submit only the first line.
+
+## 29. Capability-disabled entry behavior
+
+Order-list and entry-data reads expose the server capability state. When Outbound Beta is disabled, the order list remains searchable and readable but does not expose an executable new-order link. Direct navigation to `/app/sales/orders/new` shows the read-only capability notice and no editable form or save action. Mutations still fail closed with `OUTBOUND_CAPABILITY_NOT_AVAILABLE`.
+
+## 30. Inventory link filtering
+
+Outbound Smart Links target formal inventory balance or movement routes only when every supplied filter is supported. The inventory page preserves and forwards `relatedSalesOrderId`, source document/line, posting batch, SKU, warehouse, location, movement type, item, and status filters as applicable. Filtering, pagination, stable sorting, tenant isolation, and warehouse read scope are enforced on the server. The active-filter summary and clear action make the effective scope visible; links never appear enabled when they would open an unfiltered result.
+
+## 31. Warehouse-scoped audit projection
+
+Tenant-level lifecycle events remain visible only after warehouse identifiers and transaction metadata are removed. Reservation, shipment, and inventory transaction audit events are projected from authoritative reservation, allocation, balance, and movement facts. A multi-warehouse transaction event is visible only when the actor can read every involved warehouse. Hidden events contribute neither serialized IDs nor evidence and Smart Link counts, preventing timing and quantity inference.
