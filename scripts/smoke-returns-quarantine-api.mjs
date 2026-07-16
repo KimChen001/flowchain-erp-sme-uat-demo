@@ -525,6 +525,19 @@ try {
   const buyer = await login(base, emails.buyer);
   const viewer = await login(base, emails.viewer);
 
+  const entryData = await request(base, "/api/returns/entry-data", {
+    token: manager,
+  });
+  assert.equal(entryData.selectionPolicy.implicitFirstSelection, false);
+  assert.equal(
+    entryData.sources.customer_return[0].id,
+    "shipment-returns-api",
+  );
+  assert.equal(
+    entryData.sources.supplier_return[0].id,
+    "receiving-returns-api",
+  );
+
   const duplicatePreview = await request(
     base,
     "/api/returns/requests/preview",
@@ -1129,6 +1142,12 @@ try {
     postingWorkbench.evidence.movements[0].movementType,
     "supplier_return_out",
   );
+  assert.equal(postingWorkbench.reconciliation.status, "matched");
+  assert.equal(postingWorkbench.reconciliation.lineIsolation, true);
+  assert.equal(postingWorkbench.reconciliation.crossLineNettingAllowed, false);
+  assert.ok(
+    postingWorkbench.smartLinks.some((row) => row.id === "return-request"),
+  );
   const reversalPreview = await request(
     base,
     `/api/returns/postings/${postingDraft.entityId}/reverse-preview`,
@@ -1289,6 +1308,7 @@ try {
     customerPostingWorkbench.evidence.movements[0].movementType,
     "customer_return_quarantine_in",
   );
+  assert.equal(customerPostingWorkbench.reconciliation.status, "matched");
   assert.match(customerPostingWorkbench.limitations[0], /Phase 4B\.3/);
   const releaseAuthorization = await request(
     base,
@@ -1396,6 +1416,13 @@ try {
     },
   );
   assert.equal(postedRelease.tenantNetQuantity, "0.0000");
+  const releaseWorkbench = await request(
+    base,
+    `/api/returns/postings/${releasePostingDraft.entityId}/workbench`,
+    { token: manager },
+  );
+  assert.equal(releaseWorkbench.reconciliation.status, "matched");
+  assert.equal(releaseWorkbench.reconciliation.lines[0].checks.length >= 6, true);
   const releaseDestination = await prisma.inventoryBalance.findUnique({
     where: { id: "available-release-returns-api" },
   });
@@ -1463,6 +1490,24 @@ try {
     { token: managerAfterRestart },
   );
   assert.equal(persisted.request.workflowStatus, "authorized");
+  const [requestList, authorizationList, postingList] = await Promise.all([
+    request(base, "/api/returns/requests?q=RET-CUST-001&sort=requestNumber", {
+      token: managerAfterRestart,
+    }),
+    request(
+      base,
+      "/api/returns/authorizations?q=AUTH-CUST&sort=authorizationNumber",
+      { token: managerAfterRestart },
+    ),
+    request(
+      base,
+      "/api/returns/postings?q=POST-CUST&sort=postingNumber",
+      { token: managerAfterRestart },
+    ),
+  ]);
+  assert.equal(requestList.requests.length >= 1, true);
+  assert.equal(authorizationList.authorizations.length >= 1, true);
+  assert.equal(postingList.postings.length >= 1, true);
   assert.ok(
     persisted.authorizations.some(
       (authorization) => authorization.workflowStatus === "executed",

@@ -28,7 +28,9 @@ export default defineConfig({
   webServer: [
     {
       command:
-        process.env.PLAYWRIGHT_INVENTORY_OPERATIONS_DB === "true"
+        process.env.PLAYWRIGHT_RETURNS_QUARANTINE_DB === "true"
+          ? "node scripts/browser-returns-quarantine-api.mjs"
+          : process.env.PLAYWRIGHT_INVENTORY_OPERATIONS_DB === "true"
           ? "node scripts/browser-inventory-operations-api.mjs"
           : process.env.PLAYWRIGHT_OUTBOUND_DB === "true"
             ? "node scripts/browser-outbound-api.mjs"
