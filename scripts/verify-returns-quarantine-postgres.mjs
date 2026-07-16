@@ -15,6 +15,8 @@ const root = resolve(import.meta.dirname, "..");
 const migrationsRoot = join(root, "prisma", "migrations");
 const foundationMigration = "20260717010000_returns_quarantine_foundation";
 const governanceMigration = "20260718010000_return_governance_kernel";
+const supplierPostingMigration =
+  "20260718020000_supplier_return_posting_kernel";
 const node = process.execPath;
 const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 
@@ -142,6 +144,24 @@ async function applyThroughFoundation(pg, database, url, secrets) {
   return names;
 }
 
+async function applyThroughGovernance(pg, database, url, secrets) {
+  const names = (await migrationNames()).filter(
+    (name) => name <= governanceMigration,
+  );
+  for (const name of names) {
+    const sql = await readFile(
+      join(migrationsRoot, name, "migration.sql"),
+      "utf8",
+    );
+    await query(pg, database, sql);
+    await run(node, [prismaCli, "migrate", "resolve", "--applied", name], {
+      env: databaseEnv(url),
+      secrets,
+    });
+  }
+  return names;
+}
+
 async function assertFoundationTables(pg, database) {
   const expected = [
     "QuarantineInventoryBalance",
@@ -192,11 +212,15 @@ async function assertGovernanceSchema(pg, database) {
             'cancelledAt', 'cancelledById', 'cancellationReason',
             'expiredAt', 'expiredById'
           ))
+          OR
+          (table_name = 'ReturnPostingDocument' AND column_name IN (
+            'readyAt', 'readyById', 'cancelledAt', 'cancelledById'
+          ))
         )
       ORDER BY table_name, column_name
     `,
   );
-  assert.equal(columns.rows.length, 15);
+  assert.equal(columns.rows.length, 19);
   const index = await query(
     pg,
     database,
@@ -209,6 +233,28 @@ async function assertGovernanceSchema(pg, database) {
   );
   assert.equal(index.rows.length, 1);
   assert.match(index.rows[0].indexdef, /WHERE.*workflowStatus/i);
+  const postingIndex = await query(
+    pg,
+    database,
+    `
+      SELECT indexdef
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'ReturnPostingDocument_tenantId_workflowStatus_postingStatus_idx'
+    `,
+  );
+  assert.equal(postingIndex.rows.length, 1);
+  const lifecycleConstraint = await query(
+    pg,
+    database,
+    `
+      SELECT pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint
+      WHERE conname = 'ReturnPostingDocument_lifecycle_timestamp_check'
+    `,
+  );
+  assert.equal(lifecycleConstraint.rows.length, 1);
+  assert.match(lifecycleConstraint.rows[0].definition, /readyAt/);
 }
 
 async function seedCore(pg, database, prefix) {
@@ -604,6 +650,12 @@ async function verifyFresh(pg, database, url, secrets) {
   await verifyFoundationFacts(pg, database, "fresh");
   await verifyGovernanceConstraints(pg, database, "fresh");
   await verifyAuthoritativeSelectors(url, "fresh");
+  console.log("[fresh] Running supplier return transaction kernel tests");
+  await run(
+    node,
+    ["--test", "server/domain/supplier-return-transaction.test.mjs"],
+    { env: databaseEnv(url), secrets },
+  );
 }
 
 async function verifyUpgrade(pg, database, url, secrets) {
@@ -651,7 +703,9 @@ async function verifyFoundationUpgrade(pg, database, url, secrets) {
   assert.equal(applied.at(-1), foundationMigration);
   await seedCore(pg, database, "foundation-upgrade");
   await verifyFoundationFacts(pg, database, "foundation-upgrade");
-  console.log("[phase-4b0-upgrade] Applying Phase 4B.1 governance migration");
+  console.log(
+    "[phase-4b0-upgrade] Applying Phase 4B.1 and Phase 4B.2 additive migrations",
+  );
   await deploy(url, secrets);
   await assertGovernanceSchema(pg, database);
   await verifyGovernanceConstraints(pg, database, "foundation-upgrade");
@@ -674,6 +728,52 @@ async function verifyFoundationUpgrade(pg, database, url, secrets) {
   });
 }
 
+async function verifyGovernanceUpgrade(pg, database, url, secrets) {
+  console.log("\n[phase-4b1-upgrade] Applying migrations through Phase 4B.1");
+  const applied = await applyThroughGovernance(pg, database, url, secrets);
+  assert.equal(applied.at(-1), governanceMigration);
+  await seedCore(pg, database, "governance-upgrade");
+  await verifyFoundationFacts(pg, database, "governance-upgrade");
+  await query(
+    pg,
+    database,
+    `
+      UPDATE "ReturnPostingDocument"
+      SET "workflowStatus" = 'ready',
+          "postingStatus" = 'posted',
+          "postedAt" = NULL,
+          "updatedAt" = NOW()
+      WHERE "id" = 'governance-upgrade-posting'
+    `,
+  );
+  console.log("[phase-4b1-upgrade] Applying Phase 4B.2 posting migration");
+  await deploy(url, secrets);
+  await assertGovernanceSchema(pg, database);
+  const preserved = await query(
+    pg,
+    database,
+    `
+      SELECT "workflowStatus", "postingStatus",
+             ("readyAt" IS NOT NULL) AS ready_backfilled,
+             ("postedAt" IS NOT NULL) AS posted_backfilled
+      FROM "ReturnPostingDocument"
+      WHERE "id" = 'governance-upgrade-posting'
+    `,
+  );
+  assert.deepEqual(preserved.rows[0], {
+    workflowStatus: "ready",
+    postingStatus: "posted",
+    ready_backfilled: true,
+    posted_backfilled: true,
+  });
+  const migrations = await query(
+    pg,
+    database,
+    `SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name`,
+  );
+  assert.equal(migrations.rows.at(-1).migration_name, supplierPostingMigration);
+}
+
 const pgPort = await availablePort();
 const user = "flowchain_returns";
 const password = `local-${randomUUID()}`;
@@ -681,6 +781,7 @@ const directory = await mkdtemp(join(tmpdir(), "flowchain-returns-pg-"));
 const freshDatabase = "flowchain_returns_fresh_test";
 const upgradeDatabase = "flowchain_returns_upgrade_test";
 const foundationUpgradeDatabase = "flowchain_returns_foundation_upgrade_test";
+const governanceUpgradeDatabase = "flowchain_returns_governance_upgrade_test";
 const pg = new EmbeddedPostgres({
   databaseDir: directory,
   user,
@@ -697,6 +798,7 @@ try {
   await pg.createDatabase(freshDatabase);
   await pg.createDatabase(upgradeDatabase);
   await pg.createDatabase(foundationUpgradeDatabase);
+  await pg.createDatabase(governanceUpgradeDatabase);
   const secrets = [password];
   await verifyFresh(
     pg,
@@ -731,7 +833,20 @@ try {
     }),
     secrets,
   );
-  console.log("PostgreSQL returns and quarantine foundation verification: PASS");
+  await verifyGovernanceUpgrade(
+    pg,
+    governanceUpgradeDatabase,
+    databaseUrl({
+      port: pgPort,
+      user,
+      password,
+      database: governanceUpgradeDatabase,
+    }),
+    secrets,
+  );
+  console.log(
+    "PostgreSQL returns, quarantine, and supplier return posting verification: PASS",
+  );
 } finally {
   await pg.stop().catch(() => {});
   await rm(directory, { recursive: true, force: true }).catch(() => {});

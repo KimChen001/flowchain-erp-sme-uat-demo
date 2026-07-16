@@ -975,6 +975,171 @@ try {
   assert.equal(rejected.authorization.workflowStatus, "rejected");
 
   assert.deepEqual(await protectedFacts(prisma), before);
+
+  const postingAuthorization = await request(
+    base,
+    `/api/returns/requests/${supplierCreated.entityId}/authorize`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        expectedRequestVersion: 5,
+        authorizationNumber: "AUTH-SUP-POST",
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+        idempotencyKey: "authorize-supplier-posting",
+        lines: [
+          {
+            returnRequestLineId: supplierWorkbench.lines[0].id,
+            authorizedQuantity: "2",
+            dispositionRoute: "return_from_available",
+          },
+        ],
+      },
+    },
+  );
+  const postingAuthorizationWorkbench = await request(
+    base,
+    `/api/returns/authorizations/${postingAuthorization.authorization.id}/workbench`,
+    { token: manager },
+  );
+  const postingLineInput = [
+    {
+      returnAuthorizationLineId:
+        postingAuthorizationWorkbench.authorization.lines[0].id,
+      quantity: "1",
+      inventoryBalanceId: "available-returns-api",
+    },
+  ];
+  const postingDraftPreview = await request(
+    base,
+    `/api/returns/authorizations/${postingAuthorization.authorization.id}/postings/preview`,
+    {
+      token: manager,
+      method: "POST",
+      body: { lines: postingLineInput },
+    },
+  );
+  assert.equal(postingDraftPreview.preview.allowed, true);
+  assert.equal(
+    postingDraftPreview.preview.normalizedPlan.lines[0].balanceType,
+    "available",
+  );
+  const postingDraft = await request(
+    base,
+    `/api/returns/authorizations/${postingAuthorization.authorization.id}/postings`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        postingNumber: "POST-SUP-API-001",
+        expectedAuthorizationVersion: 0,
+        lines: postingLineInput,
+        idempotencyKey: "create-supplier-posting-api",
+      },
+    },
+  );
+  const postingReadyPreview = await request(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/ready-preview`,
+    { token: manager, method: "POST", body: {} },
+  );
+  assert.equal(postingReadyPreview.preview.allowed, true);
+  const postingReady = await request(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/ready`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        expectedPostingVersion: 0,
+        idempotencyKey: "ready-supplier-posting-api",
+      },
+    },
+  );
+  assert.equal(postingReady.posting.workflowStatus, "ready");
+  const postingPreview = await request(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/post-preview`,
+    { token: manager, method: "POST", body: {} },
+  );
+  assert.equal(postingPreview.preview.allowed, true);
+  assert.deepEqual(postingPreview.preview.balanceImpacts[0], {
+    balanceType: "available",
+    balanceId: "available-returns-api",
+    version: 0,
+    quantity: "1.0000",
+    onHandBefore: "20.0000",
+    onHandAfter: "19.0000",
+    reservedBefore: "0.0000",
+    reservedAfter: "0.0000",
+    availableBefore: "20.0000",
+    availableAfter: "19.0000",
+    postingLineIds: postingPreview.preview.balanceImpacts[0].postingLineIds,
+    authorizationLineIds:
+      postingPreview.preview.balanceImpacts[0].authorizationLineIds,
+  });
+  const postedSupplierReturn = await request(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/post`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        expectedPostingVersion: 1,
+        expectedAuthorizationVersion: 0,
+        expectedRequestVersion: 6,
+        idempotencyKey: "post-supplier-return-api",
+      },
+    },
+  );
+  assert.equal(postedSupplierReturn.posting.postingStatus, "posted");
+  assert.equal(
+    postedSupplierReturn.returnAuthorization.workflowStatus,
+    "partially_executed",
+  );
+  const postedBalance = await prisma.inventoryBalance.findUnique({
+    where: { id: "available-returns-api" },
+  });
+  assert.equal(String(postedBalance.onHandQuantity), "19");
+  assert.equal(String(postedBalance.availableQuantity), "19");
+  const postingWorkbench = await request(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/workbench`,
+    { token: manager },
+  );
+  assert.equal(postingWorkbench.availableActions.reverse, true);
+  assert.equal(
+    postingWorkbench.evidence.movements[0].movementType,
+    "supplier_return_out",
+  );
+  const reversalPreview = await request(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/reverse-preview`,
+    { token: manager, method: "POST", body: {} },
+  );
+  assert.equal(reversalPreview.preview.allowed, true);
+  const reversedSupplierReturn = await request(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/reverse`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        expectedPostingVersion: 2,
+        expectedAuthorizationVersion: 1,
+        expectedRequestVersion: 7,
+        reason: "API reversal coverage",
+        idempotencyKey: "reverse-supplier-return-api",
+      },
+    },
+  );
+  assert.equal(reversedSupplierReturn.posting.postingStatus, "reversed");
+  const reversedBalance = await prisma.inventoryBalance.findUnique({
+    where: { id: "available-returns-api" },
+  });
+  assert.equal(String(reversedBalance.onHandQuantity), "20");
+  assert.equal(String(reversedBalance.availableQuantity), "20");
+  const afterPostingFlow = await protectedFacts(prisma);
   assert.equal(
     await prisma.businessCommandExecution.count({ where: { tenantId } }) > 0,
     true,
@@ -995,6 +1160,13 @@ try {
   );
   assert.equal(persisted.request.workflowStatus, "authorized");
   assert.equal(persisted.authorizations[0].workflowStatus, "approved");
+  const persistedPosting = await request(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/workbench`,
+    { token: managerAfterRestart },
+  );
+  assert.equal(persistedPosting.posting.postingStatus, "reversed");
+  assert.equal(persistedPosting.evidence.movements.length, 2);
 
   await stop(api);
   api = startApi({
@@ -1027,10 +1199,30 @@ try {
     disabledWrite.payload.code,
     "RETURN_GOVERNANCE_CAPABILITY_NOT_AVAILABLE",
   );
-  assert.deepEqual(await protectedFacts(prisma), before);
+  const disabledPostingRead = await request(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/workbench`,
+    { token: disabledToken },
+  );
+  assert.ok(
+    Object.values(disabledPostingRead.availableActions).every(
+      (value) => value === false,
+    ),
+  );
+  const disabledPostingWrite = await raw(
+    base,
+    `/api/returns/postings/${postingDraft.entityId}/post-preview`,
+    { token: disabledToken, method: "POST", body: {} },
+  );
+  assert.equal(disabledPostingWrite.response.status, 409);
+  assert.equal(
+    disabledPostingWrite.payload.code,
+    "RETURN_GOVERNANCE_CAPABILITY_NOT_AVAILABLE",
+  );
+  assert.deepEqual(await protectedFacts(prisma), afterPostingFlow);
 
   console.log(
-    "Returns and quarantine API smoke: PASS (request/authorization governance, PostgreSQL, signed roles, restart persistence, zero inventory mutation)",
+    "Returns and quarantine API smoke: PASS (governance plus supplier return posting/reversal, PostgreSQL, signed roles, restart persistence)",
   );
 } finally {
   await stop(api);
