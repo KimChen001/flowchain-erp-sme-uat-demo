@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+test.describe.configure({ retries: 0 });
+
 test("sales fulfillment workbench closes reserve, shipment, post, and reverse through PostgreSQL", async ({
   page,
   request,
@@ -95,11 +97,20 @@ test("sales fulfillment workbench closes reserve, shipment, post, and reverse th
   await page.getByText("SHIP-PW-POST", { exact: true }).click();
   await expect(page.getByTestId("open-post")).toHaveCount(0);
   const shipmentId = decodeURIComponent(page.url().split("/").pop() || "");
+  const postingStateResponse = await request.get(
+    `/api/sales/shipments/${shipmentId}/posting-state`,
+    { headers: { Authorization: `Bearer ${session.token}` } },
+  );
+  expect(postingStateResponse.ok()).toBeTruthy();
+  const postingState = await postingStateResponse.json();
   const blockedPost = await request.post(
     `/api/sales/shipments/${shipmentId}/post`,
     {
       headers: { Authorization: `Bearer ${session.token}` },
-      data: { expectedShipmentVersion: 0, idempotencyKey: "browser-held-post" },
+      data: {
+        expectedShipmentVersion: postingState.shipment.version,
+        idempotencyKey: "browser-held-post",
+      },
     },
   );
   expect(blockedPost.status()).toBe(409);
