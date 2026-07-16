@@ -177,6 +177,23 @@ async function seed(prisma) {
       unit: "EA",
     },
   });
+  await prisma.inventoryBalance.create({
+    data: {
+      id: "available-release-returns-api",
+      tenantId,
+      itemId,
+      sku,
+      itemName: "Returns API Item",
+      warehouseId,
+      warehouseKey: warehouseId,
+      location: "Q-01",
+      locationKey: "q-01",
+      onHandQuantity: "0",
+      reservedQuantity: "0",
+      availableQuantity: "0",
+      unit: "EA",
+    },
+  });
   await prisma.quarantineInventoryBalance.create({
     data: {
       id: "quarantine-returns-api",
@@ -188,7 +205,7 @@ async function seed(prisma) {
       warehouseKey: warehouseId,
       location: "Q-01",
       locationKey: "q-01",
-      onHandQuantity: "5",
+      onHandQuantity: "0",
       unit: "EA",
     },
   });
@@ -1149,7 +1166,7 @@ try {
     {
       returnAuthorizationLineId:
         customerAuthorizationWorkbench.authorization.lines[0].id,
-      quantity: "1",
+      quantity: "3",
       quarantineBalanceId: "quarantine-returns-api",
     },
   ];
@@ -1213,9 +1230,9 @@ try {
     balanceType: "quarantine",
     balanceId: "quarantine-returns-api",
     version: 0,
-    quantity: "1.0000",
-    onHandBefore: "5.0000",
-    onHandAfter: "6.0000",
+    quantity: "3.0000",
+    onHandBefore: "0.0000",
+    onHandAfter: "3.0000",
     postingLineIds:
       customerPostPreview.preview.balanceImpacts[0].postingLineIds,
   });
@@ -1236,7 +1253,7 @@ try {
   assert.equal(postedCustomerReceipt.posting.postingStatus, "posted");
   assert.equal(
     postedCustomerReceipt.returnAuthorization.workflowStatus,
-    "partially_executed",
+    "executed",
   );
   const availableAfterCustomerReceipt =
     await prisma.inventoryBalance.findUnique({
@@ -1260,8 +1277,8 @@ try {
     await prisma.quarantineInventoryBalance.findUnique({
       where: { id: "quarantine-returns-api" },
     });
-  assert.equal(String(quarantineBeforeCustomerReceipt.onHandQuantity), "5");
-  assert.equal(String(quarantineAfterCustomerReceipt.onHandQuantity), "6");
+  assert.equal(String(quarantineBeforeCustomerReceipt.onHandQuantity), "0");
+  assert.equal(String(quarantineAfterCustomerReceipt.onHandQuantity), "3");
   const customerPostingWorkbench = await request(
     base,
     `/api/returns/postings/${customerPostingDraft.entityId}/workbench`,
@@ -1273,7 +1290,119 @@ try {
     "customer_return_quarantine_in",
   );
   assert.match(customerPostingWorkbench.limitations[0], /Phase 4B\.3/);
-  const reversedCustomerReceipt = await request(
+  const releaseAuthorization = await request(
+    base,
+    `/api/returns/requests/${created.entityId}/authorize`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        expectedRequestVersion: 3,
+        authorizationNumber: "AUTH-CUST-RELEASE-001",
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+        idempotencyKey: "authorize-quarantine-release-api",
+        lines: [
+          {
+            returnRequestLineId: draftWorkbench.lines[0].id,
+            authorizedQuantity: "1",
+            dispositionRoute: "release_quarantine_to_available",
+          },
+        ],
+      },
+    },
+  );
+  const releaseAuthorizationWorkbench = await request(
+    base,
+    `/api/returns/authorizations/${releaseAuthorization.authorization.id}/workbench`,
+    { token: manager },
+  );
+  assert.equal(
+    releaseAuthorizationWorkbench.authorization.lines[0].dispositionRoute,
+    "release_quarantine_to_available",
+  );
+  const releasePostingLines = [
+    {
+      returnAuthorizationLineId:
+        releaseAuthorizationWorkbench.authorization.lines[0].id,
+      quantity: "1",
+      quarantineBalanceId: "quarantine-returns-api",
+      destinationInventoryBalanceId: "available-release-returns-api",
+    },
+  ];
+  const releaseDraftPreview = await request(
+    base,
+    `/api/returns/authorizations/${releaseAuthorization.authorization.id}/postings/preview`,
+    {
+      token: manager,
+      method: "POST",
+      body: { lines: releasePostingLines },
+    },
+  );
+  assert.equal(releaseDraftPreview.transactionType, "quarantine_release");
+  assert.equal(
+    releaseDraftPreview.preview.allowed,
+    true,
+    JSON.stringify(releaseDraftPreview.preview),
+  );
+  const releasePostingDraft = await request(
+    base,
+    `/api/returns/authorizations/${releaseAuthorization.authorization.id}/postings`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        postingNumber: "POST-RELEASE-API-001",
+        expectedAuthorizationVersion: 0,
+        lines: releasePostingLines,
+        idempotencyKey: "create-quarantine-release-api",
+      },
+    },
+  );
+  await request(
+    base,
+    `/api/returns/postings/${releasePostingDraft.entityId}/ready`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        expectedPostingVersion: 0,
+        idempotencyKey: "ready-quarantine-release-api",
+      },
+    },
+  );
+  const releasePreview = await request(
+    base,
+    `/api/returns/postings/${releasePostingDraft.entityId}/post-preview`,
+    { token: manager, method: "POST", body: {} },
+  );
+  assert.equal(releasePreview.preview.tenantNetQuantity, "0.0000");
+  assert.equal(releasePreview.preview.balanceImpacts.length, 2);
+  assert.equal(
+    releasePreview.preview.reconciliationImpacts[0].status,
+    "matched",
+  );
+  const postedRelease = await request(
+    base,
+    `/api/returns/postings/${releasePostingDraft.entityId}/post`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        expectedPostingVersion: 1,
+        expectedAuthorizationVersion: 0,
+        expectedRequestVersion: 4,
+        idempotencyKey: "post-quarantine-release-api",
+      },
+    },
+  );
+  assert.equal(postedRelease.tenantNetQuantity, "0.0000");
+  const releaseDestination = await prisma.inventoryBalance.findUnique({
+    where: { id: "available-release-returns-api" },
+  });
+  assert.equal(String(releaseDestination.onHandQuantity), "1");
+  assert.equal(String(releaseDestination.reservedQuantity), "0");
+  assert.equal(String(releaseDestination.availableQuantity), "1");
+  const customerReverseBlocked = await raw(
     base,
     `/api/returns/postings/${customerPostingDraft.entityId}/reverse`,
     {
@@ -1282,20 +1411,37 @@ try {
       body: {
         expectedPostingVersion: 2,
         expectedAuthorizationVersion: 1,
-        expectedRequestVersion: 3,
-        reason: "API customer receipt reversal coverage",
-        idempotencyKey: "reverse-customer-return-api",
+        expectedRequestVersion: 5,
+        reason: "Must fail while release consumes receipt",
+        idempotencyKey: "reverse-customer-return-blocked-api",
       },
     },
   );
-  assert.equal(reversedCustomerReceipt.posting.postingStatus, "reversed");
-  const quarantineAfterCustomerReversal =
+  assert.equal(customerReverseBlocked.response.status, 409);
+  assert.equal(customerReverseBlocked.payload.code, "RETURN_REVERSAL_NOT_SAFE");
+  const reversedRelease = await request(
+    base,
+    `/api/returns/postings/${releasePostingDraft.entityId}/reverse`,
+    {
+      token: manager,
+      method: "POST",
+      body: {
+        expectedPostingVersion: 2,
+        expectedAuthorizationVersion: 1,
+        expectedRequestVersion: 5,
+        reason: "API quarantine release reversal coverage",
+        idempotencyKey: "reverse-quarantine-release-api",
+      },
+    },
+  );
+  assert.equal(reversedRelease.posting.postingStatus, "reversed");
+  const quarantineAfterReleaseReversal =
     await prisma.quarantineInventoryBalance.findUnique({
       where: { id: "quarantine-returns-api" },
     });
   assert.equal(
-    String(quarantineAfterCustomerReversal.onHandQuantity),
-    String(quarantineBeforeCustomerReceipt.onHandQuantity),
+    String(quarantineAfterReleaseReversal.onHandQuantity),
+    String(quarantineAfterCustomerReceipt.onHandQuantity),
   );
   const afterPostingFlow = await protectedFacts(prisma);
   assert.equal(
@@ -1317,7 +1463,16 @@ try {
     { token: managerAfterRestart },
   );
   assert.equal(persisted.request.workflowStatus, "authorized");
-  assert.equal(persisted.authorizations[0].workflowStatus, "approved");
+  assert.ok(
+    persisted.authorizations.some(
+      (authorization) => authorization.workflowStatus === "executed",
+    ),
+  );
+  assert.ok(
+    persisted.authorizations.some(
+      (authorization) => authorization.workflowStatus === "approved",
+    ),
+  );
   const persistedPosting = await request(
     base,
     `/api/returns/postings/${postingDraft.entityId}/workbench`,
@@ -1330,8 +1485,15 @@ try {
     `/api/returns/postings/${customerPostingDraft.entityId}/workbench`,
     { token: managerAfterRestart },
   );
-  assert.equal(persistedCustomerPosting.posting.postingStatus, "reversed");
-  assert.equal(persistedCustomerPosting.evidence.movements.length, 2);
+  assert.equal(persistedCustomerPosting.posting.postingStatus, "posted");
+  assert.equal(persistedCustomerPosting.evidence.movements.length, 1);
+  const persistedReleasePosting = await request(
+    base,
+    `/api/returns/postings/${releasePostingDraft.entityId}/workbench`,
+    { token: managerAfterRestart },
+  );
+  assert.equal(persistedReleasePosting.posting.postingStatus, "reversed");
+  assert.equal(persistedReleasePosting.evidence.movements.length, 4);
 
   await stop(api);
   api = startApi({
@@ -1384,6 +1546,16 @@ try {
       (value) => value === false,
     ),
   );
+  const disabledReleasePostingRead = await request(
+    base,
+    `/api/returns/postings/${releasePostingDraft.entityId}/workbench`,
+    { token: disabledToken },
+  );
+  assert.ok(
+    Object.values(disabledReleasePostingRead.availableActions).every(
+      (value) => value === false,
+    ),
+  );
   const disabledPostingWrite = await raw(
     base,
     `/api/returns/postings/${postingDraft.entityId}/post-preview`,
@@ -1397,7 +1569,7 @@ try {
   assert.deepEqual(await protectedFacts(prisma), afterPostingFlow);
 
   console.log(
-    "Returns and quarantine API smoke: PASS (governance, supplier dispatch, customer quarantine receipt/reversal, PostgreSQL, signed roles, restart persistence)",
+    "Returns and quarantine API smoke: PASS (governance, supplier dispatch, customer receipt, controlled quarantine release/reversal, PostgreSQL, signed roles, restart persistence)",
   );
 } finally {
   await stop(api);

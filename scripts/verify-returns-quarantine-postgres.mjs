@@ -755,6 +755,12 @@ async function verifyFresh(pg, database, url, secrets) {
     ["--test", "server/domain/customer-return-transaction.test.mjs"],
     { env: databaseEnv(url), secrets },
   );
+  console.log("[fresh] Running quarantine release transaction kernel tests");
+  await run(
+    node,
+    ["--test", "server/domain/quarantine-release-transaction.test.mjs"],
+    { env: databaseEnv(url), secrets },
+  );
 }
 
 async function verifyUpgrade(pg, database, url, secrets) {

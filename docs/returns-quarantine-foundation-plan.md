@@ -1,6 +1,6 @@
 # Phase 4B Return & Quarantine Foundation — Architecture Audit and Delivery Plan
 
-Status: approved; Phase 4B.0 through Phase 4B.2 passed; Phase 4B.3 local gate passed and remote gate pending
+Status: approved; Phase 4B.0 through Phase 4B.3 passed; Phase 4B.4 local gate passed and remote gate pending
 
 Branch base: `origin/main` at `81bc6ce23a7be8c0d3ca5f057cb2fa2a5b07b4ff`
 
