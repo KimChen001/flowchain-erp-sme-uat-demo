@@ -28,7 +28,7 @@ export const capabilityRegistry = [
   capability('quarantine-inventory', 'beta', true, false, 'Database-only quarantine inventory read foundation', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_RETURNS_QUARANTINE' }),
   capability('return-request', 'beta', true, true, 'Database-only governed return request lifecycle', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_RETURNS_QUARANTINE' }),
   capability('return-authorization', 'beta', true, true, 'Database-only governed return authorization lifecycle', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_RETURNS_QUARANTINE' }),
-  capability('return-posting', 'beta', false, false, 'Database-only return posting foundation; transaction commands are not enabled yet', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_RETURNS_QUARANTINE' }),
+  capability('return-posting', 'beta', true, true, 'Database-only supplier return posting and reversal; later return transaction types remain gated', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_RETURNS_QUARANTINE' }),
   capability('finance', 'unavailable', false, false, 'Receipt, invoice, and settlement runtime is not fully connected'),
   capability('reports', 'stable', true, false, 'Authoritative runtime analytics'),
   capability('settings', 'beta', true, true, 'Local/UAT workspace settings'),

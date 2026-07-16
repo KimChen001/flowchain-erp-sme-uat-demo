@@ -1156,6 +1156,10 @@ model ReturnPostingDocument {
   postingStatus         String    @default("unposted")
   warehouseId           String
   version               Int       @default(0)
+  readyAt               DateTime?
+  readyById             String?
+  cancelledAt           DateTime?
+  cancelledById         String?
   postedAt              DateTime?
   postedById            String?
   reversedAt            DateTime?
