@@ -1,10 +1,10 @@
 # Phase 4B Return & Quarantine Foundation — Architecture Audit and Delivery Plan
 
-Status: approved; Phase 4B.0 implementation in progress
+Status: approved; Phase 4B.0 passed; Phase 4B.1 implementation in progress
 
 Branch base: `origin/main` at `81bc6ce23a7be8c0d3ca5f057cb2fa2a5b07b4ff`
 
-Implementation branch: `codex/returns-quarantine-foundation`
+Implementation branch: `codex/returns-finance-foundation`
 
 ## 1. Reusable capabilities
 

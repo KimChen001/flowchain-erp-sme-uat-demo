@@ -14,6 +14,7 @@ const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const migrationsRoot = join(root, "prisma", "migrations");
 const foundationMigration = "20260717010000_returns_quarantine_foundation";
+const governanceMigration = "20260718010000_return_governance_kernel";
 const node = process.execPath;
 const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 
@@ -123,6 +124,24 @@ async function applyPhase4ABaseline(pg, database, url, secrets) {
   return names;
 }
 
+async function applyThroughFoundation(pg, database, url, secrets) {
+  const names = (await migrationNames()).filter(
+    (name) => name <= foundationMigration,
+  );
+  for (const name of names) {
+    const sql = await readFile(
+      join(migrationsRoot, name, "migration.sql"),
+      "utf8",
+    );
+    await query(pg, database, sql);
+    await run(node, [prismaCli, "migrate", "resolve", "--applied", name], {
+      env: databaseEnv(url),
+      secrets,
+    });
+  }
+  return names;
+}
+
 async function assertFoundationTables(pg, database) {
   const expected = [
     "QuarantineInventoryBalance",
@@ -148,6 +167,48 @@ async function assertFoundationTables(pg, database) {
     result.rows.map((row) => row.table_name).sort(),
     [...expected].sort(),
   );
+}
+
+async function assertGovernanceSchema(pg, database) {
+  const columns = await query(
+    pg,
+    database,
+    `
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND (
+          (table_name = 'ReturnRequest' AND column_name IN (
+            'sourceDocumentNumber', 'contextDocumentType', 'contextDocumentId',
+            'rejectedAt', 'rejectedById', 'rejectionReason'
+          ))
+          OR
+          (table_name = 'ReturnRequestLine' AND column_name IN (
+            'sourceDocumentType', 'sourceDocumentId', 'sourceQuantity',
+            'sourceWarehouseIds'
+          ))
+          OR
+          (table_name = 'ReturnAuthorization' AND column_name IN (
+            'cancelledAt', 'cancelledById', 'cancellationReason',
+            'expiredAt', 'expiredById'
+          ))
+        )
+      ORDER BY table_name, column_name
+    `,
+  );
+  assert.equal(columns.rows.length, 15);
+  const index = await query(
+    pg,
+    database,
+    `
+      SELECT indexdef
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'ReturnAuthorization_one_active_per_request_key'
+    `,
+  );
+  assert.equal(index.rows.length, 1);
+  assert.match(index.rows[0].indexdef, /WHERE.*workflowStatus/i);
 }
 
 async function seedCore(pg, database, prefix) {
@@ -493,12 +554,55 @@ async function verifyFoundationFacts(pg, database, prefix) {
   );
 }
 
+async function verifyGovernanceConstraints(pg, database, prefix) {
+  await expectDatabaseError(
+    pg,
+    database,
+    `
+      INSERT INTO "ReturnAuthorization" (
+        "id", "tenantId", "authorizationNumber", "returnRequestId",
+        "workflowStatus", "updatedAt"
+      ) VALUES (
+        '${prefix}-second-active-authorization',
+        '${prefix}-tenant',
+        'RET-AUTH-SECOND-${prefix}',
+        '${prefix}-request',
+        'approved',
+        NOW()
+      )
+    `,
+    "23505",
+  );
+  await expectDatabaseError(
+    pg,
+    database,
+    `
+      UPDATE "ReturnRequestLine"
+      SET "sourceQuantity" = -1
+      WHERE "id" = '${prefix}-request-line'
+    `,
+    "23514",
+  );
+  await expectDatabaseError(
+    pg,
+    database,
+    `
+      UPDATE "ReturnRequest"
+      SET "contextDocumentType" = 'InventoryAdjustmentDocument'
+      WHERE "id" = '${prefix}-request'
+    `,
+    "23514",
+  );
+}
+
 async function verifyFresh(pg, database, url, secrets) {
   console.log("\n[fresh] Applying all migrations");
   await deploy(url, secrets);
   await assertFoundationTables(pg, database);
+  await assertGovernanceSchema(pg, database);
   await seedCore(pg, database, "fresh");
   await verifyFoundationFacts(pg, database, "fresh");
+  await verifyGovernanceConstraints(pg, database, "fresh");
   await verifyAuthoritativeSelectors(url, "fresh");
 }
 
@@ -515,7 +619,9 @@ async function verifyUpgrade(pg, database, url, secrets) {
   console.log("[phase-4a-upgrade] Applying Phase 4B.0 additive migration");
   await deploy(url, secrets);
   await assertFoundationTables(pg, database);
+  await assertGovernanceSchema(pg, database);
   await verifyFoundationFacts(pg, database, "upgrade");
+  await verifyGovernanceConstraints(pg, database, "upgrade");
   await verifyAuthoritativeSelectors(url, "upgrade");
   const preserved = await query(
     pg,
@@ -534,12 +640,47 @@ async function verifyUpgrade(pg, database, url, secrets) {
   });
 }
 
+async function verifyFoundationUpgrade(pg, database, url, secrets) {
+  console.log("\n[phase-4b0-upgrade] Applying migrations through Phase 4B.0");
+  const applied = await applyThroughFoundation(
+    pg,
+    database,
+    url,
+    secrets,
+  );
+  assert.equal(applied.at(-1), foundationMigration);
+  await seedCore(pg, database, "foundation-upgrade");
+  await verifyFoundationFacts(pg, database, "foundation-upgrade");
+  console.log("[phase-4b0-upgrade] Applying Phase 4B.1 governance migration");
+  await deploy(url, secrets);
+  await assertGovernanceSchema(pg, database);
+  await verifyGovernanceConstraints(pg, database, "foundation-upgrade");
+  const preserved = await query(
+    pg,
+    database,
+    `
+      SELECT rr."requestNumber", ra."authorizationNumber", rpd."postingNumber"
+      FROM "ReturnRequest" rr
+      JOIN "ReturnAuthorization" ra ON ra."returnRequestId" = rr."id"
+      JOIN "ReturnPostingDocument" rpd
+        ON rpd."returnAuthorizationId" = ra."id"
+      WHERE rr."id" = 'foundation-upgrade-request'
+    `,
+  );
+  assert.deepEqual(preserved.rows[0], {
+    requestNumber: "RET-REQ-1",
+    authorizationNumber: "RET-AUTH-1",
+    postingNumber: "RET-POST-1",
+  });
+}
+
 const pgPort = await availablePort();
 const user = "flowchain_returns";
 const password = `local-${randomUUID()}`;
 const directory = await mkdtemp(join(tmpdir(), "flowchain-returns-pg-"));
 const freshDatabase = "flowchain_returns_fresh_test";
 const upgradeDatabase = "flowchain_returns_upgrade_test";
+const foundationUpgradeDatabase = "flowchain_returns_foundation_upgrade_test";
 const pg = new EmbeddedPostgres({
   databaseDir: directory,
   user,
@@ -555,6 +696,7 @@ try {
   await pg.start();
   await pg.createDatabase(freshDatabase);
   await pg.createDatabase(upgradeDatabase);
+  await pg.createDatabase(foundationUpgradeDatabase);
   const secrets = [password];
   await verifyFresh(
     pg,
@@ -575,6 +717,17 @@ try {
       user,
       password,
       database: upgradeDatabase,
+    }),
+    secrets,
+  );
+  await verifyFoundationUpgrade(
+    pg,
+    foundationUpgradeDatabase,
+    databaseUrl({
+      port: pgPort,
+      user,
+      password,
+      database: foundationUpgradeDatabase,
     }),
     secrets,
   );

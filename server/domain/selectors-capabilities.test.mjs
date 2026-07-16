@@ -59,6 +59,10 @@ test('capability registry hides preview and unavailable modules by default', asy
     assert.equal(byId[id].enabled, false)
   }
   assert.equal(byId['quarantine-inventory'].readReady, true)
+  assert.equal(byId['return-request'].readReady, true)
+  assert.equal(byId['return-request'].writeReady, true)
+  assert.equal(byId['return-authorization'].readReady, true)
+  assert.equal(byId['return-authorization'].writeReady, true)
   assert.equal(byId['return-posting'].writeReady, false)
 
   const databaseEnabled = await call(handleCapabilitiesRoute, '/api/capabilities', { env: { FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: 'true' } })
