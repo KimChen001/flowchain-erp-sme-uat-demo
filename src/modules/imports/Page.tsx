@@ -28,7 +28,8 @@ import { DataAccessQualityV2 } from "../../components/data-access/DataAccessQual
 import { fetchDataAccessQualityV2, type DataAccessQualityV2 as DataAccessQualityV2Payload } from "./dataAccessQuality";
 import { readImportTasks, type ImportTask } from "../../lib/excel/importTaskService";
 import { exportRowsToWorkbook } from "../../lib/excel/excelWorkbookService";
-import { fetchImportBatches, rollbackImportBatch, type ImportBatch as PersistedImportBatch } from "../../lib/excel/importPersistenceApi";
+import { fetchImportBatches, type ImportBatch as PersistedImportBatch } from "../../lib/excel/importPersistenceApi";
+import PilotImportWorkbench from "./PilotImportWorkbench";
 
 type ImportTypeId = "supplierQuotes" | "supplierInvoices" | "supplierReconciliations" | "purchaseReturns" | "supplierCreditMemos" | "supplierPerformance" | "supplierCertification" | "openingInventory" | "inventoryMovements" | "inventoryExceptions" | "contractPrices" | "forecastDemand" | "suppliers" | "itemMaster" | "warehouseBins" | "taxCodes" | "paymentTerms";
 type ImportedRow = Record<string, unknown>;
@@ -66,7 +67,7 @@ type ImportConfig = {
 };
 type ImportsPanelProps = {
   onNavigate?: (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null, options?: { returnTo?: string; entityLabel?: string; source?: string; returnContext?: unknown }) => void;
-  initialView?: "templates" | "validation" | "failed" | "user-data";
+  initialView?: "pilot" | "templates" | "validation" | "failed" | "user-data";
 };
 
 type BusinessImportView = "tasks" | "mapping" | "quality" | "failed";
@@ -287,7 +288,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
 
   type DisplayTask = typeof BUSINESS_IMPORT_TASKS[number] & { importTaskId?: string; raw?: ImportTask; batch?: PersistedImportBatch };
   const displayTasks: DisplayTask[] = [
-    ...persistedBatches.filter((batch) => !liveTasks.some((task) => task.importBatchId === batch.importBatchId)).map((batch) => ({ importTaskId: batch.importBatchId, name: `${batch.businessObject} Excel 导入`, module: "正式导入 API", type: batch.businessObject, file: batch.originalFileName || "—", records: batch.inserted + batch.updated + batch.skipped, passed: batch.inserted + batch.updated, warnings: batch.warnings?.length || 0, errors: batch.failed, status: batch.status === "rolled_back" ? "已回滚" : "已提交", owner: "当前用户", time: new Date(batch.committedAt).toLocaleString("zh-CN"), nextStep: batch.status === "committed" ? "可审计、可在回滚窗口内回滚" : "业务变更已反向撤销，审计保留", batch })),
+    ...persistedBatches.filter((batch) => !liveTasks.some((task) => task.importBatchId === batch.importBatchId)).map((batch) => ({ importTaskId: batch.importBatchId, name: `${batch.businessObject} Excel 导入`, module: "正式导入 API", type: batch.businessObject, file: batch.originalFileName || "—", records: batch.inserted + batch.updated + batch.skipped, passed: batch.inserted + batch.updated, warnings: batch.warnings?.length || 0, errors: batch.failed, status: batch.status === "rolled_back" ? "已回滚" : "已提交", owner: "当前用户", time: new Date(batch.committedAt).toLocaleString("zh-CN"), nextStep: batch.status === "committed" && batch.persistenceScope === "process-memory-metadata" ? "正式数据已写入；如需修正，请通过对应业务模块执行反向调整或人工修正。" : batch.status === "committed" ? "旧版 process-memory 批次；请在审计记录中复核处理边界。" : "旧版 process-memory 批次状态已更新；审计记录保留。", batch })),
     ...liveTasks.map((task) => { const batch = persistedBatches.find((item) => item.importBatchId === task.importBatchId); return { importTaskId: task.importTaskId, name: `${task.businessObject} Excel 导入`, module: task.sourcePage, type: task.businessObject, file: task.originalFileName, records: task.totalRows, passed: task.validRows, warnings: task.warningRows, errors: task.errorRows, status: batch?.status === "rolled_back" ? "已回滚" : task.importBatchId ? "已提交" : task.status === "completed" ? "校验通过" : task.status === "completed_with_warnings" ? "有警告" : "有错误", owner: task.uploadedBy, time: new Date(task.uploadedAt).toLocaleString("zh-CN"), nextStep: task.importBatchId ? `批次 ${task.importBatchId} · 审计 ${task.auditEventId || "—"}` : task.errorRows ? "下载失败行并重新上传" : "校验完成，可由业务负责人复核", raw: task, batch }; }),
     ...BUSINESS_IMPORT_TASKS,
   ];
@@ -296,6 +297,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
 
   return (
     <div className="space-y-5" data-testid="data-access-business-page">
+      {(initialView === "pilot" || view === "tasks") && <PilotImportWorkbench />}
       <DataAccessQualityV2
         quality={qualityV2}
         loading={qualityV2Loading}
@@ -396,7 +398,7 @@ function BusinessImportsExperience({ onNavigate, initialView }: ImportsPanelProp
                           <button onClick={() => setView("failed")} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.red }}>查看失败项</button>
                           {task.raw ? <button onClick={() => { const rows = task.raw!.validationErrors.map((issue) => ({ 原始行号: issue.rowNumber, 错误字段: issue.field, 错误原因: issue.reason, 修复建议: issue.suggestion })); rows.length ? exportRowsToWorkbook(`${task.raw!.businessObject}-failed-rows`, rows, "失败行") : toast.warning("当前任务没有失败行"); }} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.red }}>下载失败项</button> : <DisabledActionButton>下载失败项</DisabledActionButton>}
                           {task.raw ? <button onClick={() => window.location.assign(task.raw!.sourcePage)} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: A.gray6, color: A.blue }}>重新上传</button> : <DisabledActionButton>重新上传</DisabledActionButton>}
-                          {task.batch?.status === "committed" && task.batch.rollbackAvailable ? <button onClick={async () => { if (!window.confirm(`确认回滚导入批次 ${task.batch!.importBatchId}？审计历史会保留。`)) return; try { await rollbackImportBatch(task.batch!.importBatchId); toast.success("导入批次已回滚"); refreshPersistedBatches(); } catch (error) { toast.error("无法回滚", { description: error instanceof Error ? error.message : "请检查权限和后续引用" }); } }} className="px-2.5 py-1.5 rounded-md text-[11px] font-medium" style={{ background: "#fff1f0", color: A.red }}>回滚批次</button> : null}
+                          {task.batch?.status === "committed" && !task.batch.rollbackAvailable ? <span className="px-2.5 py-1.5 text-[11px]" data-testid="durable-import-correction-limitation" style={{ color: A.gray1 }} title={`${task.batch.limitations?.join(" ") || "正式数据需通过业务模块反向调整或人工修正"} · ${task.batch.targetRepositories?.join(", ") || "authoritative runtime"} · ${task.batch.importBatchId} · ${task.batch.auditEventId || "审计记录可查"}`}>不支持自动回滚 · 需业务反向调整</span> : null}
                         </div>
                       </td>
                     </tr>
@@ -2018,7 +2020,7 @@ export default function ImportsPanel({ onNavigate, initialView }: ImportsPanelPr
             <span className="font-semibold" style={{ color: A.label }}>透明校验：</span>必填、数字范围、邮箱格式和简单重复项会在预览中展示。
           </div>
           <div className="rounded-xl p-3" style={{ background: A.gray6, color: A.sub }}>
-            <span className="font-semibold" style={{ color: A.label }}>流程衔接：</span>批次确认后可进入审批、审计、回滚和字段映射治理流程。
+            <span className="font-semibold" style={{ color: A.label }}>流程衔接：</span>批次确认后可进入审批、审计、人工修正和字段映射治理流程。
           </div>
         </div>
       </Card>

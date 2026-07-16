@@ -6,11 +6,11 @@ const panelSource = readFileSync(new URL('../../src/modules/ai-assistant/Panel.t
 
 test('R134 AI assistant empty state exposes business prompt chips', () => {
   assert.match(panelSource, /AI_EMPTY_STATE_PROMPT_CHIPS/)
-  for (const label of ['今日重点', '库存风险', '供应商跟进', 'RFQ 回复', '收货异常', '数据缺口', '生成草稿']) {
+  for (const label of ['今天先处理什么', '哪些事项风险最高', '哪些数据需要补齐', '帮我准备一个处理草稿']) {
     assert.match(panelSource, new RegExp(label))
   }
   assert.match(panelSource, /data-testid="ai-empty-prompt-chip"/)
-  assert.match(panelSource, /有什么需要我注意的？/)
+  assert.match(panelSource, /今天先处理什么？/)
 })
 
 test('R135 context-aware placeholder helper covers Today PO SKU RFQ and Supplier', () => {

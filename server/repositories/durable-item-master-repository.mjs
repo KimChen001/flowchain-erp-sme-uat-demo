@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
+import { withRuntimeFileMutex } from "./runtime-file-mutex.mjs";
 
 const clone = (value) => structuredClone(value);
 const now = () => new Date().toISOString();
@@ -92,26 +93,32 @@ async function atomicWrite(file, document) {
   }
 }
 
-export function createDurableItemMasterRepository({ dataFile, seed = [] }) {
+export function createDurableItemMasterRepository({ dataFile }) {
   let document;
-  async function load() {
-    if (document) return document;
+  async function readLatest() {
+    let latest;
     try {
-      document = JSON.parse(await readFile(dataFile, "utf8"));
+      latest = JSON.parse(await readFile(dataFile, "utf8"));
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
-      document = {
-        schemaVersion: 1,
-        items: seed.map((item) => normalize(item, {}, "seed")),
-        updatedAt: now(),
-      };
-      await atomicWrite(dataFile, document);
+      latest = { schemaVersion: 1, revision: 0, items: [], updatedAt: null };
     }
+    return latest;
+  }
+  async function load() {
+    if (!document) document = await readLatest();
     return document;
   }
-  async function save() {
-    document.updatedAt = now();
-    await atomicWrite(dataFile, document);
+  async function transact(operation) {
+    return withRuntimeFileMutex(dataFile, async () => {
+      const working = clone(await readLatest());
+      const result = await operation(working);
+      working.revision = Number(working.revision || 0) + 1;
+      working.updatedAt = now();
+      await atomicWrite(dataFile, working);
+      document = working;
+      return clone(result);
+    });
   }
   const find = (items, key) =>
     items.find((item) =>
@@ -136,7 +143,7 @@ export function createDurableItemMasterRepository({ dataFile, seed = [] }) {
       return clone(find((await load()).items, decodeURIComponent(id)) || null);
     },
     async createItem(input, actor) {
-      const doc = await load();
+      return transact(doc => {
       const item = normalize(input, {}, actor);
       if (!item.sku || !item.itemName || !item.baseUnit)
         throw Object.assign(new Error("SKU、物料名称和基本单位必填"), {
@@ -154,11 +161,11 @@ export function createDurableItemMasterRepository({ dataFile, seed = [] }) {
           status: 409,
         });
       doc.items.push(item);
-      await save();
-      return clone(item);
+      return item;
+      });
     },
     async updateItem(id, input, actor) {
-      const doc = await load();
+      return transact(doc => {
       const index = doc.items.findIndex((item) =>
         [item.itemId, item.sku].includes(decodeURIComponent(id)),
       );
@@ -188,8 +195,30 @@ export function createDurableItemMasterRepository({ dataFile, seed = [] }) {
           status: 409,
         });
       doc.items[index] = next;
-      await save();
-      return clone(next);
+      return next;
+      });
+    },
+    async applyImportBatch(rows, actor, metadata) {
+      return transact(doc => {
+        const changes = [];
+        for (const [index, input] of rows.entries()) {
+          try {
+            const existingIndex = doc.items.findIndex(row => row.sku.toLowerCase() === text(input.sku).toLowerCase());
+            const next = normalize(input, existingIndex >= 0 ? doc.items[existingIndex] : {}, actor);
+            if (!next.sku || !next.itemName || !next.baseUnit)
+              throw Object.assign(new Error("SKU、物料名称和基本单位必填"), { code: "VALIDATION_ERROR", status: 400 });
+            if (doc.items.some((row, rowIndex) => rowIndex !== existingIndex && row.sku.toLowerCase() === next.sku.toLowerCase()))
+              throw Object.assign(new Error("SKU 编码已存在"), { code: "DUPLICATE_ITEM", status: 409 });
+            Object.assign(next, metadata);
+            if (existingIndex >= 0) doc.items[existingIndex] = next; else doc.items.push(next);
+            changes.push({ repository: "item-master-runtime", operation: existingIndex >= 0 ? "update" : "insert", entityId: next.itemId });
+          } catch (error) {
+            Object.assign(error, { failedRowNumber: index + 1 });
+            throw error;
+          }
+        }
+        return changes;
+      });
     },
     _dataFile: dataFile,
   };

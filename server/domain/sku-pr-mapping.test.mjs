@@ -16,13 +16,14 @@ const baseItem = {
   specification: "2kW",
   status: "active",
   purchasable: true,
+  defaultSupplierId: "SUP-1",
 };
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "flowchain-sku-"));
   const items = createDurableItemMasterRepository({
     dataFile: join(directory, "items.json"),
-    seed: [baseItem],
   });
+  await items.createItem(baseItem, "fixture");
   const procurement = createDurableProcurementRepository({
     dataFile: join(directory, "procurement.json"),
   });
@@ -101,7 +102,8 @@ test("catalog mapping is canonical, immutable after submit and rejects mismatch"
             itemNameSnapshot: "伪造名称",
             unitSnapshot: "箱",
             quantity: 2,
-            lineComment: "原厂包装",
+            estimatedUnitPrice: 10, supplierId: "SUP-1", needByDate: "2026-08-01", targetWarehouseId: "WH-1", currency: "CNY",
+            internalLineComment: "原厂包装",
           },
         ],
       },
@@ -109,13 +111,12 @@ test("catalog mapping is canonical, immutable after submit and rejects mismatch"
     );
     assert.equal(pr.lines[0].itemNameSnapshot, "电机");
     assert.equal(pr.lines[0].unitSnapshot, "台");
-    assert.equal(pr.comments, "设备维护");
     await assert.rejects(
       () =>
         f.service.createPurchaseRequest(
           {
             lines: [
-              { lineType: "catalog_item", itemId: "ITEM-1", sku: "WRONG" },
+              { lineType: "catalog_item", itemId: "ITEM-1", sku: "WRONG", supplierId: "SUP-1", quantity: 1, estimatedUnitPrice: 10, needByDate: "2026-08-01" },
             ],
           },
           "owner",
@@ -166,14 +167,16 @@ test("catalog and Other lines coexist and snapshots/comments reach RFQ and PO", 
           itemId: "ITEM-1",
           sku: "SKU-1",
           quantity: 1,
-          lineComment: "目录备注",
+          estimatedUnitPrice: 10, supplierId: "SUP-1", needByDate: "2026-08-10", targetWarehouseId: "WH-1", currency: "CNY",
+          internalLineComment: "目录备注",
         },
         {
           lineType: "non_catalog_item",
           itemNameSnapshot: "设备校准服务",
           unitSnapshot: "项",
           quantity: 1,
-          lineComment: "服务备注",
+          estimatedUnitPrice: 20, supplierId: "SUP-1", needByDate: "2026-08-10", targetWarehouseId: "WH-1", currency: "CNY", commodityId: "service",
+          internalLineComment: "服务备注",
         },
       ],
     };
@@ -195,9 +198,8 @@ test("catalog and Other lines coexist and snapshots/comments reach RFQ and PO", 
       { expectedVersion: approved.version },
       "buyer",
     );
-    assert.equal(rfq.rfq.comments, "整单说明");
     assert.equal(rfq.rfq.lines[1].itemNameSnapshot, "设备校准服务");
-    assert.equal(rfq.rfq.lines[1].lineComment, "服务备注");
+    assert.equal(rfq.rfq.lines[1].internalLineComment, "服务备注");
     const f2 = await fixture();
     try {
       const p = await f2.service.createPurchaseRequest(input, "owner");
@@ -214,8 +216,7 @@ test("catalog and Other lines coexist and snapshots/comments reach RFQ and PO", 
         { expectedVersion: a.version, supplierId: "SUP-1" },
         "buyer",
       );
-      assert.equal(po.purchaseOrder.comments, "整单说明");
-      assert.equal(po.purchaseOrder.lines[1].itemNameSnapshot, "设备校准服务");
+      assert.equal(po.createdPurchaseOrders[0].lines[1].itemNameSnapshot, "设备校准服务");
     } finally {
       await f2.close();
     }
@@ -230,7 +231,7 @@ test("Other requires name and unit", async () => {
     await assert.rejects(
       () =>
         f.service.createPurchaseRequest(
-          { lines: [{ lineType: "non_catalog_item", unitSnapshot: "项" }] },
+          { lines: [{ lineType: "non_catalog_item", unitSnapshot: "项", supplierId:"SUP-1", quantity:1, estimatedUnitPrice:10, needByDate:"2026-08-01" }] },
           "owner",
         ),
       (error) => error.code === "NON_CATALOG_ITEM_NAME_REQUIRED",
@@ -239,7 +240,7 @@ test("Other requires name and unit", async () => {
       () =>
         f.service.createPurchaseRequest(
           {
-            lines: [{ lineType: "non_catalog_item", itemNameSnapshot: "服务" }],
+            lines: [{ lineType: "non_catalog_item", itemNameSnapshot: "服务", supplierId:"SUP-1", quantity:1, estimatedUnitPrice:10, needByDate:"2026-08-01" }],
           },
           "owner",
         ),

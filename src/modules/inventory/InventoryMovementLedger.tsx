@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, ClipboardList, FileSpreadsheet, Inbox, PackageMinus, PackagePlus, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { A, Card, Chip, inputStyle, KpiCard, Modal, SectionHeader } from "../../components/ui";
-import { INVENTORY_MOVEMENT_LEDGER } from "../../data/demo-data";
+const INVENTORY_MOVEMENT_LEDGER: never[] = [];
 import {
   filterInventoryMovements,
   INVENTORY_MOVEMENT_STATUS_FILTERS,

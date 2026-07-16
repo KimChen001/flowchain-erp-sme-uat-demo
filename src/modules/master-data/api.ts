@@ -4,10 +4,13 @@ import type { CustomerMaster } from "./standardData";
 
 type ApiMasterItem = {
   id?: string;
+  itemId?: string;
   sku?: string;
   name?: string;
+  itemName?: string;
   category?: string;
   baseUom?: string;
+  baseUnit?: string;
   defaultWarehouseId?: string;
   preferredSupplierId?: string;
   leadTimeDays?: number;
@@ -18,6 +21,8 @@ type ApiMasterItem = {
 
 type ApiMasterSupplier = {
   id?: string;
+  supplierCode?: string;
+  supplierName?: string;
   name?: string;
   status?: string;
   risk?: string;
@@ -132,14 +137,14 @@ function supplierByIdOrName(suppliers: SupplierMaster[], value: unknown) {
 }
 
 function fallbackItem(fallback: ItemMaster[], apiItem: ApiMasterItem, index: number) {
-  const key = text(apiItem.sku || apiItem.id || apiItem.name).toLowerCase();
+  const key = text(apiItem.sku || apiItem.itemId || apiItem.id || apiItem.itemName || apiItem.name).toLowerCase();
   return fallback.find((item) =>
     [item.sku, item.name].some((candidate) => candidate.toLowerCase() === key)
   ) || fallback[index];
 }
 
 function fallbackSupplier(fallback: SupplierMaster[], apiSupplier: ApiMasterSupplier, index: number) {
-  const key = text(apiSupplier.id || apiSupplier.name).toLowerCase();
+  const key = text(apiSupplier.supplierCode || apiSupplier.id || apiSupplier.supplierName || apiSupplier.name).toLowerCase();
   return fallback.find((supplier) =>
     [supplier.code, supplier.name].some((candidate) => candidate.toLowerCase() === key)
   ) || fallback[index];
@@ -156,11 +161,11 @@ export function normalizeItemRows(
     const supplier = supplierByIdOrName(suppliers, apiItem.preferredSupplierId);
     const status = backendStatus(apiItem.status);
     return {
-      sku: text(apiItem.sku || apiItem.id, fallback?.sku || `ITEM-${index + 1}`),
-      name: text(apiItem.name, fallback?.name || text(apiItem.sku || apiItem.id, `物料 ${index + 1}`)),
+      sku: text(apiItem.sku || apiItem.itemId || apiItem.id, fallback?.sku || `ITEM-${index + 1}`),
+      name: text(apiItem.itemName || apiItem.name, fallback?.name || text(apiItem.sku || apiItem.itemId || apiItem.id, `物料 ${index + 1}`)),
       category: text(apiItem.category, fallback?.category || "未分类"),
       specification: fallback?.specification || "",
-      unit: text(apiItem.baseUom, fallback?.unit || "件"),
+      unit: text(apiItem.baseUnit || apiItem.baseUom, fallback?.unit || "件"),
       defaultWarehouse: text(apiItem.defaultWarehouseId, fallback?.defaultWarehouse || ""),
       defaultBin: fallback?.defaultBin || "",
       safetyStock: numberValue(fallback?.safetyStock, 0),
@@ -186,8 +191,8 @@ export function normalizeSupplierRows(
     const fallback = fallbackSupplier(fallbackSuppliers, apiSupplier, index);
     const category = text(apiSupplier.categories?.[0], fallback?.category || "未分类");
     return {
-      code: text(apiSupplier.id, fallback?.code || `SUP-${index + 1}`),
-      name: text(apiSupplier.name, fallback?.name || `供应商 ${index + 1}`),
+      code: text(apiSupplier.supplierCode || apiSupplier.id, fallback?.code || `SUP-${index + 1}`),
+      name: text(apiSupplier.supplierName || apiSupplier.name, fallback?.name || `供应商 ${index + 1}`),
       category,
       contact: fallback?.contact || "",
       email: fallback?.email || "",

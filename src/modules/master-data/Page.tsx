@@ -38,7 +38,7 @@ export default function MasterDataPage({
 }: {
   initialView?: MasterDataTab;
   focus?: { entityType: string; entityId: string; at: number } | null;
-  onNavigate?: (routeId: string) => void;
+  onNavigate?: (routeId: string, focus?: unknown) => void;
   onActiveContextChange?: (context: ActiveContext | null) => void;
 }) {
   const [tab, setTab] = useState<MasterDataTab>(initialView);
@@ -62,13 +62,7 @@ export default function MasterDataPage({
     if (!focus?.entityId) return;
     const normalized = focus.entityId.toLowerCase();
     if (focus.entityType === "item") {
-      const item = masterData.items.find((entry) =>
-        entry.sku.toLowerCase() === normalized ||
-        entry.name.toLowerCase() === normalized
-      );
-      if (!item) return;
       setTab("items");
-      setDetail({ type: "items", item });
       return;
     }
     if (focus.entityType === "supplier") {
@@ -195,7 +189,7 @@ export default function MasterDataPage({
 
       <Card>
         {tab === "items" ? (
-          <ItemMasterWorkbench />
+          <ItemMasterWorkbench focus={focus} onNavigate={onNavigate} />
         ) : tab === "overview" ? (
           <MasterDataOverview data={masterData} onOpenTab={openTab} />
         ) : tab === "customers" ? (

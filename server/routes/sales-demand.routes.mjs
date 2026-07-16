@@ -1,79 +1,56 @@
-import {
-  buildCustomerDeliveryRisks,
-  buildSalesDemandReadModel,
-  buildSalesDemandSummary,
-  getSalesOrderById,
-  listSalesOrders,
-  resolvePurchaseOrderSalesImpact,
-  resolveSalesDemandEvidence,
-  resolveSkuDemandImpact,
-} from '../domain/sales-demand-read-model.mjs'
+import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 
 function query(url) {
-  return {
-    q: url.searchParams.get('q') || '',
-    sku: url.searchParams.get('sku') || '',
-    status: url.searchParams.get('status') || '',
-    risk: url.searchParams.get('risk') || '',
-    limit: url.searchParams.get('limit') || '',
-  }
-}
-
-function methodNotAllowed(ctx) {
-  ctx.send(ctx.res, 405, { error: 'Method not allowed' })
-  return true
+  return { q: url.searchParams.get('q') || '', sku: url.searchParams.get('sku') || '', status: url.searchParams.get('status') || '', risk: url.searchParams.get('risk') || '' }
 }
 
 export async function handleSalesDemandRoute(ctx) {
-  const { req, res, url, db, send } = ctx
-
-  if (url.pathname.startsWith('/api/sales-demand') && req.method !== 'GET') {
-    return methodNotAllowed(ctx)
-  }
+  const { req, res, url, send } = ctx
+  const repository = ctx.repositories?.salesOrders
+  if (!repository || !url.pathname.startsWith('/api/sales-demand')) return false
 
   if (req.method === 'GET' && url.pathname === '/api/sales-demand/summary') {
-    const model = buildSalesDemandReadModel(db)
-    send(res, 200, { summary: buildSalesDemandSummary(db), evidenceLinks: model.evidenceLinks, dataLimitations: model.dataLimitations })
+    send(res, 200, { summary: await repository.getSummary(), evidenceLinks: [], dataLimitations: [] })
     return true
   }
-
   if (req.method === 'GET' && url.pathname === '/api/sales-demand/orders') {
-    const model = buildSalesDemandReadModel(db)
-    send(res, 200, { orders: listSalesOrders(db, query(url)), summary: model.summary, evidenceLinks: model.evidenceLinks, dataLimitations: model.dataLimitations })
+    send(res, 200, { orders: await repository.listOrders(query(url)), summary: await repository.getSummary(), evidenceLinks: [], dataLimitations: [] })
     return true
   }
-
-  const orderMatch = url.pathname.match(/^\/api\/sales-demand\/orders\/([^/]+)$/)
-  if (req.method === 'GET' && orderMatch) {
-    const order = getSalesOrderById(db, orderMatch[1])
-    if (!order) {
-      send(res, 404, { error: 'Sales order not found', dataLimitations: ['record_not_found'] })
-      return true
+  if (req.method === 'POST' && url.pathname === '/api/sales-demand/orders') {
+    const authorization = authorizeMutation(ctx, { allowedRoles: ['admin', 'manager', 'business-specialist'], action: 'sales.order.upsert', resource: 'sales-orders' })
+    if (authorization.blocked) return true
+    try {
+      const order = await repository.upsertOrder(await ctx.readBody(req), authorization.identity.userId)
+      send(res, 201, { order })
+    } catch (error) {
+      send(res, error.status || 400, { error: error.message, code: error.code })
     }
-    const evidence = resolveSalesDemandEvidence(db, orderMatch[1])
-    send(res, 200, { order, evidenceLinks: evidence.evidenceLinks, dataLimitations: evidence.dataLimitations })
     return true
   }
-
+  const match = url.pathname.match(/^\/api\/sales-demand\/orders\/([^/]+)$/)
+  if (req.method === 'GET' && match) {
+    const order = await repository.getOrder(match[1])
+    if (!order) send(res, 404, { error: 'Sales order not found', dataLimitations: ['record_not_found'] })
+    else send(res, 200, { order, evidenceLinks: order.evidence || [], dataLimitations: order.dataLimitations || [] })
+    return true
+  }
   if (req.method === 'GET' && url.pathname === '/api/sales-demand/risks') {
-    const model = buildSalesDemandReadModel(db)
-    send(res, 200, { risks: buildCustomerDeliveryRisks(db), summary: model.summary, evidenceLinks: model.evidenceLinks, dataLimitations: model.dataLimitations })
+    const orders = await repository.listOrders(query(url))
+    send(res, 200, { risks: orders.filter(row => row.deliveryRiskLevel !== 'low'), summary: await repository.getSummary(), evidenceLinks: [], dataLimitations: [] })
     return true
   }
-
   if (req.method === 'GET' && url.pathname === '/api/sales-demand/impact') {
     const sku = url.searchParams.get('sku') || ''
-    const impact = resolveSkuDemandImpact(db, sku)
-    send(res, 200, impact)
+    send(res, 200, { sku, orders: await repository.listOrders({ sku }), evidenceLinks: [], dataLimitations: [] })
     return true
   }
-
   if (req.method === 'GET' && url.pathname === '/api/sales-demand/po-impact') {
     const poId = url.searchParams.get('poId') || ''
-    const impact = resolvePurchaseOrderSalesImpact(db, poId)
-    send(res, 200, impact)
+    const orders = (await repository.listOrders()).filter(row => (row.linkedPurchaseOrders || []).some(po => (po.id || po.poId) === poId))
+    send(res, 200, { poId, orders, evidenceLinks: [], dataLimitations: [] })
     return true
   }
-
-  return false
+  send(res, 405, { error: 'Method not allowed' })
+  return true
 }

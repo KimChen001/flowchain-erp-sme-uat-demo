@@ -14,8 +14,8 @@ test.skip(process.env.FLOWCHAIN_DATA_MODE !== "empty", "empty-mode browser UAT r
 
 async function openLoggedInApp(page: Page) {
   await page.addInitScript((user) => {
-    window.localStorage.setItem("scm-demo-token", "browser-empty-token");
-    window.localStorage.setItem("scm-demo-user", JSON.stringify(user));
+    window.localStorage.setItem("flowchain:auth-token", "browser-empty-token");
+    window.localStorage.setItem("flowchain:current-user", JSON.stringify(user));
   }, demoUser);
   await page.goto("/");
   await expect(page.getByTestId("app-main")).toBeVisible();

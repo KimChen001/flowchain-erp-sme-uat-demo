@@ -38,7 +38,7 @@ export async function buildAiReadContext(db = {}, ctx = {}) {
   const repositories = ctx.repositories || {}
   const dataMode = ctx.dataMode || db.__dataMode || 'test'
   let userDataRuntime = null
-  let contextDb = db
+  let contextDb = ctx.businessReadDb || db
 
   if (dataMode === 'user' && isRepositoryAvailable(repositories.userDataRuntime, ['getAIReadableContext'])) {
     const scope = buildUserDataScope(ctx.userDataScope || ctx.scope || {})
@@ -93,5 +93,7 @@ export async function buildAiReadContext(db = {}, ctx = {}) {
     repositoryBacked,
     userDataRuntime,
     masterData: masterData || null,
+    businessReadContext: ctx.businessReadContext || null,
+    dataLimitations: ctx.businessReadContext?.dataLimitations || [],
   }
 }

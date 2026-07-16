@@ -658,9 +658,9 @@ function objectEvidenceForIntent(intent, ctx, request) {
       .map((po) => poEvidence(po))
       .filter(Boolean)
   }
-  const poId = text(objects.po?.po || objects.po?.id || 'PO-2026-1282')
-  const skuId = text(objects.sku?.sku || objects.sku?.id || 'SKU-00412')
-  const rfqId = text(objects.rfq?.id || objects.rfq?.rfq || 'RFQ-26-0046')
+  const poId = text(objects.po?.po || objects.po?.id)
+  const skuId = text(objects.sku?.sku || objects.sku?.id)
+  const rfqId = text(objects.rfq?.id || objects.rfq?.rfq)
   const soId = text(objects.so?.salesOrderId || objects.so?.id || '')
   const common = [
     poEvidence(objects.po, { poId }),
@@ -871,7 +871,7 @@ function buildResponse({ request, intent, ctx, modeNotice = '', conversationGrou
     contextBundle: { evidenceRefs: ev, navigationRefs: links },
     resolvedContext,
     conversationGrounding,
-    baseReviewCards: reviewCards(intent, links),
+    baseReviewCards: ev.length ? reviewCards(intent, links) : [],
   })
   const limitations = collectLimitations(ctx, [...extraLimitations, ...conversationLimitations(resolvedContext || {}), ...contextualDraft.dataLimitations])
   const conclusion = conclusionFor(intent, ev)
@@ -901,7 +901,7 @@ function buildResponse({ request, intent, ctx, modeNotice = '', conversationGrou
     recommendedActions: recommendedActions(links, intent.id === 'unsafe_request'),
     navigationLinks: links,
     dataLimitations: limitations,
-    reviewCards: contextualDraft.reviewCards,
+    reviewCards: ev.length ? contextualDraft.reviewCards : [],
     safetyBoundaries: SAFETY_BOUNDARIES,
     followUpQuestions: ['查看数据限制', '进入人工复核', '打开相关模块'],
     contextBreadcrumbs: conversationGrounding ? buildContextBreadcrumbsV2(conversationGrounding, resolvedContext || {}) : [],
@@ -1056,7 +1056,7 @@ export function buildAiRuntimeSafeFallbackV2(request = {}, reasonLabel = '当前
     recommendedActions: recommendedActions(links),
     navigationLinks: links,
     dataLimitations: [cleanLimitation({ label: reasonLabel, description: '部分来源证据暂时未完整读取，已保留可用模块入口。', severity: 'warning', consequence: '请打开来源模块核对后再继续处理。' })],
-    reviewCards: reviewCards({ id: 'today_attention', label: '当前工作区证据' }, links),
+    reviewCards: keyEvidence.length ? reviewCards({ id: 'today_attention', label: '当前工作区证据' }, links) : [],
     safetyBoundaries: SAFETY_BOUNDARIES,
     followUpQuestions: ['查看数据限制', '进入人工复核', '打开相关模块'],
     contextBreadcrumbs: [],

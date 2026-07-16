@@ -75,7 +75,7 @@ test('AI evidence navigation supports object-specific PO SKU RFQ GRN and PR focu
   assert.match(source, /inventory_item: \{ moduleId: "inventory", entityType: "inventory_item"/)
   assert.match(source, /focusTarget: \{ entityType: target\.entityType, entityId \}/)
   assert.match(source, /focusTarget: \{ entityType: "inventory_item", entityId: decodeURIComponent\(parts\[3\]\) \}/)
-  assert.match(app, /setSearchFocus\(intent\.focusTarget/)
+  assert.match(app, /setSearchFocus\(\s*intent\.focusTarget/)
   assert.match(ai, /navigationIntentFromEvidenceLink\(navigableLink, \{ source: "ai" \}\)/)
   assert.match(ai, /navigationIntentFromInternalTarget\(action\.target, \{ source: "aiAction" \}\)/)
   assert.doesNotMatch(ai, /onClick=\{\(\) => askAi\(intent\.activeId/)

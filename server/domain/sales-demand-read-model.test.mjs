@@ -38,14 +38,23 @@ function createDb() {
 function routeContext(method, path, db = createDb()) {
   let response = null
   let wrote = false
+  const orders = db.salesOrders.map(row => ({ ...row, statusLabel: row.status, deliveryRiskLevel: row.status === 'shortage_risk' ? 'high' : 'low', linkedPurchaseOrders: (row.linkedPurchaseOrders || []).map(id => ({ id })) }))
   return {
     ctx: {
       req: { method },
+      identity: { authenticated: true, userId: 'runtime-manager', name: 'Runtime Manager', role: 'manager' },
       res: {},
       url: new URL(path, 'http://localhost'),
       db,
       send(_res, status, payload) { response = { status, payload } },
       writeDb: async () => { wrote = true },
+      readBody: async () => ({ salesOrderId: 'SO-RUNTIME-WRITE', customerName: 'Runtime customer', sku: 'SKU-OK', orderedQty: 1 }),
+      repositories: { salesOrders: {
+        listOrders: async (filters = {}) => orders.filter(row => !filters.sku || row.sku === filters.sku),
+        getOrder: async id => orders.find(row => row.salesOrderId === id) || null,
+        getSummary: async () => ({ totalOrders: orders.length }),
+        upsertOrder: async input => { const row = { ...input, linkedPurchaseOrders: [], deliveryRiskLevel: 'low' }; orders.unshift(row); return row },
+      } },
     },
     get response() { return response },
     get wrote() { return wrote },
@@ -96,7 +105,7 @@ test('SKU and PO impact expose affected sales orders and business data limitatio
   assert.equal(limited.dataLimitations.includes('sample_data'), false)
 })
 
-test('Sales Demand route is readonly and rejects write methods', async () => {
+test('Sales Demand route reads and explicitly persists runtime orders while rejecting unsupported writes', async () => {
   const db = createDb()
   const listRoute = routeContext('GET', '/api/sales-demand/orders', db)
   assert.equal(await handleSalesDemandRoute(listRoute.ctx), true)
@@ -114,8 +123,13 @@ test('Sales Demand route is readonly and rejects write methods', async () => {
 
   const writeRoute = routeContext('POST', '/api/sales-demand/orders', db)
   assert.equal(await handleSalesDemandRoute(writeRoute.ctx), true)
-  assert.equal(writeRoute.response.status, 405)
+  assert.equal(writeRoute.response.status, 201)
+  assert.equal(writeRoute.response.payload.order.salesOrderId, 'SO-RUNTIME-WRITE')
   assert.equal(writeRoute.wrote, false)
+
+  const unsupported = routeContext('PATCH', '/api/sales-demand/orders/SO-HIGH', db)
+  assert.equal(await handleSalesDemandRoute(unsupported.ctx), true)
+  assert.equal(unsupported.response.status, 405)
 
   assert.equal(listSalesOrders(db, { q: '华东' })[0].salesOrderId, 'SO-HIGH')
   assert.equal(buildCustomerDeliveryRisks(db)[0].salesOrderId, 'SO-HIGH')

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 const user = { id: "report-filter-user", company: "新辰智能制造", name: "张磊", email: "filter@example.com", role: "供应链经理" };
-test.beforeEach(async ({ page }) => { await page.addInitScript((profile) => { localStorage.setItem("scm-demo-token", "filter-token"); localStorage.setItem("scm-demo-user", JSON.stringify(profile)); }, user); });
+test.beforeEach(async ({ page }) => { await page.addInitScript((profile) => { localStorage.setItem("flowchain:auth-token", "filter-token"); localStorage.setItem("flowchain:current-user", JSON.stringify(profile)); }, user); });
 test("one query filters KPI chart details export and survives reload", async ({ page }) => {
   await page.goto("/app/reports/sales");
   const amount = page.getByRole("button", { name: /销售订单金额/ });

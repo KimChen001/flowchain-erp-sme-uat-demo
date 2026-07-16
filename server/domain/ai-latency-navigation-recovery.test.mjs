@@ -6,7 +6,7 @@ const aiPanelSource = readFileSync(new URL('../../src/modules/ai-assistant/Panel
 const appSource = readFileSync(new URL('../../src/app/FlowChainApp.tsx', import.meta.url), 'utf8')
 const inventorySource = readFileSync(new URL('../../src/modules/inventory/Page.tsx', import.meta.url), 'utf8')
 const purchasingSource = readFileSync(new URL('../../src/modules/purchasing/Page.tsx', import.meta.url), 'utf8')
-const purchaseRequestsSource = readFileSync(new URL('../../src/modules/purchase-requests/Page.tsx', import.meta.url), 'utf8')
+const purchaseRequestsSource = readFileSync(new URL('../../src/modules/purchase-requests/CanonicalProcurementPanel.tsx', import.meta.url), 'utf8')
 const rfqSource = readFileSync(new URL('../../src/modules/rfq/Page.tsx', import.meta.url), 'utf8')
 const receivingSource = readFileSync(new URL('../../src/modules/receiving/Page.tsx', import.meta.url), 'utf8')
 const actionDraftSource = readFileSync(new URL('../../src/modules/action-drafts/ActionDraftReviewShell.tsx', import.meta.url), 'utf8')
@@ -20,7 +20,7 @@ test('AI assistant UI has duplicate request guard, abort, and timeout fallback',
   assert.match(aiPanelSource, /当前工作区数据暂时未能完整读取，仍可先从相关模块查看来源证据并进入人工复核。/)
   assert.match(aiPanelSource, /草稿预览 · 人工复核 · 不提交 · 不外发 · 不写库存/)
   assert.match(aiPanelSource, /retryPrompt/)
-  assert.match(aiPanelSource, /retryPrompt: timeoutHit \|\| abortReasonRef\.current === "timeout" \? message : undefined/)
+  assert.match(aiPanelSource, /retryPrompt: message/)
   assert.match(aiPanelSource, /askAi\(message\.retryPrompt \|\| ""\)/)
   assert.match(aiPanelSource, /重试/)
   assert.match(aiPanelSource, /disabled=\{asking\}/)
@@ -37,12 +37,12 @@ test('global focus recovery renders return and clear focus controls', () => {
   assert.match(appSource, /setSearchFocus\(null\)/)
 })
 
-test('inventory SKU focus renders visible recovery and related document entry points', () => {
-  assert.match(inventorySource, /当前 SKU 聚焦/)
-  assert.match(inventorySource, /<RecoveryActions/)
-  assert.match(inventorySource, /返回库存列表/)
-  assert.match(inventorySource, /查看事务流水/)
-  assert.match(inventorySource, /查看异常单据/)
+test('inventory SKU focus renders a local detail and canonical entity navigation', () => {
+  assert.match(inventorySource, /data-testid="inventory-local-detail"/)
+  assert.match(inventorySource, /库存详情/)
+  assert.match(inventorySource, /<EntityLink kind="item"/)
+  assert.match(inventorySource, /movements:\s*\{\s*url:\s*"\/api\/inventory\/movements"/)
+  assert.match(inventorySource, /exceptions:\s*\{\s*url:\s*"\/api\/inventory\/exceptions"/)
 })
 
 test('PO detail and draft review shell use shared recovery actions', () => {
@@ -56,10 +56,9 @@ test('PO detail and draft review shell use shared recovery actions', () => {
 })
 
 test('procurement PR RFQ and GRN details expose canonical recovery paths', () => {
-  assert.match(purchaseRequestsSource, /<RecoveryActions/)
-  assert.match(purchaseRequestsSource, /返回采购工作台/)
-  assert.match(purchaseRequestsSource, /moduleId: "procurement:orders"/)
-  assert.doesNotMatch(purchaseRequestsSource, /moduleId: "purchasing"/)
+  assert.match(purchaseRequestsSource, /返回采购申请列表/)
+  assert.match(purchaseRequestsSource, /"procurement:orders"/)
+  assert.match(purchaseRequestsSource, /entityType:\s*"purchase_order"/)
   assert.match(rfqSource, /<RecoveryActions/)
   assert.match(rfqSource, /返回采购工作台/)
   assert.match(receivingSource, /<RecoveryActions/)

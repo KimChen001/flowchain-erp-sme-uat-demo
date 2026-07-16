@@ -21,6 +21,12 @@ test('route classification covers read preview legacy mutation and diagnostics r
   assert.equal(classifyRoute('POST', '/api/action-drafts/preview').classification, ROUTE_CLASSES.previewOnly)
   assert.equal(classifyRoute('POST', '/api/action-drafts').classification, ROUTE_CLASSES.controlledPersistence)
   assert.equal(classifyRoute('POST', '/api/action-drafts/save').databaseMode, 'allowed-db-persistence')
+  assert.equal(classifyRoute('POST', '/api/procurement/receiving/GRN-1/post').classification, ROUTE_CLASSES.controlledPersistence)
+  assert.equal(classifyRoute('POST', '/api/procurement/receiving/GRN-1/reverse').databaseMode, 'allowed-db-persistence')
+  assert.equal(classifyRoute('GET', '/api/sales/orders/SO-1/outbound-state').databaseMode, 'allowed-db-read')
+  assert.equal(classifyRoute('POST', '/api/sales/orders/SO-1/reservations/preview').databaseMode, 'allowed-db-read')
+  assert.equal(classifyRoute('POST', '/api/sales/shipments/SHIP-1/post').databaseMode, 'allowed-db-persistence')
+  assert.equal(classifyRoute('GET', '/api/procurement/receiving/GRN-1/reconciliation').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/mrp-plan').classification, ROUTE_CLASSES.readOnly)
   assert.equal(classifyRoute('GET', '/api/mrp-plan').writesJson, false)
   assert.equal(classifyRoute('GET', '/api/sop-cycle').classification, ROUTE_CLASSES.readOnly)
@@ -33,7 +39,6 @@ test('route classification covers read preview legacy mutation and diagnostics r
 
 test('database mode blocks legacy mutation routes but allows read and preview routes', () => {
   const blocked = [
-    ['POST', '/api/auth/login'],
     ['POST', '/api/forecast-plans'],
     ['POST', '/api/sop-cycle'],
     ['POST', '/api/market-prices/refresh'],
@@ -65,6 +70,9 @@ test('database mode blocks legacy mutation routes but allows read and preview ro
     ['GET', '/api/mrp-plan'],
     ['GET', '/api/sop-cycle'],
     ['POST', '/api/action-drafts/preview'],
+    ['POST', '/api/auth/login'],
+    ['POST', '/api/procurement/receiving/GRN-1/post'],
+    ['POST', '/api/procurement/receiving/GRN-1/reverse'],
     ['POST', '/api/ai/chat'],
   ]
 
@@ -93,4 +101,6 @@ test('database mode route metadata reflects migrated master data read adapter', 
   assert.equal(classifyRoute('GET', '/api/procurement/documents').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/inventory/items').databaseMode, 'allowed-db-read')
   assert.equal(classifyRoute('GET', '/api/inventory/demand-supply-gap').databaseMode, 'allowed-db-read')
+  assert.equal(classifyRoute('GET', '/api/pilot/exports/inventory_balances').group, 'pilot-exports')
+  assert.equal(classifyRoute('GET', '/api/admin/pilot-diagnostics').classification, ROUTE_CLASSES.diagnostics)
 })

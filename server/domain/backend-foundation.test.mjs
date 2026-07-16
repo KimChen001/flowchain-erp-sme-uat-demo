@@ -30,7 +30,7 @@ async function closeServer(server) {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 }
 
-async function requestJson(port, method, pathname, body) {
+async function requestJson(port, method, pathname, body, headers = {}) {
   const raw = body === undefined ? '' : JSON.stringify(body)
   return await new Promise((resolve, reject) => {
     const req = http.request({
@@ -39,9 +39,10 @@ async function requestJson(port, method, pathname, body) {
       method,
       path: pathname,
       headers: raw ? {
+        ...headers,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(raw),
-      } : {},
+      } : headers,
     }, (res) => {
       const chunks = []
       res.on('data', (chunk) => chunks.push(chunk))
@@ -87,7 +88,7 @@ test('server factory imports with backend foundation routes', () => {
 test('server route context injects repository registry for repository-compatible routes', () => {
   const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
 
-  assert.match(source, /import \{[^}]*createRepositoryRegistry[^}]*\} from '\.\.\/repositories\/adapter-registry\.mjs'/)
+  assert.match(source, /import \{[^}]*createRepositoryRegistry[^}]*\} from ["']\.\.\/repositories\/adapter-registry\.mjs["']/)
   assert.match(source, /const repositories = createRepositoryRegistry\(\{ db, env: process\.env \}\)/)
   assert.match(source, /routeContext = \{[\s\S]*repositories,[\s\S]*\}/)
   assert.ok(source.indexOf('const repositories = createRepositoryRegistry') < source.indexOf('const routeContext = {'))
@@ -111,27 +112,29 @@ test('global server errors are sanitized before returning 500 responses', () => 
 
 test('server health response omits provider keys models and proxy diagnostics by default', () => {
   const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
-  const healthBlock = source.slice(source.indexOf("url.pathname === '/api/health'"), source.indexOf("if (req.method === 'POST' && url.pathname === '/api/auth/login'"))
+  const healthBlock = source.slice(
+    source.search(/url\.pathname === ["']\/api\/health["']/),
+    source.search(/if\s*\(\s*req\.method === ["']POST["'] && url\.pathname === ["']\/api\/auth\/login["']/),
+  )
 
-  assert.match(healthBlock, /service: 'flowchain-scm-api'/)
-  assert.match(healthBlock, /mode: 'local-dev'/)
-  assert.match(healthBlock, /port/)
+  assert.match(healthBlock, /service: ["']flowchain-scm-api["']/)
+  assert.match(healthBlock, /\.\.\.buildIdentity/)
   assert.match(healthBlock, /persistenceMode/)
+  assert.match(healthBlock, /readsDemoData/)
+  assert.match(healthBlock, /runtimeAdapters/)
   assert.match(healthBlock, /timestamp/)
-  assert.match(healthBlock, /healthCheck: '\/api\/health'/)
-  assert.match(healthBlock, /aiChat: '\/api\/ai\/chat'/)
   assert.match(healthBlock, /dataMode: dataMode\.mode/)
-  assert.match(healthBlock, /dataSource: dataMode\.dataSource/)
   assert.doesNotMatch(healthBlock, /OPENAI_API_KEY|ARK_API_KEY|DOUBAO_API_KEY|OPENAI_MODEL|ARK_MODEL|DOUBAO_MODEL/)
-  assert.doesNotMatch(healthBlock, /DATABASE_URL|POSTGRES_URL|OPENAI|ARK|DOUBAO|openai:|doubao:|provider:|model:|proxy:|secret|token|password/i)
+  assert.doesNotMatch(healthBlock, /DATABASE_URL|POSTGRES_URL|OPENAI|ARK|DOUBAO|openai:|doubao:|(?<![A-Za-z])(?:provider|model|proxy|secret|token|password)\s*:/i)
   assert.match(source, /sendInternalServerError\(res, send, error\)/)
 })
 
 test('database mode guard is before legacy auth and forecast writes', () => {
   const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
 
-  assert.ok(source.indexOf('isDatabaseModeWriteBlocked') < source.indexOf("url.pathname === '/api/auth/login'"))
-  assert.ok(source.indexOf('isDatabaseModeWriteBlocked') < source.indexOf("url.pathname === '/api/forecast-plans'"))
+  const guardIndex = source.indexOf('isDatabaseModeWriteBlocked({')
+  assert.ok(guardIndex < source.search(/url\.pathname === ["']\/api\/auth\/login["']/))
+  assert.ok(guardIndex < source.search(/url\.pathname === ["']\/api\/forecast-plans["']/))
   assert.deepEqual(databaseModeMutationBlockedPayload(), {
     error: 'This mutation is not available in database persistence mode yet.',
   })
@@ -154,15 +157,13 @@ test('database mode blocks legacy writes while allowing health and preview route
     assert.equal(health.status, 200)
     assert.equal(health.payload.ok, true)
     assert.equal(health.payload.service, 'flowchain-scm-api')
-    assert.equal(health.payload.mode, 'local-dev')
-    assert.equal(typeof health.payload.port, 'number')
+    assert.equal(health.payload.runtimeMode, 'local-dev')
     assert.equal(health.payload.persistenceMode, 'database')
-    assert.equal(health.payload.diagnostics.healthCheck, '/api/health')
-    assert.equal(health.payload.diagnostics.aiChat, '/api/ai/chat')
-    assert.equal(health.payload.diagnostics.dataMode, 'demo')
-    assert.equal(health.payload.diagnostics.dataSource, 'scm-demo')
+    assert.equal(health.payload.dataMode, 'user')
+    assert.equal(health.payload.readsDemoData, false)
     assert.equal(typeof health.payload.timestamp, 'string')
-    assert.equal(typeof health.payload.purchaseOrders, 'number')
+    assert.equal(health.payload.runtimeWriteCoordination.processLocalMutex, true)
+    assert.equal(health.payload.runtimeWriteCoordination.multiProcessSafe, false)
     assert.equal(mrp.status, 200)
     assert.equal(mrp.payload.sourceMetadata.persistence, 'read-only-generated-plan')
     assert.equal(forecastPlan.status, 501)
@@ -186,13 +187,20 @@ test('database mode blocks legacy writes while allowing health and preview route
 test('database mode returns clean config error when DB audit adapter is invoked without DATABASE_URL', async () => {
   const previousMode = process.env.FLOWCHAIN_PERSISTENCE_MODE
   const previousDatabaseUrl = process.env.DATABASE_URL
+  const previousTestHeaders = process.env.FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS
+  const previousTenantId = process.env.FLOWCHAIN_DEFAULT_TENANT_ID
   process.env.FLOWCHAIN_PERSISTENCE_MODE = 'database'
+  process.env.FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS = 'true'
+  process.env.FLOWCHAIN_DEFAULT_TENANT_ID = 'tenant-backend-foundation'
   delete process.env.DATABASE_URL
   const server = createScmServer()
 
   try {
     const port = await listen(server)
-    const audit = await requestJson(port, 'GET', '/api/audit-log')
+    const audit = await requestJson(port, 'GET', '/api/audit-log', undefined, {
+      'x-flowchain-user': 'backend-foundation-test',
+      'x-flowchain-role': 'admin',
+    })
 
     assert.equal(audit.status, 500)
     assert.deepEqual(audit.payload, {
@@ -210,6 +218,16 @@ test('database mode returns clean config error when DB audit adapter is invoked 
       delete process.env.DATABASE_URL
     } else {
       process.env.DATABASE_URL = previousDatabaseUrl
+    }
+    if (previousTestHeaders === undefined) {
+      delete process.env.FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS
+    } else {
+      process.env.FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS = previousTestHeaders
+    }
+    if (previousTenantId === undefined) {
+      delete process.env.FLOWCHAIN_DEFAULT_TENANT_ID
+    } else {
+      process.env.FLOWCHAIN_DEFAULT_TENANT_ID = previousTenantId
     }
     await closeServer(server)
   }

@@ -50,11 +50,14 @@ const HISTORICAL_TECHNICAL_DOCS = new Set([
   'docs/ui-typography-consistency-v1.md',
   'docs/ui-typography-system-v1.md',
   'docs/ui-typography-token-consolidation-v2.md',
+  'docs/verification/browser-baseline-differential.md',
 ])
 
 const TECHNICAL_FILE_PATTERNS = [
   /^package\.json$/,
   /^server\/domain\/product-terminology-governance\.test\.mjs$/,
+  /^server\/domain\/authoritative-runtime-initialization\.test\.mjs$/,
+  /^tests\/browser\/authoritative-runtime-initialization\.spec\.ts$/,
   /(^|\/)ai-runtime-provider/i,
   /(^|\/)ai-provider-safety/i,
   /(^|\/)ai-model-router/i,
@@ -68,6 +71,8 @@ const TECHNICAL_FILE_PATTERNS = [
   /(^|\/)user-data-import-(dry-run|commit-boundary)/i,
   /(^|\/)user-data-runtime-ai/i,
   /(^|\/)ai-empty/i,
+  /(^|\/)capability(RouteGuard|-registry)\.(mjs|ts)$/i,
+  /(^|\/)durable-import-cutover\.test\.mjs$/i,
 ]
 
 const TECHNICAL_LINE_PATTERNS = [

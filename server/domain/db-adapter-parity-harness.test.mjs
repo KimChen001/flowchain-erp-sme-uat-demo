@@ -113,15 +113,16 @@ test('database registry selects all migrated DB adapters and JSON registry remai
   await assert.rejects(() => database.procurementRead.listDocuments(), (error) => error.message === DATABASE_CONFIG_ERROR)
 })
 
-test('master data JSON and DB adapters expose matching public row shapes', async () => {
+test('shared master data JSON and DB reads expose matching public row shapes', async () => {
   const json = createJsonMasterDataRepository(createDb())
   const database = createDbMasterDataRepository({ env, prisma: createMasterPrisma() })
 
   assertSameKeys(await database.listItems().then((rows) => rows[0]), json.listItems()[0], 'item keys')
-  assertSameKeys(await database.listSuppliers().then((rows) => rows[0]), json.listSuppliers()[0], 'supplier keys')
   assertSameKeys(await database.listWarehouses().then((rows) => rows[0]), json.listWarehouses()[0], 'warehouse keys')
   assertSameKeys(await database.listPaymentTerms().then((rows) => rows[0]), json.listPaymentTerms()[0], 'payment term keys')
   assertSameKeys(await database.listTaxCodes().then((rows) => rows[0]), json.listTaxCodes()[0], 'tax code keys')
+  assert.equal(typeof json.createSupplier, 'function')
+  assert.equal(typeof json.selectSuppliers, 'function')
 })
 
 test('procurement and inventory DB adapters preserve public read shapes without write methods', async () => {

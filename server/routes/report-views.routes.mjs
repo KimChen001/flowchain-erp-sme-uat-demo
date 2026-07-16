@@ -2,6 +2,7 @@ import { resolveCurrentUser } from '../domain/context.mjs'
 import { cloneReportView, createReportView, deleteReportView, getReportView, listReportViews, updateReportView } from '../repositories/report-view-repository.mjs'
 
 function actorFrom(ctx) {
+  if (ctx.identity?.authenticated) return { id: ctx.identity.userId, name: ctx.identity.name, role: ctx.identity.role }
   const user = resolveCurrentUser(ctx.db, ctx.req.headers.authorization || '')
   const requested = String(ctx.req.headers['x-flowchain-role'] || user.role || '').toLowerCase()
   const role = /admin|管理员/.test(requested) ? 'admin' : /manager|经理|approver/.test(requested) ? 'manager' : /viewer|只读/.test(requested) ? 'viewer' : 'analyst'

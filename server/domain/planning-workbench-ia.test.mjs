@@ -24,7 +24,7 @@ test('Planning workbench exposes five distinct canonical subviews', () => {
     assert.match(forecast, new RegExp(component))
   }
 
-  assert.match(app, /<ForecastPanel initialView=\{activeView as any\} onNavigate=\{navigateTo\} onReviewActionDraft=\{openActionDraftReview\}/)
+  assert.match(app, /<ForecastPanel\s+initialView=\{activeView as any\}\s+onNavigate=\{navigateTo\}\s+onReviewActionDraft=\{openActionDraftReview\}/)
   assert.match(forecast, /data-planning-view=\{activePlanningView\}/)
 })
 

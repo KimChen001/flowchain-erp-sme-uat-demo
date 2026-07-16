@@ -19,6 +19,11 @@ const BUSINESS_CONFIG = Object.freeze({
   'inventory-balance': { businessObject: 'inventory_balance', key: (row) => `${row.warehouse}::${row.bin}::${row.sku}`, policy: 'inventory_adjustment', collection: 'inventoryBalances', required: ['sku', 'warehouse', 'bin', 'quantity', 'asOfDate', 'status'] },
 })
 
+const DURABLE_IMPORT_LIMITATIONS = Object.freeze([
+  '正式业务数据已经写入 authoritative repositories。',
+  '当前版本不支持自动回滚；请通过对应业务模块创建反向调整或人工修正。',
+])
+
 function clone(value) { return JSON.parse(JSON.stringify(value ?? null)) }
 function text(value = '') { return String(value ?? '').trim() }
 function stable(value) {
@@ -196,10 +201,56 @@ export function commitImportPreview(previewId, input = {}, options = {}) {
   return clone(result)
 }
 
+export function validateDurableImportCommit(previewId, input = {}, options = {}) {
+  const preview = state.previews.get(previewId)
+  if (!preview) return { ok: false, status: 404, code: 'IMPORT_PREVIEW_NOT_FOUND', error: 'Import preview not found or expired.' }
+  if (new Date(preview.expiresAt).getTime() < Date.now()) return { ok: false, status: 410, code: 'IMPORT_PREVIEW_EXPIRED', error: 'Import preview has expired.' }
+  if (text(input.snapshotHash) !== preview.snapshotHash) return { ok: false, status: 409, code: 'IMPORT_SNAPSHOT_MISMATCH', error: 'Snapshot hash mismatch.' }
+  if (input.userConfirmation !== true) return { ok: false, status: 422, code: 'IMPORT_CONFIRMATION_REQUIRED', error: 'Explicit user confirmation is required.' }
+  if (preview.validationErrors.length || preview.duplicateRows.length) return { ok: false, status: 422, code: 'IMPORT_PREVIEW_BLOCKED', error: 'Preview contains blocking rows.' }
+  const relationships = options.relationships || preview.relationships
+  const revalidated = validateServerRows(BUSINESS_CONFIG[preview.schemaId], preview.normalizedRows, relationships)
+  if (revalidated.errors.length) return { ok: false, status: 422, code: 'IMPORT_REVALIDATION_FAILED', error: 'Server revalidation failed.', validationErrors: revalidated.errors }
+  if (preview.validationWarnings.length && (!Array.isArray(input.acceptedWarningCodes) || input.acceptedWarningCodes.length === 0)) return { ok: false, status: 422, code: 'IMPORT_WARNING_ACK_REQUIRED', error: 'Preview warnings require explicit acknowledgement.' }
+  const idempotencyKey = text(input.idempotencyKey)
+  if (!idempotencyKey) return { ok: false, status: 422, code: 'IDEMPOTENCY_KEY_REQUIRED', error: 'idempotencyKey is required.' }
+  if (state.idempotency.has(idempotencyKey)) return { ok: true, replayed: true, result: clone(state.idempotency.get(idempotencyKey)) }
+  return { ok: true, preview: clone(preview), config: BUSINESS_CONFIG[preview.schemaId], idempotencyKey }
+}
+
+export function recordDurableImportCommit(validation, changes = [], options = {}) {
+  const preview = validation.preview
+  const importBatchId = text(options.importBatchId) || `IMP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
+  const inserted = changes.filter(change => change.operation === 'insert').length
+  const updated = changes.filter(change => change.operation === 'update').length
+  const batch = {
+    importBatchId, previewId: preview.previewId, businessObject: preview.businessObject, schemaId: preview.schemaId,
+    originalFileName: preview.fileMetadata.name || '', sheetName: preview.sheetName, schemaVersion: preview.schemaVersion,
+    fieldMapping: clone(preview.fieldMapping), inserted, updated, skipped: 0, failed: 0,
+    warnings: clone(preview.validationWarnings), snapshotHash: preview.snapshotHash, status: 'committed',
+    atomic: true, rollbackAvailable: false, committedAt: new Date().toISOString(), actor: text(options.actor) || preview.actor,
+    persistenceScope: 'process-memory-metadata', limitations: [...DURABLE_IMPORT_LIMITATIONS],
+    targetRepositories: [...new Set(changes.map(change => change.repository))], changes: clone(changes),
+  }
+  state.batches.set(importBatchId, batch)
+  const auditEvent = audit('import_batch_committed', { type: 'importBatch', id: importBatchId }, batch, batch.actor)
+  batch.auditEventId = auditEvent.id
+  const result = { ok: true, atomic: true, importBatchId, businessObject: preview.businessObject, inserted, updated, skipped: 0, failed: 0, warnings: batch.warnings, auditEventId: auditEvent.id, rollbackAvailable: false, committedAt: batch.committedAt, targetRepositories: batch.targetRepositories }
+  state.idempotency.set(validation.idempotencyKey, result)
+  return clone(result)
+}
+
 export function rollbackImportBatch(importBatchId, input = {}, options = {}) {
   const batch = state.batches.get(importBatchId)
   if (!batch) return { ok: false, status: 404, error: 'Import batch not found.' }
   if (!['admin', 'manager'].includes(text(options.role).toLowerCase())) return { ok: false, status: 403, error: 'Admin or manager permission is required.' }
+  if (batch.persistenceScope === 'process-memory-metadata') return {
+    ok: false,
+    status: 409,
+    code: 'DURABLE_IMPORT_ROLLBACK_NOT_SUPPORTED',
+    message: '该导入批次已经写入正式业务数据，当前版本不支持自动回滚。请通过对应业务模块创建反向调整或人工修正。',
+    rollbackAvailable: false,
+  }
   if (batch.status !== 'committed') return { ok: false, status: 409, error: `Batch status ${batch.status} cannot be rolled back.` }
   if (new Date(batch.rollbackDeadline).getTime() < Date.now()) return { ok: false, status: 409, error: 'Rollback window has expired.' }
   if (input.hasDownstreamReferences === true) return { ok: false, status: 409, error: 'Batch has downstream business references.', dependencyReasons: ['存在后续业务引用'] }

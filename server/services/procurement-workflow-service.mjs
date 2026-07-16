@@ -33,9 +33,26 @@ export function createProcurementWorkflowService({
   const canonicalLines = async (lines = []) =>
     Promise.all(
       lines.map(async (line, index) => {
-        const lineType =
-          line.lineType ||
+        const lineType = line.sourceType || line.lineType ||
           (line.itemId || line.sku ? "catalog_item" : "non_catalog_item");
+        const lineBasis = line.lineBasis || "quantity";
+        const supplierId = String(line.supplierId || "").trim();
+        if (!supplierId) throw procurementError("SUPPLIER_REQUIRED", "每一条采购行必须选择供应商", [{ field: `lines.${index}.supplierId` }], 400);
+        const supplier = itemRepository?.getSupplier ? await itemRepository.getSupplier(supplierId) : { id: supplierId };
+        if (!supplier) throw procurementError("SUPPLIER_NOT_FOUND", "供应商不存在", [{ field: `lines.${index}.supplierId` }], 400);
+        if (["inactive", "disabled", "停用"].includes(String(supplier.status || "").toLowerCase())) throw procurementError("SUPPLIER_INACTIVE", "供应商已停用", [{ field: `lines.${index}.supplierId` }], 400);
+        const supplierSnapshot = {
+          id: supplier.id || supplierId,
+          supplierCode: supplier.supplierCode || supplier.code || supplierId,
+          supplierName: supplier.supplierName || supplier.name || supplierId,
+        };
+        const estimatedUnitPrice = line.estimatedUnitPrice ?? line.unitPrice;
+        const quantity = line.quantity == null || line.quantity === "" ? null : Number(line.quantity);
+        const estimatedAmount = lineBasis === "amount" ? Number(line.estimatedAmount) : Number(quantity) * Number(estimatedUnitPrice);
+        if (lineBasis === "amount" ? !(estimatedAmount > 0) : !(quantity > 0 && Number(estimatedUnitPrice) >= 0 && estimatedUnitPrice !== "" && estimatedUnitPrice != null))
+          throw procurementError("LINE_VALUE_REQUIRED", lineBasis === "amount" ? "预计总金额必须大于 0" : "数量和预计单价必须明确填写", [{ field: `lines.${index}.${lineBasis === "amount" ? "estimatedAmount" : "estimatedUnitPrice"}` }], 400);
+        if (!line.needByDate) throw procurementError("NEED_BY_DATE_REQUIRED", "需求日期必填", [{ field: `lines.${index}.needByDate` }], 400);
+        if (line.serviceStartDate && line.serviceEndDate && line.serviceStartDate > line.serviceEndDate) throw procurementError("INVALID_SERVICE_DATE_RANGE", "服务开始日期不得晚于结束日期", [{ field: `lines.${index}.serviceEndDate` }], 400);
         if (lineType === "non_catalog_item") {
           if (!String(line.itemNameSnapshot || line.itemName || "").trim())
             throw procurementError(
@@ -44,7 +61,7 @@ export function createProcurementWorkflowService({
               [{ field: `lines.${index}.itemNameSnapshot` }],
               400,
             );
-          if (!String(line.unitSnapshot || line.unit || "").trim())
+          if (lineBasis === "quantity" && !String(line.unitSnapshot || line.unit || "").trim())
             throw procurementError(
               "NON_CATALOG_ITEM_UNIT_REQUIRED",
               "非目录物料单位必填",
@@ -53,7 +70,9 @@ export function createProcurementWorkflowService({
             );
           return {
             ...structuredClone(line),
-            lineType,
+            lineType, sourceType: lineType, lineBasis, supplierId, supplierSnapshot, quantity: lineBasis === "quantity" ? quantity : null,
+            estimatedUnitPrice: lineBasis === "quantity" ? Number(estimatedUnitPrice) : null,
+            estimatedAmount,
             itemId: null,
             sku: null,
             itemNameSnapshot: line.itemNameSnapshot || line.itemName,
@@ -102,17 +121,24 @@ export function createProcurementWorkflowService({
             [{ field: `lines.${index}.sku` }],
             400,
           );
+        if (itemRepository?.approvedSuppliersForItem) {
+          const approved = await itemRepository.approvedSuppliersForItem(item.itemId);
+          if (!approved.length) throw procurementError("ITEM_HAS_NO_APPROVED_SUPPLIER", "该 SKU 尚未维护可采购供应商，请先维护 SKU–供应商关系。", [{ field: `lines.${index}.supplierId` }], 400);
+          if (!approved.some(row => row.id === supplierId)) throw procurementError("ITEM_SUPPLIER_RELATIONSHIP_INVALID", "所选供应商不是该 SKU 的已批准供应商", [{ field: `lines.${index}.supplierId` }], 400);
+        } else if (item.defaultSupplierId && supplierId !== item.defaultSupplierId) {
+          throw procurementError("ITEM_SUPPLIER_RELATIONSHIP_INVALID", "所选供应商不是该 SKU 的已批准供应商", [{ field: `lines.${index}.supplierId` }], 400);
+        }
         return {
           ...structuredClone(line),
-          lineType,
+          lineType, sourceType: lineType, lineBasis, supplierId, supplierSnapshot, quantity: lineBasis === "quantity" ? quantity : null,
+          estimatedUnitPrice: lineBasis === "quantity" ? Number(estimatedUnitPrice) : null,
+          estimatedAmount,
           itemId: item.itemId,
           sku: item.sku,
           itemNameSnapshot: item.itemName,
           unitSnapshot: item.purchaseUnit || item.baseUnit,
           specificationSnapshot: item.specification || "",
           warehouseId: line.warehouseId || item.defaultWarehouseId || "",
-          suggestedSupplierId:
-            line.suggestedSupplierId || item.defaultSupplierId || "",
         };
       }),
     );
@@ -129,15 +155,12 @@ export function createProcurementWorkflowService({
           status: "draft",
           procurementPath: "undecided",
           procurementPathDecision: null,
-          requesterId: input.requesterId || actor,
-          buyerId: input.buyerId || "",
+          requesterId: actor,
           departmentId: input.departmentId || "",
-          supplierId: input.supplierId || "",
-          currency: input.currency || "CNY",
-          paymentTermsId: input.paymentTermsId || "",
-          expectedDeliveryDate: input.expectedDeliveryDate || "",
-          totalAmount: Number(input.totalAmount || 0),
-          comments: input.comments || "",
+          defaultCurrency: input.defaultCurrency || input.currency || "CNY",
+          currency: input.defaultCurrency || input.currency || "CNY",
+          defaultNeedByDate: input.defaultNeedByDate || input.expectedDeliveryDate || "",
+          totalAmount: lines.reduce((sum, line) => sum + Number(line.estimatedAmount), 0),
           lines,
           version: 1,
           createdAt: t,
@@ -180,22 +203,17 @@ export function createProcurementWorkflowService({
           );
         const before = structuredClone(pr);
         for (const key of [
-          "requesterId",
-          "buyerId",
           "departmentId",
-          "supplierId",
-          "currency",
-          "paymentTermsId",
-          "expectedDeliveryDate",
-          "totalAmount",
+          "defaultCurrency",
+          "defaultNeedByDate",
           "lines",
           "emergencyPurchase",
           "singleSource",
           "reason",
-          "comments",
         ])
           if (input[key] !== undefined)
             pr[key] = structuredClone(key === "lines" ? lines : input[key]);
+        if (lines) { pr.totalAmount = lines.reduce((sum, line) => sum + Number(line.estimatedAmount), 0); pr.currency = input.defaultCurrency || pr.defaultCurrency; }
         pr.version++;
         pr.updatedAt = now();
         pr.updatedBy = actor;
@@ -426,15 +444,8 @@ export function createProcurementWorkflowService({
         if (!pr)
           throw procurementError("ENTITY_NOT_FOUND", "采购申请不存在", [], 404);
         assertVersion(pr, input.expectedVersion);
-        const existing = doc.purchaseOrders.find(
-          (x) => x.sourcePrId === prId && x.status !== "cancelled",
-        );
-        if (existing)
-          return {
-            purchaseRequest: pr,
-            purchaseOrder: existing,
-            replayed: true,
-          };
+        const existing = doc.purchaseOrders.filter((x) => x.sourcePrId === prId && x.status !== "cancelled");
+        if (existing.length) return { purchaseRequest: pr, createdPurchaseOrders: existing, replayed: true };
         if (
           doc.rfqs.some(
             (x) =>
@@ -448,66 +459,32 @@ export function createProcurementWorkflowService({
             [],
             409,
           );
-        const merged = {
-          ...pr,
-          ...input,
-          supplierId: input.supplierId || pr.supplierId,
-          currency: input.currency || pr.currency,
-          paymentTermsId: input.paymentTermsId || pr.paymentTermsId,
-          expectedDeliveryDate:
-            input.expectedDeliveryDate || pr.expectedDeliveryDate,
-        };
-        validateDirectPo(
-          merged,
-          await policyProvider(pr),
-          await permission(actor, "procurement.direct_po", pr),
-        );
+        if (pr.status !== "approved") throw procurementError("INVALID_STATE_TRANSITION", "只有已批准采购申请可以生成采购订单", [], 409);
+        if (!pr.lines?.length || pr.lines.some((line) => !line.supplierId || !line.currency || !(line.targetWarehouseId || line.warehouseId || line.serviceLocationId)))
+          throw procurementError("DIRECT_PO_NOT_ALLOWED", "采购行缺少供应商、币种或交付地点", [{ field: "lines" }]);
         const t = now();
-        const po = {
-          id: id("PO"),
-          sourcePrId: pr.id,
-          sourceRfqId: null,
-          procurementPath: "direct_po",
-          supplierId: merged.supplierId,
-          buyerId: pr.buyerId,
-          currency: merged.currency,
-          paymentTermsId: merged.paymentTermsId,
-          orderDate: t.slice(0, 10),
-          expectedDeliveryDate: merged.expectedDeliveryDate,
-          subtotal: Number(pr.totalAmount),
-          taxAmount: Number(input.taxAmount || 0),
-          totalAmount: Number(pr.totalAmount) + Number(input.taxAmount || 0),
-          lines: structuredClone(pr.lines),
-          comments: pr.comments || "",
-          sourcePurchaseRequestId: pr.id,
-          status: "draft",
-          version: 1,
-          createdAt: t,
-          createdBy: actor,
-          updatedAt: t,
-          updatedBy: actor,
-          auditTrailIds: [],
-        };
+        const groups = new Map();
+        for (const line of pr.lines) {
+          const warehouseId = line.targetWarehouseId || line.warehouseId || line.serviceLocationId;
+          const groupKey = [line.supplierId, line.currency, warehouseId, line.legalEntityId || "", line.paymentTermsId || "", line.shippingTermsId || "", line.selectedContractId || ""].join("::");
+          if (!groups.has(groupKey)) groups.set(groupKey, { supplierId: line.supplierId, currency: line.currency, warehouseId, paymentTermsId: line.paymentTermsId || "", shippingTermsId: line.shippingTermsId || "", selectedContractId: line.selectedContractId || "", lines: [] });
+          groups.get(groupKey).lines.push(line);
+        }
+        const createdPurchaseOrders = [...groups.values()].map((group) => {
+          const lines = group.lines.map((line) => ({ ...structuredClone(line), sourcePurchaseRequestLineId: line.lineId }));
+          const totalAmount = lines.reduce((sum, line) => sum + Number(line.estimatedAmount), 0);
+          const po = { id: id("PO"), sourcePrId: pr.id, sourcePurchaseRequestId: pr.id, sourceRfqId: null, procurementPath: "direct_po", supplierId: group.supplierId, supplierSnapshot: lines[0]?.supplierSnapshot || { id: group.supplierId, supplierCode: group.supplierId, supplierName: group.supplierId }, currency: group.currency, targetWarehouseId: group.warehouseId, paymentTermsId: group.paymentTermsId, shippingTermsId: group.shippingTermsId, selectedContractId: group.selectedContractId, orderDate: t.slice(0, 10), subtotal: totalAmount, taxAmount: 0, totalAmount, lines, supplierFacingNote: "", internalContext: lines.map((line) => ({ sourceLineId: line.lineId, internalLineComment: line.internalLineComment || null })), status: "draft", transmissionStatus: "not_sent", version: 1, createdAt: t, createdBy: actor, updatedAt: t, updatedBy: actor, auditTrailIds: [] };
+          po.auditTrailIds.push(audit(doc, { actor, entityType: "purchase_order", entityId: po.id, action: "PO_CREATED_FROM_PR", relatedEntityIds: [pr.id], idempotencyKey: key, after: po, result: "success" }));
+          return po;
+        });
         pr.procurementPath = "direct_po";
         pr.status = "converted";
-        pr.linkedPoId = po.id;
+        pr.linkedPurchaseOrderIds = createdPurchaseOrders.map((po) => po.id);
         pr.version++;
         pr.updatedAt = t;
         pr.updatedBy = actor;
-        po.auditTrailIds.push(
-          audit(doc, {
-            actor,
-            entityType: "purchase_order",
-            entityId: po.id,
-            action: "PO_CREATED_FROM_PR",
-            relatedEntityIds: [pr.id],
-            idempotencyKey: key,
-            after: po,
-            result: "success",
-          }),
-        );
-        doc.purchaseOrders.push(po);
-        const result = { purchaseRequest: pr, purchaseOrder: po };
+        doc.purchaseOrders.push(...createdPurchaseOrders);
+        const result = { purchaseRequestId: pr.id, purchaseRequest: pr, createdPurchaseOrders };
         doc.idempotencyRecords.push({ key, result, createdAt: t });
         return result;
       });

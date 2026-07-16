@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Boxes, ClipboardList, FileText, GitBranch, PackageSearch, ShoppingCart, Truck, Users } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { A, Card, Chip, KpiCard, SectionHeader } from "../../components/ui";
-import ContextualImportActions from "../../components/import/ContextualImportActions";
 import type { InventoryAvailability } from "../inventory/api";
 import {
   BusinessObjectDetailModal,
@@ -18,8 +17,10 @@ import DeliveryPage from "./DeliveryPage";
 import ReceiptPage from "./ReceiptPage";
 import SalesReturnPage from "./SalesReturnPage";
 import { BusinessDocumentForm } from "../../components/business/BusinessDocumentForm";
-import { useLocation, useSearchParams } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
 import { ActionableMetricCard } from "../../components/cards/ActionableMetricCard";
+import { EntityLink } from "../../components/business/EntityLink";
+import OutboundWorkbench from "./OutboundWorkbench";
 
 type SalesOrder = {
   salesOrderId: string;
@@ -107,6 +108,7 @@ function viewFromInitial(initialView?: string): SalesView {
 
 export default function SalesDemandPage(props: SalesDemandPageProps) {
   const location = useLocation();
+  if (location.pathname === "/app/sales/orders" || location.pathname === "/app/sales/orders/new" || /^\/app\/sales\/orders\/[^/]+$/.test(location.pathname) || /^\/app\/sales\/shipments\/[^/]+$/.test(location.pathname)) return <OutboundWorkbench />;
   const documentId = decodeURIComponent(location.pathname.split("/").at(-2) || "");
   if (props.initialView === "delivery-new") return <BusinessDocumentForm documentLabel="发货单" listPath="/app/sales/deliveries" />;
   if (props.initialView === "delivery-edit") return <BusinessDocumentForm mode="edit" documentLabel="发货单" documentId={documentId} listPath="/app/sales/deliveries" />;
@@ -122,11 +124,11 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
   const [searchParams] = useSearchParams();
   const view = viewFromInitial(initialView);
   const [orders, setOrders] = useState<SalesOrder[]>([]);
-  const [availability, setAvailability] = useState<InventoryAvailability[]>([]);
+  const [availability] = useState<InventoryAvailability[]>([]);
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [ordersError, setOrdersError] = useState("");
-  const [allocationWarning, setAllocationWarning] = useState("");
+  const [allocationWarning] = useState("库存分配尚未接入销售订单运行时仓库，当前不展示未经接入的可承诺量。");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -146,18 +148,6 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
       })
       .finally(() => { if (alive) setLoadingOrders(false); });
 
-    apiJson<{ availability: InventoryAvailability[] }>("/api/inventory/availability")
-      .then((payload) => {
-        if (!alive) return;
-        setAvailability(payload.availability || []);
-        setAllocationWarning("");
-      })
-      .catch(() => {
-        if (!alive) return;
-        setAvailability([]);
-        setAllocationWarning("当前工作区暂未读取到完整库存分配记录，因此可承诺量和预留建议需人工复核。");
-      });
-
     return () => { alive = false; };
   }, []);
 
@@ -165,6 +155,7 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
     if (!focus?.entityId) return;
     if (focus.entityType === "sales_order" || focus.entityType === "customer_order") {
       setSelectedOrderId(focus.entityId);
+      setDetailOpen(true);
       return;
     }
     if (focus.entityType === "inventory_item" || focus.entityType === "item" || focus.entityType === "sku") {
@@ -218,10 +209,6 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
-          {view === "orders" && <ContextualImportActions entityLabel="客户订单" compact={false} />}
-      </div>
-
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <ActionableMetricCard label="客户订单" value={String(activeSummary.totalOrders)} description="查看当前工作区全部订单" to="/app/sales/orders" icon={ClipboardList} color={A.blue} />
         <ActionableMetricCard label="交付风险" value={String(activeSummary.riskOrderCount)} description={`${activeSummary.highRiskOrderCount} 个高风险订单`} to="/app/sales/orders?risk=true" icon={AlertTriangle} color={activeSummary.highRiskOrderCount ? A.red : A.orange} />
@@ -265,10 +252,10 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
                 <tbody>
                   {visibleOrders.map((order, index) => (
                     <tr key={order.salesOrderId} data-testid={`sales-order-${order.salesOrderId}`} style={{ borderBottom: index < visibleOrders.length - 1 ? `1px solid ${A.border}` : "none", background: selectedOrder?.salesOrderId === order.salesOrderId ? "#f0f6ff" : A.white }}>
-                      <td className="px-3 py-3 font-semibold tabular-nums" style={{ color: A.blue }}>{order.salesOrderId}</td>
+                      <td className="px-3 py-3 tabular-nums" style={{ color: A.blue }}><EntityLink kind="sales_order" id={order.salesOrderId}>{order.salesOrderId}</EntityLink></td>
                       <td className="px-3 py-3" style={{ color: A.label }}>{order.customerName}</td>
                       <td className="px-3 py-3">
-                        <div className="font-semibold tabular-nums" style={{ color: A.label }}>{order.sku}</div>
+                        <div className="tabular-nums" style={{ color: A.label }}><EntityLink kind="item" id={order.sku}>{order.sku}</EntityLink></div>
                         <div className="fc-caption truncate max-w-[180px]" style={{ color: A.sub }}>{order.itemName}</div>
                       </td>
                       <td className="px-3 py-3 tabular-nums" style={{ color: A.label }}>{qty(order.orderedQty)}</td>
@@ -278,7 +265,7 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
                       <td className="px-3 py-3"><Chip label={order.deliveryRiskLabel} color={riskColor[order.deliveryRiskLevel] || A.gray1} bg={`${riskColor[order.deliveryRiskLevel] || A.gray1}16`} /></td>
                       <td className="px-3 py-3" style={{ color: A.sub }}>{order.statusLabel}</td>
                       <td className="px-3 py-3">
-                        <button onClick={() => openOrderDetail(order.salesOrderId)} className="px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看详情</button>
+                        <Link to={`/app/sales/orders/${encodeURIComponent(order.salesOrderId)}`} className="px-2.5 py-1.5 rounded-md font-medium" style={{ background: A.gray6, color: A.blue }}>查看详情</Link>
                       </td>
                     </tr>
                   ))}
@@ -301,8 +288,8 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
                 <div className="grid grid-cols-[120px_1fr_180px_120px] gap-3 items-start">
                   <Chip label={order.deliveryRiskLabel} color={riskColor[order.deliveryRiskLevel] || A.gray1} bg={`${riskColor[order.deliveryRiskLevel] || A.gray1}16`} />
                   <div className="min-w-0">
-                    <div className="font-semibold text-sm tabular-nums" style={{ color: A.label }}>{order.salesOrderId} · {order.customerName}</div>
-                    <div className="mt-1 text-xs truncate" style={{ color: A.sub }}>{order.sku} / {order.itemName} · 缺口 {qty(order.shortageQty)} · 承诺日期 {order.promisedDate || "待确认"}</div>
+                    <div className="font-semibold text-sm tabular-nums" style={{ color: A.label }}><EntityLink kind="sales_order" id={order.salesOrderId}>{order.salesOrderId}</EntityLink> · {order.customerName}</div>
+                    <div className="mt-1 text-xs truncate" style={{ color: A.sub }}><EntityLink kind="item" id={order.sku}>{order.sku}</EntityLink> / {order.itemName} · 缺口 {qty(order.shortageQty)} · 承诺日期 {order.promisedDate || "待确认"}</div>
                     <div className="mt-1 text-[11px] leading-5 line-clamp-2" style={{ color: A.gray1 }}>{order.deliveryRiskReason}</div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {[
@@ -321,7 +308,7 @@ function SalesDemandCore({ initialView, focus, onNavigate, onOpenAi }: SalesDema
                   </div>
                   <div className="text-[11px] leading-5" style={{ color: A.orange }}>建议动作：优先复核库存分配、在途采购和供应商交付承诺。</div>
                   <div className="flex justify-end">
-                    <button onClick={() => openOrderDetail(order.salesOrderId)} className="px-3 py-1.5 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</button>
+                    <Link to={`/app/sales/orders/${encodeURIComponent(order.salesOrderId)}`} className="px-3 py-1.5 rounded-md font-medium" style={{ background: "#f0f6ff", color: A.blue }}>查看详情</Link>
                   </div>
                 </div>
               </div>

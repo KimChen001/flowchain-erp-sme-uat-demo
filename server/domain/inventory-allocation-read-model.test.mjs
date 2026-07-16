@@ -95,7 +95,8 @@ test('inventory allocation API is read-only and route classification marks it re
   const getCtx = routeContext('GET', '/api/inventory/reservation-preview?sku=SKU-00412&salesOrderId=SO-HIGH&requestedQty=25')
   assert.equal(await handleInventoryRoute(getCtx), true)
   assert.equal(getCtx.payloads[0].status, 200)
-  assert.equal(getCtx.payloads[0].payload.reservationPreview.reservationSuggestedQty, 10)
+  assert.equal(getCtx.payloads[0].payload.reservationPreview.reservableQty, 10)
+  assert.equal(getCtx.payloads[0].payload.availability.reserved, 30)
 
   const postCtx = routeContext('POST', '/api/inventory/availability')
   assert.equal(await handleInventoryRoute(postCtx), true)

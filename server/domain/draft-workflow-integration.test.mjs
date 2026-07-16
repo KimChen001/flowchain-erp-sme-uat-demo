@@ -9,37 +9,18 @@ function readSource(...parts) {
   return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8')
 }
 
-test('inventory replenishment opens draft preview instead of creating purchase requests', () => {
+test('inventory replenishment enters canonical PR form without auto-submit or legacy preview', () => {
   const app = readSource('src', 'app', 'FlowChainApp.tsx')
   const inventory = readSource('src', 'modules', 'inventory', 'Page.tsx')
 
-  assert.match(app, /function ReplenishmentRequestModal/)
-  assert.match(app, /onPreviewDraft/)
-  assert.match(app, /type: draftType/)
-  assert.match(app, /purchase_request_draft/)
-  assert.match(app, /rfq_draft/)
   assert.match(app, /\/api\/action-drafts\/preview/)
-  assert.doesNotMatch(app, /submitReplenishmentRequest/)
-  assert.doesNotMatch(app, /inventoryPurchaseRequestPayload/)
-  assert.doesNotMatch(app, /提交采购申请/)
-  assert.doesNotMatch(app, /生成补货采购申请/)
-
-  assert.match(app, /<InventoryPanel[^>]+onReviewActionDraft=\{openActionDraftReview\}/)
-  assert.match(inventory, /onReviewActionDraft/)
-  assert.match(inventory, /function inventoryDraftRequest/)
-  assert.match(inventory, /purchase_request_draft/)
-  assert.match(inventory, /rfq_draft/)
-  assert.match(inventory, /预览 PR/)
-  assert.match(inventory, /预览 RFQ/)
-  assert.match(inventory, /查看批次\/序列号/)
-  assert.match(inventory, /返回库存列表/)
-  assert.match(inventory, /查看事务流水/)
-  assert.match(inventory, /查看异常单据/)
-  assert.match(inventory, /inventoryReadFallbackScopes/)
-  assert.match(inventory, /当前工作区数据补足/)
-  assert.doesNotMatch(inventory, /\/api\/purchase-requests/)
-  assert.doesNotMatch(inventory, /inventoryPurchaseRequestPayload/)
-  assert.doesNotMatch(inventory, /apiJson<PurchaseRequest>/)
+  assert.doesNotMatch(app, /ReplenishmentRequestModal|inventoryItems|supplierRecommendation/)
+  assert.match(inventory, /<EntityLink kind="item"/)
+  assert.match(inventory, /\/app\/procurement\/requests\?itemId=/)
+  assert.match(inventory, /新建采购申请/)
+  assert.match(inventory, /维护供应商关系/)
+  assert.doesNotMatch(inventory, /预览 PR|预览 RFQ|demo-data|inventoryReadFallbackScopes/)
+  assert.doesNotMatch(inventory, /submit|purchase_request_draft|rfq_draft/)
 })
 
 test('Today Cockpit maps reviewable actions to supported draft previews with fallback copy', () => {

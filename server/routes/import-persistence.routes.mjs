@@ -1,12 +1,40 @@
+import { randomUUID } from 'node:crypto'
 import { resolveCurrentUser } from '../domain/context.mjs'
+import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 import {
-  commitImportPreview,
   createImportPreview,
   getImportBatch,
   importBusinessConfigs,
   listImportBatches,
   rollbackImportBatch,
+  validateDurableImportCommit,
+  recordDurableImportCommit,
 } from '../repositories/import-persistence-repository.mjs'
+
+async function relationshipSnapshot(ctx) {
+  const [items, suppliers, procurement] = await Promise.all([
+    ctx.repositories?.masterData?.listManagedItems?.() || [],
+    ctx.repositories?.masterData?.listSuppliers?.() || [],
+    ctx.repositories?.procurementRuntime?.snapshot?.() || {},
+  ])
+  return {
+    skus: items.flatMap(row => [row.sku, row.itemId].filter(Boolean).map(String)),
+    suppliers: suppliers.flatMap(row => [row.supplierCode, row.id, row.supplierName].filter(Boolean).map(String)),
+    purchaseOrders: (procurement.purchaseOrders || []).map(row => String(row.id || row.po || '')),
+    receivingDocs: (procurement.receipts || []).map(row => String(row.id || row.grn || '')),
+  }
+}
+
+async function applyDurableRows(ctx, validation, actor, metadata) {
+  const rows = validation.preview.normalizedRows
+  const schemaId = validation.preview.schemaId
+  if (schemaId === 'purchase-request') { const error = new Error('采购申请正式导入尚未接通，请继续使用预览并从采购申请入口创建。'); Object.assign(error, { status: 501, code: 'PURCHASE_REQUEST_IMPORT_NOT_CONNECTED' }); throw error }
+  if (!['supplier-master', 'item-master', 'customer-master', 'inventory-balance'].includes(schemaId)) { const error = new Error('该业务对象当前仅支持预览，正式导入尚未接通。'); Object.assign(error, { status: 501, code: 'IMPORT_COMMIT_NOT_CONNECTED' }); throw error }
+  if (schemaId === 'supplier-master') return ctx.repositories.masterData.applySupplierImportBatch(rows.map(row => ({ supplierCode: row.code, supplierName: row.name, categories: [row.category].filter(Boolean), contactName: row.contact, email: row.email, defaultCurrency: row.currency, status: row.status })), actor, metadata)
+  if (schemaId === 'item-master') return ctx.repositories.masterData.applyItemImportBatch(rows.map(row => ({ sku: row.sku, itemName: row.name, category: row.category, baseUnit: row.unit, defaultWarehouseId: row.defaultWarehouse, safetyStock: row.safetyStock, status: row.status })), actor, metadata)
+  if (schemaId === 'customer-master') return ctx.repositories.masterData.applyCustomerImportBatch(rows.map(row => ({ code: row.code, name: row.name, contact: row.contact, email: row.email, currency: row.currency, status: row.status })), actor, metadata)
+  return ctx.repositories.inventoryRuntime.applyImportBatch(rows.map(row => ({ sku: row.sku, warehouse: row.warehouse, bin: row.bin, quantity: row.quantity, asOfDate: row.asOfDate, status: row.status, reason: '正式库存余额导入' })), actor, metadata)
+}
 
 function roleFor(user = {}) {
   const raw = String(user.role || '').toLowerCase()
@@ -27,26 +55,36 @@ function baselineFor(db = {}, schemaId = '') {
 
 export async function handleImportPersistenceRoute(ctx) {
   const { req, res, url, db, send, readBody } = ctx
-  const user = resolveCurrentUser(db, req.headers.authorization || '')
+  const user = ctx.identity?.authenticated ? { id: ctx.identity.userId, name: ctx.identity.name, role: ctx.identity.role } : resolveCurrentUser(db, req.headers.authorization || '')
 
   if (req.method === 'POST' && url.pathname === '/api/imports/preview') {
     const body = await readBody(req)
-    const result = createImportPreview(body, { actor: user.name, relationships: {
-      skus: (db.products || []).map((row) => String(row.sku || row.itemSku || '')),
-      suppliers: (db.suppliers || []).flatMap((row) => [row.code, row.id, row.name].filter(Boolean).map(String)),
-      purchaseOrders: (db.purchaseOrders || []).map((row) => String(row.po || row.id || '')),
-      receivingDocs: (db.receivingDocs || []).map((row) => String(row.grn || row.id || '')),
-    } })
+    const result = createImportPreview(body, { actor: user.name, relationships: await relationshipSnapshot(ctx) })
     send(res, result.ok ? 200 : result.status || 422, result)
     return true
   }
 
   const commitMatch = url.pathname.match(/^\/api\/imports\/([^/]+)\/commit$/)
   if (req.method === 'POST' && commitMatch) {
+    const authorization = authorizeMutation(ctx, { allowedRoles: ['admin', 'manager', 'business-specialist'], action: 'commit', resource: 'durable-import' })
+    if (authorization.blocked) return true
     const body = await readBody(req)
     const previewId = decodeURIComponent(commitMatch[1])
-    const result = commitImportPreview(previewId, body, { actor: user.name, baselineRecords: baselineFor(db, String(body.businessObject || body.schemaId || '')) })
-    send(res, result.ok ? 201 : result.status || 422, result)
+    const validation = validateDurableImportCommit(previewId, body, { relationships: await relationshipSnapshot(ctx) })
+    if (!validation.ok) { send(res, validation.status || 422, validation); return true }
+    if (validation.replayed) { send(res, 200, { ...validation.result, replayed: true }); return true }
+    const importBatchId = `IMP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
+    const metadata = { importBatchId, previewId, snapshotHash: validation.preview.snapshotHash }
+    try {
+      const changes = await applyDurableRows(ctx, validation, authorization.identity.userId, metadata)
+      send(res, 201, recordDurableImportCommit(validation, changes, { actor: authorization.identity.userId, importBatchId }))
+    } catch (error) {
+      if (['PURCHASE_REQUEST_IMPORT_NOT_CONNECTED', 'IMPORT_COMMIT_NOT_CONNECTED'].includes(error.code)) {
+        send(res, error.status || 501, { code: error.code, message: error.message, details: error.details || [] })
+        return true
+      }
+      send(res, [409, 422].includes(error.status) ? error.status : 422, { code: 'IMPORT_BATCH_ATOMIC_COMMIT_FAILED', failedRowNumber: error.failedRowNumber, message: error.message, committedRows: 0, details: error.details || [] })
+    }
     return true
   }
 
@@ -64,8 +102,10 @@ export async function handleImportPersistenceRoute(ctx) {
 
   const rollbackMatch = url.pathname.match(/^\/api\/import-batches\/([^/]+)\/rollback$/)
   if (req.method === 'POST' && rollbackMatch) {
+    const authorization = authorizeMutation(ctx, { allowedRoles: ['admin', 'manager'], action: 'rollback', resource: 'durable-import' })
+    if (authorization.blocked) return true
     const body = await readBody(req)
-    const result = rollbackImportBatch(decodeURIComponent(rollbackMatch[1]), body, { actor: user.name, role: roleFor({ role: req.headers['x-flowchain-role'] || user.role }) })
+    const result = rollbackImportBatch(decodeURIComponent(rollbackMatch[1]), body, { actor: authorization.identity.name, role: roleFor(authorization.identity) })
     send(res, result.ok ? 200 : result.status || 422, result)
     return true
   }

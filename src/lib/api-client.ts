@@ -1,40 +1,57 @@
-import type { ApiErrorPayload } from "../types/api";
+import type { ApiErrorPayload } from '../types/api'
+
+export const AUTH_TOKEN_KEY = 'flowchain:auth-token'
+export const CURRENT_USER_KEY = 'flowchain:current-user'
+const LEGACY_AUTH_TOKEN_KEY = 'scm-demo-token'
+const LEGACY_CURRENT_USER_KEY = 'scm-demo-user'
+
+export function migrateLegacySessionStorage(storage: Storage = localStorage) {
+  const currentToken = storage.getItem(AUTH_TOKEN_KEY)
+  const currentUser = storage.getItem(CURRENT_USER_KEY)
+  const legacyToken = storage.getItem(LEGACY_AUTH_TOKEN_KEY)
+  const legacyUser = storage.getItem(LEGACY_CURRENT_USER_KEY)
+  if (!currentToken && legacyToken) storage.setItem(AUTH_TOKEN_KEY, legacyToken)
+  if (!currentUser && legacyUser) storage.setItem(CURRENT_USER_KEY, legacyUser)
+  try {
+    const candidate = JSON.parse(storage.getItem(CURRENT_USER_KEY) || 'null')
+    if (candidate?.name === '张磊' && candidate?.email === 'zhanglei@example.com') {
+      storage.removeItem(AUTH_TOKEN_KEY)
+      storage.removeItem(CURRENT_USER_KEY)
+    }
+  } catch { /* Ignore malformed legacy session storage. */ }
+  storage.removeItem(LEGACY_AUTH_TOKEN_KEY)
+  storage.removeItem(LEGACY_CURRENT_USER_KEY)
+}
+
+export class ApiError extends Error {
+  status: number
+  code?: string
+  details: Array<Record<string, unknown>>
+  entityId?: string
+  currentStatus?: string
+  currentVersion?: number
+  expectedVersion?: number
+  payload: ApiErrorPayload
+
+  constructor(status: number, payload: ApiErrorPayload, fallback: string) {
+    super(payload.message || payload.error || fallback)
+    this.name = 'ApiError'; this.status = status; this.payload = payload; this.code = payload.code
+    this.details = Array.isArray(payload.details) ? payload.details : []
+    this.entityId = payload.entityId; this.currentStatus = payload.currentStatus
+    this.currentVersion = payload.currentVersion; this.expectedVersion = payload.expectedVersion
+  }
+}
+
+if (typeof window !== 'undefined') migrateLegacySessionStorage(window.localStorage)
 
 export async function apiJson<T>(url: string, options?: RequestInit): Promise<T> {
-  let token = "";
-  let role = "";
-  let userId = "";
-  if (typeof window !== "undefined") {
-    token = localStorage.getItem("scm-demo-token") || "";
-    try {
-      const user = JSON.parse(localStorage.getItem("scm-demo-user") || "{}");
-      const rawRole = String(user.role || "").toLowerCase();
-      role = /admin|管理员/.test(rawRole) ? "admin" : /manager|经理|approver/.test(rawRole) ? "manager" : /viewer|只读/.test(rawRole) ? "viewer" : "analyst";
-      userId = String(user.id || "");
-    } catch { /* Ignore malformed local session metadata. */ }
-  }
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(role ? { "X-FlowChain-Role": role } : {}),
-      ...(userId ? { "X-FlowChain-User": userId } : {}),
-      ...(options?.headers ?? {}),
-    },
-  });
-
+  const token = typeof window !== 'undefined' ? localStorage.getItem(AUTH_TOKEN_KEY) || '' : ''
+  const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options?.headers ?? {}) } })
   if (!res.ok) {
-    const text = await res.text();
-    let message = text;
-    try {
-      const payload = JSON.parse(text) as ApiErrorPayload;
-      message = payload.message || payload.error || message;
-    } catch {
-      // Some local development endpoints may return plain text.
-    }
-    throw new Error(message || `API request failed: ${res.status}`);
+    const raw = await res.text(); let payload: ApiErrorPayload = { error: raw }
+    try { payload = JSON.parse(raw) as ApiErrorPayload } catch { /* Preserve plain-text server errors. */ }
+    throw new ApiError(res.status, payload, raw || `API request failed: ${res.status}`)
   }
-
-  return res.json();
+  if (res.status === 204) return undefined as T
+  return res.json()
 }

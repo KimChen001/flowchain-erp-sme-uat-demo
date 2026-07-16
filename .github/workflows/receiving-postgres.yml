@@ -1,0 +1,59 @@
+name: Receiving PostgreSQL Workbench
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+        env:
+          DATABASE_URL: postgresql://generate_only:generate_only@127.0.0.1:55432/flowchain_generate_only?schema=public
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - run: npm run test:db:receiving
+      - run: npm run test:api:receiving
+      - run: npm run test:db:outbound
+      - run: npm run test:api:outbound
+      - run: npm run test:db:inventory-operations
+      - run: npm run test:api:inventory-operations
+      - run: npm run pilot:check
+        env:
+          FLOWCHAIN_PERSISTENCE_MODE: database
+          DATABASE_URL: postgresql://readiness_only:readiness_only@127.0.0.1:55432/flowchain_readiness_only?schema=public
+          FLOWCHAIN_LOCAL_SESSION_SECRET: ci-readiness-check-secret-at-least-32-characters
+          FLOWCHAIN_DEFAULT_TENANT_ID: ci-readiness-tenant
+          FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: 'true'
+          FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true'
+          FLOWCHAIN_ENABLE_DB_INVENTORY_OPERATIONS: 'true'
+          FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: 'false'
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+        env:
+          DATABASE_URL: postgresql://generate_only:generate_only@127.0.0.1:55432/flowchain_generate_only?schema=public
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser:receiving
+      - run: npm run test:browser:reports
+      - run: npm run test:browser:outbound
+      - run: npm run test:browser:inventory-operations

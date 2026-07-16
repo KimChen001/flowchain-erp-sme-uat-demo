@@ -42,7 +42,8 @@ test('GET /api/evidence-graph builds read-only graph by query anchor', async () 
   assert.equal(route.response.status, 200)
   assert.equal(route.response.payload.anchor.id, 'SO-2026-0412-A')
   assert.equal(route.response.payload.nodes.some((node) => node.id === 'SKU-00412'), true)
-  assert.equal(route.response.payload.edges.some((edge) => edge.relation === 'consumes_inventory'), true)
+  assert.equal(route.response.payload.edges.some((edge) => edge.relation === 'references_item'), true)
+  assert.ok(route.response.payload.nodes.every((node) => node.entityType && node.entityId && node.canonicalRoute && node.sourceRepository))
 })
 
 test('evidence graph shortcut routes return expected related records', async () => {
@@ -50,7 +51,7 @@ test('evidence graph shortcut routes return expected related records', async () 
   await handleEvidenceGraphRoute(route.ctx)
 
   assert.equal(route.response.status, 200)
-  assert.equal(route.response.payload.relatedRecords.salesOrders.some((item) => item.id === 'SO-2026-0412-A'), true)
+  assert.equal(route.response.payload.relatedRecords.purchaseRequests.some((item) => item.id === 'PR-2026-2401'), true)
   assert.equal(route.response.payload.relatedRecords.receivingDocs.some((item) => item.id === 'GRN-202605-0418'), true)
 })
 
@@ -59,7 +60,8 @@ test('GET /api/evidence-graph/related returns compact related records', async ()
   await handleEvidenceGraphRoute(route.ctx)
 
   assert.equal(route.response.status, 200)
-  assert.equal(route.response.payload.relatedRecords.purchaseOrders.some((item) => item.id === 'PO-2026-1282'), true)
+  assert.equal(route.response.payload.relatedRecords.salesOrders.some((item) => item.id === 'SO-2026-0412-A'), true)
+  assert.equal(route.response.payload.relatedRecords.inventoryItems.some((item) => item.id === 'SKU-00412'), true)
   assert.ok(Array.isArray(route.response.payload.nodes))
 })
 

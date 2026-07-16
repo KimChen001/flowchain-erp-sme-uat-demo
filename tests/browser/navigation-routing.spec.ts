@@ -3,8 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 const user = { id: "routing-user", company: "新辰智能制造", name: "张磊", email: "route@example.com", role: "供应链经理" };
 async function authenticate(page: Page) {
   await page.addInitScript((profile) => {
-    localStorage.setItem("scm-demo-token", "routing-token");
-    localStorage.setItem("scm-demo-user", JSON.stringify(profile));
+    localStorage.setItem("flowchain:auth-token", "routing-token");
+    localStorage.setItem("flowchain:current-user", JSON.stringify(profile));
   }, user);
 }
 
