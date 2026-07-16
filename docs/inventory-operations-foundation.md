@@ -130,3 +130,13 @@ Transfer reconciliation verifies paired movements, zero net quantity, balance ef
 ## 30. Phase 4B boundary
 
 After Phase 4A is frozen, Phase 4B may separately evaluate Lot/Serial, Returns, Quarantine, two-step in-transit transfers, and barcode/mobile counting. Those additions must preserve the Phase 4A movement immutability, mathematics, idempotency, authorization, reconciliation, PostgreSQL, API, and browser gates.
+
+## 31. Phase 4A.1 inventory integrity hardening
+
+Posting and reversal now use one shared balance-impact aggregation contract. Repeated transfer legs and adjustment lines accumulate fixed-scale deltas by `InventoryBalance.id`; each balance is locked and updated once. Transfer safety validates cumulative gross outbound demand as well as deterministic net impact. Adjustment lines that cancel to a zero balance delta are rejected with `ADJUSTMENT_NET_ZERO_NOT_ALLOWED`, and zero movements are never created.
+
+Transfer and adjustment reversal fail closed unless every immutable original movement matches its document, line or leg, movement direction, item/SKU, warehouse/location, quantity fields, posting batch, balance metadata, and unreversed state. Corrections append linked movements under a new posting batch and leave original quantities unchanged.
+
+Blind Count snapshot reveal is workflow-aware. Draft and in-progress entry hides recorded values from every recorder, including managers. Submitted counts reveal snapshots only to Admin/Manager reviewers; reviewed and posted counts reveal to authorized warehouse readers. Hidden values are serialized as `null`.
+
+Reconciliation is evaluated per line rather than by document totals alone. Symmetric or offsetting errors cannot produce `matched`. Partial warehouse scope returns `unavailable` with `PARTIAL_WAREHOUSE_SCOPE`. Capability state requires all three explicit inventory-operation capabilities; an absent capability fails closed. Routes expose only formal domain and identity errors and sanitize Prisma/internal failures as `INVENTORY_OPERATION_FAILED`.

@@ -1082,7 +1082,7 @@ function OperationDetail({
             </div>
           ))}
         </div>
-        <div className="mt-4 text-sm">
+        <div className="mt-4 text-sm" data-testid="inventory-reconciliation">
           Reconciliation：<strong>{data.reconciliation?.status}</strong>
         </div>
       </Card>

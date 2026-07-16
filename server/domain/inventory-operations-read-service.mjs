@@ -15,6 +15,20 @@ const mutator = (role) =>
     role,
   );
 const manager = (role) => ["admin", "manager"].includes(role);
+const capabilityIds = [
+  "stock-transfer",
+  "cycle-count",
+  "inventory-adjustment-document",
+];
+
+export class InventoryOperationsReadError extends Error {
+  constructor(code, message, status = 400) {
+    super(message);
+    this.name = "InventoryOperationsReadError";
+    this.code = code;
+    this.status = status;
+  }
+}
 
 function page(query = {}) {
   const number = Math.max(1, Number.parseInt(query.page, 10) || 1);
@@ -57,6 +71,54 @@ function movementModel(row) {
   };
 }
 
+function capabilitiesEnabled(capabilities) {
+  return capabilityIds.every(
+    (id) =>
+      Object.prototype.hasOwnProperty.call(capabilities, id) &&
+      capabilities[id]?.enabled === true,
+  );
+}
+
+function countSnapshotVisible(session, actor) {
+  if (!session.blindCount) return true;
+  if (["draft", "in_progress"].includes(session.workflowStatus)) return false;
+  if (session.workflowStatus === "submitted") return manager(actor.role);
+  if (["reviewed", "posted"].includes(session.workflowStatus)) return true;
+  if (session.workflowStatus === "cancelled") return manager(actor.role);
+  return false;
+}
+
+function movementMatchesIdentity(row, expected) {
+  const expectedUnits = (value) =>
+    typeof value === "bigint" ? value : units(value || 0);
+  return Boolean(
+    row &&
+    row.sourceDocumentType === expected.sourceDocumentType &&
+    row.sourceDocumentId === expected.sourceDocumentId &&
+    row.sourceDocumentLineId === expected.sourceDocumentLineId &&
+    row.movementType === expected.movementType &&
+    row.itemId === expected.itemId &&
+    row.sku === expected.sku &&
+    row.warehouseId === expected.warehouseId &&
+    text(row.locationKey) === text(expected.locationKey) &&
+    text(row.metadata?.balanceId) === text(expected.balanceId) &&
+    (!expected.postingBatchId ||
+      text(row.postingBatchId) === text(expected.postingBatchId)) &&
+    units(row.quantityIn || 0) === expectedUnits(expected.quantityIn) &&
+    units(row.quantityOut || 0) === expectedUnits(expected.quantityOut) &&
+    units(row.adjustmentQty || 0) === expectedUnits(expected.adjustmentQty),
+  );
+}
+
+function oneBySourceLine(movements, sourceDocumentLineId, movementType) {
+  const matches = movements.filter(
+    (row) =>
+      row.sourceDocumentLineId === sourceDocumentLineId &&
+      (!movementType || row.movementType === movementType),
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
 async function evidence(prisma, actor, entityType, entityId, warehouseIds) {
   if (!warehouseIds.every((id) => canRead(actor, id))) return [];
   return (
@@ -83,9 +145,7 @@ export function createInventoryOperationsReadService({
   capabilities = {},
 } = {}) {
   if (!prisma) throw new Error("prisma is required");
-  const enabled = Object.values(capabilities).every(
-    (entry) => entry?.enabled === true,
-  );
+  const enabled = capabilitiesEnabled(capabilities);
 
   async function entryData(context) {
     const actor = await resolveProvisionedActor(
@@ -226,18 +286,21 @@ export function createInventoryOperationsReadService({
         },
       },
     });
-    if (
-      !transfer ||
-      !transferWarehouses(transfer).every((warehouseId) =>
-        canRead(actor, warehouseId),
-      )
-    ) {
-      const error = new Error("Stock transfer was not found.");
-      error.code = "TRANSFER_NOT_FOUND";
-      error.status = 404;
-      throw error;
+    const allWarehouses = transfer ? transferWarehouses(transfer) : [];
+    const fullScope =
+      Boolean(transfer) &&
+      allWarehouses.every((warehouseId) => canRead(actor, warehouseId));
+    const anyScope =
+      Boolean(transfer) &&
+      allWarehouses.some((warehouseId) => canRead(actor, warehouseId));
+    if (!transfer || !anyScope) {
+      throw new InventoryOperationsReadError(
+        "TRANSFER_NOT_FOUND",
+        "Stock transfer was not found.",
+        404,
+      );
     }
-    const movements = await prisma.inventoryMovement.findMany({
+    const allMovements = await prisma.inventoryMovement.findMany({
       where: {
         tenantId: actor.tenantId,
         sourceDocumentType: "StockTransferDocument",
@@ -245,10 +308,13 @@ export function createInventoryOperationsReadService({
       },
       orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
     });
-    const warehouses = transferWarehouses(transfer),
-      operate = warehouses.every((warehouseId) =>
-        canOperate(actor, warehouseId),
-      );
+    const movements = allMovements.filter((row) =>
+        canRead(actor, row.warehouseId),
+      ),
+      warehouses = allWarehouses,
+      operate =
+        fullScope &&
+        warehouses.every((warehouseId) => canOperate(actor, warehouseId));
     const availableActions = {
       canEdit:
         enabled &&
@@ -287,27 +353,172 @@ export function createInventoryOperationsReadService({
       );
     if (!operate)
       availableActions.blockingReasonCodes.push("WAREHOUSE_SCOPE_DENIED");
-    const posted = movements.filter((row) =>
+    const posted = allMovements.filter((row) =>
         ["stock_transfer_out", "stock_transfer_in"].includes(row.movementType),
       ),
-      reversals = movements.filter((row) =>
+      reversals = allMovements.filter((row) =>
         row.movementType.includes("reversal"),
       );
-    const transferNet = movements.reduce(
+    const transferNet = allMovements.reduce(
       (sum, row) => sum + units(row.quantityIn) - units(row.quantityOut),
       0n,
     );
+    const postingBatchId = text(transfer.metadata?.postingBatchId);
+    const movementBalanceIds = [
+      ...new Set(
+        allMovements
+          .map((row) => text(row.metadata?.balanceId))
+          .filter(Boolean),
+      ),
+    ];
+    const movementBalances = movementBalanceIds.length
+      ? await prisma.inventoryBalance.findMany({
+          where: {
+            tenantId: actor.tenantId,
+            id: { in: movementBalanceIds },
+          },
+        })
+      : [];
+    const movementBalanceMap = new Map(
+      movementBalances.map((row) => [row.id, row]),
+    );
+    const lineChecks = transfer.lines.map((line) => {
+      const source = line.legs.find((leg) => leg.direction === "source");
+      const destination = line.legs.find(
+        (leg) => leg.direction === "destination",
+      );
+      const sourceMovement = source
+        ? oneBySourceLine(allMovements, source.id, "stock_transfer_out")
+        : null;
+      const destinationMovement = destination
+        ? oneBySourceLine(allMovements, destination.id, "stock_transfer_in")
+        : null;
+      const sourceBalance = movementBalanceMap.get(
+        text(sourceMovement?.metadata?.balanceId),
+      );
+      const destinationBalance = movementBalanceMap.get(
+        text(destinationMovement?.metadata?.balanceId),
+      );
+      const sourceBalanceMatched =
+        sourceBalance?.itemId === line.itemId &&
+        sourceBalance?.sku === line.sku &&
+        sourceBalance?.warehouseId === source?.warehouseId &&
+        text(sourceBalance?.locationKey) === text(source?.locationKey);
+      const destinationBalanceMatched =
+        destinationBalance?.itemId === line.itemId &&
+        destinationBalance?.sku === line.sku &&
+        destinationBalance?.warehouseId === destination?.warehouseId &&
+        text(destinationBalance?.locationKey) ===
+          text(destination?.locationKey);
+      const originalMatched =
+        Boolean(source && destination) &&
+        sourceBalanceMatched &&
+        destinationBalanceMatched &&
+        movementMatchesIdentity(sourceMovement, {
+          sourceDocumentType: "StockTransferDocument",
+          sourceDocumentId: transfer.id,
+          sourceDocumentLineId: source.id,
+          movementType: "stock_transfer_out",
+          itemId: line.itemId,
+          sku: line.sku,
+          warehouseId: source.warehouseId,
+          locationKey: source.locationKey,
+          balanceId: sourceMovement?.metadata?.balanceId,
+          postingBatchId,
+          quantityIn: 0,
+          quantityOut: line.quantity,
+          adjustmentQty: 0,
+        }) &&
+        movementMatchesIdentity(destinationMovement, {
+          sourceDocumentType: "StockTransferDocument",
+          sourceDocumentId: transfer.id,
+          sourceDocumentLineId: destination.id,
+          movementType: "stock_transfer_in",
+          itemId: line.itemId,
+          sku: line.sku,
+          warehouseId: destination.warehouseId,
+          locationKey: destination.locationKey,
+          balanceId: destinationMovement?.metadata?.balanceId,
+          postingBatchId,
+          quantityIn: line.quantity,
+          quantityOut: 0,
+          adjustmentQty: 0,
+        });
+      let reversalMatched = transfer.postingStatus !== "reversed";
+      if (transfer.postingStatus === "reversed") {
+        const sourceReverse = source
+          ? oneBySourceLine(
+              allMovements,
+              `${source.id}:reversal`,
+              "stock_transfer_reversal_in",
+            )
+          : null;
+        const destinationReverse = destination
+          ? oneBySourceLine(
+              allMovements,
+              `${destination.id}:reversal`,
+              "stock_transfer_reversal_out",
+            )
+          : null;
+        reversalMatched =
+          movementMatchesIdentity(sourceReverse, {
+            sourceDocumentType: "StockTransferDocument",
+            sourceDocumentId: transfer.id,
+            sourceDocumentLineId: `${source?.id}:reversal`,
+            movementType: "stock_transfer_reversal_in",
+            itemId: line.itemId,
+            sku: line.sku,
+            warehouseId: source?.warehouseId,
+            locationKey: source?.locationKey,
+            balanceId: sourceMovement?.metadata?.balanceId,
+            quantityIn: line.quantity,
+            quantityOut: 0,
+            adjustmentQty: 0,
+          }) &&
+          sourceReverse?.reversalOfMovementId === sourceMovement?.id &&
+          sourceMovement?.reversedByMovementId === sourceReverse?.id &&
+          movementMatchesIdentity(destinationReverse, {
+            sourceDocumentType: "StockTransferDocument",
+            sourceDocumentId: transfer.id,
+            sourceDocumentLineId: `${destination?.id}:reversal`,
+            movementType: "stock_transfer_reversal_out",
+            itemId: line.itemId,
+            sku: line.sku,
+            warehouseId: destination?.warehouseId,
+            locationKey: destination?.locationKey,
+            balanceId: destinationMovement?.metadata?.balanceId,
+            quantityIn: 0,
+            quantityOut: line.quantity,
+            adjustmentQty: 0,
+          }) &&
+          destinationReverse?.reversalOfMovementId ===
+            destinationMovement?.id &&
+          destinationMovement?.reversedByMovementId === destinationReverse?.id;
+      }
+      return {
+        rule: "transfer line movement chain",
+        lineId: line.id,
+        status:
+          originalMatched && reversalMatched && postingBatchId
+            ? "matched"
+            : "mismatch",
+      };
+    });
     const reconciliation = {
-      status:
-        transfer.postingStatus === "unposted"
+      status: !fullScope
+        ? "unavailable"
+        : transfer.postingStatus === "unposted"
           ? "unavailable"
           : transferNet === 0n &&
+              lineChecks.every((row) => row.status === "matched") &&
               posted.length === transfer.lines.length * 2 &&
               (transfer.postingStatus !== "reversed" ||
                 reversals.length === transfer.lines.length * 2)
             ? "matched"
             : "mismatch",
+      limitationCodes: fullScope ? [] : ["PARTIAL_WAREHOUSE_SCOPE"],
       checks: [
+        ...lineChecks,
         {
           rule: "transfer net inventory change = 0",
           recorded: fixed(transferNet),
@@ -350,8 +561,17 @@ export function createInventoryOperationsReadService({
         quantity: fixed(units(line.quantity)),
         unit: line.unit,
         version: line.version,
-        source: line.legs.find((leg) => leg.direction === "source"),
-        destination: line.legs.find((leg) => leg.direction === "destination"),
+        source:
+          line.legs.find(
+            (leg) =>
+              leg.direction === "source" && canRead(actor, leg.warehouseId),
+          ) || null,
+        destination:
+          line.legs.find(
+            (leg) =>
+              leg.direction === "destination" &&
+              canRead(actor, leg.warehouseId),
+          ) || null,
       })),
       movements: movements.map(movementModel),
       availableActions,
@@ -423,15 +643,13 @@ export function createInventoryOperationsReadService({
       include: { lines: { orderBy: { id: "asc" } } },
     });
     if (!session || !canRead(actor, session.warehouseId)) {
-      const error = new Error("Cycle count was not found.");
-      error.code = "COUNT_NOT_FOUND";
-      error.status = 404;
-      throw error;
+      throw new InventoryOperationsReadError(
+        "COUNT_NOT_FOUND",
+        "Cycle count was not found.",
+        404,
+      );
     }
-    const reveal =
-      !session.blindCount ||
-      manager(actor.role) ||
-      ["submitted", "reviewed", "posted"].includes(session.workflowStatus);
+    const reveal = countSnapshotVisible(session, actor);
     const movements = await prisma.inventoryMovement.findMany({
       where: {
         tenantId: actor.tenantId,
@@ -474,17 +692,68 @@ export function createInventoryOperationsReadService({
       availableActions.blockingReasonCodes.push(
         "INVENTORY_OPERATIONS_CAPABILITY_NOT_AVAILABLE",
       );
-    const checks = session.lines.map((line) => ({
-      rule: "variance = counted - recorded",
-      lineId: line.id,
-      status:
-        line.countedQuantity === null
-          ? "unavailable"
-          : units(line.countedQuantity) - units(line.recordedOnHandQuantity) ===
-              units(line.varianceQuantity)
+    const balances = await prisma.inventoryBalance.findMany({
+      where: {
+        tenantId: actor.tenantId,
+        id: { in: session.lines.map((line) => line.inventoryBalanceId) },
+      },
+    });
+    const balanceMap = new Map(balances.map((row) => [row.id, row]));
+    const checks = session.lines.map((line) => {
+      if (line.countedQuantity === null)
+        return {
+          rule: "count line reconciliation",
+          lineId: line.id,
+          status: "unavailable",
+        };
+      const variance =
+        units(line.countedQuantity) - units(line.recordedOnHandQuantity);
+      const movement = oneBySourceLine(
+        movements,
+        line.id,
+        "cycle_count_adjustment",
+      );
+      const balance = balanceMap.get(line.inventoryBalanceId);
+      const zeroVariance = variance === 0n;
+      const movementMatched = zeroVariance
+        ? !movement
+        : movementMatchesIdentity(movement, {
+            sourceDocumentType: "CycleCountSession",
+            sourceDocumentId: session.id,
+            sourceDocumentLineId: line.id,
+            movementType: "cycle_count_adjustment",
+            itemId: line.itemId,
+            sku: line.sku,
+            warehouseId: line.warehouseId,
+            locationKey: line.locationKey,
+            balanceId: line.inventoryBalanceId,
+            adjustmentQty: variance,
+            quantityIn: variance > 0n ? variance : 0,
+            quantityOut: variance < 0n ? -variance : 0,
+          });
+      const balanceMatched =
+        balance &&
+        units(balance.onHandQuantity) === units(line.countedQuantity) &&
+        units(balance.reservedQuantity) ===
+          units(line.recordedReservedQuantity) &&
+        units(balance.availableQuantity) ===
+          units(balance.onHandQuantity) - units(balance.reservedQuantity);
+      return {
+        rule: "count line reconciliation",
+        lineId: line.id,
+        status:
+          variance === units(line.varianceQuantity) &&
+          movementMatched &&
+          balanceMatched
             ? "matched"
             : "mismatch",
-    }));
+        movementStatus: zeroVariance
+          ? "no_movement_required"
+          : movementMatched
+            ? "matched"
+            : "mismatch",
+      };
+    });
     return {
       dataSource: "Authoritative PostgreSQL",
       session: {
@@ -605,10 +874,11 @@ export function createInventoryOperationsReadService({
       !adjustment ||
       !warehouses.every((warehouseId) => canRead(actor, warehouseId))
     ) {
-      const error = new Error("Inventory adjustment was not found.");
-      error.code = "ADJUSTMENT_NOT_FOUND";
-      error.status = 404;
-      throw error;
+      throw new InventoryOperationsReadError(
+        "ADJUSTMENT_NOT_FOUND",
+        "Inventory adjustment was not found.",
+        404,
+      );
     }
     const movements = await prisma.inventoryMovement.findMany({
       where: {
@@ -655,17 +925,59 @@ export function createInventoryOperationsReadService({
       availableActions.blockingReasonCodes.push(
         "INVENTORY_OPERATIONS_CAPABILITY_NOT_AVAILABLE",
       );
-    const effective = movements.reduce(
-        (sum, row) => sum + units(row.adjustmentQty),
-        0n,
-      ),
-      expected =
-        adjustment.postingStatus === "posted"
-          ? adjustment.lines.reduce(
-              (sum, line) => sum + units(line.adjustmentQuantity),
-              0n,
-            )
-          : 0n;
+    const lineChecks = adjustment.lines.map((line) => {
+      const original = oneBySourceLine(
+        movements,
+        line.id,
+        "inventory_adjustment",
+      );
+      const delta = units(line.adjustmentQuantity);
+      const originalMatched = movementMatchesIdentity(original, {
+        sourceDocumentType: "InventoryAdjustmentDocument",
+        sourceDocumentId: adjustment.id,
+        sourceDocumentLineId: line.id,
+        movementType: "inventory_adjustment",
+        itemId: line.itemId,
+        sku: line.sku,
+        warehouseId: line.warehouseId,
+        locationKey: line.locationKey,
+        balanceId: line.inventoryBalanceId,
+        postingBatchId: adjustment.metadata?.postingBatchId,
+        adjustmentQty: delta,
+        quantityIn: delta > 0n ? delta : 0,
+        quantityOut: delta < 0n ? -delta : 0,
+      });
+      let reversalMatched = adjustment.postingStatus !== "reversed";
+      if (adjustment.postingStatus === "reversed") {
+        const reversal = oneBySourceLine(
+          movements,
+          `${line.id}:reversal`,
+          "inventory_adjustment_reversal",
+        );
+        reversalMatched =
+          movementMatchesIdentity(reversal, {
+            sourceDocumentType: "InventoryAdjustmentDocument",
+            sourceDocumentId: adjustment.id,
+            sourceDocumentLineId: `${line.id}:reversal`,
+            movementType: "inventory_adjustment_reversal",
+            itemId: line.itemId,
+            sku: line.sku,
+            warehouseId: line.warehouseId,
+            locationKey: line.locationKey,
+            balanceId: line.inventoryBalanceId,
+            adjustmentQty: -delta,
+            quantityIn: delta < 0n ? -delta : 0,
+            quantityOut: delta > 0n ? delta : 0,
+          }) &&
+          reversal?.reversalOfMovementId === original?.id &&
+          original?.reversedByMovementId === reversal?.id;
+      }
+      return {
+        rule: "adjustment line movement chain",
+        lineId: line.id,
+        status: originalMatched && reversalMatched ? "matched" : "mismatch",
+      };
+    });
     return {
       dataSource: "Authoritative PostgreSQL",
       adjustment: {
@@ -707,16 +1019,10 @@ export function createInventoryOperationsReadService({
         status:
           adjustment.postingStatus === "unposted"
             ? "unavailable"
-            : effective === expected
+            : lineChecks.every((row) => row.status === "matched")
               ? "matched"
               : "mismatch",
-        checks: [
-          {
-            rule: "effective movement delta = document delta",
-            recorded: fixed(effective),
-            expected: fixed(expected),
-          },
-        ],
+        checks: lineChecks,
       },
       limitations: ["Adjustments only target existing inventory balances."],
     };

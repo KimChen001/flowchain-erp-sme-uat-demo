@@ -32,6 +32,13 @@ test("inventory operations workbench closes transfer, count, and adjustment thro
   await page.getByLabel("来源库位 1").fill("A-01");
   await page.getByLabel("目标仓库 1").selectOption("inventory-browser-b");
   await page.getByLabel("目标库位 1").fill("B-01");
+  await page.getByRole("button", { name: "添加行" }).click();
+  await page.getByLabel("调拨物料 2").selectOption("inventory-browser-item");
+  await page.getByLabel("调拨数量 2").fill("1.0000");
+  await page.getByLabel("来源仓库 2").selectOption("inventory-browser-a");
+  await page.getByLabel("来源库位 2").fill("A-01");
+  await page.getByLabel("目标仓库 2").selectOption("inventory-browser-b");
+  await page.getByLabel("目标库位 2").fill("B-01");
   await page.getByTestId("create-transfer").click();
   await expect(page.getByTestId("inventory-transfer-workbench")).toBeVisible();
   const transferUrl = page.url();
@@ -42,11 +49,18 @@ test("inventory operations workbench closes transfer, count, and adjustment thro
   );
   await page.getByTestId("confirm-inventory-operation").click();
   await expect(
-    page.getByTestId("operation-movement-stock_transfer_out"),
-  ).toContainText("出 3.0000");
+    page
+      .getByTestId("operation-movement-stock_transfer_out")
+      .filter({ hasText: "出 3.0000" }),
+  ).toHaveCount(1);
   await expect(
-    page.getByTestId("operation-movement-stock_transfer_in"),
-  ).toContainText("入 3.0000");
+    page
+      .getByTestId("operation-movement-stock_transfer_in")
+      .filter({ hasText: "入 3.0000" }),
+  ).toHaveCount(1);
+  await expect(page.getByTestId("inventory-reconciliation")).toContainText(
+    "matched",
+  );
   let balances = await request.get(
     "/api/inventory/balances?sku=INV-BROWSER-SKU",
     { headers: { Authorization: `Bearer ${kim.token}` } },
@@ -56,16 +70,16 @@ test("inventory operations workbench closes transfer, count, and adjustment thro
     balanceData.balances.find(
       (row: any) => row.id === "inventory-browser-balance-a",
     ).onHandQuantity,
-  ).toBe("7.0000");
+  ).toBe("6.0000");
   expect(
     balanceData.balances.find(
       (row: any) => row.id === "inventory-browser-balance-b",
     ).onHandQuantity,
-  ).toBe("8.0000");
+  ).toBe("9.0000");
   await page.getByTestId("operation-preview-reverse").click();
   await page.getByTestId("confirm-inventory-operation").click();
   await expect(
-    page.getByTestId("operation-movement-stock_transfer_reversal_in"),
+    page.getByTestId("operation-movement-stock_transfer_reversal_in").first(),
   ).toBeVisible();
   balances = await request.get("/api/inventory/balances?sku=INV-BROWSER-SKU", {
     headers: { Authorization: `Bearer ${kim.token}` },
@@ -82,6 +96,7 @@ test("inventory operations workbench closes transfer, count, and adjustment thro
   await page.getByRole("checkbox").nth(1).check();
   await page.getByTestId("create-count").click();
   await expect(page.getByTestId("inventory-count-workbench")).toBeVisible();
+  await expect(page.getByTestId("count-recorded")).toContainText("盲盘隐藏");
   const countUrl = page.url();
   const specialist = await login(request, "specialist@example.com"),
     specialistContext = await browser.newContext({
@@ -96,8 +111,12 @@ test("inventory operations workbench closes transfer, count, and adjustment thro
   await specialistPage.getByLabel("实盘数量 INV-BROWSER-SKU").fill("11.0000");
   await specialistPage.getByTestId("save-counts").click();
   await specialistPage.getByTestId("count-submit").click();
+  await expect(specialistPage.getByTestId("count-recorded")).toContainText(
+    "盲盘隐藏",
+  );
   await specialistContext.close();
   await page.goto(countUrl);
+  await expect(page.getByTestId("count-recorded")).toContainText("10.0000");
   await page.getByTestId("count-review").click();
   await page.getByTestId("operation-preview-post").click();
   await page.getByTestId("confirm-inventory-operation").click();

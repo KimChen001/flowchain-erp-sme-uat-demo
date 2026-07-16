@@ -12,7 +12,11 @@ import {
   buildStockTransferPostingPlan,
   buildStockTransferReversalPlan,
 } from "../domain/inventory-operations-policy.mjs";
-import { createInventoryOperationsReadService } from "../domain/inventory-operations-read-service.mjs";
+import {
+  createInventoryOperationsReadService,
+  InventoryOperationsReadError,
+} from "../domain/inventory-operations-read-service.mjs";
+import { PilotIdentityError } from "../domain/pilot-identity.mjs";
 import { getPrismaClient } from "../persistence/prisma-client.mjs";
 
 const capabilityIds = [
@@ -232,8 +236,8 @@ export async function handleInventoryOperationsRoute(ctx) {
   } catch (error) {
     const known =
       error instanceof InventoryOperationsError ||
-      error?.name === "PilotIdentityError" ||
-      error?.code;
+      error instanceof InventoryOperationsReadError ||
+      error instanceof PilotIdentityError;
     send(res, known ? error.status || 400 : 500, {
       code: known ? error.code : "INVENTORY_OPERATION_FAILED",
       message: known ? error.message : "Inventory operation failed.",
