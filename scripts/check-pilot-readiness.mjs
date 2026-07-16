@@ -13,9 +13,11 @@ check('session_secret', String(env.FLOWCHAIN_LOCAL_SESSION_SECRET || '').length 
 check('default_tenant', Boolean(String(env.FLOWCHAIN_DEFAULT_TENANT_ID || '').trim()), 'Set FLOWCHAIN_DEFAULT_TENANT_ID to the provisioned workspace id.')
 check('receiving_posting', env.FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING === 'true', 'Set FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING=true.')
 check('outbound_posting', env.FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING === 'true', 'Set FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING=true.')
+check('inventory_operations', env.FLOWCHAIN_ENABLE_DB_INVENTORY_OPERATIONS === 'true', 'Set FLOWCHAIN_ENABLE_DB_INVENTORY_OPERATIONS=true.')
 check('bootstrap_disabled', env.FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP !== 'true', 'Disable FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP outside disposable local tests.')
 check('identity_migration', existsSync(path.join(root, 'prisma/migrations/20260715020000_pilot_identity_foundation/migration.sql')), 'Deploy the Pilot identity migration.')
 check('import_migration', existsSync(path.join(root, 'prisma/migrations/20260715021000_pilot_import_foundation/migration.sql')), 'Deploy the Pilot import migration.')
+check('inventory_operations_migration', existsSync(path.join(root, 'prisma/migrations/20260716010000_inventory_operations_foundation/migration.sql')), 'Deploy the Inventory Operations foundation migration.')
 
 const report = { ready: checks.every(row => row.status === 'pass'), checkedAt: new Date().toISOString(), checks }
 if (process.argv.includes('--json')) console.log(JSON.stringify(report, null, 2))

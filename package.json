@@ -18,6 +18,7 @@
     "test:browser:receiving": "node scripts/run-receiving-playwright.mjs",
     "test:browser:reports": "playwright test tests/browser/reports-currency-contract.spec.ts",
     "test:browser:outbound": "node scripts/run-outbound-playwright.mjs",
+    "test:browser:inventory-operations": "node scripts/run-inventory-operations-playwright.mjs",
     "test:browser:ai:empty": "node scripts/browser-uat-ai-empty.mjs",
     "test:ai-provider-smoke:fake": "node scripts/ai-runtime-provider-smoke.mjs --all-fake",
     "check:ai-provider-env": "node scripts/ai-runtime-provider-env-check.mjs",
