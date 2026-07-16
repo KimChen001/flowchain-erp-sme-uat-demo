@@ -19,8 +19,7 @@ const supplierPostingMigration =
   "20260718020000_supplier_return_posting_kernel";
 const customerReceiptMigration =
   "20260718030000_customer_return_receipt_kernel";
-const operationsSettingsMigration =
-  "20260718040000_operations_settings_closeout";
+const latestMigration = "20260718050000_operational_finance_p2p";
 const node = process.execPath;
 const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 
@@ -884,7 +883,7 @@ async function verifyGovernanceUpgrade(pg, database, url, secrets) {
     `SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name`,
   );
   assert.ok(migrations.rows.some(row => row.migration_name === customerReceiptMigration));
-  assert.equal(migrations.rows.at(-1).migration_name, operationsSettingsMigration);
+  assert.equal(migrations.rows.at(-1).migration_name, latestMigration);
 }
 
 async function verifySupplierPostingUpgrade(
@@ -937,7 +936,7 @@ async function verifySupplierPostingUpgrade(
     `SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL ORDER BY migration_name`,
   );
   assert.ok(migrations.rows.some(row => row.migration_name === customerReceiptMigration));
-  assert.equal(migrations.rows.at(-1).migration_name, operationsSettingsMigration);
+  assert.equal(migrations.rows.at(-1).migration_name, latestMigration);
 }
 
 const pgPort = await availablePort();

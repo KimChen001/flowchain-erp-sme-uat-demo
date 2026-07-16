@@ -36,6 +36,8 @@
     "test:api:inventory-operations": "node scripts/smoke-inventory-operations-api.mjs",
     "test:db:returns-quarantine": "node scripts/verify-returns-quarantine-postgres.mjs",
     "test:api:returns-quarantine": "node scripts/smoke-returns-quarantine-api.mjs",
+    "test:db:operational-finance": "node scripts/verify-operational-finance-postgres.mjs",
+    "test:api:operational-finance": "node scripts/smoke-operational-finance-api.mjs",
     "test:api:settings": "node scripts/smoke-workspace-settings-api.mjs",
     "db:generate": "prisma generate",
     "pilot:setup": "node scripts/setup-pilot-workspace.mjs",

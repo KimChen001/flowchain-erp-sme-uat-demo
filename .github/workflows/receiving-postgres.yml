@@ -30,6 +30,8 @@ jobs:
       - run: npm run test:api:inventory-operations
       - run: npm run test:db:returns-quarantine
       - run: npm run test:api:returns-quarantine
+      - run: npm run test:db:operational-finance
+      - run: npm run test:api:operational-finance
       - run: npm run test:api:settings
       - run: npm run pilot:check
         env:
@@ -40,6 +42,7 @@ jobs:
           FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: 'true'
           FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true'
           FLOWCHAIN_ENABLE_DB_INVENTORY_OPERATIONS: 'true'
+          FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE: 'true'
           FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: 'false'
 
   browser:
