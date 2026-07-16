@@ -64,7 +64,7 @@ test('R198 AI insight panel is embedded and not a standalone left navigation mod
   assert.doesNotMatch(routes, /label:\s*["']AI Command Center["']/)
   assert.doesNotMatch(routes, /label:\s*["']Ask AI["']/)
   assert.match(app, /<span>AI 助手<\/span>/)
-  assert.match(app, /<AiPanel moduleId=\{activeModule\}/)
+  assert.match(app, /<AiPanel\s+moduleId=\{activeModule\}/)
   assert.match(floating, /data-testid="ai-assistant-root"/)
   assert.match(floating, /data-testid="ai-assistant-toggle"/)
   assert.match(floating, /export default function FloatingAiAssistant/)

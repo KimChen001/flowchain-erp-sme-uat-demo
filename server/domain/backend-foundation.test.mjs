@@ -88,7 +88,7 @@ test('server factory imports with backend foundation routes', () => {
 test('server route context injects repository registry for repository-compatible routes', () => {
   const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
 
-  assert.match(source, /import \{[^}]*createRepositoryRegistry[^}]*\} from '\.\.\/repositories\/adapter-registry\.mjs'/)
+  assert.match(source, /import \{[^}]*createRepositoryRegistry[^}]*\} from ["']\.\.\/repositories\/adapter-registry\.mjs["']/)
   assert.match(source, /const repositories = createRepositoryRegistry\(\{ db, env: process\.env \}\)/)
   assert.match(source, /routeContext = \{[\s\S]*repositories,[\s\S]*\}/)
   assert.ok(source.indexOf('const repositories = createRepositoryRegistry') < source.indexOf('const routeContext = {'))
@@ -112,9 +112,12 @@ test('global server errors are sanitized before returning 500 responses', () => 
 
 test('server health response omits provider keys models and proxy diagnostics by default', () => {
   const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
-  const healthBlock = source.slice(source.indexOf("url.pathname === '/api/health'"), source.indexOf("if (req.method === 'POST' && url.pathname === '/api/auth/login'"))
+  const healthBlock = source.slice(
+    source.search(/url\.pathname === ["']\/api\/health["']/),
+    source.search(/if\s*\(\s*req\.method === ["']POST["'] && url\.pathname === ["']\/api\/auth\/login["']/),
+  )
 
-  assert.match(healthBlock, /service: 'flowchain-scm-api'/)
+  assert.match(healthBlock, /service: ["']flowchain-scm-api["']/)
   assert.match(healthBlock, /\.\.\.buildIdentity/)
   assert.match(healthBlock, /persistenceMode/)
   assert.match(healthBlock, /readsDemoData/)
@@ -129,8 +132,9 @@ test('server health response omits provider keys models and proxy diagnostics by
 test('database mode guard is before legacy auth and forecast writes', () => {
   const source = readSource('server', 'routes', 'scm-legacy.routes.mjs')
 
-  assert.ok(source.indexOf('isDatabaseModeWriteBlocked') < source.indexOf("url.pathname === '/api/auth/login'"))
-  assert.ok(source.indexOf('isDatabaseModeWriteBlocked') < source.indexOf("url.pathname === '/api/forecast-plans'"))
+  const guardIndex = source.indexOf('isDatabaseModeWriteBlocked({')
+  assert.ok(guardIndex < source.search(/url\.pathname === ["']\/api\/auth\/login["']/))
+  assert.ok(guardIndex < source.search(/url\.pathname === ["']\/api\/forecast-plans["']/))
   assert.deepEqual(databaseModeMutationBlockedPayload(), {
     error: 'This mutation is not available in database persistence mode yet.',
   })
