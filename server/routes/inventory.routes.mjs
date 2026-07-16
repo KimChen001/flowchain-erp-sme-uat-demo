@@ -6,6 +6,7 @@ import {
 import { readBusinessContext } from "../services/runtime-business-read-service.mjs";
 import { authorizeMutation } from "../domain/mutation-authorization.mjs";
 import { createInventoryAuthoritativeReadService } from "../domain/inventory-authoritative-read-service.mjs";
+import { capabilityForEnvironment } from "../domain/capability-registry.mjs";
 import { getPrismaClient } from "../persistence/prisma-client.mjs";
 
 function query(url) {
@@ -364,6 +365,58 @@ export async function handleInventoryRoute(ctx) {
       return true;
     }
     send(res, 200, await service.listBalances(authoritativeQuery(url), ctx));
+    return true;
+  }
+
+  if (
+    req.method === "GET" &&
+    url.pathname === "/api/inventory/balances/select"
+  ) {
+    const service = await authoritativeService(ctx);
+    if (!service) {
+      send(res, 409, {
+        error:
+          "Authoritative inventory balance selection requires database persistence and authentication.",
+        code: "AUTHORITATIVE_INVENTORY_READ_NOT_AVAILABLE",
+      });
+      return true;
+    }
+    send(
+      res,
+      200,
+      await service.listAvailableBalanceOptions(authoritativeQuery(url), ctx),
+    );
+    return true;
+  }
+
+  if (
+    req.method === "GET" &&
+    (url.pathname === "/api/inventory/quarantine-balances" ||
+      url.pathname === "/api/inventory/quarantine-balances/select")
+  ) {
+    const service = await authoritativeService(ctx);
+    if (!service) {
+      send(res, 409, {
+        error:
+          "Authoritative quarantine inventory requires database persistence and authentication.",
+        code: "AUTHORITATIVE_QUARANTINE_READ_NOT_AVAILABLE",
+      });
+      return true;
+    }
+    const result =
+      url.pathname === "/api/inventory/quarantine-balances/select"
+        ? await service.listQuarantineBalanceOptions(
+            authoritativeQuery(url),
+            ctx,
+          )
+        : await service.listQuarantineBalances(authoritativeQuery(url), ctx);
+    send(res, 200, {
+      ...result,
+      capability: capabilityForEnvironment(
+        "quarantine-inventory",
+        ctx.env || process.env,
+      ),
+    });
     return true;
   }
 

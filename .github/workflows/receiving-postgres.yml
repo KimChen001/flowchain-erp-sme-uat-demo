@@ -28,6 +28,7 @@ jobs:
       - run: npm run test:api:outbound
       - run: npm run test:db:inventory-operations
       - run: npm run test:api:inventory-operations
+      - run: npm run test:db:returns-quarantine
       - run: npm run pilot:check
         env:
           FLOWCHAIN_PERSISTENCE_MODE: database

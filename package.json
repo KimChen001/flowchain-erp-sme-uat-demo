@@ -32,6 +32,7 @@
     "test:api:outbound": "node scripts/smoke-outbound-api.mjs",
     "test:db:inventory-operations": "node scripts/verify-inventory-operations-postgres.mjs",
     "test:api:inventory-operations": "node scripts/smoke-inventory-operations-api.mjs",
+    "test:db:returns-quarantine": "node scripts/verify-returns-quarantine-postgres.mjs",
     "db:generate": "prisma generate",
     "pilot:setup": "node scripts/setup-pilot-workspace.mjs",
     "pilot:check": "node scripts/check-pilot-readiness.mjs",
