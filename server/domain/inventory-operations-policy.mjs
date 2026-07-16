@@ -29,6 +29,150 @@ function routeKey(row) {
   return `${text(row.warehouseId)}|${text(row.locationKey)}`;
 }
 
+function aggregateBalanceImpacts(
+  entries,
+  blockingIssues,
+  {
+    insufficientCode,
+    insufficientMessage,
+    unsafeCode,
+    unsafeMessage,
+    rejectZeroCode,
+    rejectZeroMessage,
+  } = {},
+) {
+  const grouped = new Map();
+  for (const entry of entries) {
+    const current = grouped.get(entry.balance.id) || {
+      balance: entry.balance,
+      delta: 0n,
+      totalIn: 0n,
+      totalOut: 0n,
+      roles: new Set(),
+      lineIds: [],
+      legIds: [],
+    };
+    current.delta += entry.delta;
+    if (entry.delta > 0n) current.totalIn += entry.delta;
+    if (entry.delta < 0n) current.totalOut += -entry.delta;
+    if (entry.role) current.roles.add(entry.role);
+    if (entry.lineId) current.lineIds.push(entry.lineId);
+    if (entry.legId) current.legIds.push(entry.legId);
+    grouped.set(entry.balance.id, current);
+  }
+  const impacts = [];
+  for (const aggregate of [...grouped.values()].sort((a, b) =>
+    a.balance.id.localeCompare(b.balance.id),
+  )) {
+    const onHand = decimalUnits(aggregate.balance.onHandQuantity);
+    const reserved = decimalUnits(aggregate.balance.reservedQuantity);
+    const available = decimalUnits(aggregate.balance.availableQuantity);
+    const after = onHand + aggregate.delta;
+    if (
+      aggregate.totalOut > 0n &&
+      (onHand < aggregate.totalOut || available < aggregate.totalOut)
+    )
+      blockingIssues.push(
+        issue(insufficientCode, insufficientMessage(aggregate.balance), 409, {
+          balanceId: aggregate.balance.id,
+          totalOut: fixed(aggregate.totalOut),
+        }),
+      );
+    if (after < 0n || after < reserved)
+      blockingIssues.push(
+        issue(unsafeCode, unsafeMessage(aggregate.balance), 409, {
+          balanceId: aggregate.balance.id,
+          onHandAfter: fixed(after),
+          reserved: fixed(reserved),
+        }),
+      );
+    if (aggregate.delta === 0n && rejectZeroCode) {
+      blockingIssues.push(
+        issue(rejectZeroCode, rejectZeroMessage(aggregate.balance), 422, {
+          balanceId: aggregate.balance.id,
+        }),
+      );
+      continue;
+    }
+    impacts.push({
+      balanceId: aggregate.balance.id,
+      roles: [...aggregate.roles].sort(),
+      version: aggregate.balance.version,
+      onHandBefore: fixed(onHand),
+      onHandAfter: fixed(after),
+      reservedBefore: fixed(reserved),
+      reservedAfter: fixed(reserved),
+      availableBefore: fixed(available),
+      availableAfter: fixed(after - reserved),
+      quantity: fixed(aggregate.delta),
+      totalIn: fixed(aggregate.totalIn),
+      totalOut: fixed(aggregate.totalOut),
+      lineIds: [...new Set(aggregate.lineIds)].sort(),
+      legIds: [...new Set(aggregate.legIds)].sort(),
+    });
+  }
+  return impacts;
+}
+
+function sameUnits(actual, expected) {
+  return (
+    decimalUnits(actual || 0) ===
+    (typeof expected === "bigint" ? expected : decimalUnits(expected || 0))
+  );
+}
+
+function movementBalanceId(movement) {
+  return text(movement?.metadata?.balanceId);
+}
+
+function validTransferOriginal({ movement, transfer, line, leg }) {
+  const source = leg.direction === "source";
+  return Boolean(
+    movement &&
+    movement.tenantId === transfer.tenantId &&
+    movement.sourceDocumentType === "StockTransferDocument" &&
+    movement.sourceDocumentId === transfer.id &&
+    movement.sourceDocumentLineId === leg.id &&
+    movement.movementType ===
+      (source ? "stock_transfer_out" : "stock_transfer_in") &&
+    movement.itemId === line.itemId &&
+    movement.sku === line.sku &&
+    movement.warehouseId === leg.warehouseId &&
+    text(movement.locationKey) === text(leg.locationKey) &&
+    sameUnits(movement.quantityIn, source ? 0 : line.quantity) &&
+    sameUnits(movement.quantityOut, source ? line.quantity : 0) &&
+    sameUnits(movement.adjustmentQty, 0) &&
+    text(movement.postingBatchId) &&
+    text(movement.postingBatchId) === text(transfer.metadata?.postingBatchId) &&
+    movementBalanceId(movement) &&
+    !movement.reversedByMovementId,
+  );
+}
+
+function validAdjustmentOriginal({ movement, adjustment, line }) {
+  const delta = decimalUnits(line.adjustmentQuantity);
+  return Boolean(
+    movement &&
+    movement.tenantId === adjustment.tenantId &&
+    movement.sourceDocumentType === "InventoryAdjustmentDocument" &&
+    movement.sourceDocumentId === adjustment.id &&
+    movement.sourceDocumentLineId === line.id &&
+    movement.movementType === "inventory_adjustment" &&
+    movement.itemId === line.itemId &&
+    movement.sku === line.sku &&
+    movement.warehouseId === line.warehouseId &&
+    text(movement.locationKey) === text(line.locationKey) &&
+    sameUnits(movement.adjustmentQty, delta) &&
+    sameUnits(movement.quantityIn, delta > 0n ? delta : 0) &&
+    sameUnits(movement.quantityOut, delta < 0n ? -delta : 0) &&
+    movementBalanceId(movement) === line.inventoryBalanceId &&
+    text(movement.postingBatchId) &&
+    text(movement.postingBatchId) ===
+      text(adjustment.metadata?.postingBatchId) &&
+    !movement.reversedByMovementId,
+  );
+}
+
 export async function buildStockTransferPostingPlan({
   prisma,
   tenantId,
@@ -79,7 +223,7 @@ export async function buildStockTransferPostingPlan({
       row,
     ]),
   );
-  const balanceImpacts = [],
+  const rawBalanceImpacts = [],
     movementFacts = [];
   for (const line of transfer.lines) {
     const source = line.legs.find((leg) => leg.direction === "source"),
@@ -117,11 +261,6 @@ export async function buildStockTransferPostingPlan({
         ),
       );
     if (!sourceBalance || !destinationBalance) continue;
-    const sourceOnHand = decimalUnits(sourceBalance.onHandQuantity),
-      sourceReserved = decimalUnits(sourceBalance.reservedQuantity),
-      sourceAvailable = decimalUnits(sourceBalance.availableQuantity);
-    const destinationOnHand = decimalUnits(destinationBalance.onHandQuantity),
-      destinationReserved = decimalUnits(destinationBalance.reservedQuantity);
     if (quantity <= 0n)
       blockingIssues.push(
         issue(
@@ -129,42 +268,18 @@ export async function buildStockTransferPostingPlan({
           "Transfer quantity must be greater than zero.",
         ),
       );
-    if (sourceAvailable < quantity || sourceOnHand < quantity)
-      blockingIssues.push(
-        issue(
-          "TRANSFER_INSUFFICIENT_AVAILABLE",
-          `Source inventory is insufficient for ${line.sku}.`,
-          409,
-        ),
-      );
-    balanceImpacts.push(
+    rawBalanceImpacts.push(
       {
-        balanceId: sourceBalance.id,
+        balance: sourceBalance,
+        delta: -quantity,
         role: "source",
-        version: sourceBalance.version,
-        onHandBefore: fixed(sourceOnHand),
-        onHandAfter: fixed(sourceOnHand - quantity),
-        reservedBefore: fixed(sourceReserved),
-        reservedAfter: fixed(sourceReserved),
-        availableBefore: fixed(sourceAvailable),
-        availableAfter: fixed(sourceOnHand - quantity - sourceReserved),
-        quantity: fixed(quantity),
         lineId: line.id,
         legId: source.id,
       },
       {
-        balanceId: destinationBalance.id,
+        balance: destinationBalance,
+        delta: quantity,
         role: "destination",
-        version: destinationBalance.version,
-        onHandBefore: fixed(destinationOnHand),
-        onHandAfter: fixed(destinationOnHand + quantity),
-        reservedBefore: fixed(destinationReserved),
-        reservedAfter: fixed(destinationReserved),
-        availableBefore: fixed(destinationOnHand - destinationReserved),
-        availableAfter: fixed(
-          destinationOnHand + quantity - destinationReserved,
-        ),
-        quantity: fixed(quantity),
         lineId: line.id,
         legId: destination.id,
       },
@@ -204,6 +319,18 @@ export async function buildStockTransferPostingPlan({
       },
     );
   }
+  const balanceImpacts = aggregateBalanceImpacts(
+    rawBalanceImpacts,
+    blockingIssues,
+    {
+      insufficientCode: "TRANSFER_INSUFFICIENT_AVAILABLE",
+      insufficientMessage: (balance) =>
+        `Source inventory is insufficient for ${balance.sku}.`,
+      unsafeCode: "TRANSFER_INSUFFICIENT_AVAILABLE",
+      unsafeMessage: (balance) =>
+        `Transfer would reduce ${balance.sku} below reserved inventory.`,
+    },
+  );
   return result(
     { transferId: transfer.id, expectedVersion: transfer.version },
     blockingIssues,
@@ -251,12 +378,14 @@ export async function buildStockTransferReversalPlan({
       tenantId,
       sourceDocumentId: transfer.id,
       sourceDocumentLineId: { in: legIds },
-      movementType: { in: ["stock_transfer_out", "stock_transfer_in"] },
     },
   });
-  const movementMap = new Map(
-    movements.map((row) => [row.sourceDocumentLineId, row]),
-  );
+  const movementGroups = new Map();
+  for (const movement of movements) {
+    const rows = movementGroups.get(movement.sourceDocumentLineId) || [];
+    rows.push(movement);
+    movementGroups.set(movement.sourceDocumentLineId, rows);
+  }
   const balanceIds = movements
     .map((row) => row.metadata?.balanceId)
     .filter(Boolean);
@@ -266,12 +395,16 @@ export async function buildStockTransferReversalPlan({
       })
     : [];
   const balanceMap = new Map(balances.map((row) => [row.id, row]));
-  const balanceImpacts = [],
+  const rawBalanceImpacts = [],
     movementFacts = [];
   for (const line of transfer.lines)
     for (const leg of line.legs) {
-      const original = movementMap.get(leg.id);
-      if (!original || original.reversedByMovementId) {
+      const originals = movementGroups.get(leg.id) || [];
+      const original = originals[0];
+      if (
+        originals.length !== 1 ||
+        !validTransferOriginal({ movement: original, transfer, line, leg })
+      ) {
         blockingIssues.push(
           issue(
             "TRANSFER_REVERSAL_NOT_SAFE",
@@ -281,8 +414,15 @@ export async function buildStockTransferReversalPlan({
         );
         continue;
       }
-      const balance = balanceMap.get(original.metadata?.balanceId);
-      if (!balance) {
+      const balance = balanceMap.get(movementBalanceId(original));
+      if (
+        !balance ||
+        balance.id !== movementBalanceId(original) ||
+        balance.itemId !== line.itemId ||
+        balance.sku !== line.sku ||
+        balance.warehouseId !== leg.warehouseId ||
+        text(balance.locationKey) !== text(leg.locationKey)
+      ) {
         blockingIssues.push(
           issue(
             "TRANSFER_REVERSAL_NOT_SAFE",
@@ -292,30 +432,13 @@ export async function buildStockTransferReversalPlan({
         );
         continue;
       }
-      const quantity = decimalUnits(line.quantity),
-        onHand = decimalUnits(balance.onHandQuantity),
-        reserved = decimalUnits(balance.reservedQuantity);
+      const quantity = decimalUnits(line.quantity);
       const source = leg.direction === "source",
-        after = source ? onHand + quantity : onHand - quantity;
-      if (!source && (onHand < quantity || onHand - reserved < quantity))
-        blockingIssues.push(
-          issue(
-            "TRANSFER_REVERSAL_NOT_SAFE",
-            `Destination inventory is no longer sufficient to reverse ${line.sku}.`,
-            409,
-          ),
-        );
-      balanceImpacts.push({
-        balanceId: balance.id,
+        delta = source ? quantity : -quantity;
+      rawBalanceImpacts.push({
+        balance,
+        delta,
         role: source ? "source" : "destination",
-        version: balance.version,
-        onHandBefore: fixed(onHand),
-        onHandAfter: fixed(after),
-        reservedBefore: fixed(reserved),
-        reservedAfter: fixed(reserved),
-        availableBefore: fixed(onHand - reserved),
-        availableAfter: fixed(after - reserved),
-        quantity: fixed(quantity),
         lineId: line.id,
         legId: leg.id,
       });
@@ -339,6 +462,18 @@ export async function buildStockTransferReversalPlan({
         unit: line.unit,
       });
     }
+  const balanceImpacts = aggregateBalanceImpacts(
+    rawBalanceImpacts,
+    blockingIssues,
+    {
+      insufficientCode: "TRANSFER_REVERSAL_NOT_SAFE",
+      insufficientMessage: (balance) =>
+        `Destination inventory is no longer sufficient to reverse ${balance.sku}.`,
+      unsafeCode: "TRANSFER_REVERSAL_NOT_SAFE",
+      unsafeMessage: (balance) =>
+        `Current inventory for ${balance.sku} cannot safely absorb the reversal.`,
+    },
+  );
   return result(
     { transferId: transfer.id, expectedVersion: transfer.version },
     blockingIssues,
@@ -493,9 +628,12 @@ export async function buildCycleCountPostingPlan({
     if (
       !balance ||
       balance.version !== line.recordedBalanceVersion ||
-      decimalUnits(balance.onHandQuantity) !== decimalUnits(line.recordedOnHandQuantity) ||
-      decimalUnits(balance.reservedQuantity) !== decimalUnits(line.recordedReservedQuantity) ||
-      decimalUnits(balance.availableQuantity) !== decimalUnits(line.recordedAvailableQuantity)
+      decimalUnits(balance.onHandQuantity) !==
+        decimalUnits(line.recordedOnHandQuantity) ||
+      decimalUnits(balance.reservedQuantity) !==
+        decimalUnits(line.recordedReservedQuantity) ||
+      decimalUnits(balance.availableQuantity) !==
+        decimalUnits(line.recordedAvailableQuantity)
     ) {
       blockingIssues.push(
         issue(
@@ -615,7 +753,7 @@ export async function buildInventoryAdjustmentPostingPlan({
     },
   });
   const balanceMap = new Map(balances.map((row) => [row.id, row])),
-    balanceImpacts = [],
+    rawBalanceImpacts = [],
     movementFacts = [];
   for (const line of adjustment.lines) {
     const balance = balanceMap.get(line.inventoryBalanceId);
@@ -629,36 +767,10 @@ export async function buildInventoryAdjustmentPostingPlan({
       );
       continue;
     }
-    const delta = decimalUnits(line.adjustmentQuantity),
-      onHand = decimalUnits(balance.onHandQuantity),
-      reserved = decimalUnits(balance.reservedQuantity),
-      after = onHand + delta;
-    if (after < 0n)
-      blockingIssues.push(
-        issue(
-          "ADJUSTMENT_NEGATIVE_INVENTORY",
-          `Adjustment would make ${line.sku} inventory negative.`,
-          409,
-        ),
-      );
-    if (after < reserved)
-      blockingIssues.push(
-        issue(
-          "ADJUSTMENT_BELOW_RESERVED_NOT_SAFE",
-          `Adjustment would reduce ${line.sku} below reserved inventory.`,
-          409,
-        ),
-      );
-    balanceImpacts.push({
-      balanceId: balance.id,
-      version: balance.version,
-      onHandBefore: fixed(onHand),
-      onHandAfter: fixed(after),
-      reservedBefore: fixed(reserved),
-      reservedAfter: fixed(reserved),
-      availableBefore: fixed(onHand - reserved),
-      availableAfter: fixed(after - reserved),
-      quantity: fixed(delta),
+    const delta = decimalUnits(line.adjustmentQuantity);
+    rawBalanceImpacts.push({
+      balance,
+      delta,
       lineId: line.id,
     });
     movementFacts.push({
@@ -677,6 +789,21 @@ export async function buildInventoryAdjustmentPostingPlan({
       unit: line.unit,
     });
   }
+  const balanceImpacts = aggregateBalanceImpacts(
+    rawBalanceImpacts,
+    blockingIssues,
+    {
+      insufficientCode: "ADJUSTMENT_BELOW_RESERVED_NOT_SAFE",
+      insufficientMessage: (balance) =>
+        `Adjustment would reduce ${balance.sku} below available inventory.`,
+      unsafeCode: "ADJUSTMENT_BELOW_RESERVED_NOT_SAFE",
+      unsafeMessage: (balance) =>
+        `Adjustment would reduce ${balance.sku} below reserved inventory.`,
+      rejectZeroCode: "ADJUSTMENT_NET_ZERO_NOT_ALLOWED",
+      rejectZeroMessage: (balance) =>
+        `Adjustment lines for ${balance.sku} cancel to zero.`,
+    },
+  );
   return result(
     { adjustmentId: adjustment.id, expectedVersion: adjustment.version },
     blockingIssues,
@@ -719,12 +846,14 @@ export async function buildInventoryAdjustmentReversalPlan({
     where: {
       tenantId,
       sourceDocumentId: adjustment.id,
-      movementType: "inventory_adjustment",
     },
   });
-  const movementMap = new Map(
-    movements.map((row) => [row.sourceDocumentLineId, row]),
-  );
+  const movementGroups = new Map();
+  for (const movement of movements) {
+    const rows = movementGroups.get(movement.sourceDocumentLineId) || [];
+    rows.push(movement);
+    movementGroups.set(movement.sourceDocumentLineId, rows);
+  }
   const balances = await prisma.inventoryBalance.findMany({
     where: {
       tenantId,
@@ -732,12 +861,21 @@ export async function buildInventoryAdjustmentReversalPlan({
     },
   });
   const balanceMap = new Map(balances.map((row) => [row.id, row])),
-    balanceImpacts = [],
+    rawBalanceImpacts = [],
     movementFacts = [];
   for (const line of adjustment.lines) {
-    const original = movementMap.get(line.id),
+    const originals = movementGroups.get(line.id) || [],
+      original = originals[0],
       balance = balanceMap.get(line.inventoryBalanceId);
-    if (!original || original.reversedByMovementId || !balance) {
+    if (
+      originals.length !== 1 ||
+      !validAdjustmentOriginal({ movement: original, adjustment, line }) ||
+      !balance ||
+      balance.itemId !== line.itemId ||
+      balance.sku !== line.sku ||
+      balance.warehouseId !== line.warehouseId ||
+      text(balance.locationKey) !== text(line.locationKey)
+    ) {
       blockingIssues.push(
         issue(
           "ADJUSTMENT_REVERSAL_NOT_SAFE",
@@ -747,28 +885,10 @@ export async function buildInventoryAdjustmentReversalPlan({
       );
       continue;
     }
-    const reverseDelta = -decimalUnits(line.adjustmentQuantity),
-      onHand = decimalUnits(balance.onHandQuantity),
-      reserved = decimalUnits(balance.reservedQuantity),
-      after = onHand + reverseDelta;
-    if (after < 0n || after < reserved)
-      blockingIssues.push(
-        issue(
-          "ADJUSTMENT_REVERSAL_NOT_SAFE",
-          `Current inventory for ${line.sku} cannot safely absorb the reversal.`,
-          409,
-        ),
-      );
-    balanceImpacts.push({
-      balanceId: balance.id,
-      version: balance.version,
-      onHandBefore: fixed(onHand),
-      onHandAfter: fixed(after),
-      reservedBefore: fixed(reserved),
-      reservedAfter: fixed(reserved),
-      availableBefore: fixed(onHand - reserved),
-      availableAfter: fixed(after - reserved),
-      quantity: fixed(reverseDelta),
+    const reverseDelta = -decimalUnits(line.adjustmentQuantity);
+    rawBalanceImpacts.push({
+      balance,
+      delta: reverseDelta,
       lineId: line.id,
     });
     movementFacts.push({
@@ -788,6 +908,21 @@ export async function buildInventoryAdjustmentReversalPlan({
       unit: line.unit,
     });
   }
+  const balanceImpacts = aggregateBalanceImpacts(
+    rawBalanceImpacts,
+    blockingIssues,
+    {
+      insufficientCode: "ADJUSTMENT_REVERSAL_NOT_SAFE",
+      insufficientMessage: (balance) =>
+        `Current inventory for ${balance.sku} cannot safely absorb the reversal.`,
+      unsafeCode: "ADJUSTMENT_REVERSAL_NOT_SAFE",
+      unsafeMessage: (balance) =>
+        `Current inventory for ${balance.sku} cannot safely absorb the reversal.`,
+      rejectZeroCode: "ADJUSTMENT_REVERSAL_NOT_SAFE",
+      rejectZeroMessage: (balance) =>
+        `Adjustment reversal for ${balance.sku} has no effective balance impact.`,
+    },
+  );
   return result(
     { adjustmentId: adjustment.id, expectedVersion: adjustment.version },
     blockingIssues,

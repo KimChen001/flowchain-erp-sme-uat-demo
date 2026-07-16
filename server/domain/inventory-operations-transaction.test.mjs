@@ -4,6 +4,11 @@ import { after, before, test } from "node:test";
 import { createPrismaClient } from "../persistence/prisma-client.mjs";
 import { createInventoryOperationsCommandService } from "./inventory-operations-command-service.mjs";
 import { createInventoryOperationsReadService } from "./inventory-operations-read-service.mjs";
+import {
+  buildInventoryAdjustmentPostingPlan,
+  buildStockTransferPostingPlan,
+  inventoryOperationDecimalUnits as units,
+} from "./inventory-operations-policy.mjs";
 
 const realPostgres =
   Boolean(process.env.DATABASE_URL) &&
@@ -306,6 +311,295 @@ if (!realPostgres) {
     assert.equal(workbench.movements.length, 4);
   });
 
+  test("transfer posting aggregates repeated balances and uses the same cumulative preview plan", async () => {
+    const ids = await seed(),
+      service = createInventoryOperationsCommandService({ prisma, env }),
+      ctx = identity(ids.tenantId, ids.managerId);
+    const created = await service.createTransfer(
+      {
+        transferNumber: `TR-AGG-${randomUUID()}`,
+        idempotencyKey: "transfer-aggregate-create",
+        lines: ["3", "4"].map((quantity) => ({
+          itemId: ids.itemId,
+          quantity,
+          source: { warehouseId: ids.warehouseA, location: "A-01" },
+          destination: { warehouseId: ids.warehouseB, location: "B-01" },
+        })),
+      },
+      ctx,
+    );
+    const ready = await service.readyTransfer(
+      created.transfer.id,
+      {
+        expectedTransferVersion: created.transfer.version,
+        idempotencyKey: "transfer-aggregate-ready",
+      },
+      ctx,
+    );
+    const preview = await buildStockTransferPostingPlan({
+      prisma,
+      tenantId: ids.tenantId,
+      transferId: created.transfer.id,
+    });
+    assert.equal(preview.allowed, true);
+    assert.equal(preview.balanceImpacts.length, 2);
+    assert.equal(
+      preview.balanceImpacts.find((row) => row.balanceId === ids.balanceA)
+        .totalOut,
+      "7.0000",
+    );
+    const before = await prisma.inventoryBalance.findMany({
+      where: { id: { in: [ids.balanceA, ids.balanceB] } },
+      orderBy: { id: "asc" },
+    });
+    const posted = await service.postTransfer(
+      created.transfer.id,
+      {
+        expectedTransferVersion: ready.transfer.version,
+        idempotencyKey: "transfer-aggregate-post",
+      },
+      ctx,
+    );
+    assert.equal(posted.movementIds.length, 4);
+    const after = await prisma.inventoryBalance.findMany({
+      where: { id: { in: [ids.balanceA, ids.balanceB] } },
+      orderBy: { id: "asc" },
+    });
+    assert.deepEqual(
+      after.map((row, index) => row.version - before[index].version),
+      [1, 1],
+    );
+    assert.deepEqual(
+      after.map((row) => row.onHandQuantity.toString()),
+      ["3", "12"],
+    );
+    const workbench = await createInventoryOperationsReadService({
+      prisma,
+      capabilities,
+    }).transferWorkbench(created.transfer.id, ctx);
+    assert.equal(workbench.reconciliation.status, "matched");
+    const reversed = await service.reverseTransfer(
+      created.transfer.id,
+      {
+        expectedTransferVersion: posted.transfer.version,
+        idempotencyKey: "transfer-aggregate-reverse",
+        reason: "Aggregate reversal",
+      },
+      ctx,
+    );
+    assert.equal(reversed.movementIds.length, 4);
+    const restored = await prisma.inventoryBalance.findMany({
+      where: { id: { in: [ids.balanceA, ids.balanceB] } },
+      orderBy: { id: "asc" },
+    });
+    assert.deepEqual(
+      restored.map((row) => row.onHandQuantity.toString()),
+      ["10", "5"],
+    );
+
+    const insufficient = await service.createTransfer(
+      {
+        transferNumber: `TR-AGG-FAIL-${randomUUID()}`,
+        idempotencyKey: "transfer-aggregate-fail-create",
+        lines: ["5", "4"].map((quantity) => ({
+          itemId: ids.itemId,
+          quantity,
+          source: { warehouseId: ids.warehouseA, location: "A-01" },
+          destination: { warehouseId: ids.warehouseB, location: "B-01" },
+        })),
+      },
+      ctx,
+    );
+    const insufficientReady = await service.readyTransfer(
+      insufficient.transfer.id,
+      {
+        expectedTransferVersion: insufficient.transfer.version,
+        idempotencyKey: "transfer-aggregate-fail-ready",
+      },
+      ctx,
+    );
+    const deniedPreview = await buildStockTransferPostingPlan({
+      prisma,
+      tenantId: ids.tenantId,
+      transferId: insufficient.transfer.id,
+    });
+    assert.equal(deniedPreview.allowed, false);
+    assert.equal(
+      deniedPreview.blockingIssues[0].code,
+      "TRANSFER_INSUFFICIENT_AVAILABLE",
+    );
+    await assert.rejects(
+      () =>
+        service.postTransfer(
+          insufficient.transfer.id,
+          {
+            expectedTransferVersion: insufficientReady.transfer.version,
+            idempotencyKey: "transfer-aggregate-fail-post",
+          },
+          ctx,
+        ),
+      (error) => error.code === "TRANSFER_INSUFFICIENT_AVAILABLE",
+    );
+  });
+
+  test("transfer aggregation handles balances used by multiple source and destination legs deterministically", async () => {
+    const ids = await seed(),
+      service = createInventoryOperationsCommandService({ prisma, env }),
+      ctx = identity(ids.tenantId, ids.managerId);
+    const created = await service.createTransfer(
+      {
+        transferNumber: `TR-NET-${randomUUID()}`,
+        idempotencyKey: "transfer-net-create",
+        lines: [
+          {
+            itemId: ids.itemId,
+            quantity: "3",
+            source: { warehouseId: ids.warehouseA, location: "A-01" },
+            destination: { warehouseId: ids.warehouseB, location: "B-01" },
+          },
+          {
+            itemId: ids.itemId,
+            quantity: "1",
+            source: { warehouseId: ids.warehouseB, location: "B-01" },
+            destination: { warehouseId: ids.warehouseA, location: "A-01" },
+          },
+        ],
+      },
+      ctx,
+    );
+    const ready = await service.readyTransfer(
+      created.transfer.id,
+      {
+        expectedTransferVersion: created.transfer.version,
+        idempotencyKey: "transfer-net-ready",
+      },
+      ctx,
+    );
+    const preview = await buildStockTransferPostingPlan({
+      prisma,
+      tenantId: ids.tenantId,
+      transferId: created.transfer.id,
+    });
+    assert.equal(preview.balanceImpacts.length, 2);
+    assert.equal(
+      preview.balanceImpacts.find((row) => row.balanceId === ids.balanceA)
+        .quantity,
+      "-2.0000",
+    );
+    assert.equal(
+      preview.balanceImpacts.find((row) => row.balanceId === ids.balanceB)
+        .quantity,
+      "2.0000",
+    );
+    await service.postTransfer(
+      created.transfer.id,
+      {
+        expectedTransferVersion: ready.transfer.version,
+        idempotencyKey: "transfer-net-post",
+      },
+      ctx,
+    );
+    const workbench = await createInventoryOperationsReadService({
+      prisma,
+      capabilities,
+    }).transferWorkbench(created.transfer.id, ctx);
+    assert.equal(workbench.reconciliation.status, "matched");
+  });
+
+  test("transfer reversal fails closed when any original movement fact is corrupted", async () => {
+    const ids = await seed(),
+      service = createInventoryOperationsCommandService({ prisma, env }),
+      ctx = identity(ids.tenantId, ids.managerId);
+    const created = await service.createTransfer(
+      {
+        transferNumber: `TR-INTEGRITY-${randomUUID()}`,
+        idempotencyKey: "transfer-integrity-create",
+        lines: [
+          {
+            itemId: ids.itemId,
+            quantity: "3",
+            source: { warehouseId: ids.warehouseA, location: "A-01" },
+            destination: { warehouseId: ids.warehouseB, location: "B-01" },
+          },
+        ],
+      },
+      ctx,
+    );
+    const ready = await service.readyTransfer(
+      created.transfer.id,
+      {
+        expectedTransferVersion: created.transfer.version,
+        idempotencyKey: "transfer-integrity-ready",
+      },
+      ctx,
+    );
+    const posted = await service.postTransfer(
+      created.transfer.id,
+      {
+        expectedTransferVersion: ready.transfer.version,
+        idempotencyKey: "transfer-integrity-post",
+      },
+      ctx,
+    );
+    const original = await prisma.inventoryMovement.findFirst({
+      where: {
+        sourceDocumentId: created.transfer.id,
+        movementType: "stock_transfer_out",
+      },
+    });
+    const corruptions = [
+      { quantityOut: "4" },
+      { movementType: "inventory_adjustment" },
+      { warehouseId: ids.warehouseB },
+      { metadata: { balanceId: ids.balanceB } },
+      { postingBatchId: randomUUID() },
+    ];
+    for (const [index, data] of corruptions.entries()) {
+      await prisma.inventoryMovement.update({
+        where: { id: original.id },
+        data,
+      });
+      const corruptedWorkbench = await createInventoryOperationsReadService({
+        prisma,
+        capabilities,
+      }).transferWorkbench(created.transfer.id, ctx);
+      assert.equal(corruptedWorkbench.reconciliation.status, "mismatch");
+      await assert.rejects(
+        () =>
+          service.reverseTransfer(
+            created.transfer.id,
+            {
+              expectedTransferVersion: posted.transfer.version,
+              idempotencyKey: `transfer-integrity-reverse-${index}`,
+              reason: "Integrity test",
+            },
+            ctx,
+          ),
+        (error) =>
+          error.code === "TRANSFER_REVERSAL_NOT_SAFE" && error.status === 409,
+      );
+      assert.equal(
+        await prisma.inventoryMovement.count({
+          where: {
+            sourceDocumentId: created.transfer.id,
+            reversalOfMovementId: { not: null },
+          },
+        }),
+        0,
+      );
+      await prisma.inventoryMovement.update({
+        where: { id: original.id },
+        data: {
+          quantityOut: original.quantityOut,
+          movementType: original.movementType,
+          warehouseId: original.warehouseId,
+          metadata: original.metadata,
+          postingBatchId: original.postingBatchId,
+        },
+      });
+    }
+  });
+
   test("blind cycle count protects snapshot, requires review, and posts fixed-scale variance", async () => {
     const ids = await seed(),
       service = createInventoryOperationsCommandService({ prisma, env });
@@ -330,6 +624,11 @@ if (!realPostgres) {
       capabilities,
     }).countWorkbench(created.session.id, specialist);
     assert.equal(blind.lines[0].recordedOnHandQuantity, null);
+    const managerDraft = await createInventoryOperationsReadService({
+      prisma,
+      capabilities,
+    }).countWorkbench(created.session.id, manager);
+    assert.equal(managerDraft.lines[0].recordedOnHandQuantity, null);
     const entered = await service.reviseCount(
       created.session.id,
       {
@@ -353,6 +652,16 @@ if (!realPostgres) {
       },
       specialist,
     );
+    const specialistSubmitted = await createInventoryOperationsReadService({
+      prisma,
+      capabilities,
+    }).countWorkbench(created.session.id, specialist);
+    assert.equal(specialistSubmitted.lines[0].recordedOnHandQuantity, null);
+    const managerSubmitted = await createInventoryOperationsReadService({
+      prisma,
+      capabilities,
+    }).countWorkbench(created.session.id, manager);
+    assert.equal(managerSubmitted.lines[0].recordedOnHandQuantity, "10.0000");
     await assert.rejects(
       () =>
         service.postCount(
@@ -374,7 +683,9 @@ if (!realPostgres) {
       manager,
     );
     const [snapshotLine, currentBalance] = await Promise.all([
-      prisma.cycleCountLine.findUnique({ where: { id: created.session.lines[0].id } }),
+      prisma.cycleCountLine.findUnique({
+        where: { id: created.session.lines[0].id },
+      }),
       prisma.inventoryBalance.findUnique({ where: { id: ids.balanceA } }),
     ]);
     assert.deepEqual(
@@ -583,6 +894,193 @@ if (!realPostgres) {
     assert.equal(workbench.reconciliation.status, "matched");
   });
 
+  test("adjustment posting aggregates duplicate balances and rejects net-zero plans", async () => {
+    const ids = await seed(),
+      service = createInventoryOperationsCommandService({ prisma, env }),
+      ctx = identity(ids.tenantId, ids.managerId);
+    const created = await service.createAdjustment(
+      {
+        adjustmentNumber: `ADJ-AGG-${randomUUID()}`,
+        reasonCode: "data_correction",
+        notes: "Aggregate duplicate balance lines",
+        idempotencyKey: "adjust-aggregate-create",
+        lines: [
+          { inventoryBalanceId: ids.balanceA, adjustmentQuantity: "3" },
+          { inventoryBalanceId: ids.balanceA, adjustmentQuantity: "-1" },
+        ],
+      },
+      ctx,
+    );
+    const ready = await service.readyAdjustment(
+      created.adjustment.id,
+      {
+        expectedAdjustmentVersion: created.adjustment.version,
+        idempotencyKey: "adjust-aggregate-ready",
+      },
+      ctx,
+    );
+    const preview = await buildInventoryAdjustmentPostingPlan({
+      prisma,
+      tenantId: ids.tenantId,
+      adjustmentId: created.adjustment.id,
+    });
+    assert.equal(preview.allowed, true);
+    assert.equal(preview.balanceImpacts.length, 1);
+    assert.equal(preview.balanceImpacts[0].quantity, "2.0000");
+    const before = await prisma.inventoryBalance.findUnique({
+      where: { id: ids.balanceA },
+    });
+    const posted = await service.postAdjustment(
+      created.adjustment.id,
+      {
+        expectedAdjustmentVersion: ready.adjustment.version,
+        idempotencyKey: "adjust-aggregate-post",
+      },
+      ctx,
+    );
+    assert.equal(posted.movementIds.length, 2);
+    const after = await prisma.inventoryBalance.findUnique({
+      where: { id: ids.balanceA },
+    });
+    assert.equal(after.onHandQuantity.toString(), "12");
+    assert.equal(after.version, before.version + 1);
+    await service.reverseAdjustment(
+      created.adjustment.id,
+      {
+        expectedAdjustmentVersion: posted.adjustment.version,
+        idempotencyKey: "adjust-aggregate-reverse",
+        reason: "Reverse aggregate",
+      },
+      ctx,
+    );
+    assert.equal(
+      (
+        await prisma.inventoryBalance.findUnique({
+          where: { id: ids.balanceA },
+        })
+      ).onHandQuantity.toString(),
+      "10",
+    );
+
+    const zero = await service.createAdjustment(
+      {
+        adjustmentNumber: `ADJ-ZERO-${randomUUID()}`,
+        reasonCode: "data_correction",
+        notes: "Net-zero duplicate balance lines",
+        idempotencyKey: "adjust-zero-create",
+        lines: [
+          { inventoryBalanceId: ids.balanceA, adjustmentQuantity: "1" },
+          { inventoryBalanceId: ids.balanceA, adjustmentQuantity: "-1" },
+        ],
+      },
+      ctx,
+    );
+    const zeroReady = await service.readyAdjustment(
+      zero.adjustment.id,
+      {
+        expectedAdjustmentVersion: zero.adjustment.version,
+        idempotencyKey: "adjust-zero-ready",
+      },
+      ctx,
+    );
+    const zeroPreview = await buildInventoryAdjustmentPostingPlan({
+      prisma,
+      tenantId: ids.tenantId,
+      adjustmentId: zero.adjustment.id,
+    });
+    assert.equal(zeroPreview.allowed, false);
+    assert.equal(
+      zeroPreview.blockingIssues[0].code,
+      "ADJUSTMENT_NET_ZERO_NOT_ALLOWED",
+    );
+    assert.equal(
+      zeroPreview.movementFacts.some((row) => units(row.adjustmentQty) === 0n),
+      false,
+    );
+    await assert.rejects(
+      () =>
+        service.postAdjustment(
+          zero.adjustment.id,
+          {
+            expectedAdjustmentVersion: zeroReady.adjustment.version,
+            idempotencyKey: "adjust-zero-post",
+          },
+          ctx,
+        ),
+      (error) => error.code === "ADJUSTMENT_NET_ZERO_NOT_ALLOWED",
+    );
+  });
+
+  test("adjustment reversal and reconciliation fail closed on corrupted movement facts", async () => {
+    const ids = await seed(),
+      service = createInventoryOperationsCommandService({ prisma, env }),
+      ctx = identity(ids.tenantId, ids.managerId);
+    const created = await service.createAdjustment(
+      {
+        adjustmentNumber: `ADJ-INTEGRITY-${randomUUID()}`,
+        reasonCode: "damage",
+        notes: "Integrity test",
+        idempotencyKey: "adjust-integrity-create",
+        lines: [{ inventoryBalanceId: ids.balanceA, adjustmentQuantity: "-2" }],
+      },
+      ctx,
+    );
+    const ready = await service.readyAdjustment(
+      created.adjustment.id,
+      {
+        expectedAdjustmentVersion: created.adjustment.version,
+        idempotencyKey: "adjust-integrity-ready",
+      },
+      ctx,
+    );
+    const posted = await service.postAdjustment(
+      created.adjustment.id,
+      {
+        expectedAdjustmentVersion: ready.adjustment.version,
+        idempotencyKey: "adjust-integrity-post",
+      },
+      ctx,
+    );
+    const movement = await prisma.inventoryMovement.findFirst({
+      where: {
+        sourceDocumentId: created.adjustment.id,
+        movementType: "inventory_adjustment",
+      },
+    });
+    await prisma.inventoryMovement.update({
+      where: { id: movement.id },
+      data: { adjustmentQty: "-3", quantityOut: "3" },
+    });
+    const workbench = await createInventoryOperationsReadService({
+      prisma,
+      capabilities,
+    }).adjustmentWorkbench(created.adjustment.id, ctx);
+    assert.equal(workbench.reconciliation.status, "mismatch");
+    await assert.rejects(
+      () =>
+        service.reverseAdjustment(
+          created.adjustment.id,
+          {
+            expectedAdjustmentVersion: posted.adjustment.version,
+            idempotencyKey: "adjust-integrity-reverse",
+            reason: "Integrity test",
+          },
+          ctx,
+        ),
+      (error) =>
+        error.code === "ADJUSTMENT_REVERSAL_NOT_SAFE" && error.status === 409,
+    );
+    assert.equal(
+      await prisma.inventoryMovement.count({
+        where: {
+          sourceDocumentId: created.adjustment.id,
+          reversalOfMovementId: { not: null },
+        },
+      }),
+      0,
+    );
+  });
+
   test("capability, role, tenant, and warehouse boundaries fail closed", async () => {
     const ids = await seed(),
       disabled = createInventoryOperationsCommandService({
@@ -605,6 +1103,47 @@ if (!realPostgres) {
       (error) => error.code === "INVENTORY_OPERATIONS_CAPABILITY_NOT_AVAILABLE",
     );
     const service = createInventoryOperationsCommandService({ prisma, env });
+    const readable = await service.createTransfer(
+      {
+        transferNumber: `TR-CAP-${randomUUID()}`,
+        idempotencyKey: "capability-read-create",
+        lines: [
+          {
+            itemId: ids.itemId,
+            quantity: "1",
+            source: { warehouseId: ids.warehouseA, location: "A-01" },
+            destination: { warehouseId: ids.warehouseB, location: "B-01" },
+          },
+        ],
+      },
+      identity(ids.tenantId, ids.managerId),
+    );
+    const failClosedRead = createInventoryOperationsReadService({
+      prisma,
+      capabilities: {},
+    });
+    const failClosedWorkbench = await failClosedRead.transferWorkbench(
+      readable.transfer.id,
+      identity(ids.tenantId, ids.managerId),
+    );
+    assert.equal(failClosedWorkbench.availableActions.canEdit, false);
+    assert.ok(
+      failClosedWorkbench.availableActions.blockingReasonCodes.includes(
+        "INVENTORY_OPERATIONS_CAPABILITY_NOT_AVAILABLE",
+      ),
+    );
+    const partialWorkbench = await createInventoryOperationsReadService({
+      prisma,
+      capabilities,
+    }).transferWorkbench(
+      readable.transfer.id,
+      identity(ids.tenantId, ids.viewerId, "viewer"),
+    );
+    assert.equal(partialWorkbench.reconciliation.status, "unavailable");
+    assert.deepEqual(partialWorkbench.reconciliation.limitationCodes, [
+      "PARTIAL_WAREHOUSE_SCOPE",
+    ]);
+    assert.equal(partialWorkbench.lines[0].destination, null);
     await assert.rejects(
       () =>
         service.createCount(
