@@ -20,6 +20,19 @@ after(async () => { await prisma?.$disconnect() })
 const identity = (tenantId, userId, role = 'manager') => ({ identity: { authenticated: true, tenantId, userId, role, source: 'signed-session' } })
 const command = (client = prisma) => createOutboundPostingCommandService({ prisma: client, env })
 const fixed = (value) => outboundDecimalString(outboundDecimalUnits(value))
+const enabledWorkbenchCapabilities = {
+  lifecycle: { enabled: true },
+  reservation: { enabled: true },
+  shipmentDraft: { enabled: true },
+  shipmentPosting: { enabled: true },
+  shipmentReversal: { enabled: true },
+}
+const enabledQueryCapabilities = {
+  'sales-reservation': { enabled: true },
+  'sales-shipment-draft': { enabled: true },
+  'sales-shipment-posting': { enabled: true },
+  'sales-shipment-reversal': { enabled: true },
+}
 
 test('stable request hashing ignores object insertion and business-array order', () => {
   const a = { salesOrderId: 'SO-1', allocations: [{ warehouseId: 'B', quantity: '1' }, { quantity: '2', warehouseId: 'A' }] }
@@ -35,13 +48,18 @@ test('authoritative sales order lifecycle creates, revises, confirms, holds, res
   assert.equal((await service.createOrder({ orderNumber: created.order.orderNumber, customerName: 'Lifecycle Customer', currency: 'USD', idempotencyKey: 'lifecycle-create', lines: [{ itemId: base.itemId, quantity: '2.5000' }] }, ctx)).idempotentReplay, true)
   const revised = await service.reviseOrder(created.order.id, { expectedOrderVersion: 0, idempotencyKey: 'lifecycle-revise', header: { customerName: 'Lifecycle Revised', currency: 'CNY' }, lines: [{ itemId: base.itemId, quantity: '3' }] }, ctx)
   const confirmed = await service.confirmOrder(created.order.id, { expectedOrderVersion: revised.order.version, idempotencyKey: 'lifecycle-confirm' }, ctx)
+  assert.equal((await service.confirmOrder(created.order.id, { expectedOrderVersion: revised.order.version, idempotencyKey: 'lifecycle-confirm' }, ctx)).idempotentReplay, true)
+  await assert.rejects(() => service.confirmOrder(created.order.id, { expectedOrderVersion: confirmed.order.version, idempotencyKey: 'lifecycle-confirm' }, ctx), (error) => error.code === 'IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD')
   const held = await service.holdOrder(created.order.id, { expectedOrderVersion: confirmed.order.version, idempotencyKey: 'lifecycle-hold' }, ctx)
+  assert.equal((await service.holdOrder(created.order.id, { expectedOrderVersion: confirmed.order.version, idempotencyKey: 'lifecycle-hold' }, ctx)).idempotentReplay, true)
   const resumed = await service.resumeOrder(created.order.id, { expectedOrderVersion: held.order.version, idempotencyKey: 'lifecycle-resume' }, ctx)
+  assert.equal((await service.resumeOrder(created.order.id, { expectedOrderVersion: held.order.version, idempotencyKey: 'lifecycle-resume' }, ctx)).idempotentReplay, true)
   assert.equal(resumed.order.workflowStatus, 'confirmed')
   await assert.rejects(() => service.reviseOrder(created.order.id, { expectedOrderVersion: resumed.order.version, idempotencyKey: 'lifecycle-invalid-edit', header: {}, lines: [{ itemId: base.itemId, quantity: '1' }] }, ctx), (error) => error.code === 'SALES_ORDER_INVALID_STATE')
   const listed = await createSalesOrderReadService({ prisma }).listOrders({ page: 1, pageSize: 1, search: 'Lifecycle Revised' }, ctx)
   assert.deepEqual([listed.total, listed.orders.length, listed.dataSource], [1, 1, 'Authoritative PostgreSQL'])
   assert.equal(await prisma.auditLog.count({ where: { tenantId: base.tenantId, entityId: created.order.id } }), 5)
+  assert.equal(await prisma.businessCommandExecution.count({ where: { tenantId: base.tenantId, commandType: { in: ['confirm_sales_order', 'hold_sales_order', 'resume_sales_order'] } } }), 3)
 })
 
 async function seed({ stock = '10.0000', ordered = '10.0000', actorRole = 'manager', scope = 'operate', suffix = randomUUID() } = {}) {
@@ -126,10 +144,105 @@ test('authoritative reserve, draft, post, replay, and reversal close the Postgre
   assert.equal(workbench.reconciliation.status, 'matched')
   assert.ok(workbench.evidence.some((event) => event.commandExecutionId && event.idempotencyKey))
   assert.ok(workbench.smartLinks.some((link) => link.targetRouteId === 'inventory:movements' && link.filter.relatedSalesOrderId === ids.salesOrderId))
+  assert.equal(workbench.smartLinks.find((link) => link.targetType === 'shipment').targetId, shipmentId)
   const shipmentWorkbench = await createOutboundWorkbenchReadService({ prisma }).shipmentWorkbench(shipmentId, identity(ids.tenantId, ids.actorId))
   assert.equal(shipmentWorkbench.availableActions.canReverse, false)
   assert.equal(shipmentWorkbench.movements.length, 2)
   await assertReconciled(ids)
+})
+
+test('holding a sales order blocks shipment posting without writes, resume permits posting, and reversal remains safe on hold', async () => {
+  const ids = await seed(), ctx = identity(ids.tenantId, ids.actorId), service = command(), lifecycle = createSalesOrderWorkbenchService({ prisma })
+  const reserved = await service.reserveSalesOrderInventory(reserveInput(ids, '3', 'hold-reserve'), ctx)
+  const drafted = await service.createShipmentDraft({ salesOrderId: ids.salesOrderId, shipmentNumber: `HOLD-${randomUUID()}`, expectedOrderVersion: 1, idempotencyKey: 'hold-draft', lines: [{ salesOrderLineId: ids.salesOrderLineId, allocations: [{ reservationId: reserved.reservations[0].id, quantity: '3' }] }] }, ctx)
+  const beforeHold = await prisma.salesOrder.findUnique({ where: { id: ids.salesOrderId } })
+  await lifecycle.holdOrder(ids.salesOrderId, { expectedOrderVersion: beforeHold.version, idempotencyKey: 'hold-before-post' }, ctx)
+  const snapshot = async () => ({
+    balance: await prisma.inventoryBalance.findUnique({ where: { id: ids.balanceId } }),
+    reservation: await prisma.inventoryReservation.findUnique({ where: { id: reserved.reservations[0].id } }),
+    shipment: await prisma.shipmentDocument.findUnique({ where: { id: drafted.shipment.id } }),
+    movements: await prisma.inventoryMovement.count({ where: { tenantId: ids.tenantId, movementType: 'shipment_posting' } }),
+  })
+  const beforeRejectedPost = await snapshot()
+  const preview = await createOutboundQueryService({ prisma, capabilities: enabledQueryCapabilities }).previewShipmentPosting({ shipmentId: drafted.shipment.id }, ctx)
+  assert.equal(preview.allowed, false)
+  assert.ok(preview.blockingIssues.some((issue) => issue.code === 'SALES_ORDER_ON_HOLD'))
+  await assert.rejects(() => service.postShipment({ shipmentId: drafted.shipment.id, expectedShipmentVersion: 0, idempotencyKey: 'hold-post-rejected' }, ctx), (error) => error.code === 'SALES_ORDER_ON_HOLD' && error.status === 409)
+  const afterRejectedPost = await snapshot()
+  assert.deepEqual(
+    [fixed(afterRejectedPost.balance.onHandQuantity), fixed(afterRejectedPost.balance.reservedQuantity), fixed(afterRejectedPost.reservation.consumedQuantity), afterRejectedPost.shipment.postingStatus, afterRejectedPost.movements],
+    [fixed(beforeRejectedPost.balance.onHandQuantity), fixed(beforeRejectedPost.balance.reservedQuantity), fixed(beforeRejectedPost.reservation.consumedQuantity), beforeRejectedPost.shipment.postingStatus, beforeRejectedPost.movements],
+  )
+  const held = await prisma.salesOrder.findUnique({ where: { id: ids.salesOrderId } })
+  await lifecycle.resumeOrder(ids.salesOrderId, { expectedOrderVersion: held.version, idempotencyKey: 'resume-before-post' }, ctx)
+  await service.postShipment({ shipmentId: drafted.shipment.id, expectedShipmentVersion: 0, idempotencyKey: 'hold-post-success' }, ctx)
+  const postedOrder = await prisma.salesOrder.findUnique({ where: { id: ids.salesOrderId } })
+  await lifecycle.holdOrder(ids.salesOrderId, { expectedOrderVersion: postedOrder.version, idempotencyKey: 'hold-before-reverse' }, ctx)
+  const shipmentWorkbench = await createOutboundWorkbenchReadService({ prisma, capabilities: enabledWorkbenchCapabilities }).shipmentWorkbench(drafted.shipment.id, ctx)
+  assert.equal(shipmentWorkbench.availableActions.canReverse, true)
+  await service.reverseShipment({ shipmentId: drafted.shipment.id, expectedShipmentVersion: 1, idempotencyKey: 'reverse-while-held', reason: 'Safe correction while order is held' }, ctx)
+  assert.equal((await prisma.shipmentDocument.findUnique({ where: { id: drafted.shipment.id } })).postingStatus, 'reversed')
+  await assertReconciled(ids)
+})
+
+test('outbound workbench capability contract keeps reads available while every disabled mutation action fails closed', async () => {
+  const ids = await seed(), ctx = identity(ids.tenantId, ids.actorId)
+  const disabled = await createOutboundWorkbenchReadService({ prisma, capabilities: {} }).orderWorkbench(ids.salesOrderId, ctx)
+  assert.equal(disabled.dataSource, 'Authoritative PostgreSQL')
+  assert.deepEqual(
+    [disabled.availableActions.canEditDraft, disabled.availableActions.canConfirm, disabled.availableActions.canHold, disabled.availableActions.canResume, disabled.availableActions.canReserve, disabled.availableActions.canRelease, disabled.availableActions.canCreateShipment],
+    [false, false, false, false, false, false, false],
+  )
+  assert.ok(disabled.availableActions.blockingReasonCodes.includes('OUTBOUND_CAPABILITY_NOT_AVAILABLE'))
+  const enabled = await createOutboundWorkbenchReadService({ prisma, capabilities: enabledWorkbenchCapabilities }).orderWorkbench(ids.salesOrderId, ctx)
+  assert.equal(enabled.availableActions.canHold, true)
+  assert.equal(enabled.availableActions.canReserve, true)
+})
+
+test('warehouse-scoped outbound projection hides cross-warehouse facts and marks reconciliation incomplete', async () => {
+  const ids = await seed({ stock: '10', ordered: '10' }), suffix = randomUUID(), ctx = identity(ids.tenantId, ids.actorId)
+  const warehouseB = `wh-b-${suffix}`, balanceB = `bal-b-${suffix}`
+  await prisma.warehouse.create({ data: { id: warehouseB, tenantId: ids.tenantId, code: `WH-B-${suffix}`, name: 'Restricted Warehouse', status: 'active' } })
+  await prisma.userWarehouseScope.create({ data: { id: `scope-b-${suffix}`, tenantId: ids.tenantId, userId: ids.actorId, warehouseId: warehouseB, accessLevel: 'operate' } })
+  const item = await prisma.item.findUnique({ where: { id: ids.itemId } })
+  await prisma.inventoryBalance.create({ data: { id: balanceB, tenantId: ids.tenantId, itemId: ids.itemId, sku: item.sku, itemName: item.name, warehouseId: warehouseB, warehouseKey: warehouseB, location: 'B-01', locationKey: 'b-01', onHandQuantity: '10', reservedQuantity: '0', availableQuantity: '10', unit: 'EA', status: 'available' } })
+  const hiddenOpeningMovement = `opening-b-${suffix}`
+  await prisma.inventoryMovement.create({ data: { id: hiddenOpeningMovement, tenantId: ids.tenantId, itemId: ids.itemId, sku: item.sku, itemName: item.name, warehouseId: warehouseB, location: 'B-01', locationKey: 'b-01', movementType: 'opening_balance', movementLabel: 'Opening balance', sourceDocument: 'test-seed', sourceDocumentType: 'TestSeed', sourceDocumentId: balanceB, sourceDocumentLineId: balanceB, quantityIn: '10', quantityOut: '0', adjustmentQty: '0', status: 'posted', unit: 'EA' } })
+  const service = command()
+  const reserved = await service.reserveSalesOrderInventory({ salesOrderId: ids.salesOrderId, expectedOrderVersion: 0, idempotencyKey: 'scope-reserve', allocations: [
+    { salesOrderLineId: ids.salesOrderLineId, warehouseId: ids.warehouseId, location: 'A-01', quantity: '2' },
+    { salesOrderLineId: ids.salesOrderLineId, warehouseId: warehouseB, location: 'B-01', quantity: '2' },
+  ] }, ctx)
+  const reservationA = reserved.reservations.find((row) => row.warehouseId === ids.warehouseId)
+  const reservationB = reserved.reservations.find((row) => row.warehouseId === warehouseB)
+  const shipmentA = await service.createShipmentDraft({ salesOrderId: ids.salesOrderId, shipmentNumber: `VISIBLE-${suffix}`, expectedOrderVersion: 1, idempotencyKey: 'scope-draft-a', lines: [{ salesOrderLineId: ids.salesOrderLineId, allocations: [{ reservationId: reservationA.id, quantity: '1' }] }] }, ctx)
+  const shipmentB = await service.createShipmentDraft({ salesOrderId: ids.salesOrderId, shipmentNumber: `HIDDEN-${suffix}`, expectedOrderVersion: 2, idempotencyKey: 'scope-draft-b', lines: [{ salesOrderLineId: ids.salesOrderLineId, allocations: [{ reservationId: reservationB.id, quantity: '1' }] }] }, ctx)
+  const hiddenPost = await service.postShipment({ shipmentId: shipmentB.shipment.id, expectedShipmentVersion: 0, idempotencyKey: 'scope-post-b' }, ctx)
+  const viewerId = `viewer-a-${suffix}`, adminId = `admin-${suffix}`
+  await prisma.user.createMany({ data: [
+    { id: viewerId, tenantId: ids.tenantId, email: `${viewerId}@example.com`, name: 'Warehouse A Viewer', role: 'manager' },
+    { id: adminId, tenantId: ids.tenantId, email: `${adminId}@example.com`, name: 'Workspace Admin', role: 'admin' },
+  ] })
+  await prisma.userWarehouseScope.create({ data: { id: `scope-viewer-a-${suffix}`, tenantId: ids.tenantId, userId: viewerId, warehouseId: ids.warehouseId, accessLevel: 'read' } })
+  const read = createOutboundWorkbenchReadService({ prisma, capabilities: enabledWorkbenchCapabilities })
+  const partial = await read.orderWorkbench(ids.salesOrderId, identity(ids.tenantId, viewerId))
+  assert.deepEqual([partial.scopeCoverage.status, partial.scopeCoverage.hiddenWarehouseFacts, partial.reconciliation.status, partial.reconciliation.reasonCode], ['partial', true, 'unavailable', 'PARTIAL_WAREHOUSE_SCOPE'])
+  assert.equal(partial.lines[0].quantityScope, 'visible_warehouses_only')
+  assert.equal(partial.lines[0].remainingToReserve, null)
+  assert.deepEqual(partial.reservations.map((row) => row.id), [reservationA.id])
+  assert.deepEqual(partial.shipments.map((row) => row.id), [shipmentA.shipment.id])
+  assert.equal(partial.smartLinks.find((link) => link.targetType === 'shipment').targetId, shipmentA.shipment.id)
+  assert.ok(partial.availability.every((row) => row.balances.every((balance) => balance.warehouseId === ids.warehouseId)))
+  const serialized = JSON.stringify(partial)
+  for (const hiddenId of [warehouseB, balanceB, reservationB.id, shipmentB.shipment.id, hiddenOpeningMovement, ...hiddenPost.movementIds]) assert.equal(serialized.includes(hiddenId), false, hiddenId)
+  await assert.rejects(() => read.shipmentWorkbench(shipmentB.shipment.id, identity(ids.tenantId, viewerId)), (error) => error.code === 'WAREHOUSE_SCOPE_DENIED' && error.status === 404)
+  const full = await read.orderWorkbench(ids.salesOrderId, identity(ids.tenantId, adminId, 'admin'))
+  assert.equal(full.scopeCoverage.status, 'full')
+  assert.equal(full.reconciliation.status, 'matched')
+  assert.equal(full.reservations.length, 2)
+  assert.equal(full.shipments.length, 2)
+  const multipleShipmentLink = full.smartLinks.find((link) => link.targetType === 'shipment')
+  assert.deepEqual([multipleShipmentLink.targetRouteId, multipleShipmentLink.targetId, multipleShipmentLink.filter.section], ['sales:order-detail', ids.salesOrderId, 'shipments'])
 })
 
 test('partial/full release, cancellation, authorization, version, and idempotency conflicts are stable', async () => {

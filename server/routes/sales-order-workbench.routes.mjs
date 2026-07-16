@@ -3,6 +3,7 @@ import { createSalesOrderReadService, createSalesOrderWorkbenchService, SalesWor
 import { PilotIdentityError } from '../domain/pilot-identity.mjs'
 import { createOutboundWorkbenchReadService } from '../domain/outbound-workbench-read-service.mjs'
 import { getPrismaClient } from '../persistence/prisma-client.mjs'
+import { capabilityForEnvironment } from '../domain/capability-registry.mjs'
 
 const decode = (value) => decodeURIComponent(value)
 function errorResponse(ctx, error) {
@@ -28,16 +29,26 @@ export async function handleSalesOrderWorkbenchRoute(ctx) {
   if (!isRead && !isCreate && !isEdit && !isTransition) return false
   const authorization = isRead ? null : authorizeMutation(ctx, { allowedRoles: ['admin', 'manager', 'business-specialist', 'business_specialist'], action: 'sales-order-lifecycle', resource: 'database-outbound' })
   if (authorization?.blocked) return true
+  const lifecycleCapability = capabilityForEnvironment('sales-order-lifecycle', ctx.env || process.env)
+  if (!isRead && !lifecycleCapability?.enabled) { ctx.send(ctx.res, 409, { code: 'OUTBOUND_CAPABILITY_NOT_AVAILABLE', message: 'Authoritative outbound lifecycle is not enabled for this runtime.', details: { capability: 'sales-order-lifecycle' } }); return true }
   try {
     const prisma = ctx.outboundPrisma || await getPrismaClient(ctx.env || process.env)
     const context = { identity: isRead ? ctx.identity : authorization.identity }
     if (isRead) {
       if (entryData) { ctx.send(ctx.res, 200, await createSalesOrderReadService({ prisma }).entryData(context)); return true }
       if (orderRead || shipmentRead) {
-        const service = createOutboundWorkbenchReadService({ prisma })
+        const capabilities = {
+          lifecycle: lifecycleCapability,
+          reservation: capabilityForEnvironment('sales-reservation', ctx.env || process.env),
+          shipmentDraft: capabilityForEnvironment('sales-shipment-draft', ctx.env || process.env),
+          shipmentPosting: capabilityForEnvironment('sales-shipment-posting', ctx.env || process.env),
+          shipmentReversal: capabilityForEnvironment('sales-shipment-reversal', ctx.env || process.env),
+        }
+        const service = createOutboundWorkbenchReadService({ prisma, capabilities })
         const result = orderRead ? await service.orderWorkbench(decode(orderRead[1]), context) : await service.shipmentWorkbench(decode(shipmentRead[1]), context)
         const section = (orderRead || shipmentRead)[2]
-        ctx.send(ctx.res, 200, section === 'workbench' ? result : result[section]); return true
+        const sections = { workbench: result, evidence: result.evidence, links: result.smartLinks, reconciliation: result.reconciliation }
+        ctx.send(ctx.res, 200, sections[section]); return true
       }
       const query = Object.fromEntries(ctx.url.searchParams.entries())
       ctx.send(ctx.res, 200, await createSalesOrderReadService({ prisma }).listOrders(query, context)); return true

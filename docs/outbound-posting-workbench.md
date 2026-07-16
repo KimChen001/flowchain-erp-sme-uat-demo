@@ -2,7 +2,7 @@
 
 ## 1. Scope
 
-Phase 3.5 productizes the PostgreSQL flow Sales Order Draft → Confirm → Reserve/Release → Shipment Draft/Cancel → Post → Reverse. It excludes picking, lots/serials, carriers, invoicing, costing, returns, negative inventory, and automatic warehouse optimization.
+Phase 3.6 freezes the PostgreSQL flow Sales Order Draft → Confirm → Hold/Resume → Reserve/Release → Shipment Draft/Cancel → Post → Reverse. It closes capability, warehouse projection, navigation, explicit-selection, lifecycle idempotency, and order-list acceptance gaps without changing inventory mathematics.
 
 ## 2. Phase 3 stabilization changes
 
@@ -10,7 +10,7 @@ All six previews enforce signed-actor warehouse read scope and tenant warehouse 
 
 ## 3. Sales Order lifecycle
 
-The lifecycle service supports idempotent draft create, whole-draft revision, confirm, hold, and resume in SERIALIZABLE transactions. Item snapshots come from active tenant Items. Confirmed lines are immutable in this phase. Every command writes a command execution and audit record.
+The lifecycle service supports idempotent draft create, whole-draft revision, confirm, hold, and resume in SERIALIZABLE transactions. Item snapshots come from active tenant Items. Confirmed lines are immutable in this phase. Every command writes a command execution and audit record. An order on hold rejects new reservation, shipment draft, and shipment posting with `SALES_ORDER_ON_HOLD`; resume restores posting eligibility. Cancelling an unposted shipment and reversing a posted shipment remain correction paths while held.
 
 ## 4. Workbench routes
 
@@ -31,15 +31,15 @@ Availability is grouped by order line, then warehouse/location. Totals and rows 
 
 ## 7. Reservation UX
 
-Users select an operable balance and quantity, request the authoritative preview, review before/after facts, then confirm. A client idempotency key is created once per intent and retained through retry. The page refreshes the workbench after success.
+Users explicitly select an order line, an operable warehouse/location balance, and quantity, request the authoritative preview, review before/after facts, then confirm. A client idempotency key is created once per intent and retained through retry. The page refreshes the workbench after success.
 
 ## 8. Release UX
 
-Only allocatable quantity is offered. A reason, reservation version, preview, confirmation, and idempotency key are mandatory. Allocated quantity is never presented as releasable.
+Users explicitly select a reservation. Only allocatable quantity is offered. A reason, reservation version, preview, confirmation, and idempotency key are mandatory. Allocated quantity is never presented as releasable.
 
 ## 9. Shipment Draft UX
 
-The order workbench allocates an existing reservation after a duplicate-number-aware preview. Drafting changes allocation only: it does not change InventoryBalance and creates no InventoryMovement.
+The order workbench explicitly selects one order line and one existing reservation allocation after a duplicate-number-aware preview. Drafting changes allocation only: it does not change InventoryBalance and creates no InventoryMovement.
 
 ## 10. Cancellation UX
 
@@ -63,11 +63,11 @@ The timeline combines lifecycle/shipment audit records, reservation events, and 
 
 ## 15. Smart Links
 
-Order links use supported filters: reservation/shipment `salesOrderId`, balance natural keys (`sku`, `warehouseId`, `locationKey`), movement `relatedSalesOrderId`, and audit entity identity. Disabled links state an availability reason.
+Every link has an ID, route/type/target ID, filters, enabled state, and unavailable reason. A single visible shipment targets its shipment ID; multiple shipments target the order `shipments` section. Reservation links target `reservations`. Balance links use `sku`, `warehouseId`, and `locationKey` only for one unambiguous target. Movement links preserve `relatedSalesOrderId` and available source/batch keys. Ambiguous or unsupported targets are disabled.
 
 ## 16. Reconciliation
 
-Read models verify `available = onHand - reserved`, line non-negativity and ordered ceiling, reservation consumption/release/allocation ceilings, and shipment posted quantity against effective posting minus reversal movements. Results are `matched`, `mismatch`, or `unavailable`, with calculated, recorded, difference, entity, and evidence links.
+Full-scope read models verify `available = onHand - reserved`, line non-negativity and ordered ceiling, reservation consumption/release/allocation ceilings, and shipment posted quantity against effective posting minus reversal movements. When warehouse facts are hidden, `scopeCoverage.status` is `partial`, `PARTIAL_WAREHOUSE_SCOPE` is returned, and reconciliation is `unavailable` rather than claiming a full-order match.
 
 ## 17. AI Explain
 
@@ -75,7 +75,7 @@ AI Explain is a deterministic, read-only evidence explanation with conclusion, e
 
 ## 18. Idempotency UX
 
-One key represents one visible confirmation intent. Loading disables the action. A replay is treated as the original success; changed payload with the same key is rejected. A new key is created only when the user begins a new intent.
+One key represents one visible create, revise, confirm, hold, resume, reserve, release, shipment, post, cancel, or reverse intent. Loading disables the action. A replay is treated as the original success; changed payload creates a new client intent, while server reuse with a different payload is rejected.
 
 ## 19. Error handling
 
@@ -83,7 +83,7 @@ Routes return only stable `code`, `message`, and optional `details`. 404 masks u
 
 ## 20. Warehouse Scope
 
-Admin can access tenant warehouses only. Viewer with read scope can inspect availability and preview but cannot mutate. Manager with read-only or missing scope cannot mutate; missing preview scope returns 404. Body, query, and headers cannot forge scope.
+Admin can access tenant warehouses only. A shipment is visible only when every allocation warehouse is readable. Reservation events, shipment audits, movements, reconciliation facts, and Smart Link counts use the same projection; direct access to an out-of-scope shipment returns 404. Viewer with read scope can inspect availability and preview but cannot mutate.
 
 ## 21. API contracts
 
@@ -99,12 +99,16 @@ Use Node 24, run `npm ci`, set database mode and a PostgreSQL `DATABASE_URL`, de
 
 ## 24. Capability flags
 
-`FLOWCHAIN_PERSISTENCE_MODE=database` and `FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING=true` enable the kernel. Capability registry entries continue to distinguish reservation, shipment draft, posting, and reversal. Disabled capability states remain read-only and explicit.
+`FLOWCHAIN_PERSISTENCE_MODE=database` and `FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING=true` enable the beta `sales-order-lifecycle` capability together with reservation, shipment draft, posting, and reversal. Database reads remain available when disabled, but every action is false and mutations return `OUTBOUND_CAPABILITY_NOT_AVAILABLE`. File mode never falls back to JSON for authoritative workbenches.
 
 ## 25. Known limitations
 
-There is no FX conversion, costing/COGS, picking, lot/serial allocation, negative inventory, sales-order cancel, customer master overhaul, or automated AI transaction execution. Workbench entry currently supports a narrow single-line form while the API supports multiple lines.
+New Sales Order UI currently creates one line. Shipment Draft UI currently creates one explicitly selected line and one explicitly selected Reservation Allocation per action; the API supports multiple lines and allocations. The workbench no longer silently uses the first eligible record. There is no FX conversion, costing/COGS, picking, lot/serial allocation, negative inventory, sales-order cancel, customer master overhaul, or automated AI transaction execution.
 
-## 26. Phase 4 boundary
+## 26. Order list
+
+The authoritative list supports URL-persisted search, workflow/reservation/fulfillment status, currency, pagination, and stable sorting by updated time, promised date, or order number. Previous/next navigation retains query state, and an empty filtered result is not reported as a system error.
+
+## 27. Phase 4 boundary
 
 Phase 4 may introduce controlled picking and richer multi-line entry only after preserving the transaction kernel, warehouse authorization, evidence, reconciliation, idempotency, and browser gates documented here.

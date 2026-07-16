@@ -17,6 +17,7 @@ export const capabilityRegistry = [
   capability('inventory-balance-adjustment', 'stable', true, true, 'Existing authoritative inventory adjustment behavior'),
   capability('receiving-posting', 'beta', false, true, 'Database-only transactional receiving posting', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING' }),
   capability('receiving-reversal', 'beta', false, true, 'Database-only transactional receiving reversal', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING' }),
+  capability('sales-order-lifecycle', 'beta', true, true, 'Database-only authoritative sales order lifecycle', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING' }),
   capability('sales-reservation', 'beta', true, true, 'Database-only sales inventory reservation', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING' }),
   capability('sales-shipment-draft', 'beta', true, true, 'Database-only sales shipment allocation', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING' }),
   capability('sales-shipment-posting', 'beta', true, true, 'Database-only sales shipment posting', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING' }),
