@@ -831,6 +831,167 @@ model InventoryMovement {
   @@index([tenantId, sku, warehouseId, locationKey])
 }
 
+model StockTransferDocument {
+  id                 String   @id
+  tenantId           String
+  transferNumber     String
+  workflowStatus     String   @default("draft")
+  postingStatus      String   @default("unposted")
+  version            Int      @default(0)
+  postedAt           DateTime?
+  postedById         String?
+  reversedAt         DateTime?
+  reversedById       String?
+  cancellationReason String?
+  reversalReason     String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  lines StockTransferLine[]
+
+  @@unique([tenantId, transferNumber])
+  @@index([tenantId, workflowStatus])
+  @@index([tenantId, postingStatus])
+  @@index([tenantId, createdAt])
+}
+
+model StockTransferLine {
+  id         String   @id
+  transferId String
+  itemId     String
+  sku        String
+  itemName   String
+  quantity   Decimal  @db.Decimal(18, 4)
+  unit       String?
+  version    Int      @default(0)
+  metadata   Json?
+
+  transfer StockTransferDocument @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  legs     StockTransferLeg[]
+
+  @@index([transferId])
+}
+
+model StockTransferLeg {
+  id             String @id
+  tenantId       String
+  transferLineId String
+  direction      String
+  warehouseId    String
+  location       String?
+  locationKey    String @default("")
+  version        Int    @default(0)
+  metadata       Json?
+
+  transferLine StockTransferLine @relation(fields: [transferLineId], references: [id], onDelete: Cascade)
+
+  @@unique([transferLineId, direction])
+  @@index([tenantId, warehouseId, locationKey])
+}
+
+model CycleCountSession {
+  id                 String    @id
+  tenantId           String
+  countNumber        String
+  warehouseId        String
+  workflowStatus     String    @default("draft")
+  blindCount         Boolean   @default(false)
+  version            Int       @default(0)
+  submittedAt        DateTime?
+  submittedById      String?
+  reviewedAt         DateTime?
+  reviewedById       String?
+  postedAt           DateTime?
+  postedById         String?
+  cancellationReason String?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  lines CycleCountLine[]
+
+  @@unique([tenantId, countNumber])
+  @@index([tenantId, warehouseId])
+  @@index([tenantId, workflowStatus])
+  @@index([tenantId, createdAt])
+}
+
+model CycleCountLine {
+  id                        String   @id
+  countSessionId            String
+  inventoryBalanceId        String
+  itemId                    String?
+  sku                       String
+  itemName                  String?
+  warehouseId               String
+  location                  String?
+  locationKey               String   @default("")
+  unit                      String?
+  recordedOnHandQuantity    Decimal  @db.Decimal(18, 4)
+  recordedReservedQuantity  Decimal  @db.Decimal(18, 4)
+  recordedAvailableQuantity Decimal  @db.Decimal(18, 4)
+  recordedBalanceVersion    Int
+  countedQuantity           Decimal? @db.Decimal(18, 4)
+  varianceQuantity          Decimal? @db.Decimal(18, 4)
+  version                   Int      @default(0)
+  metadata                  Json?
+
+  countSession CycleCountSession @relation(fields: [countSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([countSessionId, inventoryBalanceId])
+  @@index([countSessionId])
+  @@index([warehouseId, locationKey])
+}
+
+model InventoryAdjustmentDocument {
+  id                 String    @id
+  tenantId           String
+  adjustmentNumber   String
+  reasonCode         String
+  notes              String?
+  workflowStatus     String    @default("draft")
+  postingStatus      String    @default("unposted")
+  version            Int       @default(0)
+  postedAt           DateTime?
+  postedById         String?
+  reversedAt         DateTime?
+  reversedById       String?
+  cancellationReason String?
+  reversalReason     String?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  lines InventoryAdjustmentLine[]
+
+  @@unique([tenantId, adjustmentNumber])
+  @@index([tenantId, workflowStatus])
+  @@index([tenantId, postingStatus])
+  @@index([tenantId, createdAt])
+}
+
+model InventoryAdjustmentLine {
+  id                     String  @id
+  adjustmentId           String
+  inventoryBalanceId     String
+  itemId                 String?
+  sku                    String
+  itemName               String?
+  warehouseId            String
+  location               String?
+  locationKey            String  @default("")
+  adjustmentQuantity     Decimal @db.Decimal(18, 4)
+  unit                   String?
+  version                Int     @default(0)
+  metadata               Json?
+
+  adjustment InventoryAdjustmentDocument @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+
+  @@index([adjustmentId])
+  @@index([warehouseId, locationKey])
+}
+
 model BusinessCommandExecution {
   id             String    @id
   tenantId       String
