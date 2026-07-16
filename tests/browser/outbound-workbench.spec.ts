@@ -26,6 +26,8 @@ test('sales fulfillment workbench closes reserve, shipment, post, and reverse th
   await expect(page.getByTestId('availability-balance')).toContainText('现有 10.0000')
   await expect(page.getByTestId('availability-balance')).toContainText('预留 4.0000')
   await expect(page.getByTestId('availability-balance')).toContainText('可用 6.0000')
+  await page.getByTestId('smart-link-reservation').focus(); await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#reservations$/); await expect(page.locator('#reservations')).toBeVisible()
 
   await page.getByRole('button', { name: '释放预留' }).click()
   await page.getByLabel('预留记录').selectOption({ index: 1 })
