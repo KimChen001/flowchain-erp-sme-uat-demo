@@ -7,6 +7,8 @@ import {
   createOperationalFinanceReadService,
   OperationalFinanceReadError,
 } from "../domain/operational-finance-read-service.mjs";
+import { createOperationalFinanceO2cCommandService } from "../domain/operational-finance-o2c-command-service.mjs";
+import { createOperationalFinanceO2cReadService } from "../domain/operational-finance-o2c-read-service.mjs";
 import { PilotIdentityError } from "../domain/pilot-identity.mjs";
 import { getPrismaClient } from "../persistence/prisma-client.mjs";
 
@@ -15,6 +17,9 @@ const capabilityIds = [
   "three-way-match",
   "payable-obligation",
   "supplier-credit-memo",
+  "customer-invoice",
+  "receivable-obligation",
+  "customer-credit-note",
 ];
 const capabilities = (env) =>
   Object.fromEntries(
@@ -86,6 +91,15 @@ async function services(ctx) {
     command:
       ctx.operationalFinanceCommandService ||
       createOperationalFinanceCommandService({ prisma, env }),
+    o2cRead:
+      ctx.operationalFinanceO2cReadService ||
+      createOperationalFinanceO2cReadService({
+        prisma,
+        capabilities: capabilities(env),
+      }),
+    o2cCommand:
+      ctx.operationalFinanceO2cCommandService ||
+      createOperationalFinanceO2cCommandService({ prisma, env }),
   };
 }
 
@@ -94,9 +108,87 @@ export async function handleOperationalFinanceRoute(ctx) {
   if (!path.startsWith("/api/finance/")) return false;
   if (!ensureBoundary(ctx)) return true;
   try {
-    const { read, command } = await services(ctx);
+    const { read, command, o2cRead, o2cCommand } = await services(ctx);
     if (ctx.req.method === "GET" && path === "/api/finance/entry-data") {
-      ctx.send(ctx.res, 200, await read.entryData(ctx));
+      const [p2p, o2c] = await Promise.all([
+        read.entryData(ctx),
+        o2cRead.entryData(ctx),
+      ]);
+      ctx.send(ctx.res, 200, { ...p2p, ...o2c, capabilities: capabilities(ctx.env || process.env) });
+      return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/finance/customer-invoices") {
+      ctx.send(ctx.res, 200, await o2cRead.listCustomerInvoices(query(ctx.url), ctx));
+      return true;
+    }
+    if (
+      ctx.req.method === "POST" &&
+      path === "/api/finance/customer-invoices/preview"
+    ) {
+      if (!ensureCapability(ctx, "customer-invoice")) return true;
+      ctx.send(
+        ctx.res,
+        200,
+        await o2cCommand.previewCustomerInvoice(await ctx.readBody(ctx.req), ctx),
+      );
+      return true;
+    }
+    if (ctx.req.method === "POST" && path === "/api/finance/customer-invoices") {
+      if (!ensureCapability(ctx, "customer-invoice")) return true;
+      ctx.send(
+        ctx.res,
+        201,
+        await o2cCommand.createCustomerInvoice(await ctx.readBody(ctx.req), ctx),
+      );
+      return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/finance/receivables") {
+      ctx.send(ctx.res, 200, await o2cRead.listReceivables(query(ctx.url), ctx));
+      return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/finance/aging") {
+      ctx.send(ctx.res, 200, await o2cRead.aging(query(ctx.url), ctx));
+      return true;
+    }
+    if (
+      ctx.req.method === "GET" &&
+      path === "/api/finance/customer-credit-notes"
+    ) {
+      ctx.send(
+        ctx.res,
+        200,
+        await o2cRead.listCustomerCreditNotes(query(ctx.url), ctx),
+      );
+      return true;
+    }
+    if (
+      ctx.req.method === "POST" &&
+      path === "/api/finance/customer-credit-notes/preview"
+    ) {
+      if (!ensureCapability(ctx, "customer-credit-note")) return true;
+      ctx.send(
+        ctx.res,
+        200,
+        await o2cCommand.previewCustomerCreditNote(
+          await ctx.readBody(ctx.req),
+          ctx,
+        ),
+      );
+      return true;
+    }
+    if (
+      ctx.req.method === "POST" &&
+      path === "/api/finance/customer-credit-notes"
+    ) {
+      if (!ensureCapability(ctx, "customer-credit-note")) return true;
+      ctx.send(
+        ctx.res,
+        201,
+        await o2cCommand.createCustomerCreditNote(
+          await ctx.readBody(ctx.req),
+          ctx,
+        ),
+      );
       return true;
     }
     if (ctx.req.method === "GET" && path === "/api/finance/supplier-invoices") {
@@ -296,6 +388,99 @@ export async function handleOperationalFinanceRoute(ctx) {
         memoMatch[2] === "approve-preview"
           ? await command.previewApproveSupplierCreditMemo(memoId, body, ctx)
           : await command.approveSupplierCreditMemo(memoId, body, ctx),
+      );
+      return true;
+    }
+
+    const customerInvoiceMatch = path.match(
+      /^\/api\/finance\/customer-invoices\/([^/]+)(?:\/(submit-preview|submit|approve-preview|approve|issue-preview|issue))?$/,
+    );
+    if (customerInvoiceMatch) {
+      const invoiceId = decodeURIComponent(customerInvoiceMatch[1]);
+      const action = customerInvoiceMatch[2] || "";
+      if (ctx.req.method === "GET" && !action) {
+        ctx.send(
+          ctx.res,
+          200,
+          await o2cRead.customerInvoiceDetail(invoiceId, ctx),
+        );
+        return true;
+      }
+      if (ctx.req.method === "POST" && action) {
+        const capability =
+          action.startsWith("issue")
+            ? "receivable-obligation"
+            : "customer-invoice";
+        if (!ensureCapability(ctx, capability)) return true;
+        const methods = {
+          "submit-preview": "previewSubmitCustomerInvoice",
+          submit: "submitCustomerInvoice",
+          "approve-preview": "previewApproveCustomerInvoice",
+          approve: "approveCustomerInvoice",
+          "issue-preview": "previewIssueCustomerInvoice",
+          issue: "issueCustomerInvoice",
+        };
+        ctx.send(
+          ctx.res,
+          200,
+          await o2cCommand[methods[action]](
+            invoiceId,
+            await ctx.readBody(ctx.req),
+            ctx,
+          ),
+        );
+        return true;
+      }
+    }
+
+    const receivableMatch = path.match(
+      /^\/api\/finance\/receivables\/([^/]+)\/(dispute|resolve-dispute|record-external-reference)(-preview)?$/,
+    );
+    if (receivableMatch && ctx.req.method === "POST") {
+      if (!ensureCapability(ctx, "receivable-obligation")) return true;
+      const receivableId = decodeURIComponent(receivableMatch[1]);
+      const action = receivableMatch[2];
+      const body = await ctx.readBody(ctx.req);
+      if (receivableMatch[3]) {
+        ctx.send(
+          ctx.res,
+          200,
+          await o2cCommand.previewReceivableAction(
+            action,
+            receivableId,
+            body,
+            ctx,
+          ),
+        );
+        return true;
+      }
+      const method =
+        action === "dispute"
+          ? "disputeReceivable"
+          : action === "resolve-dispute"
+            ? "resolveReceivableDispute"
+            : "recordExternalSettlementReference";
+      ctx.send(
+        ctx.res,
+        200,
+        await o2cCommand[method](receivableId, body, ctx),
+      );
+      return true;
+    }
+
+    const customerCreditMatch = path.match(
+      /^\/api\/finance\/customer-credit-notes\/([^/]+)\/(approve-preview|approve)$/,
+    );
+    if (customerCreditMatch && ctx.req.method === "POST") {
+      if (!ensureCapability(ctx, "customer-credit-note")) return true;
+      const noteId = decodeURIComponent(customerCreditMatch[1]);
+      const body = await ctx.readBody(ctx.req);
+      ctx.send(
+        ctx.res,
+        200,
+        customerCreditMatch[2] === "approve-preview"
+          ? await o2cCommand.previewApproveCustomerCreditNote(noteId, body, ctx)
+          : await o2cCommand.approveCustomerCreditNote(noteId, body, ctx),
       );
       return true;
     }
