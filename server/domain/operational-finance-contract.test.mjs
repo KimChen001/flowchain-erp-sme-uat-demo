@@ -14,6 +14,9 @@ test("operational finance capabilities are beta, database-only, and explicitly e
     "three-way-match",
     "payable-obligation",
     "supplier-credit-memo",
+    "customer-invoice",
+    "receivable-obligation",
+    "customer-credit-note",
   ]) {
     const disabled = capabilityForEnvironment(id, {
       FLOWCHAIN_PERSISTENCE_MODE: "database",
@@ -45,6 +48,53 @@ test("operational finance capabilities are beta, database-only, and explicitly e
     }).maturity,
     "unavailable",
   );
+});
+
+test("O2C schema and routes are shipment-backed and exclude collection, refund, FX, and ledger execution", () => {
+  const schema = source("prisma", "schema.prisma");
+  const migration = source(
+    "prisma",
+    "migrations",
+    "20260718060000_operational_finance_o2c",
+    "migration.sql",
+  );
+  const routes = source("server", "routes", "operational-finance.routes.mjs");
+  const policy = source(
+    "server",
+    "domain",
+    "operational-finance-o2c-policy.mjs",
+  );
+  const command = source(
+    "server",
+    "domain",
+    "operational-finance-o2c-command-service.mjs",
+  );
+  for (const model of [
+    "CustomerInvoice",
+    "CustomerInvoiceLine",
+    "ReceivableObligation",
+    "CustomerCreditNote",
+    "CustomerCreditNoteLine",
+  ]) {
+    assert.match(schema, new RegExp(`model ${model} \\{`));
+    assert.match(migration, new RegExp(`CREATE TABLE "${model}"`));
+  }
+  assert.match(migration, /ALTER TABLE "SalesOrderLine"/);
+  assert.match(policy, /postingStatus !== "posted"/);
+  assert.match(policy, /CUSTOMER_INVOICE_QUANTITY_EXCEEDS_SHIPPED/);
+  assert.match(policy, /CUSTOMER_RETURN_RECEIPT_REQUIRED/);
+  for (const route of [
+    "/api/finance/customer-invoices",
+    "/api/finance/receivables",
+    "/api/finance/aging",
+    "/api/finance/customer-credit-notes",
+  ])
+    assert.match(routes, new RegExp(route.replaceAll("/", "\\/")));
+  assert.match(command, /isolationLevel: "Serializable"/);
+  assert.match(command, /settlementVerified: false/);
+  assert.doesNotMatch(command, /\.payment\.(?:create|update|delete)/);
+  assert.doesNotMatch(command, /\.refund\.(?:create|update|delete)/);
+  assert.doesNotMatch(command, /\.journalEntry\.(?:create|update|delete)/);
 });
 
 test("finance idempotency hash is stable for line ordering and changes with payload", () => {

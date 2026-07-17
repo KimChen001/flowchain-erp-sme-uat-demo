@@ -19,7 +19,7 @@ const supplierPostingMigration =
   "20260718020000_supplier_return_posting_kernel";
 const customerReceiptMigration =
   "20260718030000_customer_return_receipt_kernel";
-const latestMigration = "20260718050000_operational_finance_p2p";
+const latestMigration = "20260718060000_operational_finance_o2c";
 const node = process.execPath;
 const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 

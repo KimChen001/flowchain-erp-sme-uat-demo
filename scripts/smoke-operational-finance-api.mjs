@@ -216,6 +216,55 @@ async function seed(prisma) {
       },
     },
   });
+  await prisma.salesOrder.create({
+    data: {
+      id: "SO-FIN-API",
+      tenantId,
+      orderNumber: "SO-FIN-API",
+      customerId: "customer-finance-api",
+      customerName: "Finance API Customer",
+      workflowStatus: "confirmed",
+      reservationStatus: "fully_reserved",
+      fulfillmentStatus: "fully_fulfilled",
+      currency: "USD",
+      lines: {
+        create: {
+          id: "SOL-FIN-API",
+          itemId: "item-operational-finance-api",
+          sku: "FIN-API",
+          itemName: "Finance API Item",
+          orderedQuantity: "10.0000",
+          fulfilledQuantity: "10.0000",
+          unit: "EA",
+          unitPrice: "12.5000",
+          amount: "125.0000",
+        },
+      },
+    },
+  });
+  await prisma.shipmentDocument.create({
+    data: {
+      id: "SHIP-FIN-API",
+      tenantId,
+      shipmentNumber: "SHIP-FIN-API",
+      salesOrderId: "SO-FIN-API",
+      workflowStatus: "ready",
+      postingStatus: "posted",
+      postedAt: new Date(),
+      postedById: managerId,
+      lines: {
+        create: {
+          id: "SHIPL-FIN-API",
+          salesOrderLineId: "SOL-FIN-API",
+          itemId: "item-operational-finance-api",
+          sku: "FIN-API",
+          requestedQuantity: "10.0000",
+          postedQuantity: "10.0000",
+          unit: "EA",
+        },
+      },
+    },
+  });
 }
 
 const pgPort = await freePort();
@@ -292,6 +341,16 @@ try {
   assert.equal(
     disabledWrite.payload.code,
     "OPERATIONAL_FINANCE_CAPABILITY_NOT_AVAILABLE",
+  );
+  const disabledO2cWrite = await raw(
+    base,
+    "/api/finance/customer-invoices/preview",
+    { token: disabledLogin.token, method: "POST", body: {} },
+  );
+  assert.equal(disabledO2cWrite.status, 409);
+  assert.equal(
+    disabledO2cWrite.payload.details.capability,
+    "customer-invoice",
   );
   await stop(server);
   server = null;
@@ -518,8 +577,127 @@ try {
     await prisma.inventoryMovement.count({ where: { tenantId } }),
     0,
   );
+  const customerInvoiceInput = {
+    invoiceNumber: "CUS-INV-API-001",
+    shipmentId: "SHIP-FIN-API",
+    currency: "USD",
+    invoiceDate: "2026-07-17T00:00:00.000Z",
+    dueDate: "2026-08-16T00:00:00.000Z",
+    totalAmount: "51.0000",
+    lines: [
+      {
+        shipmentLineId: "SHIPL-FIN-API",
+        quantity: "4.0000",
+        enteredTaxAmount: "1.0000",
+      },
+    ],
+  };
+  const customerPreview = await request(
+    base,
+    "/api/finance/customer-invoices/preview",
+    {
+      token: specialistLogin.token,
+      method: "POST",
+      body: customerInvoiceInput,
+    },
+  );
+  assert.equal(customerPreview.allowed, true);
+  assert.equal(customerPreview.source.shipmentId, "SHIP-FIN-API");
+  const customerCreated = await request(
+    base,
+    "/api/finance/customer-invoices",
+    {
+      token: specialistLogin.token,
+      method: "POST",
+      body: {
+        ...customerInvoiceInput,
+        idempotencyKey: "api-create-customer-invoice",
+      },
+    },
+  );
+  await request(
+    base,
+    `/api/finance/customer-invoices/${customerCreated.entityId}/submit`,
+    {
+      token: specialistLogin.token,
+      method: "POST",
+      body: {
+        expectedVersion: 0,
+        idempotencyKey: "api-submit-customer-invoice",
+      },
+    },
+  );
+  await request(
+    base,
+    `/api/finance/customer-invoices/${customerCreated.entityId}/approve`,
+    {
+      token: managerLogin.token,
+      method: "POST",
+      body: {
+        expectedVersion: 1,
+        idempotencyKey: "api-approve-customer-invoice",
+      },
+    },
+  );
+  const customerIssued = await request(
+    base,
+    `/api/finance/customer-invoices/${customerCreated.entityId}/issue`,
+    {
+      token: managerLogin.token,
+      method: "POST",
+      body: {
+        expectedVersion: 2,
+        obligationNumber: "AR-API-001",
+        idempotencyKey: "api-issue-customer-invoice",
+      },
+    },
+  );
+  assert.equal(customerIssued.receivable.status, "open");
+  assert.equal(customerIssued.receivable.settlementVerified, false);
+  const customerDetail = await request(
+    base,
+    `/api/finance/customer-invoices/${customerCreated.entityId}`,
+    { token: viewerLogin.token },
+  );
+  assert.equal(customerDetail.evidence[1].postingStatus, "posted");
+  assert.equal(customerDetail.reconciliation.fxConverted, false);
+  const aging = await request(base, "/api/finance/aging", {
+    token: viewerLogin.token,
+  });
+  assert.deepEqual(aging.currencies, ["USD"]);
+  assert.equal(aging.currencyAggregationStatus, "single_currency");
+  assert.equal(aging.fxConverted, false);
+  const disputed = await request(
+    base,
+    `/api/finance/receivables/${customerIssued.receivable.id}/dispute`,
+    {
+      token: managerLogin.token,
+      method: "POST",
+      body: {
+        expectedVersion: 0,
+        reason: "API customer dispute",
+        idempotencyKey: "api-dispute-receivable",
+      },
+    },
+  );
+  assert.equal(disputed.receivable.status, "disputed");
+  const externalReference = await request(
+    base,
+    `/api/finance/receivables/${customerIssued.receivable.id}/record-external-reference`,
+    {
+      token: managerLogin.token,
+      method: "POST",
+      body: {
+        expectedVersion: 1,
+        externalReference: "BANK-UNVERIFIED-API",
+        idempotencyKey: "api-reference-receivable",
+      },
+    },
+  );
+  assert.equal(externalReference.receivable.status, "disputed");
+  assert.equal(externalReference.receivable.settlementVerified, false);
   console.log(
-    "Operational finance API acceptance: 1 passed, 0 failed, 0 skipped",
+    "Operational finance API acceptance: P2P + O2C passed, 0 failed, 0 skipped",
   );
 } finally {
   await stop(server);

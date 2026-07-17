@@ -13,6 +13,7 @@ const root = resolve(import.meta.dirname, "..");
 const migrationsRoot = join(root, "prisma", "migrations");
 const phase4Migration = "20260718040000_operations_settings_closeout";
 const phase5P2pMigration = "20260718050000_operational_finance_p2p";
+const phase5O2cMigration = "20260718060000_operational_finance_o2c";
 const node = process.execPath;
 const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 
@@ -151,6 +152,7 @@ try {
       "--test-concurrency=1",
       "--test-reporter=tap",
       "server/domain/operational-finance-transaction.test.mjs",
+      "server/domain/operational-finance-o2c-transaction.test.mjs",
     ],
     envFor(freshUrl),
     [password],
@@ -198,7 +200,7 @@ try {
     upgradeDatabase,
     `SELECT "migration_name" FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL ORDER BY "finished_at" DESC, "migration_name" DESC LIMIT 1`,
   );
-  assert.equal(latest.rows[0].migration_name, phase5P2pMigration);
+  assert.equal(latest.rows[0].migration_name, phase5O2cMigration);
   const legacy = await query(
     pg,
     upgradeDatabase,
@@ -209,7 +211,9 @@ try {
         si."version",
         twm."invoiceId",
         to_regclass('"PayableObligation"') IS NOT NULL AS "hasPayable",
-        to_regclass('"SupplierCreditMemo"') IS NOT NULL AS "hasCreditMemo"
+        to_regclass('"SupplierCreditMemo"') IS NOT NULL AS "hasCreditMemo",
+        to_regclass('"CustomerInvoice"') IS NOT NULL AS "hasCustomerInvoice",
+        to_regclass('"ReceivableObligation"') IS NOT NULL AS "hasReceivable"
       FROM "SupplierInvoice" si
       JOIN "ThreeWayMatch" twm ON twm."tenantId" = si."tenantId"
       WHERE si."id" = 'legacy-supplier-invoice'
@@ -223,6 +227,8 @@ try {
       invoiceId: "legacy-orphan-invoice",
       hasPayable: true,
       hasCreditMemo: true,
+      hasCustomerInvoice: true,
+      hasReceivable: true,
     },
   ]);
   console.log(

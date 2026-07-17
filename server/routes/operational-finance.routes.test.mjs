@@ -8,6 +8,8 @@ function context({
   enabled = true,
   read,
   command,
+  o2cRead,
+  o2cCommand,
   body = {},
 } = {}) {
   const sent = [];
@@ -32,6 +34,8 @@ function context({
         listSupplierInvoices: async () => ({ items: [] }),
       }),
     operationalFinanceCommandService: command || {},
+    operationalFinanceO2cReadService: o2cRead || {},
+    operationalFinanceO2cCommandService: o2cCommand || {},
     readBody: async () => body,
     send: (_res, status, payload) => sent.push({ status, payload }),
   };
@@ -56,6 +60,37 @@ test("finance writes fail closed when the explicit capability is disabled", asyn
       },
     },
   ]);
+});
+
+test("O2C routes use focused capabilities and the centrally resolved tenant", async () => {
+  let observed;
+  const { ctx, sent } = context({
+    path: "/api/finance/customer-invoices?tenantId=forged-tenant",
+    o2cRead: {
+      listCustomerInvoices: async (query, requestContext) => {
+        observed = {
+          query,
+          tenantId: requestContext.identity.tenantId,
+        };
+        return { items: [], tenantId: requestContext.identity.tenantId };
+      },
+    },
+  });
+  assert.equal(await handleOperationalFinanceRoute(ctx), true);
+  assert.deepEqual(observed, {
+    query: { tenantId: "forged-tenant" },
+    tenantId: "signed-tenant",
+  });
+  assert.equal(sent[0].payload.tenantId, "signed-tenant");
+
+  const disabled = context({
+    path: "/api/finance/customer-invoices/preview",
+    method: "POST",
+    enabled: false,
+  });
+  assert.equal(await handleOperationalFinanceRoute(disabled.ctx), true);
+  assert.equal(disabled.sent[0].status, 409);
+  assert.equal(disabled.sent[0].payload.details.capability, "customer-invoice");
 });
 
 test("finance routes never expose Prisma error codes or raw messages", async () => {
