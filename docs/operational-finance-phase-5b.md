@@ -46,8 +46,10 @@ Amounts are grouped by original ISO currency. Multiple currencies are marked
   `receivable-obligation`, and `customer-credit-note`
 - Database-only, explicitly enabled through
   `FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE=true`
-- Broad `finance` capability remains unavailable until the Phase 5 acceptance
-  gate
+- Broad `finance` remains unavailable through Phase 5B. Phase 5C may promote it
+  to the same database-only, explicitly enabled beta boundary only after the
+  complete Operational Finance acceptance gate passes; it must not be marked
+  stable.
 
 ## Acceptance commands
 
