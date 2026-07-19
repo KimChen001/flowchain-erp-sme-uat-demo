@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { assertAuthorized } from '../auth/authorization-service.mjs'
 import { assertWarehouseAccess, resolveProvisionedActor } from './pilot-identity.mjs'
 import {
   buildReservationReleasePlan,
@@ -20,6 +21,14 @@ export const OUTBOUND_COMMAND_TYPES = Object.freeze({
   cancel: 'cancel_shipment_draft',
   post: 'post_sales_shipment',
   reverse: 'reverse_sales_shipment',
+})
+const commandPermissions = Object.freeze({
+  [OUTBOUND_COMMAND_TYPES.reserve]: 'shipment.prepare',
+  [OUTBOUND_COMMAND_TYPES.release]: 'shipment.prepare',
+  [OUTBOUND_COMMAND_TYPES.draft]: 'shipment.prepare',
+  [OUTBOUND_COMMAND_TYPES.cancel]: 'shipment.prepare',
+  [OUTBOUND_COMMAND_TYPES.post]: 'shipment.post',
+  [OUTBOUND_COMMAND_TYPES.reverse]: 'shipment.reverse',
 })
 
 export class OutboundCommandError extends Error {
@@ -145,6 +154,9 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
   async function execute(commandType, input, context, work) {
     assertEnabled(env)
     const scope = mutationScope(context?.identity || context)
+    // Finish any one-time legacy assignment provisioning before opening the
+    // serializable business transaction so concurrent commands share it.
+    await resolveProvisionedActor(prisma, scope.identity)
     const normalized = normalizeInput(commandType, input)
     const existing = await prisma.businessCommandExecution.findUnique({ where: executionWhere(scope.tenantId, commandType, normalized.idempotencyKey) })
     const existingReplay = replay(existing, normalized.requestHash)
@@ -152,7 +164,7 @@ export function createOutboundPostingCommandService({ prisma, env = process.env,
     try {
       return await prisma.$transaction(async (tx) => {
         const actor = await resolveProvisionedActor(tx, scope.identity)
-        if (!['admin', 'manager', 'business-specialist', 'business_specialist'].includes(actor.role)) fail('PERMISSION_DENIED', 'The authenticated role cannot execute outbound commands.', 403)
+        assertAuthorized({ actor, permission: commandPermissions[commandType], tenantId: actor.tenantId })
         const inside = await tx.businessCommandExecution.findUnique({ where: executionWhere(scope.tenantId, commandType, normalized.idempotencyKey) })
         const insideReplay = replay(inside, normalized.requestHash)
         if (insideReplay) return insideReplay

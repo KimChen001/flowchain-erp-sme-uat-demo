@@ -1,4 +1,5 @@
 import { resolveProvisionedActor } from "./pilot-identity.mjs";
+import { can } from "../auth/authorization-service.mjs";
 import {
   inventoryOperationDecimalString as fixed,
   inventoryOperationDecimalUnits as units,
@@ -10,11 +11,7 @@ const canRead = (actor, warehouseId) =>
   actor.allWarehouses || actor.readWarehouseIds?.has(text(warehouseId));
 const canOperate = (actor, warehouseId) =>
   actor.allWarehouses || actor.operateWarehouseIds?.has(text(warehouseId));
-const mutator = (role) =>
-  ["admin", "manager", "business-specialist", "business_specialist"].includes(
-    role,
-  );
-const manager = (role) => ["admin", "manager"].includes(role);
+const permission = (actor, code) => can({ actor, permission: code, tenantId: actor.tenantId });
 const capabilityIds = [
   "stock-transfer",
   "cycle-count",
@@ -82,9 +79,9 @@ function capabilitiesEnabled(capabilities) {
 function countSnapshotVisible(session, actor) {
   if (!session.blindCount) return true;
   if (["draft", "in_progress"].includes(session.workflowStatus)) return false;
-  if (session.workflowStatus === "submitted") return manager(actor.role);
+  if (session.workflowStatus === "submitted") return permission(actor, "inventory.count.review");
   if (["reviewed", "posted"].includes(session.workflowStatus)) return true;
-  if (session.workflowStatus === "cancelled") return manager(actor.role);
+  if (session.workflowStatus === "cancelled") return permission(actor, "inventory.count.review");
   return false;
 }
 
@@ -318,31 +315,31 @@ export function createInventoryOperationsReadService({
     const availableActions = {
       canEdit:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.transfer.create") &&
         operate &&
         transfer.workflowStatus === "draft" &&
         transfer.postingStatus === "unposted",
       canReady:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.transfer.create") &&
         operate &&
         transfer.workflowStatus === "draft" &&
         transfer.postingStatus === "unposted",
       canCancel:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.transfer.create") &&
         operate &&
         ["draft", "ready"].includes(transfer.workflowStatus) &&
         transfer.postingStatus === "unposted",
       canPost:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.transfer.post") &&
         operate &&
         transfer.workflowStatus === "ready" &&
         transfer.postingStatus === "unposted",
       canReverse:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.transfer.reverse") &&
         operate &&
         transfer.postingStatus === "posted",
       blockingReasonCodes: [],
@@ -662,28 +659,28 @@ export function createInventoryOperationsReadService({
     const availableActions = {
       canEdit:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.count.create") &&
         operate &&
         ["draft", "in_progress"].includes(session.workflowStatus),
       canSubmit:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.count.submit") &&
         operate &&
         ["draft", "in_progress"].includes(session.workflowStatus) &&
         session.lines.every((line) => line.countedQuantity !== null),
       canReview:
         enabled &&
-        manager(actor.role) &&
+        permission(actor, "inventory.count.review") &&
         operate &&
         session.workflowStatus === "submitted",
       canPost:
         enabled &&
-        manager(actor.role) &&
+        permission(actor, "inventory.count.post") &&
         operate &&
         session.workflowStatus === "reviewed",
       canCancel:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.count.create") &&
         operate &&
         !["posted", "cancelled"].includes(session.workflowStatus),
       blockingReasonCodes: [],
@@ -894,29 +891,29 @@ export function createInventoryOperationsReadService({
     const availableActions = {
       canEdit:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.adjustment.create") &&
         operate &&
         adjustment.workflowStatus === "draft",
       canReady:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.adjustment.approve") &&
         operate &&
         adjustment.workflowStatus === "draft",
       canCancel:
         enabled &&
-        mutator(actor.role) &&
+        permission(actor, "inventory.adjustment.create") &&
         operate &&
         ["draft", "ready"].includes(adjustment.workflowStatus) &&
         adjustment.postingStatus === "unposted",
       canPost:
         enabled &&
-        manager(actor.role) &&
+        permission(actor, "inventory.adjustment.post") &&
         operate &&
         adjustment.workflowStatus === "ready" &&
         adjustment.postingStatus === "unposted",
       canReverse:
         enabled &&
-        manager(actor.role) &&
+        permission(actor, "inventory.adjustment.reverse") &&
         operate &&
         adjustment.postingStatus === "posted",
       blockingReasonCodes: [],

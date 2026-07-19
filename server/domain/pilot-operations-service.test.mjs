@@ -20,7 +20,7 @@ test('Pilot diagnostics are admin-only and exports honor tenant and warehouse sc
       assert.equal(adminExport.rowCount, 1); assert.equal(adminExport.rows[0].documentNumber.startsWith('GRN-'), true)
 
       await prisma.user.update({ where: { id: actor.userId }, data: { role: 'manager' } }); actor.role = 'manager'
-      await prisma.userWarehouseScope.create({ data: { id: randomUUID(), tenantId: scenario.tenantId, userId: actor.userId, warehouseId: scenario.warehouseId, accessLevel: 'read' } })
+      await prisma.userWarehouseScope.upsert({ where: { tenantId_userId_warehouseId: { tenantId: scenario.tenantId, userId: actor.userId, warehouseId: scenario.warehouseId } }, create: { id: randomUUID(), tenantId: scenario.tenantId, userId: actor.userId, warehouseId: scenario.warehouseId, accessLevel: 'read' }, update: { accessLevel: 'read' } })
       assert.equal((await service.exportDataset('receiving_documents', actor)).rowCount, 1)
       await expectCommandError(service.diagnostics(actor), 'PERMISSION_DENIED')
       await expectCommandError(service.exportDataset('unknown', actor), 'EXPORT_DATASET_UNSUPPORTED')

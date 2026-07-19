@@ -3,6 +3,7 @@ import {
   assertWarehouseAccess,
   resolveProvisionedActor,
 } from "./pilot-identity.mjs";
+import { assertAuthorized } from "../auth/authorization-service.mjs";
 import {
   buildCycleCountPostingPlan,
   buildCycleCountReviewPlan,
@@ -32,13 +33,26 @@ const fail = (code, message, status = 400, details) => {
 };
 const text = (value) => String(value ?? "").trim();
 const locationKey = (value) => text(value).toLowerCase();
-const mutationRoles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-]);
-const managerRoles = new Set(["admin", "manager"]);
+const commandPermissions = Object.freeze({
+  create_stock_transfer: "inventory.transfer.create",
+  revise_stock_transfer: "inventory.transfer.create",
+  ready_stock_transfer: "inventory.transfer.create",
+  cancel_stock_transfer: "inventory.transfer.create",
+  post_stock_transfer: "inventory.transfer.post",
+  reverse_stock_transfer: "inventory.transfer.reverse",
+  create_cycle_count: "inventory.count.create",
+  revise_cycle_count: "inventory.count.create",
+  submit_cycle_count: "inventory.count.submit",
+  review_cycle_count: "inventory.count.review",
+  post_cycle_count: "inventory.count.post",
+  cancel_cycle_count: "inventory.count.create",
+  create_inventory_adjustment: "inventory.adjustment.create",
+  revise_inventory_adjustment: "inventory.adjustment.create",
+  ready_inventory_adjustment: "inventory.adjustment.approve",
+  cancel_inventory_adjustment: "inventory.adjustment.create",
+  post_inventory_adjustment: "inventory.adjustment.post",
+  reverse_inventory_adjustment: "inventory.adjustment.reverse",
+});
 const reasonCodes = new Set([
   "damage",
   "shrinkage",
@@ -176,6 +190,7 @@ export function createInventoryOperationsCommandService({
     const identity = context?.identity || context;
     if (!identity?.authenticated || !text(identity.tenantId))
       fail("AUTHENTICATION_REQUIRED", "Authentication is required.", 401);
+    await resolveProvisionedActor(prisma, identity);
     const idempotencyKey = text(input?.idempotencyKey);
     if (!idempotencyKey)
       fail("IDEMPOTENCY_KEY_REQUIRED", "idempotencyKey is required.", 422);
@@ -195,12 +210,7 @@ export function createInventoryOperationsCommandService({
       return await prisma.$transaction(
         async (tx) => {
           const actor = await resolveProvisionedActor(tx, identity);
-          if (!mutationRoles.has(actor.role))
-            fail(
-              "PERMISSION_DENIED",
-              "The authenticated role cannot execute inventory operations.",
-              403,
-            );
+          assertAuthorized({ actor, permission: commandPermissions[commandType], tenantId: actor.tenantId });
           const inside = replay(
             await tx.businessCommandExecution.findUnique({ where }),
             requestHash,
@@ -1178,12 +1188,6 @@ export function createInventoryOperationsCommandService({
       { ...input, countSessionId: id },
       context,
       async (tx, actor, payload) => {
-        if (!managerRoles.has(actor.role))
-          fail(
-            "PERMISSION_DENIED",
-            "Only an admin or manager can review cycle counts.",
-            403,
-          );
         if (
           !(await lockTenantRows(tx, "CycleCountSession", actor.tenantId, [
             payload.countSessionId,
@@ -1236,12 +1240,6 @@ export function createInventoryOperationsCommandService({
       { ...input, countSessionId: id },
       context,
       async (tx, actor, payload) => {
-        if (!managerRoles.has(actor.role))
-          fail(
-            "PERMISSION_DENIED",
-            "Only an admin or manager can post cycle counts.",
-            403,
-          );
         if (
           !(await lockTenantRows(tx, "CycleCountSession", actor.tenantId, [
             payload.countSessionId,
@@ -1686,12 +1684,6 @@ export function createInventoryOperationsCommandService({
       { ...input, adjustmentId: id },
       context,
       async (tx, actor, payload) => {
-        if (!managerRoles.has(actor.role))
-          fail(
-            "PERMISSION_DENIED",
-            "Only an admin or manager can post inventory adjustments.",
-            403,
-          );
         if (
           !(await lockTenantRows(
             tx,
@@ -1898,12 +1890,6 @@ export function createInventoryOperationsCommandService({
       { ...input, adjustmentId: id },
       context,
       async (tx, actor, payload) => {
-        if (!managerRoles.has(actor.role))
-          fail(
-            "PERMISSION_DENIED",
-            "Only an admin or manager can reverse inventory adjustments.",
-            403,
-          );
         if (!text(payload.reason))
           fail(
             "ADJUSTMENT_REVERSAL_NOT_SAFE",
