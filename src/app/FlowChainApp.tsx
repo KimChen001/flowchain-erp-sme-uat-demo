@@ -12,6 +12,7 @@ import {
   Sparkles,
   Loader2,
   ShieldCheck,
+  ShieldAlert,
   Lock,
   X,
   ChevronRight,
@@ -512,7 +513,7 @@ function CapabilityRouteStatus({
 }
 
 export default function FlowChainApp() {
-  const { t, routeLabel, workspaceName } = useI18n();
+  const { t, routeLabel, workspaceName, language } = useI18n();
   const location = useLocation();
   const routerNavigate = useNavigate();
   const [purchaseIntent, setPurchaseIntent] = useState<PurchaseIntent | null>(
@@ -567,6 +568,7 @@ export default function FlowChainApp() {
   >({});
   const [capabilityLoadState, setCapabilityLoadState] =
     useState<CapabilityLoadState>("loading");
+  const [authorizationVisibility, setAuthorizationVisibility] = useState<Record<string, { visible: boolean; permissionAllowed: boolean; capabilityAllowed: boolean }> | null>(null);
   const [experimentalModuleIds, setExperimentalModuleIds] = useState<
     Set<string>
   >(() => readExperimentalModuleIds());
@@ -695,6 +697,13 @@ export default function FlowChainApp() {
   }, [authToken, experimentalModuleIds]);
 
   useEffect(() => {
+    if (!authToken) { setAuthorizationVisibility(null); return; }
+    apiJson<{ moduleVisibility: Record<string, { visible: boolean; permissionAllowed: boolean; capabilityAllowed: boolean }> }>("/api/authorization/context")
+      .then((result) => setAuthorizationVisibility(result.moduleVisibility))
+      .catch(() => setAuthorizationVisibility(null));
+  }, [authToken]);
+
+  useEffect(() => {
     if (!activeRoute?.entityType || !activeRoute.entityIdParam) return;
     const entityId = decodeURIComponent(
       location.pathname.split("/").filter(Boolean).at(-1) || "",
@@ -749,6 +758,13 @@ export default function FlowChainApp() {
     capabilities,
     experimentalModuleIds,
   });
+  const authorizationModule = panelModule === "returns-quarantine" ? "returns-quarantine" : panelModule === "receiving-posting" ? "receiving" : activeModule;
+  const authorizationAccess = authorizationVisibility?.[authorizationModule];
+  const navPermissionVisible = (moduleId: string) => {
+    if (!authorizationVisibility) return true;
+    if (moduleId === "inventory") return Boolean(authorizationVisibility.inventory?.visible || authorizationVisibility["returns-quarantine"]?.visible);
+    return authorizationVisibility[moduleId]?.visible ?? true;
+  };
   const contentMaxWidthClass =
     panelModule === "srm"
       ? "max-w-[1440px]"
@@ -1299,7 +1315,8 @@ export default function FlowChainApp() {
                       );
                       if (
                         !item ||
-                        (enabledModuleIds && !enabledModuleIds.has(item.id))
+                        (enabledModuleIds && !enabledModuleIds.has(item.id)) ||
+                        !navPermissionVisible(item.id)
                       )
                         return null;
                       const isActive = activeNavItem?.id === item.id;
@@ -1794,6 +1811,18 @@ export default function FlowChainApp() {
                       loading
                       onNavigate={routerNavigate}
                     />
+                  ) : authorizationAccess && !authorizationAccess.permissionAllowed ? (
+                    <Card className="p-10 text-center" data-testid="authorization-route-denied">
+                      <ShieldAlert className="mx-auto text-amber-600" size={34} />
+                      <h2 className="mt-3 text-lg font-semibold">{language === "en-US" ? "Access denied" : "无权访问"}</h2>
+                      <p className="mt-2 text-sm text-slate-500">{language === "en-US" ? "Your effective roles do not grant read permission for this module." : "当前有效角色未授予此模块的读取权限。"}</p>
+                    </Card>
+                  ) : authorizationAccess && !authorizationAccess.capabilityAllowed ? (
+                    <Card className="p-10 text-center" data-testid="capability-route-blocked">
+                      <Lock className="mx-auto text-slate-500" size={34} />
+                      <h2 className="mt-3 text-lg font-semibold">{language === "en-US" ? "Capability unavailable" : "能力暂不可用"}</h2>
+                      <p className="mt-2 text-sm text-slate-500">{language === "en-US" ? "Permission is present, but this capability is disabled." : "权限已具备，但该业务能力当前未启用。"}</p>
+                    </Card>
                   ) : capabilityAccess.status === "blocked" ? (
                     <CapabilityRouteStatus
                       moduleLabel={activeModuleLabel}
