@@ -53,6 +53,9 @@ model Tenant {
   inventoryExceptions              InventoryException[]
   commandExecutions                BusinessCommandExecution[]
   userWarehouseScopes              UserWarehouseScope[]
+  roles                            TenantRole[]
+  rolePermissions                  TenantRolePermission[]
+  userRoleAssignments              UserRoleAssignment[]
   workspaceInvitations             WorkspaceInvitation[]
   warehouseLocations               WarehouseLocation[]
   importBatches                    ImportBatch[]
@@ -91,6 +94,11 @@ model User {
   auditLogs           AuditLog[]
   defaultWarehouse    Warehouse?                  @relation("UserDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: Restrict)
   warehouseScopes     UserWarehouseScope[]
+  roleAssignments     UserRoleAssignment[]          @relation("AssignedUser")
+  roleAssignmentsMade UserRoleAssignment[]          @relation("RoleAssignmentCreator")
+  rolesCreated        TenantRole[]                  @relation("RoleCreator")
+  rolesUpdated        TenantRole[]                  @relation("RoleUpdater")
+  roleGrantsCreated   TenantRolePermission[]        @relation("RolePermissionCreator")
   invitationsSent     WorkspaceInvitation[]       @relation("InvitationInviter")
   invitationsAccepted WorkspaceInvitation[]       @relation("InvitationAcceptor")
   importBatches       ImportBatch[]
@@ -100,7 +108,68 @@ model User {
   shipmentsReversed   ShipmentDocument[]          @relation("ShipmentReversedBy")
 
   @@unique([tenantId, email])
+  @@unique([tenantId, id])
   @@index([tenantId])
+}
+
+model TenantRole {
+  id                String   @id
+  tenantId          String
+  roleKey           String
+  name              String
+  description       String?
+  status            String   @default("active")
+  isDefaultTemplate Boolean  @default(false)
+  version           Int      @default(0)
+  createdById       String?
+  updatedById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy   User?                  @relation("RoleCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User?                  @relation("RoleUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  permissions TenantRolePermission[]
+  assignments UserRoleAssignment[]
+
+  @@unique([tenantId, roleKey])
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+}
+
+model TenantRolePermission {
+  id             String   @id
+  tenantId       String
+  roleId         String
+  permissionCode String
+  createdAt      DateTime @default(now())
+  createdById    String?
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  role      TenantRole @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict)
+  createdBy User?      @relation("RolePermissionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([roleId, permissionCode])
+  @@index([tenantId, permissionCode])
+}
+
+model UserRoleAssignment {
+  id          String   @id
+  tenantId    String
+  userId      String
+  roleId      String
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user      User       @relation("AssignedUser", fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  role      TenantRole @relation(fields: [tenantId, roleId], references: [tenantId, id], onDelete: Restrict)
+  createdBy User?      @relation("RoleAssignmentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([userId, roleId])
+  @@index([tenantId, userId, status])
+  @@index([tenantId, roleId, status])
 }
 
 model Supplier {
