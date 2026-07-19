@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { assertAuthorized } from "../auth/authorization-service.mjs";
 import { resolveProvisionedActor } from "./pilot-identity.mjs";
 import {
   buildSupplierCreditMemoPlan,
@@ -22,14 +23,19 @@ const fail = (code, message, status = 400, details) => {
   throw new OperationalFinanceError(code, message, status, details);
 };
 const text = (value) => String(value ?? "").trim();
-const draftRoles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-  "buyer",
-]);
-const managerRoles = new Set(["admin", "manager"]);
+const commandPermission = (commandType) => ({
+  create_supplier_invoice: "finance.supplier_invoice.create",
+  revise_supplier_invoice: "finance.supplier_invoice.revise",
+  submit_supplier_invoice: "finance.supplier_invoice.submit",
+  match_supplier_invoice: "finance.three_way_match.execute",
+  review_match_exception: "finance.match_exception.review",
+  approve_supplier_invoice: "finance.supplier_invoice.approve",
+  hold_payable_obligation: "finance.payable.hold",
+  release_payable_obligation: "finance.payable.release",
+  mark_export_ready_payable_obligation: "finance.payable.mark_export_ready",
+  create_supplier_credit_memo: "finance.supplier_credit.create",
+  approve_supplier_credit_memo: "finance.supplier_credit.approve",
+})[commandType];
 const executionWhere = (tenantId, commandType, idempotencyKey) => ({
   tenantId_commandType_idempotencyKey: {
     tenantId,
@@ -129,24 +135,6 @@ function assertIdentity(context) {
   if (!identity?.authenticated || !text(identity.tenantId))
     fail("AUTHENTICATION_REQUIRED", "Authentication is required.", 401);
   return identity;
-}
-
-function assertDraftRole(actor) {
-  if (!draftRoles.has(actor.role))
-    fail(
-      "PERMISSION_DENIED",
-      "The authenticated role cannot prepare operational finance documents.",
-      403,
-    );
-}
-
-function assertManager(actor) {
-  if (!managerRoles.has(actor.role))
-    fail(
-      "PERMISSION_DENIED",
-      "Only an Admin or Manager can approve or govern finance obligations.",
-      403,
-    );
 }
 
 function enforce(plan) {
@@ -332,6 +320,7 @@ export function createOperationalFinanceCommandService({
       return await prisma.$transaction(
         async (tx) => {
           const actor = await resolveProvisionedActor(tx, identity);
+          assertAuthorized({ actor, permission: commandPermission(commandType), tenantId: actor.tenantId });
           const inside = replay(
             await tx.businessCommandExecution.findUnique({ where }),
             requestHash,
@@ -386,7 +375,7 @@ export function createOperationalFinanceCommandService({
   async function previewSupplierInvoice(input, context) {
     assertEnabled(env);
     const actor = await resolveProvisionedActor(prisma, assertIdentity(context));
-    assertDraftRole(actor);
+    assertAuthorized({ actor, permission: "finance.supplier_invoice.create", tenantId: actor.tenantId });
     return buildSupplierInvoicePlan({
       prisma,
       tenantId: actor.tenantId,
@@ -403,7 +392,6 @@ export function createOperationalFinanceCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        assertDraftRole(actor);
         const plan = enforce(
           await buildSupplierInvoicePlan({
             prisma: tx,
@@ -476,7 +464,6 @@ export function createOperationalFinanceCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        assertDraftRole(actor);
         await lockTenantRow(
           tx,
           "SupplierInvoice",
@@ -586,7 +573,7 @@ export function createOperationalFinanceCommandService({
   async function previewSubmitSupplierInvoice(invoiceId, input, context) {
     assertEnabled(env);
     const actor = await resolveProvisionedActor(prisma, assertIdentity(context));
-    assertDraftRole(actor);
+    assertAuthorized({ actor, permission: "finance.supplier_invoice.submit", tenantId: actor.tenantId });
     const invoice = await prisma.supplierInvoice.findFirst({
       where: { id: invoiceId, tenantId: actor.tenantId },
       include: { lines: true },
@@ -636,7 +623,6 @@ export function createOperationalFinanceCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        assertDraftRole(actor);
         await lockTenantRow(
           tx,
           "SupplierInvoice",
@@ -714,7 +700,7 @@ export function createOperationalFinanceCommandService({
   async function previewMatchSupplierInvoice(invoiceId, input, context) {
     assertEnabled(env);
     const actor = await resolveProvisionedActor(prisma, assertIdentity(context));
-    assertDraftRole(actor);
+    assertAuthorized({ actor, permission: "finance.three_way_match.execute", tenantId: actor.tenantId });
     const plan = await buildSupplierMatchPlan({
       prisma,
       tenantId: actor.tenantId,
@@ -748,7 +734,6 @@ export function createOperationalFinanceCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        assertDraftRole(actor);
         await lockTenantRow(
           tx,
           "SupplierInvoice",
@@ -907,7 +892,6 @@ export function createOperationalFinanceCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        assertManager(actor);
         await lockTenantRow(
           tx,
           "FinanceMatchException",
@@ -987,7 +971,7 @@ export function createOperationalFinanceCommandService({
   async function previewReviewMatchException(exceptionId, input, context) {
     assertEnabled(env);
     const actor = await resolveProvisionedActor(prisma, assertIdentity(context));
-    assertManager(actor);
+    assertAuthorized({ actor, permission: "finance.match_exception.review", tenantId: actor.tenantId });
     const exception = await prisma.financeMatchException.findFirst({
       where: { id: exceptionId, tenantId: actor.tenantId },
     });
@@ -1038,7 +1022,7 @@ export function createOperationalFinanceCommandService({
   async function previewApproveSupplierInvoice(invoiceId, input, context) {
     assertEnabled(env);
     const actor = await resolveProvisionedActor(prisma, assertIdentity(context));
-    assertManager(actor);
+    assertAuthorized({ actor, permission: "finance.supplier_invoice.approve", tenantId: actor.tenantId });
     const invoice = await prisma.supplierInvoice.findFirst({
       where: { id: invoiceId, tenantId: actor.tenantId },
     });
@@ -1119,7 +1103,6 @@ export function createOperationalFinanceCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        assertManager(actor);
         await lockTenantRow(
           tx,
           "SupplierInvoice",
@@ -1223,7 +1206,6 @@ export function createOperationalFinanceCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        assertManager(actor);
         await lockTenantRow(
           tx,
           "PayableObligation",
@@ -1322,7 +1304,7 @@ export function createOperationalFinanceCommandService({
   async function previewPayableAction(action, payableId, input, context) {
     assertEnabled(env);
     const actor = await resolveProvisionedActor(prisma, assertIdentity(context));
-    assertManager(actor);
+    assertAuthorized({ actor, permission: action === "hold" ? "finance.payable.hold" : action === "release" ? "finance.payable.release" : "finance.payable.mark_export_ready", tenantId: actor.tenantId });
     const payable = await prisma.payableObligation.findFirst({
       where: { id: payableId, tenantId: actor.tenantId },
     });
@@ -1396,7 +1378,7 @@ export function createOperationalFinanceCommandService({
   async function previewSupplierCreditMemo(input, context) {
     assertEnabled(env);
     const actor = await resolveProvisionedActor(prisma, assertIdentity(context));
-    assertDraftRole(actor);
+    assertAuthorized({ actor, permission: "finance.supplier_credit.create", tenantId: actor.tenantId });
     return buildSupplierCreditMemoPlan({
       prisma,
       tenantId: actor.tenantId,
@@ -1412,7 +1394,6 @@ export function createOperationalFinanceCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        assertDraftRole(actor);
         await lockChildRows(
           tx,
           "SupplierInvoiceLine",
@@ -1487,7 +1468,6 @@ export function createOperationalFinanceCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        assertManager(actor);
         await lockTenantRow(
           tx,
           "SupplierCreditMemo",
@@ -1578,7 +1558,7 @@ export function createOperationalFinanceCommandService({
   async function previewApproveSupplierCreditMemo(memoId, input, context) {
     assertEnabled(env);
     const actor = await resolveProvisionedActor(prisma, assertIdentity(context));
-    assertManager(actor);
+    assertAuthorized({ actor, permission: "finance.supplier_credit.approve", tenantId: actor.tenantId });
     const memo = await prisma.supplierCreditMemo.findFirst({
       where: { id: memoId, tenantId: actor.tenantId },
     });
