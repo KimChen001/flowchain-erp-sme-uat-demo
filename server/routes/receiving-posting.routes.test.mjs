@@ -64,14 +64,29 @@ test('workbench GET routes enforce authentication and capability for preview', a
   assert.equal(disabled.response.payload.code, 'CAPABILITY_NOT_AVAILABLE')
 })
 
-test('formal receiving routes enforce authentication and manager authorization', async () => {
-  const anonymous = route({ authenticated: false })
+test('formal receiving routes enforce authentication and command-layer authorization', async () => {
+  const anonymousService = {
+    async postReceiving() {
+      throw Object.assign(new Error('Authentication is required.'), {
+        name: 'AuthorizationError', code: 'AUTHENTICATION_REQUIRED', status: 401,
+      })
+    },
+  }
+  const anonymous = route({ authenticated: false, service: anonymousService })
   await handleReceivingRoute(anonymous.ctx)
   assert.equal(anonymous.response.status, 401)
 
-  const viewer = route({ role: 'viewer' })
+  const service = {
+    async postReceiving() {
+      throw Object.assign(new Error('Permission denied.'), {
+        name: 'AuthorizationError', code: 'AUTHORIZATION_PERMISSION_DENIED', status: 403,
+      })
+    },
+  }
+  const viewer = route({ role: 'viewer', service })
   await handleReceivingRoute(viewer.ctx)
   assert.equal(viewer.response.status, 403)
+  assert.equal(viewer.response.payload.code, 'AUTHORIZATION_PERMISSION_DENIED')
 })
 
 test('route passes only centrally resolved identity and ignores forged actor and tenant input', async () => {

@@ -53,10 +53,17 @@ test('outbound mutation ignores forged tenant and actor fields and uses path ide
 
 test('viewer and buyer mutations are denied and stable command errors are sanitized', async () => {
   for (const role of ['viewer', 'buyer']) {
-    const denied = route({ role })
+    const command = {
+      async reserveSalesOrderInventory() {
+        throw Object.assign(new Error('Permission denied.'), {
+          name: 'AuthorizationError', code: 'AUTHORIZATION_PERMISSION_DENIED', status: 403,
+        })
+      },
+    }
+    const denied = route({ role, command })
     await handleOutboundRoute(denied.ctx)
     assert.equal(denied.response.status, 403)
-    assert.equal(denied.response.payload.code, 'PERMISSION_DENIED')
+    assert.equal(denied.response.payload.code, 'AUTHORIZATION_PERMISSION_DENIED')
   }
   const failed = route({ command: { async reserveSalesOrderInventory() { throw new OutboundCommandError('RESERVATION_INSUFFICIENT_AVAILABLE', 'Insufficient available inventory.', 422) } } })
   await handleOutboundRoute(failed.ctx)
