@@ -1,10 +1,10 @@
 import { apiJson } from '../../lib/api-client';
 
 export type SettingsRuntime = {
-  company: { companyName: string; workspaceName: string; timezone: string; currency: string; locale: string };
+  company: { companyName: string; workspaceName: string; timezone: string; currency: string; locale: string; defaultLanguage?: string };
   roles: { users: Array<{ id: string; name: string; email: string; role: string; enabled: boolean }>; roleOptions: string[] };
   numbering: { rules: Array<{ id: string; document: string; prefix: string; datePattern: string; separator: string; sequenceLength: number; nextSequence: number }> };
-  review: { amountThreshold: number; riskLevels: string[]; inventoryTolerancePercent: number; reviewerRoles: string[]; enabled: boolean };
+  review: { policies: Array<{ id: string; name: string; enabled: boolean; reviewerRoles: string[] }>; amountThreshold: number; riskLevels: string[]; inventoryTolerancePercent: number; reviewerRoles: string[]; enabled: boolean };
   modules: { defaultModule: string; items: Array<{ id: string; label: string; enabled: boolean; order: number; roles: string[] }> };
   ai: { capabilities: Array<{ id: string; label: string; level: string }>; evidenceRequired: boolean; retainDays: number };
   advanced: { sessionTimeoutMinutes: number; exportLimit: number; dateFormat: string; negativeInventoryBlocked: boolean; maintenanceNotice: string };

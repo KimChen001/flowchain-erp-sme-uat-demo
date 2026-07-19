@@ -2,7 +2,7 @@ name: Receiving PostgreSQL Workbench
 
 on:
   push:
-    branches: [main, 'codex/**']
+    branches: [main, 'codex/**', 'release/**']
   pull_request:
 
 jobs:
@@ -28,6 +28,11 @@ jobs:
       - run: npm run test:api:outbound
       - run: npm run test:db:inventory-operations
       - run: npm run test:api:inventory-operations
+      - run: npm run test:db:returns-quarantine
+      - run: npm run test:api:returns-quarantine
+      - run: npm run test:db:operational-finance
+      - run: npm run test:api:operational-finance
+      - run: npm run test:api:settings
       - run: npm run pilot:check
         env:
           FLOWCHAIN_PERSISTENCE_MODE: database
@@ -37,6 +42,7 @@ jobs:
           FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: 'true'
           FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true'
           FLOWCHAIN_ENABLE_DB_INVENTORY_OPERATIONS: 'true'
+          FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE: 'true'
           FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: 'false'
 
   browser:
@@ -57,3 +63,6 @@ jobs:
       - run: npm run test:browser:reports
       - run: npm run test:browser:outbound
       - run: npm run test:browser:inventory-operations
+      - run: npm run test:browser:returns-quarantine
+      - run: npm run test:browser:settings
+      - run: npm run test:browser:operational-finance

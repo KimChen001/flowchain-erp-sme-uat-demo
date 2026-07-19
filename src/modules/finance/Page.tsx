@@ -1,17 +1,38 @@
 import { Card } from "../../components/ui";
+import { useI18n } from "../../i18n/I18n";
+import OperationalFinanceO2cWorkbench, {
+  type O2cView,
+} from "./OperationalFinanceO2cWorkbench";
+import OperationalFinanceP2pWorkbench from "./OperationalFinanceP2pWorkbench";
 
-export type FinanceTab = "invoices" | "payables" | "credits" | "reconciliation" | "settlement" | "match";
+export type FinanceTab =
+  | "invoices"
+  | "overview"
+  | "payables"
+  | "credits"
+  | "reconciliation"
+  | "settlement"
+  | "match"
+  | O2cView;
 
-const emptyCopy: Record<FinanceTab, [string, string]> = {
-  invoices: ["暂无供应商发票", "供应商发票接入正式数据源后，记录将显示在这里。"],
-  payables: ["暂无应付记录", "费用与应付数据接入正式数据源后，记录将显示在这里。"],
-  credits: ["暂无预付款或贷项", "预付款与贷项接入正式数据源后，记录将显示在这里。"],
-  reconciliation: ["暂无对账单", "供应商对账数据接入正式数据源后，记录将显示在这里。"],
-  settlement: ["暂无结算单", "结算数据接入正式数据源后，记录将显示在这里。"],
-  match: ["暂无匹配记录", "收货与发票数据完整后可进行三单匹配。"],
-};
+const emptyCopy = {
+  reconciliation: ["finance.emptyTitle", "finance.reconciliationUnavailable"],
+  settlement: ["finance.emptyTitle", "finance.settlementUnavailable"],
+} as const;
+
+const fallbackCopy = [
+  "finance.emptyTitle",
+  "finance.emptyDescription",
+] as const;
 
 export default function FinanceWorkbench({ initialView = "invoices" }: { initialView?: FinanceTab; onNavigate?: (routeId: string) => void }) {
-  const copy = emptyCopy[initialView] || ["当前视图暂无数据", "当前模块尚未接入正式运行时数据源。"];
-  return <Card className="py-16 text-center"><h2 className="text-base font-semibold">{copy[0]}</h2><p className="mt-2 text-xs text-slate-500">{copy[1]}</p></Card>;
+  const { t } = useI18n();
+  if (["customer-invoices", "customer-invoice-new", "customer-invoice-detail", "receivables", "aging", "customer-credit-notes"].includes(initialView))
+    return <OperationalFinanceO2cWorkbench view={initialView as O2cView} />;
+  if (["overview", "invoices", "payables", "credits", "match"].includes(initialView))
+    return <OperationalFinanceP2pWorkbench view={initialView as "overview" | "invoices" | "payables" | "credits" | "match"} />;
+  const copy = initialView === "reconciliation" || initialView === "settlement"
+    ? emptyCopy[initialView]
+    : fallbackCopy;
+  return <Card className="py-16 text-center"><h2 className="text-base font-semibold">{t(copy[0])}</h2><p className="mt-2 text-xs text-slate-500">{t(copy[1])}</p></Card>;
 }

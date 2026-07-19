@@ -1,0 +1,439 @@
+import { execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { createServer as createNetServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
+import EmbeddedPostgres from "embedded-postgres";
+import { createPrismaClient } from "../server/persistence/prisma-client.mjs";
+
+const execFileAsync = promisify(execFile);
+const root = resolve(import.meta.dirname, "..");
+const node = process.execPath;
+const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
+const tenantId = "tenant-operational-finance-browser";
+const apiPort = Number(process.env.PLAYWRIGHT_API_PORT || 18787);
+const warehouseId = "finance-browser-warehouse";
+const actorId = (email) =>
+  `USR-${createHash("sha256").update(email).digest("hex").slice(0, 16)}`;
+const freePort = () =>
+  new Promise((resolvePort, reject) => {
+    const server = createNetServer().on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      server.close(() => resolvePort(port));
+    });
+  });
+const pgPort = await freePort();
+const password = `finance-browser-${randomUUID()}`;
+const directory = await mkdtemp(
+  join(tmpdir(), "flowchain-operational-finance-browser-"),
+);
+const database = "flowchain_operational_finance_browser";
+const url = `postgresql://flowchain_operational_finance_browser:${encodeURIComponent(password)}@127.0.0.1:${pgPort}/${database}?schema=public`;
+const pg = new EmbeddedPostgres({
+  databaseDir: directory,
+  user: "flowchain_operational_finance_browser",
+  password,
+  port: pgPort,
+  persistent: false,
+  onLog: () => {},
+  onError: () => {},
+});
+let prisma;
+let server;
+
+async function cleanup() {
+  await new Promise(
+    (resolveClose) => server?.close(resolveClose) || resolveClose(),
+  );
+  await prisma?.$disconnect().catch(() => {});
+  await pg.stop().catch(() => {});
+  await rm(directory, { recursive: true, force: true }).catch(() => {});
+}
+
+async function seedReturn({
+  suffix,
+  type,
+  sourceType,
+  sourceId,
+  sourceLineId,
+  route,
+  postingType,
+  target,
+}) {
+  const requestId = `finance-browser-return-request-${suffix}`;
+  const requestLineId = `finance-browser-return-request-line-${suffix}`;
+  const authorizationId = `finance-browser-return-auth-${suffix}`;
+  const authorizationLineId = `finance-browser-return-auth-line-${suffix}`;
+  const postingId = `finance-browser-return-posting-${suffix}`;
+  const postingLineId = `finance-browser-return-posting-line-${suffix}`;
+  await prisma.returnRequest.create({
+    data: {
+      id: requestId,
+      tenantId,
+      requestNumber: `RR-FIN-BROWSER-${suffix}`,
+      returnType: type,
+      partnerId:
+        type === "supplier_return"
+          ? "finance-browser-supplier"
+          : "finance-browser-customer-cny",
+      partnerNameSnapshot:
+        type === "supplier_return"
+          ? "Finance Browser Supplier"
+          : "Finance Browser Customer CNY",
+      sourceDocumentType: sourceType,
+      sourceDocumentId: sourceId,
+      reasonCode: "finance_credit",
+      workflowStatus: "executed",
+      requestedById: actorId("specialist@example.com"),
+      lines: {
+        create: {
+          id: requestLineId,
+          sourceDocumentType: sourceType,
+          sourceDocumentId: sourceId,
+          sourceDocumentLineId: sourceLineId,
+          sourceQuantity: "10.0000",
+          itemId: "finance-browser-item",
+          sku: "FIN-BROWSER",
+          itemName: "Finance Browser Item",
+          requestedQuantity: "2.0000",
+          unit: "EA",
+          reasonCode: "finance_credit",
+        },
+      },
+    },
+  });
+  await prisma.returnAuthorization.create({
+    data: {
+      id: authorizationId,
+      tenantId,
+      authorizationNumber: `RA-FIN-BROWSER-${suffix}`,
+      returnRequestId: requestId,
+      workflowStatus: "executed",
+      authorizedAt: new Date(),
+      authorizedById: actorId("manager@example.com"),
+      lines: {
+        create: {
+          id: authorizationLineId,
+          returnRequestLineId: requestLineId,
+          authorizedQuantity: "2.0000",
+          dispositionRoute: route,
+        },
+      },
+    },
+  });
+  await prisma.returnPostingDocument.create({
+    data: {
+      id: postingId,
+      tenantId,
+      postingNumber: `RP-FIN-BROWSER-${suffix}`,
+      returnAuthorizationId: authorizationId,
+      postingType,
+      workflowStatus: "ready",
+      postingStatus: "posted",
+      warehouseId,
+      readyAt: new Date(),
+      readyById: actorId("manager@example.com"),
+      postedAt: new Date(),
+      postedById: actorId("manager@example.com"),
+      lines: {
+        create: {
+          id: postingLineId,
+          returnAuthorizationLineId: authorizationLineId,
+          itemId: "finance-browser-item",
+          sku: "FIN-BROWSER",
+          itemName: "Finance Browser Item",
+          quantity: "2.0000",
+          unit: "EA",
+          warehouseId,
+          location: target.location,
+          locationKey: target.locationKey,
+          ...(target.inventoryBalanceId
+            ? { inventoryBalanceId: target.inventoryBalanceId }
+            : { quarantineBalanceId: target.quarantineBalanceId }),
+        },
+      },
+    },
+  });
+  return { postingId, postingLineId };
+}
+
+async function seedSales(currency, suffix) {
+  const orderId = `finance-browser-sales-order-${suffix}`;
+  const orderLineId = `finance-browser-sales-line-${suffix}`;
+  const shipmentId = `finance-browser-shipment-${suffix}`;
+  const shipmentLineId = `finance-browser-shipment-line-${suffix}`;
+  await prisma.salesOrder.create({
+    data: {
+      id: orderId,
+      tenantId,
+      orderNumber: `SO-FIN-BROWSER-${suffix}`,
+      customerId: `finance-browser-customer-${suffix.toLowerCase()}`,
+      customerName: `Finance Browser Customer ${suffix}`,
+      workflowStatus: "confirmed",
+      fulfillmentStatus: "fully_fulfilled",
+      currency,
+      lines: {
+        create: {
+          id: orderLineId,
+          itemId: "finance-browser-item",
+          sku: "FIN-BROWSER",
+          itemName: "Finance Browser Item",
+          orderedQuantity: "10.0000",
+          fulfilledQuantity: "10.0000",
+          unit: "EA",
+          unitPrice: "12.5000",
+          amount: "125.0000",
+        },
+      },
+    },
+  });
+  await prisma.shipmentDocument.create({
+    data: {
+      id: shipmentId,
+      tenantId,
+      shipmentNumber: `SHIP-FIN-BROWSER-${suffix}`,
+      salesOrderId: orderId,
+      workflowStatus: "ready",
+      postingStatus: "posted",
+      postedAt: new Date(),
+      postedById: actorId("manager@example.com"),
+      lines: {
+        create: {
+          id: shipmentLineId,
+          salesOrderLineId: orderLineId,
+          itemId: "finance-browser-item",
+          sku: "FIN-BROWSER",
+          requestedQuantity: "10.0000",
+          postedQuantity: "10.0000",
+          unit: "EA",
+        },
+      },
+    },
+  });
+  return { shipmentId, shipmentLineId };
+}
+
+async function seed() {
+  await prisma.tenant.create({
+    data: {
+      id: tenantId,
+      name: "Operational Finance Browser",
+      timezone: "America/New_York",
+      operationalSettings: {
+        review: {
+          quantityTolerance: "0.0000",
+          pricePercentageTolerance: "0.0000",
+          priceAbsoluteTolerance: "0.0000",
+          amountTolerance: "0.0000",
+        },
+      },
+    },
+  });
+  await prisma.user.createMany({
+    data: [
+      ["manager@example.com", "Finance Manager", "manager"],
+      ["specialist@example.com", "Finance Specialist", "business-specialist"],
+      ["viewer@example.com", "Finance Viewer", "viewer"],
+    ].map(([email, name, role]) => ({
+      id: actorId(email),
+      tenantId,
+      email,
+      name,
+      role,
+      languagePreference: email === "viewer@example.com" ? "en-US" : null,
+    })),
+  });
+  await prisma.supplier.create({
+    data: {
+      id: "finance-browser-supplier",
+      tenantId,
+      code: "FIN-BROWSER-SUP",
+      name: "Finance Browser Supplier",
+    },
+  });
+  await prisma.item.create({
+    data: {
+      id: "finance-browser-item",
+      tenantId,
+      sku: "FIN-BROWSER",
+      name: "Finance Browser Item",
+      unit: "EA",
+      preferredSupplierId: "finance-browser-supplier",
+    },
+  });
+  await prisma.warehouse.create({
+    data: {
+      id: warehouseId,
+      tenantId,
+      code: "FIN-BROWSER-WH",
+      name: "Finance Browser Warehouse",
+    },
+  });
+  await prisma.inventoryBalance.create({
+    data: {
+      id: "finance-browser-balance",
+      tenantId,
+      itemId: "finance-browser-item",
+      sku: "FIN-BROWSER",
+      itemName: "Finance Browser Item",
+      warehouseId,
+      warehouseKey: warehouseId,
+      location: "A-01",
+      locationKey: "a-01",
+      onHandQuantity: "100.0000",
+      reservedQuantity: "0.0000",
+      availableQuantity: "100.0000",
+      unit: "EA",
+      status: "available",
+    },
+  });
+  await prisma.quarantineInventoryBalance.create({
+    data: {
+      id: "finance-browser-quarantine",
+      tenantId,
+      itemId: "finance-browser-item",
+      sku: "FIN-BROWSER",
+      itemName: "Finance Browser Item",
+      warehouseId,
+      warehouseKey: warehouseId,
+      location: "Q-01",
+      locationKey: "q-01",
+      onHandQuantity: "2.0000",
+      unit: "EA",
+    },
+  });
+  await prisma.purchaseOrder.create({
+    data: {
+      id: "finance-browser-po",
+      tenantId,
+      status: "approved",
+      supplierId: "finance-browser-supplier",
+      supplierName: "Finance Browser Supplier",
+      currency: "CNY",
+      lines: {
+        create: {
+          id: "finance-browser-po-line",
+          itemId: "finance-browser-item",
+          sku: "FIN-BROWSER",
+          itemName: "Finance Browser Item",
+          orderedQuantity: "10.0000",
+          receivedQuantity: "10.0000",
+          unit: "EA",
+          unitPrice: "10.0000",
+        },
+      },
+    },
+  });
+  await prisma.receivingDocument.create({
+    data: {
+      id: "finance-browser-grn",
+      tenantId,
+      documentNumber: "GRN-FIN-BROWSER",
+      poId: "finance-browser-po",
+      supplierId: "finance-browser-supplier",
+      supplierName: "Finance Browser Supplier",
+      status: "received",
+      workflowStatus: "posted",
+      postingStatus: "posted",
+      postedAt: new Date(),
+      postedById: actorId("manager@example.com"),
+      warehouseId,
+      currency: "CNY",
+      lines: {
+        create: {
+          id: "finance-browser-grn-line",
+          purchaseOrderLineId: "finance-browser-po-line",
+          itemId: "finance-browser-item",
+          sku: "FIN-BROWSER",
+          itemName: "Finance Browser Item",
+          acceptedQty: "10.0000",
+          rejectedQty: "0.0000",
+          unit: "EA",
+          warehouseId,
+          location: "A-01",
+          locationKey: "a-01",
+        },
+      },
+    },
+  });
+  const cny = await seedSales("CNY", "CNY");
+  await seedSales("USD", "USD");
+  await seedReturn({
+    suffix: "SUP",
+    type: "supplier_return",
+    sourceType: "ReceivingDocument",
+    sourceId: "finance-browser-grn",
+    sourceLineId: "finance-browser-grn-line",
+    route: "return_from_available",
+    postingType: "supplier_return_dispatch",
+    target: {
+      location: "A-01",
+      locationKey: "a-01",
+      inventoryBalanceId: "finance-browser-balance",
+    },
+  });
+  await seedReturn({
+    suffix: "CUST",
+    type: "customer_return",
+    sourceType: "ShipmentDocument",
+    sourceId: cny.shipmentId,
+    sourceLineId: cny.shipmentLineId,
+    route: "receive_to_quarantine",
+    postingType: "customer_return_receipt",
+    target: {
+      location: "Q-01",
+      locationKey: "q-01",
+      quarantineBalanceId: "finance-browser-quarantine",
+    },
+  });
+}
+
+try {
+  await pg.initialise();
+  await pg.start();
+  await pg.createDatabase(database);
+  Object.assign(process.env, {
+    DATABASE_URL: url,
+    DATABASE_URL_TEST: url,
+    FLOWCHAIN_PERSISTENCE_MODE: "database",
+    FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE:
+      process.env.PLAYWRIGHT_OPERATIONAL_FINANCE_DISABLED === "true"
+        ? "false"
+        : "true",
+    FLOWCHAIN_DEFAULT_TENANT_ID: tenantId,
+    FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: "false",
+    FLOWCHAIN_LOCAL_SESSION_SECRET: `finance-browser-${randomUUID()}-secure`,
+    SCM_API_PORT: String(apiPort),
+    NODE_ENV: "production",
+  });
+  await execFileAsync(node, [prismaCli, "migrate", "deploy"], {
+    cwd: root,
+    env: process.env,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  prisma = await createPrismaClient(process.env);
+  await seed();
+  const { createScmServer } = await import("../server/scm-api.mjs");
+  server = createScmServer();
+  server.listen(apiPort, "127.0.0.1", () =>
+    console.log(`Operational finance browser API ready on ${apiPort}`),
+  );
+} catch (error) {
+  console.error(
+    String(error?.stack || error).replace(
+      /postgres(?:ql)?:\/\/[^\s]+/gi,
+      "[REDACTED_DATABASE_URL]",
+    ),
+  );
+  await cleanup();
+  process.exit(1);
+}
+
+for (const signal of ["SIGINT", "SIGTERM"])
+  process.once(signal, async () => {
+    await cleanup();
+    process.exit(0);
+  });

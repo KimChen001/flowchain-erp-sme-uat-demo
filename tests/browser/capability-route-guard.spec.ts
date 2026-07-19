@@ -10,13 +10,13 @@ async function authenticate(page: Page, experimentalModules: string[] = []) {
   }, { profile: user, experiments: experimentalModules });
 }
 
-test("finance direct URL is blocked by its unavailable capability", async ({ page }) => {
+test("finance direct URL is blocked until its beta database capability is enabled", async ({ page }) => {
   await authenticate(page);
   await page.goto("/app/finance/invoices");
   const blocked = page.getByTestId("capability-route-blocked");
   await expect(blocked).toContainText("结算管理 当前不可进入");
-  await expect(blocked).toContainText("unavailable");
-  await expect(blocked).toContainText("settlement runtime is not fully connected");
+  await expect(blocked).toContainText("beta");
+  await expect(blocked).toContainText("without payment, collection, refund");
   await expect(blocked.getByRole("button", { name: "返回工作台" })).toBeVisible();
   await expect(blocked.getByRole("button", { name: "返回可用模块" })).toBeVisible();
 });

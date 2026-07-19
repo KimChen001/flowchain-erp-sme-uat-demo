@@ -45,6 +45,8 @@ import { roleLabel } from "../../shared/roles.mjs";
 import { handleRfqsRoute } from "./rfqs.routes.mjs";
 import { handleInventoryRoute } from "./inventory.routes.mjs";
 import { handleInventoryOperationsRoute } from "./inventory-operations.routes.mjs";
+import { handleReturnsRoute } from "./returns.routes.mjs";
+import { handleOperationalFinanceRoute } from "./operational-finance.routes.mjs";
 import { handleInventoryMovementsRoute } from "./inventory-movements.routes.mjs";
 import { handleProcurementReadRoute } from "./procurement-read.routes.mjs";
 import { handleTodayCockpitRoute } from "./today-cockpit.routes.mjs";
@@ -1754,6 +1756,8 @@ export function createScmServer() {
       if (await handleAiRuntimeGatewayRoute(routeContext)) return;
       if (await handleAiRuntimeObservabilityRoute(routeContext)) return;
       if (await handleTodayCockpitRoute(routeContext)) return;
+      if (await handleReturnsRoute(routeContext)) return;
+      if (await handleOperationalFinanceRoute(routeContext)) return;
       if (await handleInventoryOperationsRoute(routeContext)) return;
       if (await handleInventoryRoute(routeContext)) return;
       if (await handleProcurementReadRoute(routeContext)) return;

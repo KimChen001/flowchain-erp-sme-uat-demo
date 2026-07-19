@@ -25,9 +25,23 @@ export const settingsSeed = {
       { id: 'NUM-PO', document: '采购订单', prefix: 'PO', datePattern: 'YYYYMM', separator: '-', sequenceLength: 4, nextSequence: 128 },
       { id: 'NUM-PR', document: '采购申请', prefix: 'PR', datePattern: 'YYYYMM', separator: '-', sequenceLength: 4, nextSequence: 86 },
       { id: 'NUM-GRN', document: '采购收货单', prefix: 'GRN', datePattern: 'YYYYMMDD', separator: '-', sequenceLength: 3, nextSequence: 19 },
+      { id: 'NUM-RR', document: 'Return Request', prefix: 'RR', datePattern: 'YYYYMM', separator: '-', sequenceLength: 4, nextSequence: 1 },
+      { id: 'NUM-RA', document: 'Return Authorization', prefix: 'RA', datePattern: 'YYYYMM', separator: '-', sequenceLength: 4, nextSequence: 1 },
+      { id: 'NUM-RP', document: 'Return Posting', prefix: 'RP', datePattern: 'YYYYMM', separator: '-', sequenceLength: 4, nextSequence: 1 },
+      { id: 'NUM-SI', document: 'Supplier Invoice', prefix: 'SI', datePattern: 'YYYYMM', separator: '-', sequenceLength: 4, nextSequence: 1 },
+      { id: 'NUM-CI', document: 'Customer Invoice', prefix: 'CI', datePattern: 'YYYYMM', separator: '-', sequenceLength: 4, nextSequence: 1 },
+      { id: 'NUM-CM', document: 'Credit Memo / Credit Note', prefix: 'CM', datePattern: 'YYYYMM', separator: '-', sequenceLength: 4, nextSequence: 1 },
     ],
   },
-  review: { amountThreshold: 100000, riskLevels: ['高'], inventoryTolerancePercent: 5, reviewerRoles: ['管理员', '采购经理', '财务复核员'], enabled: true },
+  review: {
+    policies: [
+      { id: 'return-authorization', name: 'Return Authorization', enabled: true, reviewerRoles: ['admin', 'manager'] },
+      { id: 'supplier-invoice-match-exception', name: 'Supplier Invoice Match Exception', enabled: true, reviewerRoles: ['admin', 'manager'] },
+      { id: 'payable-approval', name: 'Payable Approval', enabled: true, reviewerRoles: ['admin', 'manager'] },
+      { id: 'customer-credit-note-approval', name: 'Customer Credit Note Approval', enabled: true, reviewerRoles: ['admin', 'manager'] },
+    ],
+    amountThreshold: 100000, riskLevels: ['高'], inventoryTolerancePercent: 5, reviewerRoles: ['管理员', '采购经理', '财务复核员'], enabled: true,
+  },
   modules: {
     defaultModule: 'overview',
     items: [

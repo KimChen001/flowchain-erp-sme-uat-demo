@@ -1,0 +1,51 @@
+import { expect, test } from "@playwright/test";
+
+test("disabled returns capability remains readable and fail-closed", async ({
+  page,
+  request,
+}) => {
+  const response = await request.post("/api/auth/login", {
+    data: {
+      email: "manager@example.com",
+      name: "Ignored",
+      company: "Ignored",
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+  const session = await response.json();
+  await page.addInitScript(({ token, user }) => {
+    localStorage.setItem("flowchain:auth-token", token);
+    localStorage.setItem("flowchain:current-user", JSON.stringify(user));
+  }, session);
+
+  await page.goto("/app/inventory/returns/requests/new");
+  await expect(page.getByTestId("returns-readonly")).toContainText(
+    "正式记录保持只读",
+  );
+  await expect(page.getByTestId("preview-return-request")).toBeDisabled();
+  await page.goto("/app/inventory/quarantine");
+  await expect(page.getByTestId("quarantine-inventory-workbench")).toBeVisible();
+  await expect(page.getByTestId("returns-readonly")).toBeVisible();
+
+  const denied = await request.post("/api/returns/requests", {
+    headers: { Authorization: `Bearer ${session.token}` },
+    data: {
+      requestNumber: "DISABLED-DENIED",
+      returnType: "customer_return",
+      contextDocumentType: "ShipmentDocument",
+      contextDocumentId: "returns-browser-shipment",
+      reasonCode: "damaged",
+      lines: [
+        {
+          sourceDocumentLineId: "returns-browser-shipment-line",
+          requestedQuantity: "1.0000",
+        },
+      ],
+      idempotencyKey: "disabled-denied",
+    },
+  });
+  expect(denied.status()).toBe(409);
+  expect((await denied.json()).code).toBe(
+    "RETURN_GOVERNANCE_CAPABILITY_NOT_AVAILABLE",
+  );
+});

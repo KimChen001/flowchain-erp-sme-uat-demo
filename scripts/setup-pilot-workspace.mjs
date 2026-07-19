@@ -15,7 +15,7 @@ const tenantId = value('tenant-id', process.env.FLOWCHAIN_DEFAULT_TENANT_ID)
 if (!tenantId) throw new Error('--tenant-id or FLOWCHAIN_DEFAULT_TENANT_ID is required.')
 const config = {
   tenantId,
-  workspaceName: value('workspace-name', 'FlowChain Pilot Workspace'),
+  workspaceName: value('workspace-name', 'FlowChain Workspace'),
   adminEmail: value('admin-email', 'admin@flowchain.local').toLowerCase(),
   adminName: value('admin-name', 'Initial Admin'),
   warehouseCode: value('warehouse-code', 'MAIN'),

@@ -4,7 +4,8 @@ import { A, Card, RecoveryActions } from '../../components/ui';
 import { BusinessEntityLink } from '../../components/business/BusinessEntityLink';
 import { businessEntityRouteRegistry, type BusinessEntityType } from '../../components/business/businessEntityRoutes';
 import { fetchSettingsAudit, fetchSettingsRuntime, saveSettingsSection, type SettingsAuditEntry, type SettingsRuntime } from './settingsRuntime';
-import PilotWorkspaceSettings from './PilotWorkspaceSettings';
+import WorkspaceSettings from './WorkspaceSettings';
+import { useI18n } from '../../i18n/I18n';
 
 type View = keyof SettingsRuntime | 'audit';
 type NavigateFn = (moduleId: string, focusTarget?: { entityType: string; entityId: string } | null) => void;
@@ -19,11 +20,15 @@ const sectionTitles: Record<View, [string, string]> = {
 const fieldClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400';
 const buttonClass = 'inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50';
 
-function Header({ view, dirty, saving, onSave }: { view: View; dirty?: boolean; saving?: boolean; onSave?: () => void }) {
-  const [title, description] = sectionTitles[view];
+function Header({ view, dirty, saving, onSave, onCancel }: { view: View; dirty?: boolean; saving?: boolean; onSave?: () => void; onCancel?: () => void }) {
+  const { t, language } = useI18n();
+  const key = ({ company: 'settings.company', roles: 'settings.roles', numbering: 'settings.numbering', review: 'settings.review', modules: 'settings.modules', ai: 'settings.ai', audit: 'settings.audit', advanced: 'settings.advanced' } as const)[view];
+  const [, fallbackDescription] = sectionTitles[view];
+  const title = t(key);
+  const description = language === 'en-US' ? '' : fallbackDescription;
   return <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
     <div><h2 className="fc-section-title" style={{ color: A.label }}>{title}</h2><p className="mt-1 text-sm" style={{ color: A.sub }}>{description}</p></div>
-    {onSave && <button data-testid="settings-save" disabled={!dirty || saving} onClick={onSave} className={`${buttonClass} text-white`} style={{ background: A.blue }}><Save size={15} />{saving ? '保存中…' : dirty ? '保存更改' : '已保存'}</button>}
+    {onSave && <div className="flex gap-2">{dirty && <button onClick={onCancel} disabled={saving} className={`${buttonClass} border border-slate-200 bg-white`}>{t('settings.cancel')}</button>}<button data-testid="settings-save" disabled={!dirty || saving} onClick={onSave} className={`${buttonClass} text-white`} style={{ background: A.blue }}><Save size={15} />{saving ? t('settings.saving') : dirty ? t('settings.save') : t('settings.saved')}</button></div>}
   </div>;
 }
 
@@ -52,27 +57,30 @@ function previewNumber(rule: SettingsRuntime['numbering']['rules'][number]) {
 }
 
 function Numbering({ value, onChange }: { value: SettingsRuntime['numbering']; onChange: (v: SettingsRuntime['numbering']) => void }) {
+  const { t } = useI18n();
   const update = (id: string, patch: Partial<(typeof value.rules)[number]>) => onChange({ rules: value.rules.map(rule => rule.id === id ? { ...rule, ...patch } : rule) });
   const signatures = value.rules.map(r => `${r.prefix.toUpperCase()}|${r.datePattern}|${r.separator}`);
   return <div className="space-y-3">{value.rules.map((rule, index) => { const conflict = signatures.indexOf(signatures[index]) !== index; return <div key={rule.id} className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-7">
-    <label className="text-xs md:col-span-2">单据<input className={`${fieldClass} mt-1`} value={rule.document} onChange={e => update(rule.id, { document: e.target.value })} /></label>
-    <label className="text-xs">前缀<input className={`${fieldClass} mt-1`} value={rule.prefix} onChange={e => update(rule.id, { prefix: e.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 8) })} /></label>
-    <label className="text-xs">日期<select className={`${fieldClass} mt-1`} value={rule.datePattern} onChange={e => update(rule.id, { datePattern: e.target.value })}><option>YYYYMM</option><option>YYYYMMDD</option><option value="">无日期</option></select></label>
-    <label className="text-xs">分隔符<input className={`${fieldClass} mt-1`} value={rule.separator} maxLength={1} onChange={e => update(rule.id, { separator: e.target.value })} /></label>
-    <label className="text-xs">流水位数<input type="number" min={2} max={8} className={`${fieldClass} mt-1`} value={rule.sequenceLength} onChange={e => update(rule.id, { sequenceLength: Number(e.target.value) })} /></label>
-    <div className="text-xs"><span>预览</span><div className="mt-1 rounded-lg bg-slate-50 px-3 py-2 font-mono">{previewNumber(rule)}</div>{conflict && <span className="mt-1 block text-red-600">与现有规则冲突</span>}</div>
+    <label className="text-xs md:col-span-2">{t('settings.document')}<input className={`${fieldClass} mt-1`} value={rule.document} onChange={e => update(rule.id, { document: e.target.value })} /></label>
+    <label className="text-xs">{t('settings.prefix')}<input className={`${fieldClass} mt-1`} value={rule.prefix} onChange={e => update(rule.id, { prefix: e.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 8) })} /></label>
+    <label className="text-xs">{t('settings.datePattern')}<select className={`${fieldClass} mt-1`} value={rule.datePattern} onChange={e => update(rule.id, { datePattern: e.target.value })}><option>YYYYMM</option><option>YYYYMMDD</option><option value="">{t('settings.noDate')}</option></select></label>
+    <label className="text-xs">{t('settings.separator')}<input className={`${fieldClass} mt-1`} value={rule.separator} maxLength={1} onChange={e => update(rule.id, { separator: e.target.value })} /></label>
+    <label className="text-xs">{t('settings.sequenceLength')}<input type="number" min={2} max={8} className={`${fieldClass} mt-1`} value={rule.sequenceLength} onChange={e => update(rule.id, { sequenceLength: Number(e.target.value) })} /></label>
+    <div className="text-xs"><span>{t('settings.preview')}</span><div className="mt-1 rounded-lg bg-slate-50 px-3 py-2 font-mono">{previewNumber(rule)}</div>{conflict && <span className="mt-1 block text-red-600">{t('settings.conflict')}</span>}</div>
   </div>; })}</div>;
 }
 
 function Review({ value, onChange }: { value: SettingsRuntime['review']; onChange: (v: SettingsRuntime['review']) => void }) {
+  const { t } = useI18n();
   const [amount, setAmount] = useState(120000); const requires = value.enabled && amount >= value.amountThreshold;
   return <div className="grid gap-5 lg:grid-cols-[1fr_320px]"><div className="grid gap-4 md:grid-cols-2">
-    <label className="text-sm">金额复核阈值<input type="number" className={`${fieldClass} mt-1`} value={value.amountThreshold} onChange={e => onChange({ ...value, amountThreshold: Number(e.target.value) })} /></label>
-    <label className="text-sm">库存差异容差（%）<input type="number" className={`${fieldClass} mt-1`} value={value.inventoryTolerancePercent} onChange={e => onChange({ ...value, inventoryTolerancePercent: Number(e.target.value) })} /></label>
-    <label className="text-sm">触发风险等级<input className={`${fieldClass} mt-1`} value={value.riskLevels.join('、')} onChange={e => onChange({ ...value, riskLevels: e.target.value.split(/[、,]/).filter(Boolean) })} /></label>
-    <label className="text-sm">复核角色<input className={`${fieldClass} mt-1`} value={value.reviewerRoles.join('、')} onChange={e => onChange({ ...value, reviewerRoles: e.target.value.split(/[、,]/).filter(Boolean) })} /></label>
-    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={value.enabled} onChange={e => onChange({ ...value, enabled: e.target.checked })} />启用复核策略</label>
-  </div><div className="rounded-xl bg-slate-50 p-4"><div className="font-medium">策略模拟</div><label className="mt-3 block text-xs">模拟单据金额<input type="number" className={`${fieldClass} mt-1`} value={amount} onChange={e => setAmount(Number(e.target.value))} /></label><div className={`mt-3 rounded-lg p-3 text-sm ${requires ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>{requires ? `需要 ${value.reviewerRoles.join(' / ')} 复核` : '可按标准流程继续'}</div></div></div>;
+    <label className="text-sm">{t('settings.amountThreshold')}<input type="number" className={`${fieldClass} mt-1`} value={value.amountThreshold} onChange={e => onChange({ ...value, amountThreshold: Number(e.target.value) })} /></label>
+    <label className="text-sm">{t('settings.inventoryTolerance')}<input type="number" className={`${fieldClass} mt-1`} value={value.inventoryTolerancePercent} onChange={e => onChange({ ...value, inventoryTolerancePercent: Number(e.target.value) })} /></label>
+    <label className="text-sm">{t('settings.riskLevels')}<input className={`${fieldClass} mt-1`} value={value.riskLevels.join(', ')} onChange={e => onChange({ ...value, riskLevels: e.target.value.split(/[、,]/).filter(Boolean) })} /></label>
+    <label className="text-sm">{t('settings.reviewerRoles')}<input className={`${fieldClass} mt-1`} value={value.reviewerRoles.join(', ')} onChange={e => onChange({ ...value, reviewerRoles: e.target.value.split(/[、,]/).filter(Boolean) })} /></label>
+    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={value.enabled} onChange={e => onChange({ ...value, enabled: e.target.checked })} />{t('settings.enableReview')}</label>
+    <div className="md:col-span-2"><div className="mb-2 text-sm font-medium">{t('settings.reviewPolicyList')}</div><div className="grid gap-2">{(value.policies || []).map(policy => <label key={policy.id} className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm"><input type="checkbox" checked={policy.enabled} onChange={e => onChange({ ...value, policies: value.policies.map(row => row.id === policy.id ? { ...row, enabled: e.target.checked } : row) })} />{policy.name}</label>)}</div></div>
+  </div><div className="rounded-xl bg-slate-50 p-4"><div className="font-medium">{t('settings.policySimulation')}</div><label className="mt-3 block text-xs">{t('settings.simulatedAmount')}<input type="number" className={`${fieldClass} mt-1`} value={amount} onChange={e => setAmount(Number(e.target.value))} /></label><div className={`mt-3 rounded-lg p-3 text-sm ${requires ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'}`}>{requires ? t('settings.reviewRequired', { roles: value.reviewerRoles.join(' / ') }) : t('settings.standardFlow')}</div></div></div>;
 }
 
 function Modules({ value, onChange }: { value: SettingsRuntime['modules']; onChange: (v: SettingsRuntime['modules']) => void }) {
@@ -103,7 +111,8 @@ function Audit() {
 }
 
 export default function SettingsPage({ initialView }: { initialView?: string; onNavigate: NavigateFn }) {
-  if (['profile', 'workspace', 'pilot-users', 'warehouse-access', 'pilot-setup'].includes(initialView || '')) return <PilotWorkspaceSettings view={initialView || 'profile'} />;
+  const { t, locale } = useI18n();
+  if (['profile', 'company', 'roles', 'warehouse-access', 'readiness'].includes(initialView || '')) return <WorkspaceSettings view={initialView || 'profile'} />;
   const view = ((initialView === 'boundaries' ? 'advanced' : initialView) || 'company') as View;
   const [data, setData] = useState<SettingsRuntime | null>(null); const [draft, setDraft] = useState<SettingsRuntime | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [saving, setSaving] = useState(false); const [notice, setNotice] = useState('');
   useEffect(() => { setLoading(true); fetchSettingsRuntime().then(next => { setData(next); setDraft(next); setError(''); }).catch(err => setError(err instanceof Error ? err.message : '设置加载失败')).finally(() => setLoading(false)); }, []);
@@ -113,8 +122,8 @@ export default function SettingsPage({ initialView }: { initialView?: string; on
   const section = view as keyof SettingsRuntime;
   const dirty = JSON.stringify(data[section]) !== JSON.stringify(draft[section]);
   const change = <K extends keyof SettingsRuntime>(next: SettingsRuntime[K]) => { setDraft({ ...draft, [section]: next }); setNotice(''); };
-  const save = async () => { setSaving(true); setNotice(''); try { const result = await saveSettingsSection(section, draft[section]); setData({ ...data, [section]: result.settings }); setDraft({ ...draft, [section]: result.settings }); setNotice('更改已保存并写入操作日志。'); if (section === 'modules') { localStorage.setItem('flowchain:module-settings', JSON.stringify(result.settings)); window.dispatchEvent(new Event('flowchain:module-settings')); } } catch (err) { setNotice(err instanceof Error ? err.message : '保存失败'); } finally { setSaving(false); } };
-  return <Card className="p-5" data-testid={`settings-${view}`}><Header view={view} dirty={dirty} saving={saving} onSave={save} />{notice && <div role="status" className={`mb-4 rounded-lg p-3 text-sm ${notice.includes('已保存') ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>{notice}</div>}
+  const save = async () => { setSaving(true); setNotice(''); try { const result = await saveSettingsSection(section, draft[section]); setData({ ...data, [section]: result.settings }); setDraft({ ...draft, [section]: result.settings }); setNotice(t('settings.savedAt', { time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(new Date()) })); if (section === 'modules') { localStorage.setItem('flowchain:module-settings', JSON.stringify(result.settings)); window.dispatchEvent(new Event('flowchain:module-settings')); } } catch { setNotice(t('settings.saveFailed')); } finally { setSaving(false); } };
+  return <Card className="p-5" data-testid={`settings-${view}`}><Header view={view} dirty={dirty} saving={saving} onSave={save} onCancel={() => setDraft(data)} />{notice && <div role="status" className={`mb-4 rounded-lg p-3 text-sm ${notice.startsWith(t('settings.saved').slice(0, 3)) ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>{notice}</div>}
     {view === 'company' && <Company value={draft.company} onChange={change} />}{view === 'roles' && <Roles value={draft.roles} onChange={change} />}{view === 'numbering' && <Numbering value={draft.numbering} onChange={change} />}{view === 'review' && <Review value={draft.review} onChange={change} />}{view === 'modules' && <Modules value={draft.modules} onChange={change} />}{view === 'ai' && <AiGovernance value={draft.ai} onChange={change} />}{view === 'advanced' && <Advanced value={draft.advanced} onChange={change} />}
-    <div className="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4 text-xs text-slate-500"><ShieldCheck size={14} />所有保存操作都会记录操作者、时间以及变更前后值。</div></Card>;
+    <div className="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4 text-xs text-slate-500"><ShieldCheck size={14} />{t('settings.auditHint')}</div></Card>;
 }

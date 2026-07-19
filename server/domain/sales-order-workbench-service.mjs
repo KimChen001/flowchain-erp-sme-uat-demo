@@ -10,17 +10,36 @@ const fail = (code, message, status = 400, details) => { throw new SalesWorkbenc
 const text = (value) => String(value ?? '').trim()
 const iso = (value) => value ? new Date(value).toISOString() : null
 const quantity = (value) => { try { const result = units(value); if (result <= 0n) throw new Error(); return fixed(result) } catch { fail('SALES_ORDER_VALIDATION_FAILED', 'Line quantity must be positive with at most four decimal places.', 422) } }
+const price = (value) => {
+  if (value === null || value === undefined || text(value) === '') return null
+  try {
+    const result = units(value)
+    if (result < 0n) throw new Error()
+    return fixed(result)
+  } catch {
+    fail('SALES_ORDER_VALIDATION_FAILED', 'Line unit price must be non-negative with at most four decimal places.', 422)
+  }
+}
+const amount = (quantityValue, priceValue) => {
+  if (priceValue === null) return null
+  const product = units(quantityValue) * units(priceValue)
+  return fixed((product + 5_000n) / 10_000n)
+}
 const permissions = (actor) => ['admin', 'manager', 'business-specialist', 'business_specialist'].includes(actor.role)
 
 async function actorFor(prisma, context) { return resolveProvisionedActor(prisma, context?.identity || context) }
 async function authoritativeLines(prisma, tenantId, lines) {
   if (!Array.isArray(lines) || !lines.length) fail('SALES_ORDER_VALIDATION_FAILED', 'At least one sales order line is required.', 422)
-  const normalized = lines.map((line) => ({ itemId: text(line.itemId), orderedQuantity: quantity(line.quantity ?? line.orderedQuantity) }))
+  const normalized = lines.map((line) => {
+    const orderedQuantity = quantity(line.quantity ?? line.orderedQuantity)
+    const unitPrice = price(line.unitPrice)
+    return { itemId: text(line.itemId), orderedQuantity, unitPrice, amount: amount(orderedQuantity, unitPrice) }
+  })
   if (normalized.some((line) => !line.itemId)) fail('SALES_ORDER_VALIDATION_FAILED', 'Every line requires an item.', 422)
   const items = await prisma.item.findMany({ where: { tenantId, id: { in: [...new Set(normalized.map((line) => line.itemId))] }, status: 'active' } })
   const map = new Map(items.map((item) => [item.id, item]))
   if (normalized.some((line) => !map.has(line.itemId))) fail('SALES_ORDER_ITEM_INVALID', 'Every line must reference an active item in this workspace.', 422)
-  return normalized.map((line) => { const item = map.get(line.itemId); return { id: randomUUID(), itemId: item.id, sku: item.sku, itemName: item.name, orderedQuantity: line.orderedQuantity, unit: text(item.unit) || 'EA' } })
+  return normalized.map((line) => { const item = map.get(line.itemId); return { id: randomUUID(), itemId: item.id, sku: item.sku, itemName: item.name, orderedQuantity: line.orderedQuantity, unit: text(item.unit) || 'EA', unitPrice: line.unitPrice, amount: line.amount } })
 }
 
 function publicOrder(order) {
@@ -29,7 +48,7 @@ function publicOrder(order) {
     promisedDate: iso(order.promisedDate), currency: order.currency, workflowStatus: order.workflowStatus,
     reservationStatus: order.reservationStatus, fulfillmentStatus: order.fulfillmentStatus, version: order.version,
     createdAt: iso(order.createdAt), updatedAt: iso(order.updatedAt),
-    lines: (order.lines || []).map((line) => ({ id: line.id, itemId: line.itemId, sku: line.sku, itemName: line.itemName, orderedQuantity: fixed(units(line.orderedQuantity)), reservedQuantity: fixed(units(line.reservedQuantity)), fulfilledQuantity: fixed(units(line.fulfilledQuantity)), unit: line.unit, version: line.version })),
+    lines: (order.lines || []).map((line) => ({ id: line.id, itemId: line.itemId, sku: line.sku, itemName: line.itemName, orderedQuantity: fixed(units(line.orderedQuantity)), reservedQuantity: fixed(units(line.reservedQuantity)), fulfilledQuantity: fixed(units(line.fulfilledQuantity)), unit: line.unit, unitPrice: line.unitPrice === null || line.unitPrice === undefined ? null : fixed(units(line.unitPrice)), amount: line.amount === null || line.amount === undefined ? null : fixed(units(line.amount)), version: line.version })),
   }
 }
 
@@ -113,7 +132,7 @@ export function createSalesOrderWorkbenchService({ prisma, idFactory = randomUUI
       if (current.version !== payload.expectedOrderVersion) fail('SALES_ORDER_VERSION_CONFLICT', 'Sales order version does not match.', 409)
       if (current.workflowStatus !== definition[0]) fail('SALES_ORDER_INVALID_STATE', `Sales order cannot ${action} from its current state.`, 409)
       if (!current.lines.length) fail('SALES_ORDER_VALIDATION_FAILED', 'Sales order requires at least one line.', 422)
-      await authoritativeLines(tx, actor.tenantId, current.lines.map((line) => ({ itemId: line.itemId, quantity: fixed(units(line.orderedQuantity)) })))
+      await authoritativeLines(tx, actor.tenantId, current.lines.map((line) => ({ itemId: line.itemId, quantity: fixed(units(line.orderedQuantity)), unitPrice: line.unitPrice === null || line.unitPrice === undefined ? null : fixed(units(line.unitPrice)) })))
       const order = await tx.salesOrder.update({ where: { id: current.id }, data: { workflowStatus: definition[1], version: { increment: 1 } }, include: { lines: { orderBy: { id: 'asc' } } } })
       return { order, summary: `Sales order ${order.orderNumber} ${action} completed.` }
     })

@@ -116,6 +116,58 @@ function balanceWhere(actor, query = {}) {
   };
 }
 
+function availableBalanceSelectorWhere(actor, query = {}) {
+  return {
+    tenantId: actor.tenantId,
+    ...(String(query.includeZero || "").toLowerCase() === "true"
+      ? {}
+      : { availableQuantity: { gt: 0 } }),
+    AND: [
+      scopedWhere(actor),
+      {
+        ...(text(query.itemId) ? { itemId: text(query.itemId) } : {}),
+        ...(text(query.sku) ? { sku: text(query.sku) } : {}),
+        ...(text(query.warehouseId)
+          ? { warehouseId: text(query.warehouseId) }
+          : {}),
+        ...(text(query.locationKey)
+          ? { locationKey: text(query.locationKey) }
+          : {}),
+      },
+    ],
+  };
+}
+
+function quarantineBalanceWhere(actor, query = {}, { selector = false } = {}) {
+  return {
+    tenantId: actor.tenantId,
+    ...(selector
+      ? {
+          status: "active",
+          ...(String(query.includeZero || "").toLowerCase() === "true"
+            ? {}
+            : { onHandQuantity: { gt: 0 } }),
+        }
+      : {}),
+    AND: [
+      scopedWhere(actor),
+      {
+        ...(text(query.itemId) ? { itemId: text(query.itemId) } : {}),
+        ...(text(query.sku) ? { sku: text(query.sku) } : {}),
+        ...(text(query.warehouseId)
+          ? { warehouseId: text(query.warehouseId) }
+          : {}),
+        ...(text(query.locationKey)
+          ? { locationKey: text(query.locationKey) }
+          : {}),
+        ...(!selector && text(query.status)
+          ? { status: text(query.status) }
+          : {}),
+      },
+    ],
+  };
+}
+
 function movementModel(row) {
   return {
     movementId: row.id,
@@ -160,6 +212,48 @@ function balanceModel(row) {
     status: row.status,
     riskLevel: row.riskLevel,
     version: row.version,
+    updatedAt: iso(row.updatedAt),
+  };
+}
+
+function availableBalanceOption(row) {
+  return {
+    id: row.id,
+    balanceType: "available",
+    itemId: row.itemId,
+    sku: row.sku,
+    itemName: row.itemName,
+    warehouseId: row.warehouseId,
+    location: row.location || "",
+    locationKey: row.locationKey,
+    onHandQuantity: decimal(row.onHandQuantity),
+    reservedQuantity: decimal(row.reservedQuantity),
+    availableQuantity: decimal(row.availableQuantity),
+    quarantineQuantity: null,
+    unit: row.unit,
+    version: row.version,
+    reservable: true,
+  };
+}
+
+function quarantineBalanceModel(row) {
+  return {
+    id: row.id,
+    balanceType: "quarantine",
+    itemId: row.itemId,
+    sku: row.sku,
+    itemName: row.itemName,
+    warehouseId: row.warehouseId,
+    location: row.location || "",
+    locationKey: row.locationKey,
+    onHandQuantity: decimal(row.onHandQuantity),
+    reservedQuantity: null,
+    availableQuantity: null,
+    quarantineQuantity: decimal(row.onHandQuantity),
+    unit: row.unit,
+    status: row.status,
+    version: row.version,
+    reservable: false,
     updatedAt: iso(row.updatedAt),
   };
 }
@@ -217,5 +311,87 @@ export function createInventoryAuthoritativeReadService({ prisma } = {}) {
     };
   }
 
-  return { listMovements, listBalances };
+  async function listAvailableBalanceOptions(query, context) {
+    const actor = await resolveProvisionedActor(
+      prisma,
+      context?.identity || context,
+    );
+    const rows = await prisma.inventoryBalance.findMany({
+      where: availableBalanceSelectorWhere(actor, query),
+      orderBy: [
+        { sku: "asc" },
+        { warehouseId: "asc" },
+        { locationKey: "asc" },
+        { id: "asc" },
+      ],
+      take: positiveInteger(query.limit, 200, 500),
+    });
+    return {
+      dataSource: "Authoritative PostgreSQL",
+      inventoryClass: "available",
+      options: rows.map(availableBalanceOption),
+    };
+  }
+
+  async function listQuarantineBalances(query, context) {
+    const actor = await resolveProvisionedActor(
+      prisma,
+      context?.identity || context,
+    );
+    const { page, pageSize, skip } = pageOptions(query);
+    const where = quarantineBalanceWhere(actor, query);
+    const [total, rows] = await Promise.all([
+      prisma.quarantineInventoryBalance.count({ where }),
+      prisma.quarantineInventoryBalance.findMany({
+        where,
+        orderBy: [
+          { updatedAt: "desc" },
+          { sku: "asc" },
+          { warehouseId: "asc" },
+          { locationKey: "asc" },
+          { id: "asc" },
+        ],
+        skip,
+        take: pageSize,
+      }),
+    ]);
+    return {
+      dataSource: "Authoritative PostgreSQL",
+      inventoryClass: "quarantine",
+      page,
+      pageSize,
+      total,
+      balances: rows.map(quarantineBalanceModel),
+    };
+  }
+
+  async function listQuarantineBalanceOptions(query, context) {
+    const actor = await resolveProvisionedActor(
+      prisma,
+      context?.identity || context,
+    );
+    const rows = await prisma.quarantineInventoryBalance.findMany({
+      where: quarantineBalanceWhere(actor, query, { selector: true }),
+      orderBy: [
+        { sku: "asc" },
+        { warehouseId: "asc" },
+        { locationKey: "asc" },
+        { id: "asc" },
+      ],
+      take: positiveInteger(query.limit, 200, 500),
+    });
+    return {
+      dataSource: "Authoritative PostgreSQL",
+      inventoryClass: "quarantine",
+      options: rows.map(quarantineBalanceModel),
+    };
+  }
+
+  return {
+    listMovements,
+    listBalances,
+    listAvailableBalanceOptions,
+    listQuarantineBalances,
+    listQuarantineBalanceOptions,
+  };
 }

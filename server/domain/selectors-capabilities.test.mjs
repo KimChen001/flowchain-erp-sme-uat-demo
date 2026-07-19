@@ -53,6 +53,18 @@ test('capability registry hides preview and unavailable modules by default', asy
     assert.equal(byId[id].databaseOnly, true)
     assert.equal(byId[id].enabled, false)
   }
+  for (const id of ['quarantine-inventory', 'return-request', 'return-authorization', 'return-posting']) {
+    assert.equal(byId[id].maturity, 'beta')
+    assert.equal(byId[id].databaseOnly, true)
+    assert.equal(byId[id].enabled, false)
+  }
+  assert.equal(byId['quarantine-inventory'].readReady, true)
+  assert.equal(byId['return-request'].readReady, true)
+  assert.equal(byId['return-request'].writeReady, true)
+  assert.equal(byId['return-authorization'].readReady, true)
+  assert.equal(byId['return-authorization'].writeReady, true)
+  assert.equal(byId['return-posting'].readReady, true)
+  assert.equal(byId['return-posting'].writeReady, true)
 
   const databaseEnabled = await call(handleCapabilitiesRoute, '/api/capabilities', { env: { FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: 'true' } })
   const enabledById = Object.fromEntries(databaseEnabled.payload.capabilities.map(row => [row.id, row]))
@@ -66,4 +78,12 @@ test('capability registry hides preview and unavailable modules by default', asy
   const inventoryOperationsEnabled = await call(handleCapabilitiesRoute, '/api/capabilities', { env: { FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_INVENTORY_OPERATIONS: 'true' } })
   const inventoryOperationsById = Object.fromEntries(inventoryOperationsEnabled.payload.capabilities.map(row => [row.id, row]))
   for (const id of ['stock-transfer', 'cycle-count', 'inventory-adjustment-document']) assert.equal(inventoryOperationsById[id].enabled, true)
+
+  const returnsEnabled = await call(handleCapabilitiesRoute, '/api/capabilities', { env: { FLOWCHAIN_PERSISTENCE_MODE: 'database', FLOWCHAIN_ENABLE_DB_RETURNS_QUARANTINE: 'true' } })
+  const returnsById = Object.fromEntries(returnsEnabled.payload.capabilities.map(row => [row.id, row]))
+  for (const id of ['quarantine-inventory', 'return-request', 'return-authorization', 'return-posting']) assert.equal(returnsById[id].enabled, true)
+
+  const returnsWithoutDatabase = await call(handleCapabilitiesRoute, '/api/capabilities', { env: { FLOWCHAIN_ENABLE_DB_RETURNS_QUARANTINE: 'true' } })
+  const returnsWithoutDatabaseById = Object.fromEntries(returnsWithoutDatabase.payload.capabilities.map(row => [row.id, row]))
+  for (const id of ['quarantine-inventory', 'return-request', 'return-authorization', 'return-posting']) assert.equal(returnsWithoutDatabaseById[id].enabled, false)
 })
