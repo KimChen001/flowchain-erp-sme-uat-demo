@@ -3,6 +3,7 @@ import { Copy, Save, Send, ShieldCheck } from "lucide-react";
 import { apiJson } from "../../lib/api-client";
 import { A, Card } from "../../components/ui";
 import { useI18n } from "../../i18n/I18n";
+import AuthorizationWorkbench from "./AuthorizationWorkbench";
 
 type Profile = {
   id: string;
@@ -210,6 +211,8 @@ export default function WorkspaceSettings({ view }: { view: string }) {
     { value: "zh-CN", label: "简体中文（中国）— zh-CN" },
     { value: "en-US", label: "English (United States) — en-US" },
   ];
+
+  if (view === "roles") return <AuthorizationWorkbench />;
 
   return <Card className="p-5" data-testid={`workspace-settings-${view}`}>
     <div className="flex flex-wrap items-start justify-between gap-3">
