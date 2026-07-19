@@ -285,6 +285,8 @@ export function createReturnGovernanceReadService({
   async function previewRequest(input, context, currentRequestId) {
     const resolved = await actor(context);
     assertAuthorized({ actor: resolved, permission: currentRequestId ? "returns.request.revise" : "returns.request.create", tenantId: resolved.tenantId });
+    if (text(input?.returnType) === "customer_return")
+      assertAuthorized({ actor: resolved, permission: "returns.customer_request.manage", tenantId: resolved.tenantId });
     const plan = await buildReturnRequestPlan({
       prisma,
       tenantId: resolved.tenantId,

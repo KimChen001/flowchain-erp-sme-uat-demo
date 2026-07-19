@@ -360,6 +360,8 @@ export function createReturnGovernanceCommandService({
         async (tx) => {
           const actor = await resolveProvisionedActor(tx, identity);
           assertAuthorized({ actor, permission: commandPermissions[commandType], tenantId: actor.tenantId });
+          if (normalized.payload.returnType === "customer_return")
+            assertAuthorized({ actor, permission: "returns.customer_request.manage", tenantId: actor.tenantId });
           const inside = replay(
             await tx.businessCommandExecution.findUnique({ where }),
             normalized.requestHash,

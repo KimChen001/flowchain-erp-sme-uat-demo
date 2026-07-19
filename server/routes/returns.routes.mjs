@@ -56,7 +56,8 @@ function knownError(ctx, error) {
     error instanceof SupplierReturnReadError ||
     error instanceof CustomerReturnCommandError ||
     error instanceof QuarantineReleaseCommandError ||
-    error instanceof PilotIdentityError
+    error instanceof PilotIdentityError ||
+    error?.name === "AuthorizationError"
   ) {
     ctx.send(ctx.res, error.status || 400, {
       code: error.code || "RETURN_GOVERNANCE_FAILED",

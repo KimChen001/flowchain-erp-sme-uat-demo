@@ -62,7 +62,8 @@ function knownError(ctx, error) {
   if (
     error instanceof OperationalFinanceError ||
     error instanceof OperationalFinanceReadError ||
-    error instanceof PilotIdentityError
+    error instanceof PilotIdentityError ||
+    error?.name === "AuthorizationError"
   ) {
     ctx.send(ctx.res, error.status || 400, {
       code: error.code || "OPERATIONAL_FINANCE_FAILED",

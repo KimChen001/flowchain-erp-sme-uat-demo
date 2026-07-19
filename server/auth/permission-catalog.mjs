@@ -23,6 +23,7 @@ const definitions = [
   ["returns.request.revise", "returns", "request", "revise", "medium"],
   ["returns.request.submit", "returns", "request", "submit", "high"],
   ["returns.request.cancel", "returns", "request", "cancel", "high"],
+  ["returns.customer_request.manage", "returns", "customer_request", "manage", "high"],
   ["returns.authorization.read", "returns", "authorization", "read", "low"],
   ["returns.authorization.approve", "returns", "authorization", "approve", "critical"],
   ["returns.authorization.reject", "returns", "authorization", "reject", "high"],

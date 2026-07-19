@@ -29,7 +29,7 @@ async function queryService(ctx) {
 }
 
 function sendStructuredError(ctx, error) {
-  if (!(error instanceof ReceivingCommandError) && !(error instanceof PilotIdentityError)) throw error
+  if (!(error instanceof ReceivingCommandError) && !(error instanceof PilotIdentityError) && error?.name !== 'AuthorizationError') throw error
   ctx.send(ctx.res, error.status || 400, { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) })
 }
 
@@ -86,7 +86,7 @@ async function handleFormalReceivingCommand(ctx) {
       : await service.reverseReceiving({ receivingDocumentId, idempotencyKey, reason: body.reason }, { identity: ctx.identity })
     ctx.send(ctx.res, 200, result)
   } catch (error) {
-    if (!(error instanceof ReceivingCommandError)) throw error
+    if (!(error instanceof ReceivingCommandError) && error?.name !== 'AuthorizationError') throw error
     ctx.send(ctx.res, error.status || 400, {
       code: error.code || 'RECEIVING_COMMAND_FAILED',
       message: error.message,

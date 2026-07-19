@@ -6,7 +6,7 @@ import { capabilityForEnvironment } from '../domain/capability-registry.mjs'
 
 const decode = (value) => decodeURIComponent(value)
 function errorResponse(ctx, error) {
-  if (!(error instanceof SalesWorkbenchError) && !(error instanceof PilotIdentityError)) throw error
+  if (!(error instanceof SalesWorkbenchError) && !(error instanceof PilotIdentityError) && error?.name !== 'AuthorizationError') throw error
   ctx.send(ctx.res, error.status || 400, { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) })
 }
 
