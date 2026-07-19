@@ -23,9 +23,20 @@ export class AuthorizationError extends Error {
 
 const text = (value) => String(value ?? "").trim()
 const unique = (items) => [...new Set((items || []).map(text).filter(Boolean))]
+const pendingTenantBackfills = new Map()
+
+async function ensureTenantBackfilled(prisma, tenantId, actorId) {
+  const existing = pendingTenantBackfills.get(tenantId)
+  if (existing) return existing
+  const pending = backfillTenantAuthorization(prisma, tenantId, { actorId })
+  pendingTenantBackfills.set(tenantId, pending)
+  try { return await pending } finally {
+    if (pendingTenantBackfills.get(tenantId) === pending) pendingTenantBackfills.delete(tenantId)
+  }
+}
 
 async function loadUserContext(prisma, identity) {
-  return prisma.user.findFirst({
+  const user = await prisma.user.findFirst({
     where: { id: text(identity.userId || identity.id), tenantId: text(identity.tenantId) },
     include: {
       warehouseScopes: true,
@@ -35,6 +46,7 @@ async function loadUserContext(prisma, identity) {
       },
     },
   })
+  return user ? { ...user, warehouseScopes: user.warehouseScopes || [], roleAssignments: user.roleAssignments || [] } : null
 }
 
 export async function resolveAuthorizationContext(identity, { prisma, performLegacyBackfill = true } = {}) {
@@ -42,8 +54,8 @@ export async function resolveAuthorizationContext(identity, { prisma, performLeg
     return { complete: false, authenticated: Boolean(identity?.authenticated), tenantId: text(identity?.tenantId), userId: text(identity?.userId || identity?.id), permissionCodes: new Set(), roleIds: [], inactiveRoleIds: [], readWarehouseIds: new Set(), operateWarehouseIds: new Set() }
   }
   let user = await loadUserContext(prisma, identity)
-  if (user && performLegacyBackfill && user.roleAssignments.length === 0) {
-    await backfillTenantAuthorization(prisma, user.tenantId, { actorId: user.id })
+  if (user && performLegacyBackfill && user.roleAssignments.length === 0 && typeof prisma.$transaction === "function") {
+    await ensureTenantBackfilled(prisma, user.tenantId, user.id)
     user = await loadUserContext(prisma, identity)
   }
   if (!user || user.status !== "active") {
@@ -135,8 +147,9 @@ export function buildAuthorizationDecisionSet({ actor, permissions = [], tenantI
 
 export function moduleVisibilityFor(actor, capabilities = {}, workspaceEnabledModuleIds = null) {
   return Object.fromEntries(Object.entries(moduleReadPermissions).map(([moduleId, permissions]) => {
-    const capability = capabilities[moduleId]
-    const capabilityAllowed = !capability || Boolean(capability.enabled && capability.readReady)
+    const capabilityIds = ({ "returns-quarantine": ["return-request", "return-authorization", "return-posting", "quarantine-inventory"], receiving: ["receiving-posting"], sales: ["sales-order-lifecycle", "sales-shipment-posting"], inventory: ["inventory", "stock-transfer", "cycle-count", "inventory-adjustment-document"], finance: ["finance"] })[moduleId] || [moduleId]
+    const registered = capabilityIds.map((id) => capabilities[id]).filter(Boolean)
+    const capabilityAllowed = registered.length === 0 || registered.some((capability) => Boolean(capability.enabled && capability.readReady))
     const preferenceAllowed = !workspaceEnabledModuleIds || workspaceEnabledModuleIds.has(moduleId)
     const permissionAllowed = permissions.some((permission) => actor?.permissionCodes?.has(permission))
     return [moduleId, { visible: capabilityAllowed && preferenceAllowed && permissionAllowed, capabilityAllowed, preferenceAllowed, permissionAllowed, readPermissions: permissions }]
