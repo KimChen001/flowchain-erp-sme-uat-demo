@@ -4,6 +4,7 @@ import {
   outboundDecimalUnits as units,
 } from "./outbound-transaction-policy.mjs";
 import { SalesWorkbenchError } from "./sales-order-workbench-service.mjs";
+import { can } from "../auth/authorization-service.mjs";
 
 const fail = (code, message, status = 400) => {
   throw new SalesWorkbenchError(code, message, status);
@@ -17,10 +18,7 @@ const activeReservation = (row) =>
   units(row.releasedQuantity);
 const allocatable = (row) =>
   activeReservation(row) - units(row.allocatedQuantity);
-const rolesCanMutate = (role) =>
-  ["admin", "manager", "business-specialist", "business_specialist"].includes(
-    role,
-  );
+const permission = (actor, code) => can({ actor, permission: code, tenantId: actor.tenantId });
 const canRead = (actor, warehouseId) =>
   actor.allWarehouses || actor.readWarehouseIds?.has(text(warehouseId));
 const canOperate = (actor, warehouseId) =>
@@ -497,7 +495,7 @@ export function createOutboundWorkbenchReadService({
       hiddenWarehouseFacts,
       limitationCodes: hiddenWarehouseFacts ? ["PARTIAL_WAREHOUSE_SCOPE"] : [],
     };
-    const mutable = rolesCanMutate(actor.role),
+    const mutable = ["sales_order.revise", "sales_order.submit", "shipment.prepare"].some((code) => permission(actor, code)),
       lifecycleEnabled = capabilities.lifecycle?.enabled === true,
       reservationEnabled = capabilities.reservation?.enabled === true,
       confirmed = order.workflowStatus === "confirmed",
@@ -507,32 +505,32 @@ export function createOutboundWorkbenchReadService({
     const availableActions = {
       canEditDraft:
         lifecycleEnabled &&
-        mutable &&
+        permission(actor, "sales_order.revise") &&
         order.workflowStatus === "draft" &&
         order.lines.length === 1,
       canConfirm:
         lifecycleEnabled &&
-        mutable &&
+        permission(actor, "sales_order.submit") &&
         order.workflowStatus === "draft" &&
         order.lines.length > 0,
-      canHold: lifecycleEnabled && mutable && confirmed,
+      canHold: lifecycleEnabled && permission(actor, "sales_order.revise") && confirmed,
       canResume:
-        lifecycleEnabled && mutable && order.workflowStatus === "on_hold",
+        lifecycleEnabled && permission(actor, "sales_order.revise") && order.workflowStatus === "on_hold",
       canReserve:
         reservationEnabled &&
-        mutable &&
+        permission(actor, "shipment.prepare") &&
         confirmed &&
         operateWarehouses.some((row) => units(row.availableQuantity) > 0n),
       canRelease:
         reservationEnabled &&
-        mutable &&
+        permission(actor, "shipment.prepare") &&
         confirmed &&
         reservations.some(
           (row) => canOperate(actor, row.warehouseId) && allocatable(row) > 0n,
         ),
       canCreateShipment:
         capabilities.shipmentDraft?.enabled === true &&
-        mutable &&
+        permission(actor, "shipment.prepare") &&
         confirmed &&
         reservations.some(
           (row) => canOperate(actor, row.warehouseId) && allocatable(row) > 0n,
@@ -697,26 +695,26 @@ export function createOutboundWorkbenchReadService({
     if (allocations.some((row) => !canRead(actor, row.warehouseId)))
       fail("WAREHOUSE_SCOPE_DENIED", "Shipment was not found.", 404);
     const orderData = await orderWorkbench(shipment.salesOrderId, context),
-      mutable = rolesCanMutate(actor.role),
+      mutable = ["shipment.prepare", "shipment.post", "shipment.reverse"].some((code) => permission(actor, code)),
       operate = allocations.every((row) => canOperate(actor, row.warehouseId)),
       confirmed = shipment.salesOrder.workflowStatus === "confirmed";
     const availableActions = {
       canCancel:
         capabilities.shipmentDraft?.enabled === true &&
-        mutable &&
+        permission(actor, "shipment.prepare") &&
         operate &&
         shipment.postingStatus === "unposted" &&
         ["draft", "ready"].includes(shipment.workflowStatus),
       canPost:
         capabilities.shipmentPosting?.enabled === true &&
-        mutable &&
+        permission(actor, "shipment.post") &&
         operate &&
         confirmed &&
         shipment.postingStatus === "unposted" &&
         shipment.workflowStatus === "ready",
       canReverse:
         capabilities.shipmentReversal?.enabled === true &&
-        mutable &&
+        permission(actor, "shipment.reverse") &&
         operate &&
         shipment.postingStatus === "posted",
       blockingReasonCodes: [],

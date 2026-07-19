@@ -7,6 +7,7 @@ import {
   buildQuarantineReleasePostingPlan,
   buildQuarantineReleaseReversalPlan,
 } from "./quarantine-release-transaction-policy.mjs";
+import { assertAuthorized } from "../auth/authorization-service.mjs";
 
 const publicValue = (value) => {
   if (typeof value === "bigint") return undefined;
@@ -56,6 +57,8 @@ export function createQuarantineReleaseReadService({
   const actor = (context) =>
     resolveProvisionedActor(prisma, context?.identity || context);
   async function response(plan, resolved, action) {
+    const permission = action === "reverse" ? "returns.quarantine.release_reverse" : action === "post" ? "returns.quarantine.release_post" : "returns.quarantine.release_prepare";
+    assertAuthorized({ actor: resolved, permission, tenantId: resolved.tenantId });
     if (plan.warehouseIds?.length)
       assertWarehouseAccess(resolved, plan.warehouseIds, "operate");
     return {

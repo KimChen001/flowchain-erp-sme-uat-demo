@@ -1,4 +1,5 @@
 import { resolveProvisionedActor } from "./pilot-identity.mjs";
+import { can } from "../auth/authorization-service.mjs";
 
 export class OperationalFinanceReadError extends Error {
   constructor(code, message, status = 400, details) {
@@ -14,14 +15,6 @@ const fail = (code, message, status = 400, details) => {
   throw new OperationalFinanceReadError(code, message, status, details);
 };
 const text = (value) => String(value ?? "").trim();
-const managerRoles = new Set(["admin", "manager"]);
-const draftRoles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-  "buyer",
-]);
 const serial = (value) =>
   value && typeof value.toISOString === "function"
     ? value.toISOString()
@@ -39,31 +32,40 @@ function actions(actor, capability, row, type) {
   if (!capability?.enabled) return [];
   if (type === "invoice") {
     const values = [];
-    if (draftRoles.has(actor.role) && row.status === "draft")
+    if (can({ actor, permission: "finance.supplier_invoice.revise", tenantId: actor.tenantId }) && row.status === "draft")
       values.push("revise", "submit");
-    if (draftRoles.has(actor.role) && row.status === "submitted")
+    if (can({ actor, permission: "finance.three_way_match.execute", tenantId: actor.tenantId }) && row.status === "submitted")
       values.push("match");
     if (
-      managerRoles.has(actor.role) &&
+      can({ actor, permission: "finance.supplier_invoice.approve", tenantId: actor.tenantId }) &&
       ["matched", "exception"].includes(row.status)
     )
       values.push("approve");
     return values;
   }
-  if (type === "payable" && managerRoles.has(actor.role)) {
-    if (row.status === "approved") return ["hold", "mark_export_ready"];
-    if (row.status === "export_ready") return ["hold"];
-    if (row.status === "held") return ["release"];
+  if (type === "payable") {
+    if (row.status === "approved") return [["hold", "finance.payable.hold"], ["mark_export_ready", "finance.payable.mark_export_ready"]].filter(([, permission]) => can({ actor, permission, tenantId: actor.tenantId })).map(([action]) => action);
+    if (row.status === "export_ready" && can({ actor, permission: "finance.payable.hold", tenantId: actor.tenantId })) return ["hold"];
+    if (row.status === "held" && can({ actor, permission: "finance.payable.release", tenantId: actor.tenantId })) return ["release"];
   }
   if (type === "creditMemo") {
-    if (managerRoles.has(actor.role) && row.status === "draft")
+    if (can({ actor, permission: "finance.supplier_credit.approve", tenantId: actor.tenantId }) && row.status === "draft")
       return ["approve"];
   }
   return [];
 }
 
+function protectFinanceFields(model, actor) {
+  const amountsVisible = can({ actor, permission: "finance.amounts.read", tenantId: actor.tenantId });
+  const partnerVisible = can({ actor, permission: "finance.partner_snapshot.read", tenantId: actor.tenantId });
+  const output = { ...model, fieldVisibility: { ...(model.fieldVisibility || {}) } };
+  for (const key of ["subtotalAmount", "enteredTaxAmount", "totalAmount", "varianceAmount", "originalAmount", "outstandingAmount", "approvedCreditAmount", "unitPrice", "lineAmount", "expectedValue", "actualValue", "varianceValue"]) if (key in output) { if (!amountsVisible) output[key] = null; output.fieldVisibility[key] = { visible: amountsVisible, reasonCode: amountsVisible ? null : "FIELD_PERMISSION_DENIED", permission: "finance.amounts.read" }; }
+  for (const key of ["supplierName", "supplierNameSnapshot"]) if (key in output) { if (!partnerVisible) output[key] = null; output.fieldVisibility[key] = { visible: partnerVisible, reasonCode: partnerVisible ? null : "FIELD_PERMISSION_DENIED", permission: "finance.partner_snapshot.read" }; }
+  return output;
+}
+
 function invoiceSummary(row, actor, capabilities) {
-  return {
+  return protectFinanceFields({
     id: row.id,
     invoiceNumber: row.invoiceNumber || row.id,
     supplierId: row.supplierId,
@@ -86,11 +88,11 @@ function invoiceSummary(row, actor, capabilities) {
       row,
       "invoice",
     ),
-  };
+  }, actor);
 }
 
 function payableSummary(row, actor, capabilities) {
-  return {
+  return protectFinanceFields({
     id: row.id,
     obligationNumber: row.obligationNumber,
     supplierInvoiceId: row.supplierInvoiceId,
@@ -110,11 +112,11 @@ function payableSummary(row, actor, capabilities) {
       row,
       "payable",
     ),
-  };
+  }, actor);
 }
 
 function creditMemoSummary(row, actor, capabilities) {
-  return {
+  return protectFinanceFields({
     id: row.id,
     creditMemoNumber: row.creditMemoNumber,
     supplierInvoiceId: row.supplierInvoiceId,
@@ -134,7 +136,7 @@ function creditMemoSummary(row, actor, capabilities) {
       row,
       "creditMemo",
     ),
-  };
+  }, actor);
 }
 
 export function createOperationalFinanceReadService({
@@ -330,7 +332,7 @@ export function createOperationalFinanceReadService({
       }),
     ]);
     return {
-      items: rows.map((row) => ({
+      items: rows.map((row) => protectFinanceFields({
         id: row.id,
         matchId: row.matchId,
         matchNumber: row.match.matchNumber,
@@ -347,10 +349,10 @@ export function createOperationalFinanceReadService({
         resolution: row.resolution,
         version: row.version,
         availableActions:
-          managerRoles.has(current.role) && row.status === "open"
+          can({ actor: current, permission: "finance.match_exception.review", tenantId: current.tenantId }) && row.status === "open"
             ? ["approve", "reject"]
             : [],
-      })),
+      }, current)),
       page,
       pageSize,
       total,

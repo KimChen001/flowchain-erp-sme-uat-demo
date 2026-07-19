@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { assertAuthorized } from "../auth/authorization-service.mjs";
 import { resolveProvisionedActor } from "./pilot-identity.mjs";
 import { OperationalFinanceError } from "./operational-finance-command-service.mjs";
 import {
@@ -14,13 +15,17 @@ const text = (value) => String(value ?? "").trim();
 const fail = (code, message, status = 400, details) => {
   throw new OperationalFinanceError(code, message, status, details);
 };
-const draftRoles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-]);
-const managerRoles = new Set(["admin", "manager"]);
+const commandPermission = (commandType) => ({
+  create_customer_invoice: "finance.customer_invoice.create",
+  submit_customer_invoice: "finance.customer_invoice.submit",
+  approve_customer_invoice: "finance.customer_invoice.approve",
+  issue_customer_invoice: "finance.customer_invoice.issue",
+  dispute_receivable: "finance.receivable.dispute",
+  resolve_dispute_receivable: "finance.receivable.resolve_dispute",
+  record_external_reference_receivable: "finance.receivable.record_external_reference",
+  create_customer_credit_note: "finance.customer_credit.create",
+  approve_customer_credit_note: "finance.customer_credit.approve",
+})[String(commandType || "").replaceAll("-", "_")];
 const stable = (value, parent = "") => {
   if (Array.isArray(value)) {
     const rows = value.map((entry) => stable(entry, parent));
@@ -76,22 +81,6 @@ const identity = (context) => {
   if (!next?.authenticated || !text(next.tenantId))
     fail("AUTHENTICATION_REQUIRED", "Authentication is required.", 401);
   return next;
-};
-const draftRole = (actor) => {
-  if (!draftRoles.has(actor.role))
-    fail(
-      "PERMISSION_DENIED",
-      "The authenticated role cannot prepare customer finance documents.",
-      403,
-    );
-};
-const manager = (actor) => {
-  if (!managerRoles.has(actor.role))
-    fail(
-      "PERMISSION_DENIED",
-      "Only an Admin or Manager can approve or govern receivables.",
-      403,
-    );
 };
 const enforce = (plan) => {
   if (!plan.allowed) {
@@ -318,6 +307,7 @@ export function createOperationalFinanceO2cCommandService({
       return await prisma.$transaction(
         async (tx) => {
           const actor = await resolveProvisionedActor(tx, signed);
+          assertAuthorized({ actor, permission: commandPermission(commandType), tenantId: actor.tenantId });
           const inside = replay(
             await tx.businessCommandExecution.findUnique({ where }),
             requestHash,
@@ -375,7 +365,7 @@ export function createOperationalFinanceO2cCommandService({
   async function previewCustomerInvoice(input, context) {
     enabled(env);
     const actor = await resolveProvisionedActor(prisma, identity(context));
-    draftRole(actor);
+    assertAuthorized({ actor, permission: "finance.customer_invoice.create", tenantId: actor.tenantId });
     return buildCustomerInvoicePlan({
       prisma,
       tenantId: actor.tenantId,
@@ -392,7 +382,6 @@ export function createOperationalFinanceO2cCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        draftRole(actor);
         const preview = enforce(
           await buildCustomerInvoicePlan({
             prisma: tx,
@@ -454,7 +443,7 @@ export function createOperationalFinanceO2cCommandService({
   async function invoiceStatePreview(invoiceId, input, context, action) {
     enabled(env);
     const actor = await resolveProvisionedActor(prisma, identity(context));
-    action === "submit" ? draftRole(actor) : manager(actor);
+    assertAuthorized({ actor, permission: `finance.customer_invoice.${action}`, tenantId: actor.tenantId });
     const invoice = await prisma.customerInvoice.findFirst({
       where: { id: invoiceId, tenantId: actor.tenantId },
       include: { lines: true },
@@ -538,7 +527,6 @@ export function createOperationalFinanceO2cCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        action === "submit" ? draftRole(actor) : manager(actor);
         await lockTenant(
           tx,
           "CustomerInvoice",
@@ -662,7 +650,7 @@ export function createOperationalFinanceO2cCommandService({
   async function previewReceivableAction(action, id, input, context) {
     enabled(env);
     const actor = await resolveProvisionedActor(prisma, identity(context));
-    manager(actor);
+    assertAuthorized({ actor, permission: action === "dispute" ? "finance.receivable.dispute" : action === "resolve-dispute" ? "finance.receivable.resolve_dispute" : "finance.receivable.record_external_reference", tenantId: actor.tenantId });
     const row = await prisma.receivableObligation.findFirst({
       where: { id, tenantId: actor.tenantId },
     });
@@ -684,7 +672,6 @@ export function createOperationalFinanceO2cCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        manager(actor);
         await lockTenant(
           tx,
           "ReceivableObligation",
@@ -743,7 +730,7 @@ export function createOperationalFinanceO2cCommandService({
   async function previewCustomerCreditNote(input, context) {
     enabled(env);
     const actor = await resolveProvisionedActor(prisma, identity(context));
-    draftRole(actor);
+    assertAuthorized({ actor, permission: "finance.customer_credit.create", tenantId: actor.tenantId });
     return buildCustomerCreditNotePlan({
       prisma,
       tenantId: actor.tenantId,
@@ -759,7 +746,6 @@ export function createOperationalFinanceO2cCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        draftRole(actor);
         await lockTenant(
           tx,
           "CustomerInvoice",
@@ -838,7 +824,7 @@ export function createOperationalFinanceO2cCommandService({
   async function previewApproveCustomerCreditNote(id, input, context) {
     enabled(env);
     const actor = await resolveProvisionedActor(prisma, identity(context));
-    manager(actor);
+    assertAuthorized({ actor, permission: "finance.customer_credit.approve", tenantId: actor.tenantId });
     const row = await prisma.customerCreditNote.findFirst({
       where: { id, tenantId: actor.tenantId },
     });
@@ -895,7 +881,6 @@ export function createOperationalFinanceO2cCommandService({
       context,
       payload,
       async (tx, actor, normalized, command) => {
-        manager(actor);
         await lockTenant(
           tx,
           "CustomerCreditNote",

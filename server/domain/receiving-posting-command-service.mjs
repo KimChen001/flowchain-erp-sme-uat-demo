@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { assertAuthorized } from '../auth/authorization-service.mjs'
+import { resolveProvisionedActor } from './pilot-identity.mjs'
 import {
   buildReceivingPostingPlan,
   buildReceivingReversalPlan,
@@ -95,9 +97,6 @@ function tenantContext(context = {}) {
   }
   const actorId = text(identity.userId)
   if (!actorId) fail('TENANT_CONTEXT_REQUIRED', 'A server-resolved actor is required.', 403)
-  if (!['admin', 'manager'].includes(text(identity.role).toLowerCase())) {
-    fail('PERMISSION_DENIED', 'The authenticated actor cannot post or reverse receiving.', 403)
-  }
   return { tenantId, actorId, identity }
 }
 
@@ -158,8 +157,6 @@ async function ensureTenantAndActor(tx, { tenantId, actorId, identity }, { allow
 
 async function assertOperateWarehouseScope(tx, scope, receivingDocument, { allowTestBypass = false } = {}) {
   if (allowTestBypass && scope.identity.source === 'test') return
-  const actor = await tx.user.findFirst({ where: { id: scope.actorId, tenantId: scope.tenantId }, select: { role: true } })
-  if (text(actor?.role).toLowerCase() === 'admin') return
   const warehouseIds = [...new Set([receivingDocument.warehouseId, ...receivingDocument.lines.map(line => line.warehouseId)].map(text).filter(Boolean))]
   const scopeCount = await tx.userWarehouseScope.count({ where: { tenantId: scope.tenantId, userId: scope.actorId, warehouseId: { in: warehouseIds }, accessLevel: 'operate' } })
   if (scopeCount !== warehouseIds.length) fail('WAREHOUSE_SCOPE_DENIED', 'The actor lacks operate access to every receiving warehouse.', 403)
@@ -292,6 +289,8 @@ export function createReceivingPostingCommandService({ prisma, now = () => new D
       return await prisma.$transaction(async (tx) => {
         const allowLocalActorBootstrap = text(env.NODE_ENV).toLowerCase() === 'test' || ['1', 'true', 'yes'].includes(text(env.FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP).toLowerCase())
         await ensureTenantAndActor(tx, scope, { allowLocalActorBootstrap })
+        const actor = await resolveProvisionedActor(tx, scope.identity)
+        assertAuthorized({ actor, permission: commandType, tenantId: scope.tenantId })
         const executionId = idFactory()
         await tx.businessCommandExecution.create({
           data: {

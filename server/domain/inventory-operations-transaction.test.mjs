@@ -672,7 +672,7 @@ if (!realPostgres) {
           },
           specialist,
         ),
-      (error) => error.code === "PERMISSION_DENIED",
+      (error) => error.code === "AUTHORIZATION_PERMISSION_DENIED",
     );
     const reviewed = await service.reviewCount(
       created.session.id,
@@ -845,7 +845,7 @@ if (!realPostgres) {
           },
           specialist,
         ),
-      (error) => error.code === "PERMISSION_DENIED",
+      (error) => error.code === "AUTHORIZATION_PERMISSION_DENIED",
     );
     const posted = await service.postAdjustment(
       created.adjustment.id,
@@ -1155,7 +1155,7 @@ if (!realPostgres) {
           },
           identity(ids.tenantId, ids.viewerId, "viewer"),
         ),
-      (error) => error.code === "PERMISSION_DENIED",
+      (error) => error.code === "AUTHORIZATION_PERMISSION_DENIED",
     );
     const read = createInventoryOperationsReadService({ prisma, capabilities });
     await assert.rejects(

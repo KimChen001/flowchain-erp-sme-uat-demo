@@ -1,5 +1,4 @@
 import { capabilityForEnvironment } from '../domain/capability-registry.mjs'
-import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 import { createReceivingPostingCommandService, ReceivingCommandError } from '../domain/receiving-posting-command-service.mjs'
 import { createReceivingWorkbenchQueryService } from '../domain/receiving-workbench-query-service.mjs'
 import { getPrismaClient } from '../persistence/prisma-client.mjs'
@@ -30,7 +29,7 @@ async function queryService(ctx) {
 }
 
 function sendStructuredError(ctx, error) {
-  if (!(error instanceof ReceivingCommandError) && !(error instanceof PilotIdentityError)) throw error
+  if (!(error instanceof ReceivingCommandError) && !(error instanceof PilotIdentityError) && error?.name !== 'AuthorizationError') throw error
   ctx.send(ctx.res, error.status || 400, { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) })
 }
 
@@ -78,22 +77,16 @@ async function handleFormalReceivingCommand(ctx) {
     sendCapabilityUnavailable(ctx, capabilityId)
     return true
   }
-  const authorization = authorizeMutation(ctx, {
-    allowedRoles: ['admin', 'manager'],
-    action: operation === 'post' ? 'post_receiving' : 'reverse_receiving',
-    resource: 'database-receiving',
-  })
-  if (authorization.blocked) return true
   const body = await ctx.readBody(ctx.req)
   const idempotencyKey = String(body.idempotencyKey || ctx.req.headers?.['idempotency-key'] || '').trim()
   try {
     const service = await commandService(ctx)
     const result = operation === 'post'
-      ? await service.postReceiving({ receivingDocumentId, idempotencyKey, expectedVersion: body.expectedVersion }, { identity: authorization.identity })
-      : await service.reverseReceiving({ receivingDocumentId, idempotencyKey, reason: body.reason }, { identity: authorization.identity })
+      ? await service.postReceiving({ receivingDocumentId, idempotencyKey, expectedVersion: body.expectedVersion }, { identity: ctx.identity })
+      : await service.reverseReceiving({ receivingDocumentId, idempotencyKey, reason: body.reason }, { identity: ctx.identity })
     ctx.send(ctx.res, 200, result)
   } catch (error) {
-    if (!(error instanceof ReceivingCommandError)) throw error
+    if (!(error instanceof ReceivingCommandError) && error?.name !== 'AuthorizationError') throw error
     ctx.send(ctx.res, error.status || 400, {
       code: error.code || 'RECEIVING_COMMAND_FAILED',
       message: error.message,

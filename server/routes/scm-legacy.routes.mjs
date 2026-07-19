@@ -70,6 +70,7 @@ import { handleCollaborationNotificationDraftsRoute } from "./collaboration-noti
 import { handleWorkspaceSetupConfigRoute } from "./workspace-setup-config.routes.mjs";
 import { handleSettingsRuntimeRoute } from "./settings-runtime.routes.mjs";
 import { handleUserRolePermissionVisibilityRoute } from "./user-role-permission-visibility.routes.mjs";
+import { handleAuthorizationRoute } from "./authorization.routes.mjs";
 import { handleWorkspaceBoundaryVisibilityRoute } from "./workspace-boundary-visibility.routes.mjs";
 import { handleAuditIntegrationHistoryRoute } from "./audit-integration-history.routes.mjs";
 import { handlePilotReadinessGovernanceRoute } from "./pilot-readiness-governance.routes.mjs";
@@ -1748,6 +1749,7 @@ export function createScmServer() {
         return;
       if (await handleWorkspaceSetupConfigRoute(routeContext)) return;
       if (await handlePilotWorkspaceRoute(routeContext)) return;
+      if (await handleAuthorizationRoute(routeContext)) return;
       if (await handleSettingsRuntimeRoute(routeContext)) return;
       if (await handleUserRolePermissionVisibilityRoute(routeContext)) return;
       if (await handleWorkspaceBoundaryVisibilityRoute(routeContext)) return;

@@ -44,6 +44,7 @@ async function seed() {
   await prisma.user.createMany({ data: [
     { id: actorId("admin@example.com"), tenantId, email: "admin@example.com", name: "Settings Admin", role: "admin", status: "active", jobTitle: "Operations Administrator", profileCompletedAt: new Date() },
     { id: actorId("manager@example.com"), tenantId, email: "manager@example.com", name: "Operations Manager", role: "manager", status: "active" },
+    { id: actorId("viewer@example.com"), tenantId, email: "viewer@example.com", name: "Read-only Viewer", role: "viewer", status: "active" },
   ] });
   await prisma.userWarehouseScope.create({ data: { id: randomUUID(), tenantId, userId: actorId("manager@example.com"), warehouseId: "settings-browser-warehouse", accessLevel: "operate" } });
 }

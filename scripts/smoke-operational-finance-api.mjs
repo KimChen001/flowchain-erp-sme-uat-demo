@@ -566,7 +566,7 @@ try {
     { token: viewerLogin.token, method: "POST", body: invoice },
   );
   assert.equal(viewerWrite.status, 403);
-  assert.equal(viewerWrite.payload.code, "PERMISSION_DENIED");
+  assert.equal(viewerWrite.payload.code, "AUTHORIZATION_PERMISSION_DENIED");
   assert.doesNotMatch(JSON.stringify(viewerWrite.payload), /P20(?:02|25|34)/);
   const unauthenticated = await raw(
     base,

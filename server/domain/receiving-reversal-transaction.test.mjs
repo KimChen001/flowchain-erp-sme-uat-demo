@@ -28,10 +28,10 @@ test('database receiving reversal preserves history, restores state, and fails c
         const reconciliation = await service.reconcileInventoryBalance({ tenantId: scenario.tenantId, sku: scenario.items[0].sku, warehouseId: scenario.warehouseId, location: 'A-01' })
         assert.equal(reconciliation.calculatedOnHandQuantity, '0.0000')
         assert.equal(reconciliation.matches, true)
-        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId } }), 2)
+        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId, entityType: 'ReceivingDocument' } }), 2)
         await expectCommandError(service.reverseReceiving({ receivingDocumentId: scenario.receivingDocumentId, idempotencyKey: 'reverse-twice', reason: 'Duplicate reversal' }, { identity: scenario.actor }), 'RECEIVING_ALREADY_REVERSED')
         assert.equal(await prisma.inventoryMovement.count({ where: { tenantId: scenario.tenantId, movementType: 'receipt_reversal' } }), 1)
-        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId } }), 2)
+        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId, entityType: 'ReceivingDocument' } }), 2)
       } finally {
         await cleanupReceivingScenario(prisma, scenario)
       }
@@ -57,7 +57,7 @@ test('database receiving reversal preserves history, restores state, and fails c
         assert.equal((await prisma.inventoryMovement.findUnique({ where: { id: posted.movements[0].id } })).quantityIn.toString(), '4')
         assert.equal((await prisma.inventoryBalance.findFirst({ where: { tenantId: scenario.tenantId } })).onHandQuantity.toString(), '4')
         assert.equal((await prisma.purchaseOrderLine.findUnique({ where: { id: scenario.poLines[0].id } })).receivedQuantity.toString(), '4')
-        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId } }), 1)
+        assert.equal(await prisma.auditLog.count({ where: { tenantId: scenario.tenantId, entityType: 'ReceivingDocument' } }), 1)
         assert.equal(await prisma.businessCommandExecution.count({ where: { tenantId: scenario.tenantId, commandType: 'receiving.reverse' } }), 0)
       } finally {
         await cleanupReceivingScenario(prisma, scenario)

@@ -348,7 +348,7 @@ test(
           { ...payload, idempotencyKey: "viewer-create" },
           viewer,
         ),
-        (error) => error.code === "PERMISSION_DENIED",
+        (error) => error.code === "AUTHORIZATION_PERMISSION_DENIED",
       );
       const issued = await issueInvoice(command, payload, "CNY");
       assert.equal(issued.invoice.status, "issued");

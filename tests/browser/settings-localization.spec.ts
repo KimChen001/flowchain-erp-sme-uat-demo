@@ -62,6 +62,7 @@ test("workspace language, locale, timezone, persistence, and disabled capability
   await page.getByTestId("settings-save").click();
   await expect(page.getByRole("heading", { name: "Company & Workspace", exact: true })).toBeVisible();
   await page.goto("/app/finance");
-  await expect(page.getByTestId("capability-route-blocked")).toContainText("is currently unavailable");
+  await expect(page.getByTestId("capability-route-blocked")).toContainText("Capability unavailable");
+  await expect(page.getByTestId("capability-route-blocked")).toContainText("Permission is present, but this capability is disabled.");
   await expect(page.getByTestId("capability-route-blocked")).not.toContainText("当前不可进入");
 });

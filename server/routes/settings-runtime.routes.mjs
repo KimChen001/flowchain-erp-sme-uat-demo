@@ -5,6 +5,7 @@ import { getPrismaClient } from '../persistence/prisma-client.mjs'
 import { resolveProvisionedActor } from '../domain/pilot-identity.mjs'
 import { mergeOperationalSettings, validateOperationalSection } from '../domain/workspace-settings-contract.mjs'
 import { roleLabel } from '../../shared/roles.mjs'
+import { assertAuthorized, can } from '../auth/authorization-service.mjs'
 
 function settingsRepository(ctx) {
   return ctx.repositories?.settingsRuntime || getDefaultSettingsRuntimeRepository()
@@ -38,14 +39,15 @@ async function getDatabaseSettings(ctx) {
   const actor = await resolveProvisionedActor(prisma, ctx.identity)
   const [tenant, users] = await Promise.all([
     prisma.tenant.findUnique({ where: { id: actor.tenantId } }),
-    actor.role === 'admin' ? prisma.user.findMany({ where: { tenantId: actor.tenantId }, orderBy: { email: 'asc' } }) : Promise.resolve([]),
+    can({ actor, permission: 'settings.users.read', tenantId: actor.tenantId }) ? prisma.user.findMany({ where: { tenantId: actor.tenantId }, orderBy: { email: 'asc' } }) : Promise.resolve([]),
   ])
   return { actor, prisma, settings: databaseSettings(tenant, users), tenant }
 }
 
 async function updateDatabaseSection(ctx, section, next) {
   const { actor, prisma, tenant } = await getDatabaseSettings(ctx)
-  if (!['admin', 'manager'].includes(actor.role)) throw Object.assign(new Error('Settings administration requires an admin or manager role.'), { code: 'PERMISSION_DENIED', status: 403 })
+  const permission = ({ company: 'settings.workspace.manage', numbering: 'settings.numbering.manage', review: 'settings.review_policy.manage', modules: 'settings.modules.manage' })[section] || 'settings.workspace.manage'
+  assertAuthorized({ actor, permission, tenantId: actor.tenantId })
   const validated = validateOperationalSection(section, next)
   return prisma.$transaction(async tx => {
     const current = await tx.tenant.findUnique({ where: { id: actor.tenantId } })
@@ -85,7 +87,7 @@ export async function handleSettingsRuntimeRoute(ctx) {
 
   const match = url.pathname.match(/^\/api\/settings-runtime\/([a-z-]+)$/)
   if (req.method === 'PATCH' && match) {
-    const authorization = authorizeMutation(ctx, { allowedRoles: ['admin', 'manager'], action: 'settings.section.update', resource: 'settings' })
+    const authorization = databaseMode(ctx) ? { blocked: false, identity: ctx.identity } : authorizeMutation(ctx, { allowedRoles: ['admin', 'manager'], action: 'settings.section.update', resource: 'settings' })
     if (authorization.blocked) return true
     try {
       const body = await readBody(req)

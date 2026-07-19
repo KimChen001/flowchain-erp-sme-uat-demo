@@ -5,6 +5,7 @@ import {
   createSupplierReturnCommandService,
   SupplierReturnCommandError,
 } from "./supplier-return-command-service.mjs";
+import { createSupplierReturnReadService } from "./supplier-return-read-service.mjs";
 import { createPrismaClient } from "../persistence/prisma-client.mjs";
 
 const databaseUrl =
@@ -709,9 +710,7 @@ test(
           },
           { identity: identity(viewerId, "viewer") },
         ),
-        (error) =>
-          error instanceof SupplierReturnCommandError &&
-          error.code === "PERMISSION_DENIED",
+        (error) => error.code === "AUTHORIZATION_PERMISSION_DENIED",
       );
       await assert.rejects(
         service.createPostingDraft(
@@ -770,6 +769,79 @@ test(
           movementType: "supplier_return_out",
         },
       });
+      const readService = createSupplierReturnReadService({
+        prisma,
+        capability: { enabled: true, readReady: true, writeReady: true },
+      });
+      const workbench = () => readService.postingWorkbench(tamperDraft.entityId, manager);
+      const baselineReconciliation = (await workbench()).reconciliation;
+      assert.equal(baselineReconciliation.status, "matched", JSON.stringify(baselineReconciliation.lines.flatMap((line) => line.checks.filter((check) => check.status !== "matched"))));
+      const assertTamperDetected = async (label, mutate, restore) => {
+        await mutate();
+        try {
+          assert.equal((await workbench()).reconciliation.status, "mismatch", `${label} must be detected`);
+        } finally {
+          await restore();
+        }
+      };
+      const movementMutations = [
+        ["source document type", { sourceDocumentType: "TamperedDocument" }],
+        ["source document id", { sourceDocumentId: "tampered-posting" }],
+        ["source document line", { sourceDocumentLineId: "tampered-line" }],
+        ["sku", { sku: "TAMPERED-SKU" }],
+        ["unit", { unit: "case" }],
+        ["location", { location: "TAMPERED" }],
+        ["location key", { locationKey: "tampered-location" }],
+        ["posting batch", { postingBatchId: "tampered-batch" }],
+        ["quantity in", { quantityIn: "0.2500" }],
+        ["quantity out", { quantityOut: "0.5000" }],
+        ["adjustment quantity", { adjustmentQty: "0.2500" }],
+      ];
+      for (const [label, data] of movementMutations) {
+        await assertTamperDetected(
+          label,
+          () => prisma.inventoryMovement.update({ where: { id: originalMovement.id }, data }),
+          () => prisma.inventoryMovement.update({ where: { id: originalMovement.id }, data: originalMovement }),
+        );
+      }
+      for (const [label, metadata] of [
+        ["movement balance type", { ...originalMovement.metadata, balanceType: "quarantine" }],
+        ["movement balance id", { ...originalMovement.metadata, balanceId: "tampered-balance" }],
+      ]) {
+        await assertTamperDetected(
+          label,
+          () => prisma.inventoryMovement.update({ where: { id: originalMovement.id }, data: { metadata } }),
+          () => prisma.inventoryMovement.update({ where: { id: originalMovement.id }, data: { metadata: originalMovement.metadata } }),
+        );
+      }
+      const postAudit = await prisma.auditLog.findFirst({ where: { entityId: tamperDraft.entityId, action: "supplier_return_posted" } });
+      const originalAuditMetadata = structuredClone(postAudit.metadata);
+      const impactMutations = [
+        ["missing balance impacts", (metadata) => ({ ...metadata, balanceImpacts: [] })],
+        ["impact quantity", (metadata) => ({ ...metadata, balanceImpacts: metadata.balanceImpacts.map((impact) => ({ ...impact, quantity: "0.5000" })) })],
+        ["impact on hand before", (metadata) => ({ ...metadata, balanceImpacts: metadata.balanceImpacts.map((impact) => ({ ...impact, onHandBefore: "999.0000" })) })],
+        ["impact on hand after", (metadata) => ({ ...metadata, balanceImpacts: metadata.balanceImpacts.map((impact) => ({ ...impact, onHandAfter: "999.0000" })) })],
+        ["impact available before", (metadata) => ({ ...metadata, balanceImpacts: metadata.balanceImpacts.map((impact) => ({ ...impact, availableBefore: "999.0000" })) })],
+        ["impact available after", (metadata) => ({ ...metadata, balanceImpacts: metadata.balanceImpacts.map((impact) => ({ ...impact, availableAfter: "999.0000" })) })],
+        ["impact reserved after", (metadata) => ({ ...metadata, balanceImpacts: metadata.balanceImpacts.map((impact) => ({ ...impact, reservedAfter: "999.0000" })) })],
+      ];
+      for (const [label, change] of impactMutations) {
+        await assertTamperDetected(
+          label,
+          () => prisma.auditLog.update({ where: { id: postAudit.id }, data: { metadata: change(structuredClone(originalAuditMetadata)) } }),
+          () => prisma.auditLog.update({ where: { id: postAudit.id }, data: { metadata: originalAuditMetadata } }),
+        );
+      }
+      for (const [label, model, id, tamperedStatus] of [
+        ["authorization workflow", prisma.returnAuthorization, tamperAuthorization.id, "approved"],
+        ["request workflow", prisma.returnRequest, tamperAuthorization.returnRequestId, "authorized"],
+      ]) {
+        await assertTamperDetected(
+          label,
+          () => model.update({ where: { id }, data: { workflowStatus: tamperedStatus } }),
+          () => model.update({ where: { id }, data: { workflowStatus: "executed" } }),
+        );
+      }
       await prisma.inventoryMovement.update({
         where: { id: originalMovement.id },
         data: {
@@ -815,6 +887,25 @@ test(
         tamperAuthorization.returnRequestId,
         manager,
         "reverse-tamper-cleanup-b2",
+      );
+      const reversedReconciliation = (await workbench()).reconciliation;
+      assert.equal(reversedReconciliation.status, "matched", JSON.stringify(reversedReconciliation.lines.flatMap((line) => line.checks.filter((check) => check.status !== "matched"))));
+      const reversedOriginal = await prisma.inventoryMovement.findUnique({ where: { id: originalMovement.id } });
+      const compensation = await prisma.inventoryMovement.findFirst({ where: { reversalOfMovementId: originalMovement.id } });
+      await assertTamperDetected(
+        "reversal forward link",
+        () => prisma.inventoryMovement.update({ where: { id: originalMovement.id }, data: { reversedByMovementId: null } }),
+        () => prisma.inventoryMovement.update({ where: { id: originalMovement.id }, data: { reversedByMovementId: reversedOriginal.reversedByMovementId } }),
+      );
+      await assertTamperDetected(
+        "reversal inverse quantity",
+        () => prisma.inventoryMovement.update({ where: { id: compensation.id }, data: { quantityIn: "0.5000" } }),
+        () => prisma.inventoryMovement.update({ where: { id: compensation.id }, data: { quantityIn: compensation.quantityIn } }),
+      );
+      await assertTamperDetected(
+        "reversal batch separation",
+        () => prisma.inventoryMovement.update({ where: { id: compensation.id }, data: { postingBatchId: originalMovement.postingBatchId } }),
+        () => prisma.inventoryMovement.update({ where: { id: compensation.id }, data: { postingBatchId: compensation.postingBatchId } }),
       );
 
       const rollbackAuthorization = await createAuthorization(prisma, {

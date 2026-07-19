@@ -739,7 +739,7 @@ if (!realPostgres) {
       ["0.0000", "4.0000"],
     );
     assert.equal(
-      await prisma.auditLog.count({ where: { tenantId: ids.tenantId } }),
+      await prisma.auditLog.count({ where: { tenantId: ids.tenantId, module: "sales_outbound" } }),
       4,
     );
     assert.equal(
@@ -1519,7 +1519,7 @@ if (!realPostgres) {
             identity(denied.tenantId, denied.actorId, role),
           ),
         (error) =>
-          ["PERMISSION_DENIED", "WAREHOUSE_SCOPE_DENIED"].includes(error.code),
+          ["PERMISSION_DENIED", "AUTHORIZATION_PERMISSION_DENIED", "WAREHOUSE_SCOPE_DENIED"].includes(error.code),
       );
     }
     await assertReconciled(ids);

@@ -8,6 +8,7 @@ import {
   returnGovernanceFixed as fixed,
   returnGovernanceUnits as units,
 } from "./return-governance-policy.mjs";
+import { assertAuthorized, can } from "../auth/authorization-service.mjs";
 
 export class ReturnGovernanceReadError extends Error {
   constructor(code, message, status = 400, details) {
@@ -24,14 +25,6 @@ const fail = (code, message, status = 400, details) => {
 };
 const text = (value) => String(value ?? "").trim();
 const iso = (value) => (value ? new Date(value).toISOString() : null);
-const requestRoles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-  "buyer",
-]);
-const managerRoles = new Set(["admin", "manager"]);
 
 function page(query = {}) {
   const number = Math.max(1, Number.parseInt(query.page, 10) || 1);
@@ -68,12 +61,7 @@ function canRead(actor, ids) {
   );
 }
 
-function canRequest(actor, returnType) {
-  return (
-    requestRoles.has(actor.role) &&
-    (actor.role !== "buyer" || returnType === "supplier_return")
-  );
-}
+function permission(actor, code) { return can({ actor, permission: code, tenantId: actor.tenantId }); }
 
 function requestModel(request) {
   return {
@@ -153,8 +141,7 @@ function actionModel(actor, request, capabilities) {
   const requestEnabled = capabilities["return-request"]?.enabled === true;
   const authorizationEnabled =
     capabilities["return-authorization"]?.enabled === true;
-  const requestAllowed = canRequest(actor, request.returnType);
-  const manager = managerRoles.has(actor.role);
+  const requestAllowed = permission(actor, "returns.request.revise");
   const activeAuthorization = request.authorizations?.some((row) =>
     ["draft", "approved", "partially_executed"].includes(row.workflowStatus),
   );
@@ -164,11 +151,11 @@ function actionModel(actor, request, capabilities) {
   return {
     revise:
       requestEnabled &&
-      requestAllowed &&
+      permission(actor, "returns.request.submit") &&
       request.workflowStatus === "draft",
     submit:
       requestEnabled &&
-      requestAllowed &&
+      permission(actor, "returns.request.cancel") &&
       request.workflowStatus === "draft",
     cancel:
       requestEnabled &&
@@ -177,12 +164,12 @@ function actionModel(actor, request, capabilities) {
       !activeAuthorization,
     authorize:
       authorizationEnabled &&
-      manager &&
+      permission(actor, "returns.authorization.approve") &&
       (request.workflowStatus === "submitted" || releaseAuthorizationAllowed) &&
       !activeAuthorization,
     reject:
       authorizationEnabled &&
-      manager &&
+      permission(actor, "returns.authorization.reject") &&
       request.workflowStatus === "submitted" &&
       !activeAuthorization,
     blockingReasonCodes: [
@@ -199,21 +186,20 @@ function actionModel(actor, request, capabilities) {
 
 function authorizationActions(actor, authorization, capabilities, now) {
   const enabled = capabilities["return-authorization"]?.enabled === true;
-  const manager = managerRoles.has(actor.role);
   const unexecuted = ["draft", "approved"].includes(
     authorization.workflowStatus,
   );
   return {
-    cancel: enabled && manager && unexecuted && !authorization.postings.length,
+    cancel: enabled && permission(actor, "returns.authorization.cancel") && unexecuted && !authorization.postings.length,
     expire:
       enabled &&
-      manager &&
+      permission(actor, "returns.authorization.expire") &&
       unexecuted &&
       !authorization.postings.length &&
       Boolean(authorization.expiresAt && authorization.expiresAt <= now),
     blockingReasonCodes: [
       ...(!enabled ? ["RETURN_AUTHORIZATION_CAPABILITY_NOT_AVAILABLE"] : []),
-      ...(!manager ? ["PERMISSION_DENIED"] : []),
+      ...(!permission(actor, "returns.authorization.cancel") && !permission(actor, "returns.authorization.expire") ? ["PERMISSION_DENIED"] : []),
     ],
   };
 }
@@ -298,12 +284,9 @@ export function createReturnGovernanceReadService({
 
   async function previewRequest(input, context, currentRequestId) {
     const resolved = await actor(context);
-    if (!canRequest(resolved, text(input.returnType)))
-      fail(
-        "PERMISSION_DENIED",
-        "The authenticated role cannot create this return request type.",
-        403,
-      );
+    assertAuthorized({ actor: resolved, permission: currentRequestId ? "returns.request.revise" : "returns.request.create", tenantId: resolved.tenantId });
+    if (text(input?.returnType) === "customer_return")
+      assertAuthorized({ actor: resolved, permission: "returns.customer_request.manage", tenantId: resolved.tenantId });
     const plan = await buildReturnRequestPlan({
       prisma,
       tenantId: resolved.tenantId,
@@ -323,8 +306,7 @@ export function createReturnGovernanceReadService({
     });
     if (!request)
       fail("RETURN_REQUEST_NOT_FOUND", "Return request was not found.", 404);
-    if (!canRequest(resolved, request.returnType))
-      fail("PERMISSION_DENIED", "Return request access is denied.", 403);
+    assertAuthorized({ actor: resolved, permission: "returns.request.submit", tenantId: resolved.tenantId });
     assertWarehouseAccess(resolved, warehouseIds(request.lines), "read", {
       maskExistence: true,
     });
@@ -364,7 +346,7 @@ export function createReturnGovernanceReadService({
       maskExistence: true,
     });
     const blockingIssues = [];
-    if (!canRequest(resolved, request.returnType))
+    if (!permission(resolved, "returns.request.cancel"))
       blockingIssues.push({
         code: "PERMISSION_DENIED",
         message: "Return request access is denied.",
@@ -406,12 +388,7 @@ export function createReturnGovernanceReadService({
 
   async function previewAuthorization(requestId, input, context) {
     const resolved = await actor(context);
-    if (!managerRoles.has(resolved.role))
-      fail(
-        "PERMISSION_DENIED",
-        "Only an Admin or Manager can authorize returns.",
-        403,
-      );
+    assertAuthorized({ actor: resolved, permission: "returns.authorization.approve", tenantId: resolved.tenantId });
     const plan = await buildReturnAuthorizationPlan({
       prisma,
       tenantId: resolved.tenantId,
@@ -430,6 +407,7 @@ export function createReturnGovernanceReadService({
 
   async function listRequests(query, context) {
     const resolved = await actor(context);
+    assertAuthorized({ actor: resolved, permission: "returns.request.read", tenantId: resolved.tenantId });
     const paging = page(query);
     const where = {
       tenantId: resolved.tenantId,
@@ -486,6 +464,7 @@ export function createReturnGovernanceReadService({
 
   async function listAuthorizations(query, context) {
     const resolved = await actor(context);
+    assertAuthorized({ actor: resolved, permission: "returns.authorization.read", tenantId: resolved.tenantId });
     const paging = page(query);
     const candidates = await prisma.returnAuthorization.findMany({
       where: {
@@ -541,6 +520,7 @@ export function createReturnGovernanceReadService({
 
   async function listPostings(query, context) {
     const resolved = await actor(context);
+    assertAuthorized({ actor: resolved, permission: "returns.posting.read", tenantId: resolved.tenantId });
     const paging = page(query);
     const candidates = await prisma.returnPostingDocument.findMany({
       where: {
@@ -709,8 +689,8 @@ export function createReturnGovernanceReadService({
         supplier_return: supplierSources,
       },
       availableActions: {
-        createCustomerReturn: canRequest(resolved, "customer_return"),
-        createSupplierReturn: canRequest(resolved, "supplier_return"),
+        createCustomerReturn: permission(resolved, "returns.request.create"),
+        createSupplierReturn: permission(resolved, "returns.request.create"),
       },
       selectionPolicy: {
         explicitSourceDocumentRequired: true,
@@ -722,6 +702,7 @@ export function createReturnGovernanceReadService({
 
   async function requestWorkbench(requestId, context) {
     const resolved = await actor(context);
+    assertAuthorized({ actor: resolved, permission: "returns.request.read", tenantId: resolved.tenantId });
     const request = await prisma.returnRequest.findFirst({
       where: { id: text(requestId), tenantId: resolved.tenantId },
       include: {
@@ -768,6 +749,7 @@ export function createReturnGovernanceReadService({
 
   async function authorizationWorkbench(authorizationId, context) {
     const resolved = await actor(context);
+    assertAuthorized({ actor: resolved, permission: "returns.authorization.read", tenantId: resolved.tenantId });
     const authorization = await prisma.returnAuthorization.findFirst({
       where: { id: text(authorizationId), tenantId: resolved.tenantId },
       include: {

@@ -237,7 +237,8 @@ export async function handleInventoryOperationsRoute(ctx) {
     const known =
       error instanceof InventoryOperationsError ||
       error instanceof InventoryOperationsReadError ||
-      error instanceof PilotIdentityError;
+      error instanceof PilotIdentityError ||
+      error?.name === "AuthorizationError";
     send(res, known ? error.status || 400 : 500, {
       code: known ? error.code : "INVENTORY_OPERATION_FAILED",
       message: known ? error.message : "Inventory operation failed.",

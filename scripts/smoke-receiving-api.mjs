@@ -113,7 +113,7 @@ async function main() {
     assert.equal(await prisma.inventoryMovement.count({ where: { tenantId } }), 2)
     assert.equal((await prisma.inventoryBalance.findFirst({ where: { tenantId } })).onHandQuantity.toString(), '0')
     assert.equal((await prisma.purchaseOrderLine.findUnique({ where: { id: 'smoke-po-line' } })).receivedQuantity.toString(), '0')
-    assert.equal(await prisma.auditLog.count({ where: { tenantId } }), 2)
+    assert.equal(await prisma.auditLog.count({ where: { tenantId, entityType: 'ReceivingDocument' } }), 2)
     assert.equal(await prisma.businessCommandExecution.count({ where: { tenantId, status: 'completed' } }), 2)
     const importPreview = await request(base, '/api/imports/preview', { token, method: 'POST', body: { importType: 'items', fileName: 'pilot-items.csv', fileSize: 128, mapping: {}, rows: [{ sku: 'SMOKE-IMPORTED-SKU', name: 'Imported Smoke Item', unit: 'EA', status: 'active' }] } })
     assert.equal(importPreview.status, 'ready'); assert.match(importPreview.id, /^pilot-/)

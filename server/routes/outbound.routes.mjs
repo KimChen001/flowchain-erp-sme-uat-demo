@@ -1,5 +1,4 @@
 import { capabilityForEnvironment } from '../domain/capability-registry.mjs'
-import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 import { createOutboundPostingCommandService, OutboundCommandError } from '../domain/outbound-posting-command-service.mjs'
 import { createOutboundQueryService, OutboundQueryError } from '../domain/outbound-query-service.mjs'
 import { PilotIdentityError } from '../domain/pilot-identity.mjs'
@@ -13,7 +12,7 @@ function unavailable(ctx, capabilityId) {
 }
 
 function structuredError(ctx, error) {
-  if (!(error instanceof OutboundCommandError) && !(error instanceof OutboundQueryError) && !(error instanceof PilotIdentityError)) throw error
+  if (!(error instanceof OutboundCommandError) && !(error instanceof OutboundQueryError) && !(error instanceof PilotIdentityError) && error?.name !== 'AuthorizationError') throw error
   ctx.send(ctx.res, error.status || 400, { code: error.code || 'OUTBOUND_COMMAND_FAILED', message: error.message, ...(error.details ? { details: error.details } : {}) })
 }
 
@@ -65,10 +64,6 @@ export async function handleOutboundRoute(ctx) {
   if (previewCapability && !capabilityForEnvironment(previewCapability, env)?.enabled) { unavailable(ctx, previewCapability); return true }
   const commandCapability = reserve || release ? 'sales-reservation' : draft || cancel ? 'sales-shipment-draft' : post ? 'sales-shipment-posting' : reverse ? 'sales-shipment-reversal' : null
   if (commandCapability && !capabilityForEnvironment(commandCapability, env)?.enabled) { unavailable(ctx, commandCapability); return true }
-  const authorization = commandCapability
-    ? authorizeMutation(ctx, { allowedRoles: ['admin', 'manager', 'business-specialist', 'business_specialist'], action: commandCapability, resource: 'database-outbound' })
-    : null
-  if (authorization?.blocked) return true
   try {
     const needQuery = Boolean(orderState || shipmentState || previewCapability)
     const needCommand = Boolean(commandCapability)
@@ -85,12 +80,12 @@ export async function handleOutboundRoute(ctx) {
     else if (reversePreview) ctx.send(ctx.res, 200, await query.previewShipmentReversal({ shipmentId: decodeURIComponent(reversePreview[1]), reason: body.reason }, context))
     else {
       const idempotencyKey = String(body.idempotencyKey || ctx.req.headers?.['idempotency-key'] || '').trim()
-      if (reserve) ctx.send(ctx.res, 200, await command.reserveSalesOrderInventory({ salesOrderId: decodeURIComponent(reserve[1]), expectedOrderVersion: body.expectedOrderVersion, allocations: body.allocations || [], idempotencyKey }, { identity: authorization.identity }))
-      else if (release) ctx.send(ctx.res, 200, await command.releaseSalesOrderReservation({ salesOrderId: decodeURIComponent(release[1]), expectedOrderVersion: body.expectedOrderVersion, releases: body.releases || [], reason: body.reason, idempotencyKey }, { identity: authorization.identity }))
-      else if (draft) ctx.send(ctx.res, 201, await command.createShipmentDraft({ salesOrderId: decodeURIComponent(draft[1]), shipmentNumber: body.shipmentNumber, expectedOrderVersion: body.expectedOrderVersion, lines: body.lines || [], idempotencyKey }, { identity: authorization.identity }))
-      else if (cancel) ctx.send(ctx.res, 200, await command.cancelShipmentDraft({ shipmentId: decodeURIComponent(cancel[1]), expectedShipmentVersion: body.expectedShipmentVersion, reason: body.reason, idempotencyKey }, { identity: authorization.identity }))
-      else if (post) ctx.send(ctx.res, 200, await command.postShipment({ shipmentId: decodeURIComponent(post[1]), expectedShipmentVersion: body.expectedShipmentVersion, idempotencyKey }, { identity: authorization.identity }))
-      else if (reverse) ctx.send(ctx.res, 200, await command.reverseShipment({ shipmentId: decodeURIComponent(reverse[1]), expectedShipmentVersion: body.expectedShipmentVersion, reason: body.reason, idempotencyKey }, { identity: authorization.identity }))
+      if (reserve) ctx.send(ctx.res, 200, await command.reserveSalesOrderInventory({ salesOrderId: decodeURIComponent(reserve[1]), expectedOrderVersion: body.expectedOrderVersion, allocations: body.allocations || [], idempotencyKey }, { identity: ctx.identity }))
+      else if (release) ctx.send(ctx.res, 200, await command.releaseSalesOrderReservation({ salesOrderId: decodeURIComponent(release[1]), expectedOrderVersion: body.expectedOrderVersion, releases: body.releases || [], reason: body.reason, idempotencyKey }, { identity: ctx.identity }))
+      else if (draft) ctx.send(ctx.res, 201, await command.createShipmentDraft({ salesOrderId: decodeURIComponent(draft[1]), shipmentNumber: body.shipmentNumber, expectedOrderVersion: body.expectedOrderVersion, lines: body.lines || [], idempotencyKey }, { identity: ctx.identity }))
+      else if (cancel) ctx.send(ctx.res, 200, await command.cancelShipmentDraft({ shipmentId: decodeURIComponent(cancel[1]), expectedShipmentVersion: body.expectedShipmentVersion, reason: body.reason, idempotencyKey }, { identity: ctx.identity }))
+      else if (post) ctx.send(ctx.res, 200, await command.postShipment({ shipmentId: decodeURIComponent(post[1]), expectedShipmentVersion: body.expectedShipmentVersion, idempotencyKey }, { identity: ctx.identity }))
+      else if (reverse) ctx.send(ctx.res, 200, await command.reverseShipment({ shipmentId: decodeURIComponent(reverse[1]), expectedShipmentVersion: body.expectedShipmentVersion, reason: body.reason, idempotencyKey }, { identity: ctx.identity }))
     }
   } catch (error) { structuredError(ctx, error) }
   return true

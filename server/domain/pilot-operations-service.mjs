@@ -1,4 +1,5 @@
 import { PilotIdentityError, resolveProvisionedActor } from './pilot-identity.mjs'
+import { assertAuthorized } from '../auth/authorization-service.mjs'
 
 const fail = (code, message, status = 400) => { throw new PilotIdentityError(code, message, status) }
 const DATASETS = new Set(['receiving_documents', 'inventory_movements', 'inventory_balances', 'import_issues'])
@@ -8,7 +9,7 @@ export function createPilotOperationsService({ prisma, now = () => new Date() } 
 
   async function diagnostics(identity) {
     const actor = await resolveProvisionedActor(prisma, identity)
-    if (actor.role !== 'admin') fail('PERMISSION_DENIED', 'Pilot diagnostics require admin.', 403)
+    assertAuthorized({ actor, permission: 'settings.diagnostics.read', tenantId: actor.tenantId })
     const [tenant, activeWarehouses, activeUsers, admins, unscopedUsers, pendingImports, failedImports, migrationRows] = await Promise.all([
       prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { workspaceCompletedAt: true, openingBalanceLockedAt: true } }),
       prisma.warehouse.count({ where: { tenantId: actor.tenantId, status: 'active' } }),
@@ -32,7 +33,7 @@ export function createPilotOperationsService({ prisma, now = () => new Date() } 
 
   async function exportDataset(dataset, identity) {
     const actor = await resolveProvisionedActor(prisma, identity)
-    if (!['admin', 'manager'].includes(actor.role)) fail('PERMISSION_DENIED', 'Pilot exports require manager or admin.', 403)
+    assertAuthorized({ actor, permission: 'settings.export.read', tenantId: actor.tenantId })
     if (!DATASETS.has(dataset)) fail('EXPORT_DATASET_UNSUPPORTED', 'Pilot export dataset is not supported.', 404)
     const warehouseWhere = actor.allWarehouses ? {} : { warehouseId: { in: [...actor.readWarehouseIds] } }
     let rows = []

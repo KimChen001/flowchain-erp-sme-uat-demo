@@ -7,6 +7,7 @@ import {
   buildReturnAuthorizationPlan,
   buildReturnRequestPlan,
 } from "./return-governance-policy.mjs";
+import { assertAuthorized } from "../auth/authorization-service.mjs";
 
 export class ReturnGovernanceError extends Error {
   constructor(code, message, status = 400, details) {
@@ -22,14 +23,16 @@ const fail = (code, message, status = 400, details) => {
   throw new ReturnGovernanceError(code, message, status, details);
 };
 const text = (value) => String(value ?? "").trim();
-const requestRoles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-  "buyer",
-]);
-const managerRoles = new Set(["admin", "manager"]);
+const commandPermissions = Object.freeze({
+  create_return_request: "returns.request.create",
+  revise_return_request: "returns.request.revise",
+  submit_return_request: "returns.request.submit",
+  cancel_return_request: "returns.request.cancel",
+  authorize_return_request: "returns.authorization.approve",
+  reject_return_request: "returns.authorization.reject",
+  cancel_return_authorization: "returns.authorization.cancel",
+  expire_return_authorization: "returns.authorization.expire",
+});
 const executionWhere = (tenantId, commandType, idempotencyKey) => ({
   tenantId_commandType_idempotencyKey: {
     tenantId,
@@ -220,30 +223,6 @@ function assertEnabled(env) {
     );
 }
 
-function assertRequestRole(actor, returnType) {
-  if (!requestRoles.has(actor.role))
-    fail(
-      "PERMISSION_DENIED",
-      "The authenticated role cannot manage return requests.",
-      403,
-    );
-  if (actor.role === "buyer" && returnType !== "supplier_return")
-    fail(
-      "PERMISSION_DENIED",
-      "Buyer access is limited to supplier return requests.",
-      403,
-    );
-}
-
-function assertManager(actor) {
-  if (!managerRoles.has(actor.role))
-    fail(
-      "PERMISSION_DENIED",
-      "Only an Admin or Manager can govern return authorizations.",
-      403,
-    );
-}
-
 function enforce(plan) {
   if (!plan.allowed) {
     const first = plan.blockingIssues[0];
@@ -380,6 +359,9 @@ export function createReturnGovernanceCommandService({
       return await prisma.$transaction(
         async (tx) => {
           const actor = await resolveProvisionedActor(tx, identity);
+          assertAuthorized({ actor, permission: commandPermissions[commandType], tenantId: actor.tenantId });
+          if (normalized.payload.returnType === "customer_return")
+            assertAuthorized({ actor, permission: "returns.customer_request.manage", tenantId: actor.tenantId });
           const inside = replay(
             await tx.businessCommandExecution.findUnique({ where }),
             normalized.requestHash,
@@ -466,7 +448,6 @@ export function createReturnGovernanceCommandService({
       input,
       context,
       async (tx, actor, payload, normalized) => {
-        assertRequestRole(actor, payload.returnType);
         const plan = enforce(
           await buildReturnRequestPlan({
             prisma: tx,
@@ -548,7 +529,6 @@ export function createReturnGovernanceCommandService({
           where: { id: payload.requestId, tenantId: actor.tenantId },
           include: { lines: true },
         });
-        assertRequestRole(actor, current.returnType);
         if (current.workflowStatus !== "draft")
           fail(
             "RETURN_REQUEST_FROZEN",
@@ -561,7 +541,6 @@ export function createReturnGovernanceCommandService({
             "Return request version does not match.",
             409,
           );
-        assertRequestRole(actor, payload.returnType);
         const plan = enforce(
           await buildReturnRequestPlan({
             prisma: tx,
@@ -645,7 +624,6 @@ export function createReturnGovernanceCommandService({
           where: { id: payload.requestId, tenantId: actor.tenantId },
           include: { lines: { orderBy: { id: "asc" } } },
         });
-        assertRequestRole(actor, current.returnType);
         if (current.workflowStatus !== "draft")
           fail(
             "RETURN_REQUEST_NOT_DRAFT",
@@ -736,7 +714,6 @@ export function createReturnGovernanceCommandService({
           where: { id: payload.requestId, tenantId: actor.tenantId },
           include: { lines: true },
         });
-        assertRequestRole(actor, current.returnType);
         assertWarehouseAccess(actor, sortedWarehouseIds(current.lines), "read");
         if (!["draft", "submitted"].includes(current.workflowStatus))
           fail(
@@ -805,7 +782,6 @@ export function createReturnGovernanceCommandService({
       { ...input, requestId },
       context,
       async (tx, actor, payload, normalized) => {
-        assertManager(actor);
         await lockRequest(tx, actor.tenantId, payload.requestId);
         const current = await tx.returnRequest.findFirst({
           where: { id: payload.requestId, tenantId: actor.tenantId },
@@ -901,7 +877,6 @@ export function createReturnGovernanceCommandService({
       { ...input, requestId },
       context,
       async (tx, actor, payload, normalized) => {
-        assertManager(actor);
         await lockRequest(tx, actor.tenantId, payload.requestId);
         const current = await tx.returnRequest.findFirst({
           where: { id: payload.requestId, tenantId: actor.tenantId },
@@ -978,7 +953,6 @@ export function createReturnGovernanceCommandService({
       { ...input, authorizationId },
       context,
       async (tx, actor, payload, normalized) => {
-        assertManager(actor);
         if (
           !await lockTenantRow(
             tx,

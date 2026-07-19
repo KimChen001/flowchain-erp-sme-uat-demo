@@ -19,13 +19,12 @@ test("disabled returns capability remains readable and fail-closed", async ({
   }, session);
 
   await page.goto("/app/inventory/returns/requests/new");
-  await expect(page.getByTestId("returns-readonly")).toContainText(
-    "正式记录保持只读",
-  );
-  await expect(page.getByTestId("preview-return-request")).toBeDisabled();
+  await expect(page.getByTestId("capability-route-blocked")).toContainText("能力暂不可用");
+  await expect(page.getByTestId("capability-route-blocked")).toContainText("权限已具备，但该业务能力当前未启用。");
+  await expect(page.getByTestId("preview-return-request")).toHaveCount(0);
   await page.goto("/app/inventory/quarantine");
-  await expect(page.getByTestId("quarantine-inventory-workbench")).toBeVisible();
-  await expect(page.getByTestId("returns-readonly")).toBeVisible();
+  await expect(page.getByTestId("capability-route-blocked")).toContainText("能力暂不可用");
+  await expect(page.getByTestId("quarantine-inventory-workbench")).toHaveCount(0);
 
   const denied = await request.post("/api/returns/requests", {
     headers: { Authorization: `Bearer ${session.token}` },

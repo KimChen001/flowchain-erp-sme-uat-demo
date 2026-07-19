@@ -7,6 +7,7 @@ import {
   buildCustomerReturnPostingPlan,
   buildCustomerReturnReversalPlan,
 } from "./customer-return-transaction-policy.mjs";
+import { assertAuthorized } from "../auth/authorization-service.mjs";
 
 const publicValue = (value) => {
   if (typeof value === "bigint") return undefined;
@@ -51,6 +52,8 @@ export function createCustomerReturnReadService({
   const actor = (context) =>
     resolveProvisionedActor(prisma, context?.identity || context);
   async function response(plan, resolved, action) {
+    const permission = action === "reverse" ? "returns.posting.reverse" : action === "post" ? "returns.posting.post" : action === "ready" ? "returns.posting.ready" : "returns.posting.prepare";
+    assertAuthorized({ actor: resolved, permission, tenantId: resolved.tenantId });
     if (plan.warehouseIds?.length)
       assertWarehouseAccess(resolved, plan.warehouseIds, "operate");
     return {

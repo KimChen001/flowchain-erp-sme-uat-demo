@@ -517,9 +517,7 @@ test(
 
       await assert.rejects(
         command.previewSupplierInvoice(exactPayload, viewer),
-        (error) =>
-          error instanceof OperationalFinanceError &&
-          error.code === "PERMISSION_DENIED",
+        (error) => error.code === "AUTHORIZATION_PERMISSION_DENIED",
       );
       await assert.rejects(
         read.supplierInvoiceDetail(created.entityId, {

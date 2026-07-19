@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { getPrismaClient } from '../persistence/prisma-client.mjs'
 import { PilotIdentityError, resolveProvisionedActor } from '../domain/pilot-identity.mjs'
 import { roleLabel } from '../../shared/roles.mjs'
+import { assertAuthorized } from '../auth/authorization-service.mjs'
 import {
   assertSupportedCurrency,
   assertSupportedLanguage,
@@ -78,9 +79,9 @@ async function hasPostedTransactions(prisma, tenantId, tenant) {
   return movementCount + receivingCount + shipmentCount + returnCount > 0
 }
 
-async function adminActor(prisma, identity) {
+async function adminActor(prisma, identity, permission) {
   const actor = await resolveProvisionedActor(prisma, identity)
-  if (actor.role !== 'admin') fail('PERMISSION_DENIED', 'Workspace administration requires the admin role.', 403)
+  assertAuthorized({ actor, permission, tenantId: actor.tenantId })
   return actor
 }
 
@@ -138,7 +139,7 @@ export async function handlePilotWorkspaceRoute(ctx) {
       ctx.send(ctx.res, 200, publicWorkspace(tenant, await hasPostedTransactions(prisma, actor.tenantId, tenant))); return true
     }
     if (ctx.req.method === 'PATCH' && ctx.url.pathname === '/api/workspace') {
-      const actor = await adminActor(prisma, ctx.identity)
+      const actor = await adminActor(prisma, ctx.identity, 'settings.workspace.manage')
       const body = await ctx.readBody(ctx.req)
       const result = await prisma.$transaction(async tx => {
         const current = await tx.tenant.findUnique({ where: { id: actor.tenantId } })
@@ -159,13 +160,13 @@ export async function handlePilotWorkspaceRoute(ctx) {
       ctx.send(ctx.res, 200, publicWorkspace(result.tenant, result.locked)); return true
     }
     if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/workspace/users') {
-      const actor = await adminActor(prisma, ctx.identity)
+      const actor = await adminActor(prisma, ctx.identity, 'settings.users.read')
       const users = await prisma.user.findMany({ where: { tenantId: actor.tenantId }, include: { warehouseScopes: true }, orderBy: { email: 'asc' } })
       ctx.send(ctx.res, 200, { users: users.map(user => ({ ...publicUser(user), warehouseScopes: user.warehouseScopes.map(scope => ({ warehouseId: scope.warehouseId, accessLevel: scope.accessLevel })) })) }); return true
     }
     const userPatch = ctx.url.pathname.match(/^\/api\/workspace\/users\/([^/]+)$/)
     if (ctx.req.method === 'PATCH' && userPatch) {
-      const actor = await adminActor(prisma, ctx.identity)
+      const actor = await adminActor(prisma, ctx.identity, 'settings.users.manage')
       const userId = decodeURIComponent(userPatch[1]); const body = await ctx.readBody(ctx.req)
       const target = await prisma.user.findFirst({ where: { id: userId, tenantId: actor.tenantId } })
       if (!target) fail('USER_NOT_FOUND', 'Workspace user was not found.', 404)
@@ -188,7 +189,7 @@ export async function handlePilotWorkspaceRoute(ctx) {
     }
     const scopesPut = ctx.url.pathname.match(/^\/api\/workspace\/users\/([^/]+)\/warehouse-scopes$/)
     if (ctx.req.method === 'PUT' && scopesPut) {
-      const actor = await adminActor(prisma, ctx.identity)
+      const actor = await adminActor(prisma, ctx.identity, 'settings.users.manage')
       const userId = decodeURIComponent(scopesPut[1]); const body = await ctx.readBody(ctx.req); const scopes = Array.isArray(body.scopes) ? body.scopes : []
       const target = await prisma.user.findFirst({ where: { id: userId, tenantId: actor.tenantId } })
       if (!target) fail('USER_NOT_FOUND', 'Workspace user was not found.', 404)
@@ -204,13 +205,13 @@ export async function handlePilotWorkspaceRoute(ctx) {
       ctx.send(ctx.res, 200, { userId, scopes }); return true
     }
     if (ctx.req.method === 'GET' && ctx.url.pathname === '/api/workspace/invitations') {
-      const actor = await adminActor(prisma, ctx.identity)
+      const actor = await adminActor(prisma, ctx.identity, 'settings.users.read')
       await prisma.workspaceInvitation.updateMany({ where: { tenantId: actor.tenantId, status: 'pending', expiresAt: { lte: new Date() } }, data: { status: 'expired' } })
       const invitations = await prisma.workspaceInvitation.findMany({ where: { tenantId: actor.tenantId }, orderBy: { createdAt: 'desc' } })
       ctx.send(ctx.res, 200, { invitations: invitations.map(publicInvitation), emailDeliveryConnected: false }); return true
     }
     if (ctx.req.method === 'POST' && ctx.url.pathname === '/api/workspace/invitations') {
-      const actor = await adminActor(prisma, ctx.identity); const body = await ctx.readBody(ctx.req)
+      const actor = await adminActor(prisma, ctx.identity, 'settings.users.manage'); const body = await ctx.readBody(ctx.req)
       const targetEmail = email(body.email); const role = text(body.role).toLowerCase(); const expiryHours = Math.min(168, Math.max(1, Number(body.expiryHours || 72)))
       if (!targetEmail || !ALLOWED_ROLES.has(role)) fail('INVITATION_VALIDATION_FAILED', 'A valid email and canonical role are required.')
       const token = randomBytes(32).toString('base64url')
@@ -221,7 +222,7 @@ export async function handlePilotWorkspaceRoute(ctx) {
     }
     const revoke = ctx.url.pathname.match(/^\/api\/workspace\/invitations\/([^/]+)\/revoke$/)
     if (ctx.req.method === 'POST' && revoke) {
-      const actor = await adminActor(prisma, ctx.identity)
+      const actor = await adminActor(prisma, ctx.identity, 'settings.users.manage')
       const result = await prisma.workspaceInvitation.updateMany({ where: { id: decodeURIComponent(revoke[1]), tenantId: actor.tenantId, status: 'pending' }, data: { status: 'revoked' } })
       if (result.count !== 1) fail('INVITATION_NOT_PENDING', 'Pending invitation was not found.', 404)
       ctx.send(ctx.res, 200, { status: 'revoked' }); return true

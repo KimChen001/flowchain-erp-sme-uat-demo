@@ -1,3 +1,6 @@
+import { resolveAuthorizationContext } from "../auth/authorization-service.mjs"
+import { defaultRoleTemplates, legacyRoleTemplateMap } from "../auth/permission-catalog.mjs"
+
 export class PilotIdentityError extends Error {
   constructor(code, message, status = 400, details) {
     super(message)
@@ -10,6 +13,10 @@ export class PilotIdentityError extends Error {
 
 const fail = (code, message, status, details) => { throw new PilotIdentityError(code, message, status, details) }
 const text = value => String(value ?? '').trim()
+const testPermissionCodes = role => {
+  const roleKey = legacyRoleTemplateMap[text(role).toLowerCase()] || 'read-only-viewer'
+  return new Set(defaultRoleTemplates.find(template => template.roleKey === roleKey)?.permissions || [])
+}
 
 export async function resolveProvisionedActor(prisma, identity, { allowMissingTestActor = false } = {}) {
   if (!identity?.authenticated) fail('AUTHENTICATION_REQUIRED', 'Authentication is required.', 401)
@@ -18,16 +25,15 @@ export async function resolveProvisionedActor(prisma, identity, { allowMissingTe
   if (!tenantId || !userId) fail('TENANT_CONTEXT_REQUIRED', 'A server-resolved tenant and actor are required.', 403)
   const user = await prisma.user.findFirst({ where: { id: userId, tenantId }, include: { warehouseScopes: true } })
   if (!user) {
-    if (allowMissingTestActor && identity.source === 'test') return { user: { id: userId, tenantId, role: identity.role, status: 'active' }, tenantId, role: text(identity.role).toLowerCase(), allWarehouses: true, readWarehouseIds: null, operateWarehouseIds: null }
+    if (allowMissingTestActor && identity.source === 'test') return { user: { id: userId, tenantId, role: identity.role, status: 'active' }, tenantId, role: text(identity.role).toLowerCase(), complete: true, authenticated: true, permissionCodes: testPermissionCodes(identity.role), roleIds: [], permissionSourceRoleIds: new Map(), allWarehouses: true, readWarehouseIds: null, operateWarehouseIds: null }
     fail('ACTOR_NOT_PROVISIONED', 'The authenticated user is not provisioned for this workspace.', 403)
   }
   if (user.status !== 'active') fail('USER_DISABLED', 'The workspace user is disabled.', 403)
   const role = text(user.role).toLowerCase()
   if (text(identity.role).toLowerCase() !== role) fail('SESSION_STALE', 'User authorization changed. Sign in again.', 401)
-  if (allowMissingTestActor && identity.source === 'test') return { user, tenantId, role, allWarehouses: true, readWarehouseIds: null, operateWarehouseIds: null }
-  const readWarehouseIds = new Set(user.warehouseScopes.map(scope => scope.warehouseId))
-  const operateWarehouseIds = new Set(user.warehouseScopes.filter(scope => scope.accessLevel === 'operate').map(scope => scope.warehouseId))
-  return { user, tenantId, role, allWarehouses: role === 'admin', readWarehouseIds, operateWarehouseIds }
+  const authorization = await resolveAuthorizationContext(identity, { prisma })
+  if (allowMissingTestActor && identity.source === 'test' && !authorization.complete) return { user, tenantId, role, ...authorization, allWarehouses: true, readWarehouseIds: null, operateWarehouseIds: null }
+  return { user, tenantId, role, ...authorization, allWarehouses: false }
 }
 
 export function hasWarehouseAccess(actor, warehouseIds, level = 'read') {

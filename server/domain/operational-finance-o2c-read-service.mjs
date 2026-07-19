@@ -1,4 +1,5 @@
 import { resolveProvisionedActor } from "./pilot-identity.mjs";
+import { can } from "../auth/authorization-service.mjs";
 import { OperationalFinanceReadError } from "./operational-finance-read-service.mjs";
 import { financeFixed as fixed, financeUnits as units } from "./operational-finance-policy.mjs";
 
@@ -7,13 +8,6 @@ const decimal = (value) =>
   value === null || value === undefined ? null : String(value);
 const serial = (value) =>
   value && typeof value.toISOString === "function" ? value.toISOString() : value;
-const managers = new Set(["admin", "manager"]);
-const preparers = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-]);
 const fail = (code, message, status = 400, details) => {
   throw new OperationalFinanceReadError(code, message, status, details);
 };
@@ -26,28 +20,37 @@ const validCurrency = (value) => /^[A-Z]{3}$/.test(text(value).toUpperCase());
 
 function invoiceActions(actor, capability, row) {
   if (!capability?.enabled) return [];
-  if (preparers.has(actor.role) && row.status === "draft") return ["submit"];
-  if (managers.has(actor.role) && row.status === "submitted") return ["approve"];
-  if (managers.has(actor.role) && row.status === "approved") return ["issue"];
+  if (can({ actor, permission: "finance.customer_invoice.submit", tenantId: actor.tenantId }) && row.status === "draft") return ["submit"];
+  if (can({ actor, permission: "finance.customer_invoice.approve", tenantId: actor.tenantId }) && row.status === "submitted") return ["approve"];
+  if (can({ actor, permission: "finance.customer_invoice.issue", tenantId: actor.tenantId }) && row.status === "approved") return ["issue"];
   return [];
 }
 
 function receivableActions(actor, capability, row) {
-  if (!capability?.enabled || !managers.has(actor.role)) return [];
-  const result = ["record_external_reference"];
-  if (["open", "overdue"].includes(row.status)) result.unshift("dispute");
-  if (row.disputeStatus === "open") result.unshift("resolve_dispute");
+  if (!capability?.enabled) return [];
+  const result = can({ actor, permission: "finance.receivable.record_external_reference", tenantId: actor.tenantId }) ? ["record_external_reference"] : [];
+  if (["open", "overdue"].includes(row.status) && can({ actor, permission: "finance.receivable.dispute", tenantId: actor.tenantId })) result.unshift("dispute");
+  if (row.disputeStatus === "open" && can({ actor, permission: "finance.receivable.resolve_dispute", tenantId: actor.tenantId })) result.unshift("resolve_dispute");
   return result;
 }
 
 function creditActions(actor, capability, row) {
-  return capability?.enabled && managers.has(actor.role) && row.status === "draft"
+  return capability?.enabled && can({ actor, permission: "finance.customer_credit.approve", tenantId: actor.tenantId }) && row.status === "draft"
     ? ["approve"]
     : [];
 }
 
+function protectFinanceFields(model, actor) {
+  const amountsVisible = can({ actor, permission: "finance.amounts.read", tenantId: actor.tenantId });
+  const partnerVisible = can({ actor, permission: "finance.partner_snapshot.read", tenantId: actor.tenantId });
+  const output = { ...model, fieldVisibility: { ...(model.fieldVisibility || {}) } };
+  for (const key of ["subtotalAmount", "enteredTaxAmount", "totalAmount", "originalAmount", "outstandingAmount", "approvedCreditAmount", "unitPrice", "lineAmount"]) if (key in output) { if (!amountsVisible) output[key] = null; output.fieldVisibility[key] = { visible: amountsVisible, reasonCode: amountsVisible ? null : "FIELD_PERMISSION_DENIED", permission: "finance.amounts.read" }; }
+  for (const key of ["customerName", "customerNameSnapshot"]) if (key in output) { if (!partnerVisible) output[key] = null; output.fieldVisibility[key] = { visible: partnerVisible, reasonCode: partnerVisible ? null : "FIELD_PERMISSION_DENIED", permission: "finance.partner_snapshot.read" }; }
+  return output;
+}
+
 function invoiceSummary(row, actor, capabilities) {
-  return {
+  return protectFinanceFields({
     id: row.id,
     invoiceNumber: row.invoiceNumber,
     salesOrderId: row.salesOrderId,
@@ -69,11 +72,11 @@ function invoiceSummary(row, actor, capabilities) {
       capabilities["customer-invoice"],
       row,
     ),
-  };
+  }, actor);
 }
 
 function receivableSummary(row, actor, capabilities) {
-  return {
+  return protectFinanceFields({
     id: row.id,
     obligationNumber: row.obligationNumber,
     customerInvoiceId: row.customerInvoiceId,
@@ -98,11 +101,11 @@ function receivableSummary(row, actor, capabilities) {
       capabilities["receivable-obligation"],
       row,
     ),
-  };
+  }, actor);
 }
 
 function creditSummary(row, actor, capabilities) {
-  return {
+  return protectFinanceFields({
     id: row.id,
     creditNoteNumber: row.creditNoteNumber,
     customerInvoiceId: row.customerInvoiceId,
@@ -123,7 +126,7 @@ function creditSummary(row, actor, capabilities) {
       capabilities["customer-credit-note"],
       row,
     ),
-  };
+  }, actor);
 }
 
 function localDateNumber(date, timezone) {

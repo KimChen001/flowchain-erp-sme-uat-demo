@@ -9,6 +9,7 @@ import {
   receivingWorkflowStatus,
 } from './receiving-transaction-policy.mjs'
 import { assertWarehouseAccess, hasWarehouseAccess, resolveProvisionedActor } from './pilot-identity.mjs'
+import { assertAuthorized, can } from '../auth/authorization-service.mjs'
 
 const ZERO = 0n
 const text = (value = '') => String(value ?? '').trim()
@@ -118,6 +119,7 @@ export function createReceivingWorkbenchQueryService({ prisma, capabilities = {}
   async function authorizedAggregate(scope, receivingDocumentId) {
     const aggregate = await loadAggregate(prisma, scope.tenantId, receivingDocumentId)
     const actor = await resolveProvisionedActor(prisma, scope.identity, { allowMissingTestActor: true })
+    assertAuthorized({ actor, permission: 'receiving.read', tenantId: actor.tenantId })
     const warehouseIds = [...new Set([aggregate.receivingDocument.warehouseId, ...aggregate.receivingDocument.lines.map(line => line.warehouseId)].filter(Boolean))]
     assertWarehouseAccess(actor, warehouseIds, 'read', { maskExistence: true })
     return { aggregate, actor, warehouseIds }
@@ -127,7 +129,8 @@ export function createReceivingWorkbenchQueryService({ prisma, capabilities = {}
     const scope = tenantScope(context)
     const { aggregate, actor, warehouseIds } = await authorizedAggregate(scope, receivingDocumentId)
     const { receivingDocument: grn, purchaseOrder: po } = aggregate
-    const roleAllowed = ['admin', 'manager'].includes(actor.role)
+    const requiredPermission = grn.postingStatus === 'posted' ? 'receiving.reverse' : 'receiving.post'
+    const roleAllowed = can({ actor, permission: requiredPermission, tenantId: actor.tenantId })
     const warehouseAllowed = hasWarehouseAccess(actor, warehouseIds, 'operate')
     const operation = grn.postingStatus === 'posted' ? 'reverse' : 'post'
     const capability = operation === 'reverse' ? capabilities.reversal : capabilities.posting
