@@ -111,6 +111,22 @@ const money = (value: string, currency: string, locale: string) =>
     : `${value} ${currency}`;
 const date = (value: string, locale: string) =>
   value ? new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(value)) : "—";
+const canPrepare = () => {
+  try {
+    const role = String(
+      JSON.parse(localStorage.getItem("flowchain:current-user") || "{}").role ||
+        "",
+    ).toLowerCase();
+    return [
+      "admin",
+      "manager",
+      "business-specialist",
+      "business_specialist",
+    ].includes(role);
+  } catch {
+    return false;
+  }
+};
 
 function Notice({ children }: { children: ReactNode }) {
   return (
@@ -190,7 +206,8 @@ function InvoiceList() {
   }, []);
   if (error) return <Notice>{error}</Notice>;
   if (!data) return <Card className="p-6">{t("common.loading")}</Card>;
-  const enabled = data.capabilities["customer-invoice"]?.enabled;
+  const enabled =
+    data.capabilities["customer-invoice"]?.enabled && canPrepare();
   return (
     <div className="space-y-4" data-testid="customer-invoice-workbench">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -491,7 +508,7 @@ function NewInvoice() {
     }
   };
   if (!entry) return notice ? <Notice>{notice}</Notice> : <Card className="p-6">{t("common.loading")}</Card>;
-  const enabled = entry.capabilities["customer-invoice"]?.enabled;
+  const enabled = entry.capabilities["customer-invoice"]?.enabled && canPrepare();
   return (
     <div className="space-y-4" data-testid="new-customer-invoice">
       {!enabled && <Notice>{t("finance.capabilityDisabled")}</Notice>}

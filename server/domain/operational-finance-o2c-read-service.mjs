@@ -484,6 +484,120 @@ export function createOperationalFinanceO2cReadService({
     };
   }
 
+  async function landing(context) {
+    const current = await actor(context);
+    const asOf = now();
+    const [
+      supplierInvoicesAwaitingMatch,
+      matchExceptions,
+      approvedPayables,
+      customerInvoicesAwaitingIssue,
+      overdueReceivables,
+      disputedReceivables,
+      supplierCreditMemos,
+      customerCreditNotes,
+      payableCurrencies,
+      receivableCurrencies,
+    ] = await Promise.all([
+      prisma.supplierInvoice.count({
+        where: { tenantId: current.tenantId, status: "submitted" },
+      }),
+      prisma.financeMatchException.count({
+        where: {
+          tenantId: current.tenantId,
+          status: { in: ["open", "reviewed"] },
+        },
+      }),
+      prisma.payableObligation.count({
+        where: {
+          tenantId: current.tenantId,
+          status: { in: ["approved", "export_ready", "held"] },
+        },
+      }),
+      prisma.customerInvoice.count({
+        where: { tenantId: current.tenantId, status: "approved" },
+      }),
+      prisma.receivableObligation.count({
+        where: {
+          tenantId: current.tenantId,
+          dueDate: { lt: asOf },
+          outstandingAmount: { gt: 0 },
+          status: { in: ["open", "partially_settled", "overdue"] },
+        },
+      }),
+      prisma.receivableObligation.count({
+        where: {
+          tenantId: current.tenantId,
+          disputeStatus: "open",
+        },
+      }),
+      prisma.supplierCreditMemo.count({
+        where: { tenantId: current.tenantId, status: { not: "cancelled" } },
+      }),
+      prisma.customerCreditNote.count({
+        where: { tenantId: current.tenantId, status: { not: "cancelled" } },
+      }),
+      prisma.payableObligation.findMany({
+        where: {
+          tenantId: current.tenantId,
+          outstandingAmount: { gt: 0 },
+          status: { not: "cancelled" },
+        },
+        distinct: ["currency"],
+        select: { currency: true },
+      }),
+      prisma.receivableObligation.findMany({
+        where: {
+          tenantId: current.tenantId,
+          outstandingAmount: { gt: 0 },
+          status: { not: "cancelled" },
+        },
+        distinct: ["currency"],
+        select: { currency: true },
+      }),
+    ]);
+    const currencies = [
+      ...new Set(
+        [...payableCurrencies, ...receivableCurrencies]
+          .map((row) => text(row.currency).toUpperCase())
+          .filter(validCurrency),
+      ),
+    ].sort();
+    return {
+      dataSource: "Authoritative PostgreSQL",
+      generatedAt: asOf.toISOString(),
+      cards: {
+        supplierInvoicesAwaitingMatch,
+        matchExceptions,
+        approvedPayableObligations: approvedPayables,
+        customerInvoicesAwaitingIssue,
+        overdueReceivables,
+        disputedReceivables,
+        supplierCreditMemos,
+        customerCreditNotes,
+      },
+      currencyLimitations: {
+        currencies,
+        aggregationStatus:
+          currencies.length > 1
+            ? "multi_currency_unconverted"
+            : currencies.length === 1
+              ? "single_currency"
+              : "no_currency_data",
+        fxConverted: false,
+        message:
+          currencies.length > 1
+            ? "Amounts remain grouped by original currency; no FX conversion is applied."
+            : "No FX conversion is applied.",
+      },
+      settlementClaims: {
+        payableMeansPaid: false,
+        receivableMeansCollected: false,
+      },
+      capabilities,
+    };
+  }
+
   return {
     listCustomerInvoices,
     customerInvoiceDetail,
@@ -491,5 +605,6 @@ export function createOperationalFinanceO2cReadService({
     aging,
     listCustomerCreditNotes,
     entryData,
+    landing,
   };
 }

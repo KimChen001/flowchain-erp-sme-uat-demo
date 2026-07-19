@@ -18,7 +18,7 @@ const localCapabilityFallback: Record<string, ModuleCapability> = Object.fromEnt
   ["procurement", "stable", "Canonical PR and draft PO workflow"],
   ["sales", "stable", "Durable sales order runtime"],
   ["inventory", "stable", "Durable inventory balances and movements"],
-  ["finance", "unavailable", "Receipt, invoice, and settlement runtime is not fully connected"],
+  ["finance", "beta", "Operational finance requires database mode and explicit enablement"],
   ["reports", "stable", "Authoritative runtime analytics"],
   ["settings", "beta", "Local/UAT workspace settings"],
   ["imports", "beta", "Supplier, item, customer, and inventory imports are connected"],

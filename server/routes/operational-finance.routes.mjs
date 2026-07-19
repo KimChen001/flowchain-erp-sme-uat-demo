@@ -117,6 +117,10 @@ export async function handleOperationalFinanceRoute(ctx) {
       ctx.send(ctx.res, 200, { ...p2p, ...o2c, capabilities: capabilities(ctx.env || process.env) });
       return true;
     }
+    if (ctx.req.method === "GET" && path === "/api/finance/landing") {
+      ctx.send(ctx.res, 200, await o2cRead.landing(ctx));
+      return true;
+    }
     if (ctx.req.method === "GET" && path === "/api/finance/customer-invoices") {
       ctx.send(ctx.res, 200, await o2cRead.listCustomerInvoices(query(ctx.url), ctx));
       return true;
