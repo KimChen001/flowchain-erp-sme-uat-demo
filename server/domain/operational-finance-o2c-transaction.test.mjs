@@ -510,6 +510,16 @@ test(
         aging.groups.find((group) => group.currency === "USD").total,
         "52.0000",
       );
+      const landing = await read.landing(viewer);
+      assert.equal(landing.cards.customerCreditNotes, 1);
+      assert.equal(landing.cards.disputedReceivables, 0);
+      assert.equal(
+        landing.currencyLimitations.aggregationStatus,
+        "multi_currency_unconverted",
+      );
+      assert.equal(landing.currencyLimitations.fxConverted, false);
+      assert.equal(landing.settlementClaims.receivableMeansCollected, false);
+      assert.equal(landing.settlementClaims.payableMeansPaid, false);
       assert.equal(
         await prisma.inventoryMovement.count({ where: { tenantId } }),
         0,

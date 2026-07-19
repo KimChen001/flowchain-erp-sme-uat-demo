@@ -696,6 +696,14 @@ try {
   );
   assert.equal(externalReference.receivable.status, "disputed");
   assert.equal(externalReference.receivable.settlementVerified, false);
+  const landing = await request(base, "/api/finance/landing", {
+    token: viewerLogin.token,
+  });
+  assert.equal(landing.cards.approvedPayableObligations, 1);
+  assert.equal(landing.cards.disputedReceivables, 1);
+  assert.equal(landing.settlementClaims.payableMeansPaid, false);
+  assert.equal(landing.settlementClaims.receivableMeansCollected, false);
+  assert.equal(landing.currencyLimitations.fxConverted, false);
   console.log(
     "Operational finance API acceptance: P2P + O2C passed, 0 failed, 0 skipped",
   );

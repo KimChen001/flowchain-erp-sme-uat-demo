@@ -41,13 +41,12 @@ test("operational finance capabilities are beta, database-only, and explicitly e
       false,
     );
   }
-  assert.equal(
-    capabilityForEnvironment("finance", {
-      FLOWCHAIN_PERSISTENCE_MODE: "database",
-      FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE: "true",
-    }).maturity,
-    "unavailable",
-  );
+  const finance = capabilityForEnvironment("finance", {
+    FLOWCHAIN_PERSISTENCE_MODE: "database",
+    FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE: "true",
+  });
+  assert.equal(finance.maturity, "beta");
+  assert.equal(finance.enabled, true);
 });
 
 test("O2C schema and routes are shipment-backed and exclude collection, refund, FX, and ledger execution", () => {
