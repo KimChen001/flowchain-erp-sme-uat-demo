@@ -17,6 +17,7 @@ import {
   outboundDecimalString as decimalString,
   outboundDecimalUnits as decimalUnits,
 } from "./outbound-transaction-policy.mjs";
+import { assertAuthorized } from "../auth/authorization-service.mjs";
 
 export const SUPPLIER_RETURN_COMMAND_TYPES = Object.freeze({
   create: "create_supplier_return_posting_draft",
@@ -48,13 +49,14 @@ const executionWhere = (tenantId, commandType, idempotencyKey) => ({
     idempotencyKey,
   },
 });
-const postingRoles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-  "buyer",
-]);
+const commandPermissions = Object.freeze({
+  [SUPPLIER_RETURN_COMMAND_TYPES.create]: "returns.posting.prepare",
+  [SUPPLIER_RETURN_COMMAND_TYPES.revise]: "returns.posting.prepare",
+  [SUPPLIER_RETURN_COMMAND_TYPES.ready]: "returns.posting.ready",
+  [SUPPLIER_RETURN_COMMAND_TYPES.cancel]: "returns.posting.cancel",
+  [SUPPLIER_RETURN_COMMAND_TYPES.post]: "returns.posting.post",
+  [SUPPLIER_RETURN_COMMAND_TYPES.reverse]: "returns.posting.reverse",
+});
 
 function stable(value, parent = "") {
   if (Array.isArray(value)) {
@@ -210,15 +212,6 @@ function assertEnabled(env) {
       "RETURN_POSTING_CAPABILITY_NOT_AVAILABLE",
       "Supplier return posting requires database persistence and explicit enablement.",
       409,
-    );
-}
-
-function assertRole(actor) {
-  if (!postingRoles.has(actor.role))
-    fail(
-      "PERMISSION_DENIED",
-      "The authenticated role cannot execute supplier return postings.",
-      403,
     );
 }
 
@@ -442,7 +435,7 @@ export function createSupplierReturnCommandService({
       return await prisma.$transaction(
         async (tx) => {
           const actor = await resolveProvisionedActor(tx, identity);
-          assertRole(actor);
+          assertAuthorized({ actor, permission: commandPermissions[commandType], tenantId: actor.tenantId });
           const inside = replay(
             await tx.businessCommandExecution.findUnique({ where }),
             normalized.requestHash,

@@ -774,9 +774,7 @@ test(
           },
           { identity: identity(viewerId, "viewer") },
         ),
-        (error) =>
-          error instanceof CustomerReturnCommandError &&
-          error.code === "PERMISSION_DENIED",
+        (error) => error.code === "AUTHORIZATION_PERMISSION_DENIED",
       );
       await assert.rejects(
         service.createDraft(

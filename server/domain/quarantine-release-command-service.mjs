@@ -15,6 +15,7 @@ import {
   QuarantineLineageError,
   reverseTrackedQuarantineConsumption,
 } from "./quarantine-disposition-lineage.mjs";
+import { assertAuthorized } from "../auth/authorization-service.mjs";
 
 export class QuarantineReleaseCommandError extends Error {
   constructor(code, message, status = 400, details) {
@@ -30,12 +31,6 @@ const fail = (code, message, status = 400, details) => {
   throw new QuarantineReleaseCommandError(code, message, status, details);
 };
 const text = (value) => String(value ?? "").trim();
-const roles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-]);
 const TYPES = {
   create: "create_quarantine_release_draft",
   revise: "revise_quarantine_release_draft",
@@ -44,6 +39,14 @@ const TYPES = {
   post: "post_quarantine_release",
   reverse: "reverse_quarantine_release",
 };
+const commandPermissions = Object.freeze({
+  [TYPES.create]: "returns.quarantine.release_prepare",
+  [TYPES.revise]: "returns.quarantine.release_prepare",
+  [TYPES.ready]: "returns.quarantine.release_prepare",
+  [TYPES.cancel]: "returns.quarantine.release_prepare",
+  [TYPES.post]: "returns.quarantine.release_post",
+  [TYPES.reverse]: "returns.quarantine.release_reverse",
+});
 
 function stable(value, parent = "") {
   if (Array.isArray(value)) {
@@ -402,12 +405,7 @@ export function createQuarantineReleaseCommandService({
       return await prisma.$transaction(
         async (tx) => {
           const actor = await resolveProvisionedActor(tx, identity);
-          if (!roles.has(actor.role))
-            fail(
-              "PERMISSION_DENIED",
-              "The authenticated role cannot release quarantine inventory.",
-              403,
-            );
+          assertAuthorized({ actor, permission: commandPermissions[type], tenantId: actor.tenantId });
           const inside = replay(
             await tx.businessCommandExecution.findUnique({ where }),
             normalized.requestHash,

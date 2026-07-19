@@ -8,6 +8,7 @@ import {
   buildCustomerReturnPostingPlan,
   buildCustomerReturnReversalPlan,
 } from "./customer-return-transaction-policy.mjs";
+import { assertAuthorized } from "../auth/authorization-service.mjs";
 
 export class CustomerReturnCommandError extends Error {
   constructor(code, message, status = 400, details) {
@@ -23,12 +24,6 @@ const fail = (code, message, status = 400, details) => {
   throw new CustomerReturnCommandError(code, message, status, details);
 };
 const text = (value) => String(value ?? "").trim();
-const roles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-]);
 const TYPES = {
   create: "create_customer_return_receipt_draft",
   revise: "revise_customer_return_receipt_draft",
@@ -37,6 +32,14 @@ const TYPES = {
   post: "post_customer_return_receipt",
   reverse: "reverse_customer_return_receipt",
 };
+const commandPermissions = Object.freeze({
+  [TYPES.create]: "returns.posting.prepare",
+  [TYPES.revise]: "returns.posting.prepare",
+  [TYPES.ready]: "returns.posting.ready",
+  [TYPES.cancel]: "returns.posting.cancel",
+  [TYPES.post]: "returns.posting.post",
+  [TYPES.reverse]: "returns.posting.reverse",
+});
 
 function stable(value, parent = "") {
   if (Array.isArray(value)) {
@@ -318,12 +321,7 @@ export function createCustomerReturnCommandService({
       return await prisma.$transaction(
         async (tx) => {
           const actor = await resolveProvisionedActor(tx, identity);
-          if (!roles.has(actor.role))
-            fail(
-              "PERMISSION_DENIED",
-              "The authenticated role cannot receive customer returns.",
-              403,
-            );
+          assertAuthorized({ actor, permission: commandPermissions[type], tenantId: actor.tenantId });
           const inside = replay(
             await tx.businessCommandExecution.findUnique({ where }),
             normalized.requestHash,
