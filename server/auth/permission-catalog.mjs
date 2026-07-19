@@ -12,6 +12,10 @@ const definitions = [
   ["settings.review_policy.manage", "settings", "review_policy", "manage", "high"],
   ["settings.modules.read", "settings", "modules", "read", "low"],
   ["settings.modules.manage", "settings", "modules", "manage", "high"],
+  ["settings.import.manage", "settings", "import", "manage", "high"],
+  ["settings.warehouse_import.manage", "settings", "warehouse_import", "manage", "critical"],
+  ["settings.diagnostics.read", "settings", "diagnostics", "read", "high"],
+  ["settings.export.read", "settings", "export", "read", "high"],
   ["audit.read", "audit", "audit_log", "read", "medium"],
   ["audit.read_sensitive", "audit", "audit_log", "read_sensitive", "high", ["audit_sensitive_metadata"]],
   ["returns.request.read", "returns", "request", "read", "low"],
@@ -136,11 +140,11 @@ const without = (items, denied) => items.filter((code) => !denied.includes(code)
 
 export const defaultRoleTemplates = Object.freeze([
   { roleKey: "workspace-administrator", name: "Workspace Administrator", permissions: [...permissionCodes] },
-  { roleKey: "operations-manager", name: "Operations Manager", permissions: without([...byPrefix("returns.", "receiving.", "sales_order.", "shipment.", "inventory.", "finance."), "settings.workspace.read", "settings.users.read", "settings.roles.read", "settings.numbering.read", "settings.review_policy.read", "settings.modules.read", "audit.read"], ["procurement.prices.read", "finance.partner_snapshot.read", "finance.amounts.read", "audit.read_sensitive"]) },
+  { roleKey: "operations-manager", name: "Operations Manager", permissions: without([...byPrefix("returns.", "receiving.", "sales_order.", "shipment.", "inventory.", "finance."), "settings.workspace.read", "settings.users.read", "settings.roles.read", "settings.numbering.read", "settings.review_policy.read", "settings.modules.read", "settings.import.manage", "settings.export.read", "audit.read"], ["procurement.prices.read", "finance.partner_snapshot.read", "finance.amounts.read", "audit.read_sensitive"]) },
   { roleKey: "operations-specialist", name: "Operations Specialist", permissions: without([...byPrefix("returns.", "receiving.", "sales_order.", "shipment.", "inventory."), "finance.overview.read", "finance.supplier_invoice.read", "finance.supplier_invoice.create", "finance.supplier_invoice.revise", "finance.supplier_invoice.submit", "finance.three_way_match.read", "finance.three_way_match.execute", "finance.payable.read", "finance.supplier_credit.read", "finance.supplier_credit.create", "finance.customer_invoice.read", "finance.customer_invoice.create", "finance.customer_invoice.submit", "finance.receivable.read", "finance.receivable.dispute", "finance.receivable.resolve_dispute", "finance.receivable.record_external_reference", "finance.customer_credit.read", "finance.customer_credit.create"], ["returns.authorization.approve", "returns.authorization.reject", "returns.authorization.cancel", "returns.authorization.expire", "returns.posting.reverse", "returns.quarantine.release_reverse", "receiving.reverse", "shipment.reverse", "inventory.transfer.reverse", "inventory.count.review", "inventory.count.post", "inventory.count.reverse", "inventory.adjustment.post", "inventory.adjustment.reverse"]) },
   { roleKey: "procurement-specialist", name: "Procurement Specialist", permissions: ["returns.request.read", "returns.request.create", "returns.request.revise", "returns.request.submit", "returns.request.cancel", "returns.authorization.read", "returns.posting.read", "returns.quarantine.read", "receiving.read", "inventory.balance.read", "procurement.prices.read"] },
   { roleKey: "finance-specialist", name: "Finance Specialist", permissions: [...byPrefix("finance."), "audit.read"] },
-  { roleKey: "read-only-viewer", name: "Read-only Viewer", permissions: reads.filter((code) => !["audit.read_sensitive", "finance.amounts.read", "finance.partner_snapshot.read", "procurement.prices.read"].includes(code)) },
+  { roleKey: "read-only-viewer", name: "Read-only Viewer", permissions: reads.filter((code) => !["audit.read_sensitive", "finance.amounts.read", "finance.partner_snapshot.read", "procurement.prices.read", "settings.diagnostics.read", "settings.export.read"].includes(code)) },
 ])
 
 export const legacyRoleTemplateMap = Object.freeze({

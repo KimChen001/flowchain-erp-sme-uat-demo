@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { PilotIdentityError, assertWarehouseAccess, resolveProvisionedActor } from './pilot-identity.mjs'
+import { assertAuthorized } from '../auth/authorization-service.mjs'
 import { receivingDecimalString, receivingDecimalUnits, receivingLocationKey } from './receiving-transaction-policy.mjs'
 
 const TYPES = new Set(['items', 'suppliers', 'warehouses', 'locations', 'open_purchase_orders', 'opening_inventory_balances'])
@@ -25,8 +26,8 @@ export function createPilotImportService({ prisma, now = () => new Date(), idFac
     const actor = await resolveProvisionedActor(prisma, identity)
     const importType = text(input.importType)
     if (!TYPES.has(importType)) fail('IMPORT_TYPE_UNSUPPORTED', 'Pilot import type is not supported.')
-    if (!['admin', 'manager'].includes(actor.role)) fail('PERMISSION_DENIED', 'Pilot imports require manager or admin.', 403)
-    if (importType === 'warehouses' && actor.role !== 'admin') fail('PERMISSION_DENIED', 'Warehouse import requires admin.', 403)
+    assertAuthorized({ actor, permission: 'settings.import.manage', tenantId: actor.tenantId })
+    if (importType === 'warehouses') assertAuthorized({ actor, permission: 'settings.warehouse_import.manage', tenantId: actor.tenantId })
     const fileName = text(input.fileName)
     if (!/\.(csv|xlsx)$/i.test(fileName)) fail('IMPORT_FILE_TYPE_UNSUPPORTED', 'Only CSV and XLSX files are supported.')
     if (Number(input.fileSize || 0) > 10 * 1024 * 1024) fail('IMPORT_FILE_TOO_LARGE', 'Pilot import files are limited to 10 MB.', 413)
@@ -91,7 +92,7 @@ export function createPilotImportService({ prisma, now = () => new Date(), idFac
   }
 
   async function commit(id, input, identity) {
-    const actor = await resolveProvisionedActor(prisma, identity); if (!['admin', 'manager'].includes(actor.role)) fail('PERMISSION_DENIED', 'Pilot imports require manager or admin.', 403)
+    const actor = await resolveProvisionedActor(prisma, identity); assertAuthorized({ actor, permission: 'settings.import.manage', tenantId: actor.tenantId })
     const idempotencyKey = text(input.idempotencyKey); if (!idempotencyKey) fail('IDEMPOTENCY_KEY_REQUIRED', 'Commit requires idempotencyKey.', 422)
     const initial = await prisma.importBatch.findFirst({ where: { id, tenantId: actor.tenantId } }); if (!initial) fail('IMPORT_BATCH_NOT_FOUND', 'Import batch was not found.', 404)
     const replay = await prisma.importBatch.findFirst({ where: { tenantId: actor.tenantId, importType: initial.importType, idempotencyKey } })

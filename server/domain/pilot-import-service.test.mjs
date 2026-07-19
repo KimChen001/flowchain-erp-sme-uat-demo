@@ -28,8 +28,10 @@ test('Pilot imports require Dry Run and commit all six datasets atomically', asy
 
       await previewAndCommit('suppliers', [{ code: 'PILOT-SUP', name: 'Pilot Supplier', currency: 'CNY', status: 'active' }], 'suppliers-1')
       await prisma.user.update({ where: { id: identity.userId }, data: { role: 'admin' } }); identity.role = 'admin'
+      await prisma.userRoleAssignment.deleteMany({ where: { userId: identity.userId } })
       await previewAndCommit('warehouses', [{ code: 'PILOT-WH', name: 'Pilot Warehouse', status: 'active' }], 'warehouses-1')
       await prisma.user.update({ where: { id: identity.userId }, data: { role: 'manager' } }); identity.role = 'manager'
+      await prisma.userRoleAssignment.deleteMany({ where: { userId: identity.userId } })
       await previewAndCommit('locations', [{ warehouseCode: (await prisma.warehouse.findUnique({ where: { id: scenario.warehouseId } })).code, code: ' B-01 ', name: 'Bin B01', status: 'active' }], 'locations-1')
       await previewAndCommit('open_purchase_orders', [{ poNumber: 'PILOT-PO-001', supplierCode: 'PILOT-SUP', sku: 'PILOT-SKU', orderedQuantity: '10', receivedQuantity: '2', unit: 'EA', currency: 'CNY', status: 'issued' }], 'po-1')
 

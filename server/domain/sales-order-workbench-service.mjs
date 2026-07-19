@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { resolveProvisionedActor } from './pilot-identity.mjs'
+import { assertAuthorized } from '../auth/authorization-service.mjs'
 import { outboundRequestHash } from './outbound-posting-command-service.mjs'
 import { outboundDecimalString as fixed, outboundDecimalUnits as units } from './outbound-transaction-policy.mjs'
 
@@ -25,7 +26,7 @@ const amount = (quantityValue, priceValue) => {
   const product = units(quantityValue) * units(priceValue)
   return fixed((product + 5_000n) / 10_000n)
 }
-const permissions = (actor) => ['admin', 'manager', 'business-specialist', 'business_specialist'].includes(actor.role)
+const commandPermission = (commandType) => commandType === 'create_sales_order_draft' ? 'sales_order.create' : commandType === 'revise_sales_order_draft' ? 'sales_order.revise' : commandType === 'hold_sales_order' ? 'sales_order.cancel' : 'sales_order.submit'
 
 async function actorFor(prisma, context) { return resolveProvisionedActor(prisma, context?.identity || context) }
 async function authoritativeLines(prisma, tenantId, lines) {
@@ -57,7 +58,7 @@ export function createSalesOrderWorkbenchService({ prisma, idFactory = randomUUI
 
   async function execute(commandType, idempotencyKey, payload, context, work) {
     const actor = await actorFor(prisma, context)
-    if (!permissions(actor)) fail('PERMISSION_DENIED', 'Your role cannot change sales orders.', 403)
+    assertAuthorized({ actor, permission: commandPermission(commandType), tenantId: actor.tenantId })
     const key = text(idempotencyKey)
     if (!key) fail('IDEMPOTENCY_KEY_REQUIRED', 'idempotencyKey is required.', 400)
     const requestHash = outboundRequestHash(payload)

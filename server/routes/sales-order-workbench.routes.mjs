@@ -1,4 +1,3 @@
-import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 import { createSalesOrderReadService, createSalesOrderWorkbenchService, SalesWorkbenchError } from '../domain/sales-order-workbench-service.mjs'
 import { PilotIdentityError } from '../domain/pilot-identity.mjs'
 import { createOutboundWorkbenchReadService } from '../domain/outbound-workbench-read-service.mjs'
@@ -27,13 +26,11 @@ export async function handleSalesOrderWorkbenchRoute(ctx) {
   const isEdit = detail && ctx.req.method === 'PATCH'
   const isTransition = transition && ctx.req.method === 'POST'
   if (!isRead && !isCreate && !isEdit && !isTransition) return false
-  const authorization = isRead ? null : authorizeMutation(ctx, { allowedRoles: ['admin', 'manager', 'business-specialist', 'business_specialist'], action: 'sales-order-lifecycle', resource: 'database-outbound' })
-  if (authorization?.blocked) return true
   const lifecycleCapability = capabilityForEnvironment('sales-order-lifecycle', ctx.env || process.env)
   if (!isRead && !lifecycleCapability?.enabled) { ctx.send(ctx.res, 409, { code: 'OUTBOUND_CAPABILITY_NOT_AVAILABLE', message: 'Authoritative outbound lifecycle is not enabled for this runtime.', details: { capability: 'sales-order-lifecycle' } }); return true }
   try {
     const prisma = ctx.outboundPrisma || await getPrismaClient(ctx.env || process.env)
-    const context = { identity: isRead ? ctx.identity : authorization.identity }
+    const context = { identity: ctx.identity }
     if (isRead) {
       if (entryData) { ctx.send(ctx.res, 200, await createSalesOrderReadService({ prisma, lifecycleCapability }).entryData(context)); return true }
       if (orderRead || shipmentRead) {

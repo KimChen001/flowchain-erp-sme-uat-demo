@@ -1,5 +1,4 @@
 import { capabilityForEnvironment } from '../domain/capability-registry.mjs'
-import { authorizeMutation } from '../domain/mutation-authorization.mjs'
 import { createOutboundPostingCommandService, OutboundCommandError } from '../domain/outbound-posting-command-service.mjs'
 import { createOutboundQueryService, OutboundQueryError } from '../domain/outbound-query-service.mjs'
 import { PilotIdentityError } from '../domain/pilot-identity.mjs'
@@ -65,10 +64,6 @@ export async function handleOutboundRoute(ctx) {
   if (previewCapability && !capabilityForEnvironment(previewCapability, env)?.enabled) { unavailable(ctx, previewCapability); return true }
   const commandCapability = reserve || release ? 'sales-reservation' : draft || cancel ? 'sales-shipment-draft' : post ? 'sales-shipment-posting' : reverse ? 'sales-shipment-reversal' : null
   if (commandCapability && !capabilityForEnvironment(commandCapability, env)?.enabled) { unavailable(ctx, commandCapability); return true }
-  const authorization = commandCapability
-    ? authorizeMutation(ctx, { allowedRoles: ['admin', 'manager', 'business-specialist', 'business_specialist'], action: commandCapability, resource: 'database-outbound' })
-    : null
-  if (authorization?.blocked) return true
   try {
     const needQuery = Boolean(orderState || shipmentState || previewCapability)
     const needCommand = Boolean(commandCapability)
