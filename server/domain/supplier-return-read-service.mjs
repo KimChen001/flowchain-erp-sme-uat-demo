@@ -10,6 +10,7 @@ import {
   supplierReturnDecimalString as decimalString,
   supplierReturnDecimalUnits as decimalUnits,
 } from "./supplier-return-transaction-policy.mjs";
+import { assertAuthorized, can } from "../auth/authorization-service.mjs";
 
 export class SupplierReturnReadError extends Error {
   constructor(code, message, status = 400, details) {
@@ -23,13 +24,6 @@ export class SupplierReturnReadError extends Error {
 
 const text = (value) => String(value ?? "").trim();
 const fixed = (value) => decimalString(decimalUnits(value || 0));
-const postingRoles = new Set([
-  "admin",
-  "manager",
-  "business-specialist",
-  "business_specialist",
-  "buyer",
-]);
 
 function capabilityState(capability) {
   return capability || {
@@ -126,9 +120,9 @@ function postingModel(posting) {
 }
 
 const sum = (values) =>
-  fixed(values.reduce((total, value) => total + decimalUnits(value || 0), 0n));
+  decimalString(values.reduce((total, value) => total + decimalUnits(value || 0), 0n));
 
-function postingReconciliation(posting, movements, audit, consumedByAuthorizationLine) {
+function postingReconciliation(posting, movements, audit, consumedByAuthorizationLine, activePostingLineIds = new Set(), partialScope = false) {
   const postAudit = audit.find((entry) =>
     [
       "supplier_return_posted",
@@ -145,6 +139,8 @@ function postingReconciliation(posting, movements, audit, consumedByAuthorizatio
       : posting.postingType === "customer_return_receipt"
         ? ["customer_return_quarantine_in"]
         : ["supplier_return_out"];
+  const equal = (left, right) => decimalUnits(left || 0) === decimalUnits(right || 0);
+  const check = (rule, matched, calculated, recorded) => ({ rule, status: matched ? "matched" : "mismatch", calculated: String(calculated ?? ""), recorded: String(recorded ?? "") });
   const lines = posting.lines.map((line) => {
     const lineMovements = movements.filter(
       (movement) => movement.sourceDocumentLineId === line.id,
@@ -152,94 +148,66 @@ function postingReconciliation(posting, movements, audit, consumedByAuthorizatio
     const originals = lineMovements.filter(
       (movement) => !movement.reversalOfMovementId,
     );
-    const typeChecks = expectedTypes.map((movementType) => ({
-      movementType,
-      matched:
-        originals.filter((movement) => movement.movementType === movementType)
-          .length === 1,
-    }));
-    const batchMatched =
-      posting.postingStatus === "unposted" ||
-      (Boolean(posting.metadata?.postingBatchId) &&
-        originals.length === expectedTypes.length &&
-        originals.every(
-          (movement) =>
-            movement.postingBatchId === posting.metadata?.postingBatchId,
-        ));
-    const reversalMatched =
-      posting.postingStatus !== "reversed" ||
-      (originals.length === expectedTypes.length &&
-        originals.every((movement) => Boolean(movement.reversedByMovementId)) &&
-        lineMovements.filter((movement) => movement.reversalOfMovementId)
-          .length === expectedTypes.length);
-    const balanceIds = [
-      line.inventoryBalanceId,
-      line.quarantineBalanceId,
-      line.destinationInventoryBalanceId,
-    ].filter(Boolean);
+    const expectedMovement = (movementType) => {
+      const releaseAvailable = movementType === "quarantine_release_available_in";
+      const balanceType = releaseAvailable ? "available" : movementType === "supplier_return_out" ? (line.inventoryBalanceId ? "available" : "quarantine") : "quarantine";
+      const balanceId = releaseAvailable ? line.destinationInventoryBalanceId : balanceType === "available" ? line.inventoryBalanceId : line.quarantineBalanceId;
+      const inbound = ["customer_return_quarantine_in", "quarantine_release_available_in"].includes(movementType);
+      return { movementType, balanceType, balanceId, quantityIn: inbound ? line.quantity : 0, quantityOut: inbound ? 0 : line.quantity, adjustmentQty: 0 };
+    };
+    const movementChecks = expectedTypes.flatMap((movementType) => {
+      const expected = expectedMovement(movementType);
+      const candidates = originals.filter((movement) => movement.movementType === movementType);
+      const movement = candidates[0];
+      return [
+        check(`movement_${movementType}_count`, candidates.length === 1, 1, candidates.length),
+        check(`movement_${movementType}_identity`, Boolean(movement && movement.tenantId === posting.tenantId && movement.sourceDocumentType === "ReturnPostingDocument" && movement.sourceDocumentId === posting.id && movement.sourceDocumentLineId === line.id && movement.itemId === line.itemId && movement.sku === line.sku && text(movement.unit) === text(line.unit) && movement.warehouseId === line.warehouseId && text(movement.location) === text(line.location) && text(movement.locationKey) === text(line.locationKey) && movement.postingBatchId === posting.metadata?.postingBatchId && text(movement.metadata?.balanceType) === text(expected.balanceType) && text(movement.metadata?.balanceId) === text(expected.balanceId)), `${posting.tenantId}/${line.id}/${expected.balanceId}`, movement ? `${movement.tenantId}/${movement.sourceDocumentLineId}/${movement.metadata?.balanceId}` : "missing"),
+        check(`movement_${movementType}_quantity_direction`, Boolean(movement && equal(movement.quantityIn, expected.quantityIn) && equal(movement.quantityOut, expected.quantityOut) && equal(movement.adjustmentQty, expected.adjustmentQty)), `${fixed(expected.quantityIn)}/${fixed(expected.quantityOut)}/${fixed(expected.adjustmentQty)}`, movement ? `${fixed(movement.quantityIn)}/${fixed(movement.quantityOut)}/${fixed(movement.adjustmentQty)}` : "missing"),
+      ];
+    });
+    const balanceIds = [line.inventoryBalanceId, line.quarantineBalanceId, line.destinationInventoryBalanceId].filter(Boolean);
     const balanceImpacts = recordedImpacts.filter((impact) =>
       balanceIds.includes(impact.balanceId),
     );
-    const balanceEvidenceMatched =
-      posting.postingStatus === "unposted" ||
-      balanceImpacts.length >=
-        (posting.postingType === "quarantine_release" ? 2 : 1);
     const consumedQuantity =
       consumedByAuthorizationLine.get(line.returnAuthorizationLineId) ||
       "0.0000";
+    const authorizedQuantity = fixed(line.returnAuthorizationLine?.authorizedQuantity || 0);
+    const remainingUnits = decimalUnits(authorizedQuantity) - decimalUnits(consumedQuantity);
+    const expectedAuthorizationStatus = remainingUnits <= 0n ? "executed" : decimalUnits(consumedQuantity) > 0n ? "partially_executed" : "approved";
+    const expectedRequestStatus = remainingUnits <= 0n ? "executed" : decimalUnits(consumedQuantity) > 0n ? "partially_executed" : "authorized";
+    const expectedBalances = expectedTypes.map(expectedMovement);
+    const balanceChecks = expectedBalances.map((expected) => {
+      const impact = balanceImpacts.find((entry) => entry.balanceId === expected.balanceId && text(entry.balanceType) === expected.balanceType && equal(entry.quantity, line.quantity));
+      let math = Boolean(impact);
+      if (impact && expected.balanceType === "available") math = math && equal(decimalUnits(impact.onHandAfter) - decimalUnits(impact.onHandBefore), expected.movementType === "supplier_return_out" ? -decimalUnits(line.quantity) : decimalUnits(line.quantity)) && equal(impact.reservedAfter, impact.reservedBefore) && equal(decimalUnits(impact.availableAfter) - decimalUnits(impact.availableBefore), expected.movementType === "supplier_return_out" ? -decimalUnits(line.quantity) : decimalUnits(line.quantity));
+      if (impact && expected.balanceType === "quarantine") math = math && equal(decimalUnits(impact.onHandAfter) - decimalUnits(impact.onHandBefore), expected.movementType === "customer_return_quarantine_in" ? decimalUnits(line.quantity) : -decimalUnits(line.quantity));
+      return check(`balance_${expected.balanceType}_${expected.balanceId}`, math, `${expected.balanceId}:${expected.balanceType}:${fixed(line.quantity)}`, impact ? `${impact.balanceId}:${impact.balanceType}:${fixed(impact.quantity)}:${impact.onHandBefore}->${impact.onHandAfter}` : "missing");
+    });
+    const reversalChecks = originals.map((original) => {
+      const compensations = lineMovements.filter((movement) => movement.reversalOfMovementId === original.id);
+      const compensation = compensations[0];
+      const matched = posting.postingStatus !== "reversed" ? !original.reversedByMovementId && compensations.length === 0 : compensations.length === 1 && original.reversedByMovementId === compensation?.id && compensation?.postingBatchId !== original.postingBatchId && compensation?.tenantId === original.tenantId && compensation?.itemId === original.itemId && compensation?.sku === original.sku && compensation?.unit === original.unit && compensation?.warehouseId === original.warehouseId && text(compensation?.locationKey) === text(original.locationKey) && compensation?.metadata?.balanceId === original.metadata?.balanceId && equal(compensation?.quantityIn, original.quantityOut) && equal(compensation?.quantityOut, original.quantityIn) && equal(decimalUnits(compensation?.adjustmentQty), -decimalUnits(original.adjustmentQty));
+      return check(`reversal_${original.id}`, matched, posting.postingStatus === "reversed" ? "one exact compensation" : "no compensation", compensations.map((movement) => movement.id).join(",") || "none");
+    });
     const checks = [
       {
         rule: "request_authorization_posting_lineage",
         status:
-          line.returnAuthorizationLine?.returnRequestLineId &&
-          posting.returnAuthorization?.returnRequest?.id
+          line.returnAuthorizationLine?.returnRequestLine?.id === line.returnAuthorizationLine?.returnRequestLineId &&
+          line.returnAuthorizationLine?.returnRequestLine?.returnRequestId === posting.returnAuthorization?.returnRequest?.id
             ? "matched"
             : "mismatch",
-        calculated: line.returnAuthorizationLine?.returnRequestLineId || "",
+        calculated: `${line.returnAuthorizationLine?.returnRequestLineId || ""}:${line.returnAuthorizationLine?.returnRequestLine?.returnRequestId || ""}`,
         recorded: posting.returnAuthorization?.returnRequest?.id || "",
       },
-      ...typeChecks.map((check) => ({
-        rule: `movement_${check.movementType}`,
-        status: check.matched ? "matched" : "mismatch",
-        calculated: "1",
-        recorded: String(
-          originals.filter(
-            (movement) => movement.movementType === check.movementType,
-          ).length,
-        ),
-      })),
-      {
-        rule: "posting_batch",
-        status: batchMatched ? "matched" : "mismatch",
-        calculated: posting.metadata?.postingBatchId || "unposted",
-        recorded: [...new Set(originals.map((movement) => movement.postingBatchId).filter(Boolean))].join(",") || "unposted",
-      },
-      {
-        rule: "balance_before_after_evidence",
-        status: balanceEvidenceMatched ? "matched" : "mismatch",
-        calculated: balanceIds.join(","),
-        recorded: balanceImpacts
-          .map(
-            (impact) =>
-              `${impact.balanceId}:${impact.onHandBefore}->${impact.onHandAfter}`,
-          )
-          .join(","),
-      },
-      {
-        rule: "reversal_lineage",
-        status: reversalMatched ? "matched" : "mismatch",
-        calculated:
-          posting.postingStatus === "reversed" ? "reversed" : "not_required",
-        recorded: originals.every((movement) => movement.reversedByMovementId)
-          ? "reversed"
-          : "not_reversed",
-      },
-      {
-        rule: "authorization_consumed_quantity",
-        status: "matched",
-        calculated: consumedQuantity,
-        recorded: consumedQuantity,
-      },
+      ...movementChecks,
+      ...balanceChecks,
+      ...reversalChecks,
+      check("authorization_current_posting_line_included", posting.postingStatus !== "posted" || activePostingLineIds.has(line.id), line.id, activePostingLineIds.has(line.id) ? line.id : "missing"),
+      check("authorization_consumed_within_authorized", decimalUnits(consumedQuantity) <= decimalUnits(authorizedQuantity), consumedQuantity, authorizedQuantity),
+      check("authorization_workflow_status", posting.returnAuthorization?.workflowStatus === expectedAuthorizationStatus, expectedAuthorizationStatus, posting.returnAuthorization?.workflowStatus),
+      check("request_workflow_status", posting.returnAuthorization?.returnRequest?.workflowStatus === expectedRequestStatus, expectedRequestStatus, posting.returnAuthorization?.returnRequest?.workflowStatus),
     ];
     return {
       postingLineId: line.id,
@@ -248,6 +216,11 @@ function postingReconciliation(posting, movements, audit, consumedByAuthorizatio
       returnAuthorizationLineId: line.returnAuthorizationLineId,
       sku: line.sku,
       quantity: fixed(line.quantity),
+      calculatedConsumedQuantity: fixed(consumedQuantity),
+      authorizedQuantity,
+      remainingQuantity: decimalString(remainingUnits),
+      expectedAuthorizationStatus,
+      recordedAuthorizationStatus: posting.returnAuthorization?.workflowStatus || null,
       status: checks.every((check) => check.status === "matched")
         ? "matched"
         : "mismatch",
@@ -256,9 +229,10 @@ function postingReconciliation(posting, movements, audit, consumedByAuthorizatio
     };
   });
   return {
-    status: lines.every((line) => line.status === "matched")
+    status: partialScope ? "unavailable" : lines.every((line) => line.status === "matched")
       ? "matched"
       : "mismatch",
+    limitationCodes: partialScope ? ["PARTIAL_WAREHOUSE_SCOPE"] : [],
     lineIsolation: true,
     crossLineNettingAllowed: false,
     lines,
@@ -280,6 +254,7 @@ export function createSupplierReturnReadService({
 
   async function previewDraft(authorizationId, input, context) {
     const actor = await actorFor(context);
+    assertAuthorized({ actor, permission: "returns.posting.prepare", tenantId: actor.tenantId });
     const plan = await buildSupplierReturnDraftPlan({
       prisma,
       tenantId: actor.tenantId,
@@ -299,6 +274,7 @@ export function createSupplierReturnReadService({
 
   async function previewReady(postingId, context) {
     const actor = await actorFor(context);
+    assertAuthorized({ actor, permission: "returns.posting.ready", tenantId: actor.tenantId });
     const plan = await buildSupplierReturnPostingPlan({
       prisma,
       tenantId: actor.tenantId,
@@ -319,6 +295,7 @@ export function createSupplierReturnReadService({
 
   async function previewPost(postingId, context) {
     const actor = await actorFor(context);
+    assertAuthorized({ actor, permission: "returns.posting.post", tenantId: actor.tenantId });
     const plan = await buildSupplierReturnPostingPlan({
       prisma,
       tenantId: actor.tenantId,
@@ -338,6 +315,7 @@ export function createSupplierReturnReadService({
 
   async function previewReverse(postingId, context) {
     const actor = await actorFor(context);
+    assertAuthorized({ actor, permission: "returns.posting.reverse", tenantId: actor.tenantId });
     const plan = await buildSupplierReturnReversalPlan({
       prisma,
       tenantId: actor.tenantId,
@@ -356,6 +334,7 @@ export function createSupplierReturnReadService({
 
   async function postingWorkbench(postingId, context) {
     const actor = await actorFor(context);
+    assertAuthorized({ actor, permission: "returns.posting.read", tenantId: actor.tenantId });
     const posting = await prisma.returnPostingDocument.findFirst({
       where: { id: text(postingId), tenantId: actor.tenantId },
       include: {
@@ -383,7 +362,7 @@ export function createSupplierReturnReadService({
     });
     const canOperate =
       currentCapability.enabled &&
-      postingRoles.has(actor.role) &&
+      can({ actor, permission: "returns.posting.post", tenantId: actor.tenantId }) &&
       hasWarehouseAccess(actor, [posting.warehouseId], "operate");
     const [movements, audit, consumedPostings] = await Promise.all([
       prisma.inventoryMovement.findMany({
@@ -430,6 +409,8 @@ export function createSupplierReturnReadService({
       movements,
       audit,
       consumedByAuthorizationLine,
+      new Set(consumedPostings.flatMap((row) => row.lines.map((line) => line.id))),
+      consumedPostings.some((row) => !hasWarehouseAccess(actor, [row.warehouseId], "read")),
     );
     return {
       dataSource: "Authoritative PostgreSQL",
