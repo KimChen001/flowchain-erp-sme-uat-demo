@@ -36,6 +36,8 @@ export const capabilityRegistry = [
   capability('customer-invoice', 'beta', true, true, 'Database-only governed customer invoice lifecycle from posted shipment evidence', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE' }),
   capability('receivable-obligation', 'beta', true, true, 'Database-only receivable obligation and aging without collection execution', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE' }),
   capability('customer-credit-note', 'beta', true, true, 'Database-only customer credit note from posted return receipt evidence', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE' }),
+  capability('internal-settlement', 'beta', true, true, 'Database-only internal receipt and disbursement allocation without bank execution', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT' }),
+  capability('cashbook', 'beta', true, true, 'Database-only internal cashbook facts without bank statement import or general ledger', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT' }),
   capability('finance', 'beta', true, true, 'Database-only operational P2P and O2C finance without payment, collection, refund, FX, tax filing, or general-ledger execution', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE' }),
   capability('reports', 'stable', true, false, 'Authoritative runtime analytics'),
   capability('settings', 'beta', true, true, 'Local/UAT workspace settings'),
