@@ -41,6 +41,7 @@
     "test:api:operational-finance": "node scripts/smoke-operational-finance-api.mjs",
     "test:api:settings": "node scripts/smoke-workspace-settings-api.mjs",
     "test:db:authorization": "node scripts/verify-authorization-postgres.mjs",
+    "test:db:internal-settlement": "node scripts/verify-internal-settlement-postgres.mjs",
     "test:api:authorization": "node scripts/smoke-authorization-api.mjs",
     "test:browser:authorization": "node scripts/run-authorization-playwright.mjs",
     "db:generate": "prisma generate",

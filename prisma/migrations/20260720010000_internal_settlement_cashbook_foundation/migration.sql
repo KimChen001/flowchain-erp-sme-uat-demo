@@ -1,6 +1,16 @@
 -- Phase 5.2 internal settlement and cashbook foundation.
 -- Records internal settlement facts only; no bank execution or general ledger.
 
+ALTER TABLE "PayableObligation" DROP CONSTRAINT "PayableObligation_status_check";
+ALTER TABLE "PayableObligation" ADD CONSTRAINT "PayableObligation_status_check"
+  CHECK ("status" IN ('draft','approved','held','export_ready','exported','partially_settled','settled','cancelled'));
+ALTER TABLE "PayableObligation" DROP CONSTRAINT "PayableObligation_amounts_check";
+ALTER TABLE "PayableObligation" ADD CONSTRAINT "PayableObligation_amounts_check"
+  CHECK ("originalAmount" >= 0 AND "outstandingAmount" >= 0 AND "approvedCreditAmount" >= 0 AND "outstandingAmount" + "approvedCreditAmount" <= "originalAmount");
+ALTER TABLE "ReceivableObligation" DROP CONSTRAINT "ReceivableObligation_amounts_check";
+ALTER TABLE "ReceivableObligation" ADD CONSTRAINT "ReceivableObligation_amounts_check"
+  CHECK ("originalAmount" >= 0 AND "outstandingAmount" >= 0 AND "approvedCreditAmount" >= 0 AND "outstandingAmount" + "approvedCreditAmount" <= "originalAmount");
+
 CREATE TABLE "CashbookAccount" (
   "id" TEXT NOT NULL,
   "tenantId" TEXT NOT NULL,
@@ -138,6 +148,28 @@ ALTER TABLE "CashbookEntry" ADD CONSTRAINT "CashbookEntry_tenantId_cashbookAccou
 ALTER TABLE "CashbookEntry" ADD CONSTRAINT "CashbookEntry_tenantId_settlementId_fkey" FOREIGN KEY ("tenantId","settlementId") REFERENCES "SettlementDocument"("tenantId","id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "CashbookEntry" ADD CONSTRAINT "CashbookEntry_reversalOfEntryId_fkey" FOREIGN KEY ("reversalOfEntryId") REFERENCES "CashbookEntry"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "CashbookEntry" ADD CONSTRAINT "CashbookEntry_reversedByEntryId_fkey" FOREIGN KEY ("reversedByEntryId") REFERENCES "CashbookEntry"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+CREATE OR REPLACE FUNCTION flowchain_cashbook_entry_immutable() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'Cashbook entries are immutable' USING ERRCODE = '23514';
+  END IF;
+  IF (to_jsonb(NEW) - 'reversedByEntryId') IS DISTINCT FROM (to_jsonb(OLD) - 'reversedByEntryId')
+     OR OLD."reversedByEntryId" IS NOT NULL
+     OR NEW."reversedByEntryId" IS NULL THEN
+    RAISE EXCEPTION 'Cashbook entries are immutable; only a one-time reversal link may be recorded' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "CashbookEntry_immutable_update"
+BEFORE UPDATE ON "CashbookEntry"
+FOR EACH ROW EXECUTE FUNCTION flowchain_cashbook_entry_immutable();
+
+CREATE TRIGGER "CashbookEntry_immutable_delete"
+BEFORE DELETE ON "CashbookEntry"
+FOR EACH ROW EXECUTE FUNCTION flowchain_cashbook_entry_immutable();
 
 -- Extend the code-owned permission catalog constraint without editing the prior migration.
 ALTER TABLE "TenantRolePermission" DROP CONSTRAINT "TenantRolePermission_permissionCode_catalog_check";
