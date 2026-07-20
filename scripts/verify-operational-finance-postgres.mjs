@@ -14,7 +14,7 @@ const migrationsRoot = join(root, "prisma", "migrations");
 const phase4Migration = "20260718040000_operations_settings_closeout";
 const phase5P2pMigration = "20260718050000_operational_finance_p2p";
 const phase5O2cMigration = "20260718060000_operational_finance_o2c";
-const authorizationMigration = "20260719010000_authorization_visibility_foundation";
+const latestMigration = "20260720010000_internal_settlement_cashbook_foundation";
 const node = process.execPath;
 const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 
@@ -201,7 +201,7 @@ try {
     upgradeDatabase,
     `SELECT "migration_name" FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL ORDER BY "finished_at" DESC, "migration_name" DESC LIMIT 1`,
   );
-  assert.equal(latest.rows[0].migration_name, authorizationMigration);
+  assert.equal(latest.rows[0].migration_name, latestMigration);
   const legacy = await query(
     pg,
     upgradeDatabase,
