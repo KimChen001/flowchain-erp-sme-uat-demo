@@ -101,7 +101,10 @@ test("internal settlement and cashbook are atomic, authorized, reconcilable, and
     const lowDraft = await command.createSettlement({ ...payload, settlementNumber: "LOW-DISB", cashbookAccountId: low.account.id, amount: "10", allocations: [{ obligationType: "payable", obligationId: "payable-settle-60", amount: "10" }], idempotencyKey: "create-low" }, finance);
     await assert.rejects(() => command.postSettlement(lowDraft.entityId, { expectedVersion: 0, idempotencyKey: "post-low" }, finance), (error) => error instanceof InternalSettlementError && error.code === "CASHBOOK_INSUFFICIENT_BALANCE");
 
-    const concurrentDrafts = await Promise.all(["A", "B"].map((suffix) => command.createSettlement({ ...payload, settlementNumber: `CONCURRENT-${suffix}`, amount: "40", allocations: [{ obligationType: "payable", obligationId: "payable-settle-60", amount: "40" }], idempotencyKey: `create-concurrent-${suffix}` }, finance)));
+    const concurrentDrafts = [];
+    for (const suffix of ["A", "B"]) {
+      concurrentDrafts.push(await command.createSettlement({ ...payload, settlementNumber: `CONCURRENT-${suffix}`, amount: "40", allocations: [{ obligationType: "payable", obligationId: "payable-settle-60", amount: "40" }], idempotencyKey: `create-concurrent-${suffix}` }, finance));
+    }
     const concurrent = await Promise.allSettled(concurrentDrafts.map((row, index) => command.postSettlement(row.entityId, { expectedVersion: 0, idempotencyKey: `post-concurrent-${index}` }, finance)));
     assert.equal(concurrent.filter((row) => row.status === "fulfilled").length, 1);
     assert.equal(concurrent.filter((row) => row.status === "rejected").length, 1);
