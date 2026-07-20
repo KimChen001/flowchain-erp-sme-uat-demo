@@ -28,7 +28,9 @@ export default defineConfig({
   webServer: [
     {
       command:
-        process.env.PLAYWRIGHT_OPERATIONAL_FINANCE_DB === "true"
+        process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true"
+          ? "node scripts/browser-operational-finance-api.mjs"
+          : process.env.PLAYWRIGHT_OPERATIONAL_FINANCE_DB === "true"
           ? "node scripts/browser-operational-finance-api.mjs"
           : process.env.PLAYWRIGHT_SETTINGS_DB === "true"
           ? "node scripts/browser-settings-api.mjs"

@@ -4,6 +4,7 @@ import OperationalFinanceO2cWorkbench, {
   type O2cView,
 } from "./OperationalFinanceO2cWorkbench";
 import OperationalFinanceP2pWorkbench from "./OperationalFinanceP2pWorkbench";
+import InternalSettlementWorkbench from "./InternalSettlementWorkbench";
 
 export type FinanceTab =
   | "invoices"
@@ -12,13 +13,9 @@ export type FinanceTab =
   | "credits"
   | "reconciliation"
   | "settlement"
+  | "settlement-detail"
   | "match"
   | O2cView;
-
-const emptyCopy = {
-  reconciliation: ["finance.emptyTitle", "finance.reconciliationUnavailable"],
-  settlement: ["finance.emptyTitle", "finance.settlementUnavailable"],
-} as const;
 
 const fallbackCopy = [
   "finance.emptyTitle",
@@ -31,8 +28,8 @@ export default function FinanceWorkbench({ initialView = "invoices" }: { initial
     return <OperationalFinanceO2cWorkbench view={initialView as O2cView} />;
   if (["overview", "invoices", "payables", "credits", "match"].includes(initialView))
     return <OperationalFinanceP2pWorkbench view={initialView as "overview" | "invoices" | "payables" | "credits" | "match"} />;
-  const copy = initialView === "reconciliation" || initialView === "settlement"
-    ? emptyCopy[initialView]
-    : fallbackCopy;
+  if (initialView === "reconciliation") return <InternalSettlementWorkbench view="cashbook" />;
+  if (initialView === "settlement" || initialView === "settlement-detail") return <InternalSettlementWorkbench view={initialView} />;
+  const copy = fallbackCopy;
   return <Card className="py-16 text-center"><h2 className="text-base font-semibold">{t(copy[0])}</h2><p className="mt-2 text-xs text-slate-500">{t(copy[1])}</p></Card>;
 }

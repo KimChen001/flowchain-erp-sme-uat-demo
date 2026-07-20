@@ -35,6 +35,7 @@ Never put passwords, database URLs, session secrets or invitation tokens in comm
 | `FLOWCHAIN_DEFAULT_TENANT_ID` | Provisioned workspace id |
 | `FLOWCHAIN_LOCAL_SESSION_SECRET` | Random value of at least 32 characters |
 | `FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING` | `true` |
+| `FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT` | `true` for Phase 5.2 Internal Settlement and Cashbook |
 | `FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP` | unset or `false` outside disposable local tests |
 
 ## User and invitation operations

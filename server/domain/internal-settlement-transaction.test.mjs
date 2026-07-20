@@ -54,6 +54,15 @@ test("internal settlement and cashbook are atomic, authorized, reconcilable, and
     await seed(prisma);
     const command = createInternalSettlementCommandService({ prisma, env });
     const read = createInternalSettlementReadService({ prisma, capabilities: { cashbook: { enabled: true }, "internal-settlement": { enabled: true } } });
+    const disabledCommand = createInternalSettlementCommandService({
+      prisma,
+      env: { ...env, FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT: "false" },
+    });
+    await assert.rejects(
+      () => disabledCommand.createCashbookAccount({ accountCode: "DISABLED", name: "Disabled", accountType: "cash", currency: "CNY", openingBalance: "0", idempotencyKey: "disabled-account" }, admin),
+      (error) => error.code === "INTERNAL_SETTLEMENT_CAPABILITY_NOT_AVAILABLE",
+    );
+    assert.equal(await prisma.cashbookAccount.count({ where: { tenantId } }), 0);
     const account = await command.createCashbookAccount({ accountCode: "CNY-OPERATING", name: "CNY Operating Cash", accountType: "bank", currency: "CNY", openingBalance: "200.0000", idempotencyKey: "account-main" }, admin);
     assert.equal(account.account.currentBalance, "200.0000");
     assert.equal((await command.createCashbookAccount({ accountCode: "CNY-OPERATING", name: "CNY Operating Cash", accountType: "bank", currency: "CNY", openingBalance: "200.0000", idempotencyKey: "account-main" }, admin)).idempotentReplay, true);

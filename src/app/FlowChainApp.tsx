@@ -1866,6 +1866,7 @@ export default function FlowChainApp() {
                             "purchase_order",
                             "supplier",
                             "item",
+                            "settlement_document",
                           ].includes(activeRoute.entityType) ? (
                           <BusinessEntityDetailPage route={activeRoute} />
                         ) : (

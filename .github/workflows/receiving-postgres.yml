@@ -35,6 +35,8 @@ jobs:
       - run: npm run test:api:settings
       - run: npm run test:db:authorization
       - run: npm run test:api:authorization
+      - run: npm run test:db:internal-settlement
+      - run: npm run test:api:internal-settlement
       - run: npm run pilot:check
         env:
           FLOWCHAIN_PERSISTENCE_MODE: database
@@ -45,6 +47,7 @@ jobs:
           FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING: 'true'
           FLOWCHAIN_ENABLE_DB_INVENTORY_OPERATIONS: 'true'
           FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE: 'true'
+          FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT: 'true'
           FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: 'false'
 
   browser:
@@ -69,3 +72,4 @@ jobs:
       - run: npm run test:browser:settings
       - run: npm run test:browser:operational-finance
       - run: npm run test:browser:authorization
+      - run: npm run test:browser:internal-settlement

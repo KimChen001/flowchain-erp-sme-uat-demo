@@ -29,6 +29,7 @@ export function verifyLocalSessionToken(token, secret, { now = Date.now() } = {}
 
 const normalizedRole = value => {
   const role = String(value || '').toLowerCase()
+  if (['finance-specialist', 'business-specialist'].includes(role)) return role
   if (/admin|管理员/.test(role)) return 'admin'
   if (/manager|经理|approver/.test(role)) return 'manager'
   if (/buyer|采购员/.test(role)) return 'buyer'
