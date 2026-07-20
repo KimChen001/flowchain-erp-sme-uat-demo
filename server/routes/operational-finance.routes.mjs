@@ -9,6 +9,8 @@ import {
 } from "../domain/operational-finance-read-service.mjs";
 import { createOperationalFinanceO2cCommandService } from "../domain/operational-finance-o2c-command-service.mjs";
 import { createOperationalFinanceO2cReadService } from "../domain/operational-finance-o2c-read-service.mjs";
+import { createInternalSettlementCommandService, InternalSettlementError } from "../domain/internal-settlement-command-service.mjs";
+import { createInternalSettlementReadService } from "../domain/internal-settlement-read-service.mjs";
 import { PilotIdentityError } from "../domain/pilot-identity.mjs";
 import { getPrismaClient } from "../persistence/prisma-client.mjs";
 
@@ -20,6 +22,8 @@ const capabilityIds = [
   "customer-invoice",
   "receivable-obligation",
   "customer-credit-note",
+  "internal-settlement",
+  "cashbook",
 ];
 const capabilities = (env) =>
   Object.fromEntries(
@@ -62,6 +66,7 @@ function knownError(ctx, error) {
   if (
     error instanceof OperationalFinanceError ||
     error instanceof OperationalFinanceReadError ||
+    error instanceof InternalSettlementError ||
     error instanceof PilotIdentityError ||
     error?.name === "AuthorizationError"
   ) {
@@ -101,6 +106,12 @@ async function services(ctx) {
     o2cCommand:
       ctx.operationalFinanceO2cCommandService ||
       createOperationalFinanceO2cCommandService({ prisma, env }),
+    settlementRead:
+      ctx.internalSettlementReadService ||
+      createInternalSettlementReadService({ prisma, capabilities: capabilities(env) }),
+    settlementCommand:
+      ctx.internalSettlementCommandService ||
+      createInternalSettlementCommandService({ prisma, env }),
   };
 }
 
@@ -109,14 +120,64 @@ export async function handleOperationalFinanceRoute(ctx) {
   if (!path.startsWith("/api/finance/")) return false;
   if (!ensureBoundary(ctx)) return true;
   try {
-    const { read, command, o2cRead, o2cCommand } = await services(ctx);
+    const { read, command, o2cRead, o2cCommand, settlementRead, settlementCommand } = await services(ctx);
     if (ctx.req.method === "GET" && path === "/api/finance/entry-data") {
-      const [p2p, o2c] = await Promise.all([
+      const [p2p, o2c, settlement] = await Promise.all([
         read.entryData(ctx),
         o2cRead.entryData(ctx),
+        settlementRead.entryData(ctx),
       ]);
-      ctx.send(ctx.res, 200, { ...p2p, ...o2c, capabilities: capabilities(ctx.env || process.env) });
+      ctx.send(ctx.res, 200, { ...p2p, ...o2c, ...settlement, capabilities: capabilities(ctx.env || process.env) });
       return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/finance/cashbook/accounts") {
+      ctx.send(ctx.res, 200, await settlementRead.listAccounts(query(ctx.url), ctx));
+      return true;
+    }
+    if (ctx.req.method === "POST" && path === "/api/finance/cashbook/accounts") {
+      if (!ensureCapability(ctx, "cashbook")) return true;
+      ctx.send(ctx.res, 201, await settlementCommand.createCashbookAccount(await ctx.readBody(ctx.req), ctx));
+      return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/finance/cashbook/entries") {
+      ctx.send(ctx.res, 200, await settlementRead.listEntries(query(ctx.url), ctx));
+      return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/finance/settlements") {
+      ctx.send(ctx.res, 200, await settlementRead.listSettlements(query(ctx.url), ctx));
+      return true;
+    }
+    if (ctx.req.method === "POST" && path === "/api/finance/settlements/preview") {
+      if (!ensureCapability(ctx, "internal-settlement")) return true;
+      ctx.send(ctx.res, 200, await settlementCommand.previewSettlement(await ctx.readBody(ctx.req), ctx));
+      return true;
+    }
+    if (ctx.req.method === "POST" && path === "/api/finance/settlements") {
+      if (!ensureCapability(ctx, "internal-settlement")) return true;
+      ctx.send(ctx.res, 201, await settlementCommand.createSettlement(await ctx.readBody(ctx.req), ctx));
+      return true;
+    }
+    const settlementMatch = path.match(/^\/api\/finance\/settlements\/([^/]+)(?:\/(post|reverse|reconciliation))?$/);
+    if (settlementMatch) {
+      const settlementId = decodeURIComponent(settlementMatch[1]);
+      const action = settlementMatch[2] || "";
+      if (ctx.req.method === "GET" && !action) {
+        const result = await settlementRead.detail(settlementId, ctx);
+        ctx.send(ctx.res, result ? 200 : 404, result || { code: "SETTLEMENT_NOT_FOUND", message: "Settlement was not found." });
+        return true;
+      }
+      if (ctx.req.method === "GET" && action === "reconciliation") {
+        const result = await settlementRead.reconciliation(settlementId, ctx);
+        ctx.send(ctx.res, result ? 200 : 404, result || { code: "SETTLEMENT_NOT_FOUND", message: "Settlement was not found." });
+        return true;
+      }
+      if (ctx.req.method === "POST" && ["post", "reverse"].includes(action)) {
+        if (!ensureCapability(ctx, "internal-settlement")) return true;
+        const body = await ctx.readBody(ctx.req);
+        const result = action === "post" ? await settlementCommand.postSettlement(settlementId, body, ctx) : await settlementCommand.reverseSettlement(settlementId, body, ctx);
+        ctx.send(ctx.res, 200, result);
+        return true;
+      }
     }
     if (ctx.req.method === "GET" && path === "/api/finance/landing") {
       ctx.send(ctx.res, 200, await o2cRead.landing(ctx));

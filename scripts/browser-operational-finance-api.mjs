@@ -237,6 +237,9 @@ async function seed() {
       ["manager@example.com", "Finance Manager", "manager"],
       ["specialist@example.com", "Finance Specialist", "business-specialist"],
       ["viewer@example.com", "Finance Viewer", "viewer"],
+      ...(process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true"
+        ? [["settlement@example.com", "Settlement Specialist", "finance-specialist"]]
+        : []),
     ].map(([email, name, role]) => ({
       id: actorId(email),
       tenantId,
@@ -254,6 +257,34 @@ async function seed() {
       name: "Finance Browser Supplier",
     },
   });
+  if (process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true") {
+    await prisma.supplierInvoice.create({
+      data: {
+        id: "finance-browser-settlement-invoice",
+        tenantId,
+        invoiceNumber: "SI-BROWSER-SETTLEMENT",
+        supplierId: "finance-browser-supplier",
+        supplierName: "Finance Browser Supplier",
+        totalAmount: "60.0000",
+        amount: "60.0000",
+        currency: "CNY",
+        status: "approved",
+      },
+    });
+    await prisma.payableObligation.create({
+      data: {
+        id: "finance-browser-settlement-payable",
+        tenantId,
+        supplierInvoiceId: "finance-browser-settlement-invoice",
+        obligationNumber: "AP-BROWSER-SETTLEMENT",
+        originalAmount: "60.0000",
+        outstandingAmount: "60.0000",
+        currency: "CNY",
+        dueDate: new Date("2026-08-01T00:00:00.000Z"),
+        status: "approved",
+      },
+    });
+  }
   await prisma.item.create({
     data: {
       id: "finance-browser-item",
@@ -403,6 +434,10 @@ try {
       process.env.PLAYWRIGHT_OPERATIONAL_FINANCE_DISABLED === "true"
         ? "false"
         : "true",
+    FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT:
+      process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true"
+        ? "true"
+        : "false",
     FLOWCHAIN_DEFAULT_TENANT_ID: tenantId,
     FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: "false",
     FLOWCHAIN_LOCAL_SESSION_SECRET: `finance-browser-${randomUUID()}-secure`,

@@ -10,6 +10,8 @@ function context({
   command,
   o2cRead,
   o2cCommand,
+  settlementRead,
+  settlementCommand,
   body = {},
 } = {}) {
   const sent = [];
@@ -20,6 +22,7 @@ function context({
     env: {
       FLOWCHAIN_PERSISTENCE_MODE: "database",
       FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE: String(enabled),
+      FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT: String(enabled),
     },
     identity: {
       authenticated: true,
@@ -36,6 +39,8 @@ function context({
     operationalFinanceCommandService: command || {},
     operationalFinanceO2cReadService: o2cRead || {},
     operationalFinanceO2cCommandService: o2cCommand || {},
+    internalSettlementReadService: settlementRead || {},
+    internalSettlementCommandService: settlementCommand || {},
     readBody: async () => body,
     send: (_res, status, payload) => sent.push({ status, payload }),
   };
@@ -138,4 +143,40 @@ test("finance read routes receive only the centrally resolved request context", 
     userId: "signed-user",
   });
   assert.equal(sent[0].payload.tenantId, "signed-tenant");
+});
+
+test("internal settlement routes use signed context and focused capability", async () => {
+  let observed;
+  const { ctx, sent } = context({
+    path: "/api/finance/settlements/SET-1/post",
+    method: "POST",
+    body: { expectedVersion: 0, idempotencyKey: "post-1", tenantId: "forged" },
+    settlementCommand: {
+      postSettlement: async (id, body, requestContext) => {
+        observed = { id, body, tenantId: requestContext.identity.tenantId };
+        return { entityId: id, status: "posted" };
+      },
+    },
+  });
+  assert.equal(await handleOperationalFinanceRoute(ctx), true);
+  assert.equal(sent[0].status, 200);
+  assert.deepEqual(observed, { id: "SET-1", body: { expectedVersion: 0, idempotencyKey: "post-1", tenantId: "forged" }, tenantId: "signed-tenant" });
+
+  const disabled = context({ path: "/api/finance/settlements/SET-1/post", method: "POST", enabled: false });
+  assert.equal(await handleOperationalFinanceRoute(disabled.ctx), true);
+  assert.equal(disabled.sent[0].status, 409);
+  assert.equal(disabled.sent[0].payload.details.capability, "internal-settlement");
+});
+
+test("cashbook and reconciliation reads never trust a client tenant", async () => {
+  const observed = [];
+  const settlementRead = {
+    listEntries: async (query, requestContext) => { observed.push({ query, tenantId: requestContext.identity.tenantId }); return { items: [] }; },
+    reconciliation: async (id, requestContext) => { observed.push({ id, tenantId: requestContext.identity.tenantId }); return { status: "matched" }; },
+  };
+  const entries = context({ path: "/api/finance/cashbook/entries?tenantId=forged", settlementRead });
+  await handleOperationalFinanceRoute(entries.ctx);
+  const evidence = context({ path: "/api/finance/settlements/SET-1/reconciliation?tenantId=forged", settlementRead });
+  await handleOperationalFinanceRoute(evidence.ctx);
+  assert.deepEqual(observed, [{ query: { tenantId: "forged" }, tenantId: "signed-tenant" }, { id: "SET-1", tenantId: "signed-tenant" }]);
 });

@@ -1452,6 +1452,7 @@ export const appRouteRegistry: AppRouteDefinition[] = [
     entityType: "settlement_document",
     entityIdParam: "id",
     returnListRouteId: "finance:settlement",
+    viewId: "settlement-detail",
     showInSidebar: false,
     showInModuleNav: false,
     showInBreadcrumb: true,

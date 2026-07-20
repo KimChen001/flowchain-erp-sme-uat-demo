@@ -20,3 +20,16 @@ test('identity headers are rejected by default and accepted only in explicit tes
   assert.equal(resolveRequestIdentity(req, new Map(), 'secret', {}).role, 'viewer')
   assert.equal(resolveRequestIdentity(req, new Map(), 'secret', { FLOWCHAIN_ALLOW_TEST_IDENTITY_HEADERS: 'true' }).role, 'admin')
 })
+
+test('authoritative specialist roles survive signed-session normalization', () => {
+  const finance = createLocalSession(
+    { name: 'Finance', email: 'finance@example.com', role: 'finance-specialist' },
+    { authoritativeRole: true },
+  )
+  const business = createLocalSession(
+    { name: 'Business', email: 'business@example.com', role: 'business-specialist' },
+    { authoritativeRole: true },
+  )
+  assert.equal(finance.role, 'finance-specialist')
+  assert.equal(business.role, 'business-specialist')
+})

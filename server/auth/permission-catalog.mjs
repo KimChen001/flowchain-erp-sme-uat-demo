@@ -99,6 +99,13 @@ const definitions = [
   ["finance.customer_credit.read", "finance", "customer_credit", "read", "low"],
   ["finance.customer_credit.create", "finance", "customer_credit", "create", "medium"],
   ["finance.customer_credit.approve", "finance", "customer_credit", "approve", "critical"],
+  ["finance.cashbook.read", "finance", "cashbook", "read", "low"],
+  ["finance.cashbook.manage", "finance", "cashbook", "manage", "critical"],
+  ["finance.settlement.read", "finance", "settlement", "read", "low"],
+  ["finance.settlement.create", "finance", "settlement", "create", "high"],
+  ["finance.settlement.post", "finance", "settlement", "post", "critical"],
+  ["finance.settlement.reverse", "finance", "settlement", "reverse", "critical"],
+  ["finance.settlement.reconciliation.read", "finance", "settlement_reconciliation", "read", "high"],
 ]
 
 export const permissionCatalog = Object.freeze(definitions.map(([code, module, resource, action, riskLevel, fieldVisibility = []]) => Object.freeze({

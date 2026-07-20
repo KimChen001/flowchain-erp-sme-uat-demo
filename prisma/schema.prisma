@@ -44,6 +44,10 @@ model Tenant {
   customerInvoices                 CustomerInvoice[]
   receivableObligations            ReceivableObligation[]
   customerCreditNotes              CustomerCreditNote[]
+  cashbookAccounts                 CashbookAccount[]
+  settlementDocuments              SettlementDocument[]
+  settlementAllocations            SettlementAllocation[]
+  cashbookEntries                  CashbookEntry[]
   documentLinks                    DocumentLink[]
   procurementFollowups             ProcurementFollowup[]
   inventoryBalances                InventoryBalance[]
@@ -94,11 +98,11 @@ model User {
   auditLogs           AuditLog[]
   defaultWarehouse    Warehouse?                  @relation("UserDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: Restrict)
   warehouseScopes     UserWarehouseScope[]
-  roleAssignments     UserRoleAssignment[]          @relation("AssignedUser")
-  roleAssignmentsMade UserRoleAssignment[]          @relation("RoleAssignmentCreator")
-  rolesCreated        TenantRole[]                  @relation("RoleCreator")
-  rolesUpdated        TenantRole[]                  @relation("RoleUpdater")
-  roleGrantsCreated   TenantRolePermission[]        @relation("RolePermissionCreator")
+  roleAssignments     UserRoleAssignment[]        @relation("AssignedUser")
+  roleAssignmentsMade UserRoleAssignment[]        @relation("RoleAssignmentCreator")
+  rolesCreated        TenantRole[]                @relation("RoleCreator")
+  rolesUpdated        TenantRole[]                @relation("RoleUpdater")
+  roleGrantsCreated   TenantRolePermission[]      @relation("RolePermissionCreator")
   invitationsSent     WorkspaceInvitation[]       @relation("InvitationInviter")
   invitationsAccepted WorkspaceInvitation[]       @relation("InvitationAcceptor")
   importBatches       ImportBatch[]
@@ -207,13 +211,13 @@ model Item {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  tenant             Tenant                       @relation(fields: [tenantId], references: [id])
-  preferredSupplier  Supplier?                    @relation(fields: [preferredSupplierId], references: [id])
-  salesOrderLines    SalesOrderLine[]
-  reservations       InventoryReservation[]
-  shipmentLines      ShipmentLine[]
+  tenant               Tenant                       @relation(fields: [tenantId], references: [id])
+  preferredSupplier    Supplier?                    @relation(fields: [preferredSupplierId], references: [id])
+  salesOrderLines      SalesOrderLine[]
+  reservations         InventoryReservation[]
+  shipmentLines        ShipmentLine[]
   customerInvoiceLines CustomerInvoiceLine[]
-  quarantineBalances QuarantineInventoryBalance[]
+  quarantineBalances   QuarantineInventoryBalance[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, name])
@@ -685,44 +689,44 @@ model ReceivingLine {
 }
 
 model SupplierInvoice {
-  id                   String    @id
-  tenantId             String
-  invoiceNumber        String?
-  supplierId           String?
-  supplierName         String?
-  supplierSnapshot     Json?
-  relatedPoId          String?
-  relatedGrnId         String?
-  invoiceDate          DateTime?
-  dueDate              DateTime?
-  subtotalAmount       Decimal?  @db.Decimal(18, 4)
-  enteredTaxAmount     Decimal?  @db.Decimal(18, 4)
-  totalAmount          Decimal?  @db.Decimal(18, 4)
-  amount               Decimal?  @db.Decimal(18, 4)
-  currency             String    @default("CNY")
-  status               String    @default("draft")
-  matchStatus          String?
-  varianceAmount       Decimal?  @db.Decimal(18, 4)
-  submittedAt          DateTime?
-  submittedById        String?
-  approvedAt           DateTime?
-  approvedById         String?
-  heldAt               DateTime?
-  heldById             String?
-  holdReason           String?
-  cancelledAt          DateTime?
-  cancelledById        String?
-  cancellationReason   String?
-  version              Int       @default(0)
-  metadata             Json?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                 String    @id
+  tenantId           String
+  invoiceNumber      String?
+  supplierId         String?
+  supplierName       String?
+  supplierSnapshot   Json?
+  relatedPoId        String?
+  relatedGrnId       String?
+  invoiceDate        DateTime?
+  dueDate            DateTime?
+  subtotalAmount     Decimal?  @db.Decimal(18, 4)
+  enteredTaxAmount   Decimal?  @db.Decimal(18, 4)
+  totalAmount        Decimal?  @db.Decimal(18, 4)
+  amount             Decimal?  @db.Decimal(18, 4)
+  currency           String    @default("CNY")
+  status             String    @default("draft")
+  matchStatus        String?
+  varianceAmount     Decimal?  @db.Decimal(18, 4)
+  submittedAt        DateTime?
+  submittedById      String?
+  approvedAt         DateTime?
+  approvedById       String?
+  heldAt             DateTime?
+  heldById           String?
+  holdReason         String?
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancellationReason String?
+  version            Int       @default(0)
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  tenant             Tenant                 @relation(fields: [tenantId], references: [id])
-  lines              SupplierInvoiceLine[]
-  matchRuns          ThreeWayMatch[]
-  matchExceptions    FinanceMatchException[]
-  payableObligation  PayableObligation?
+  tenant              Tenant                  @relation(fields: [tenantId], references: [id])
+  lines               SupplierInvoiceLine[]
+  matchRuns           ThreeWayMatch[]
+  matchExceptions     FinanceMatchException[]
+  payableObligation   PayableObligation?
   supplierCreditMemos SupplierCreditMemo[]
 
   @@index([tenantId, status])
@@ -748,9 +752,9 @@ model SupplierInvoiceLine {
   version             Int      @default(0)
   metadata            Json?
 
-  supplierInvoice    SupplierInvoice          @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
-  matchLines         ThreeWayMatchLine[]
-  creditMemoLines    SupplierCreditMemoLine[]
+  supplierInvoice SupplierInvoice          @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+  matchLines      ThreeWayMatchLine[]
+  creditMemoLines SupplierCreditMemoLine[]
 
   @@index([supplierInvoiceId])
   @@index([purchaseOrderLineId])
@@ -789,7 +793,7 @@ model ThreeWayMatch {
 }
 
 model ThreeWayMatchLine {
-  id                         String   @id
+  id                         String  @id
   matchId                    String
   supplierInvoiceLineId      String
   purchaseOrderLineId        String
@@ -797,22 +801,22 @@ model ThreeWayMatchLine {
   itemId                     String
   sku                        String
   unit                       String?
-  orderedQuantity            Decimal  @db.Decimal(18, 4)
-  receivedQuantity           Decimal  @db.Decimal(18, 4)
-  previouslyInvoicedQuantity Decimal  @db.Decimal(18, 4)
-  invoiceQuantity            Decimal  @db.Decimal(18, 4)
-  poUnitPrice                Decimal  @db.Decimal(18, 4)
-  invoiceUnitPrice           Decimal  @db.Decimal(18, 4)
-  poLineAmount               Decimal  @db.Decimal(18, 4)
-  invoiceLineAmount          Decimal  @db.Decimal(18, 4)
-  quantityVariance           Decimal  @db.Decimal(18, 4)
-  priceVariance              Decimal  @db.Decimal(18, 4)
-  amountVariance             Decimal  @db.Decimal(18, 4)
+  orderedQuantity            Decimal @db.Decimal(18, 4)
+  receivedQuantity           Decimal @db.Decimal(18, 4)
+  previouslyInvoicedQuantity Decimal @db.Decimal(18, 4)
+  invoiceQuantity            Decimal @db.Decimal(18, 4)
+  poUnitPrice                Decimal @db.Decimal(18, 4)
+  invoiceUnitPrice           Decimal @db.Decimal(18, 4)
+  poLineAmount               Decimal @db.Decimal(18, 4)
+  invoiceLineAmount          Decimal @db.Decimal(18, 4)
+  quantityVariance           Decimal @db.Decimal(18, 4)
+  priceVariance              Decimal @db.Decimal(18, 4)
+  amountVariance             Decimal @db.Decimal(18, 4)
   currency                   String
   status                     String
   metadata                   Json?
 
-  match               ThreeWayMatch          @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  match               ThreeWayMatch           @relation(fields: [matchId], references: [id], onDelete: Cascade)
   supplierInvoiceLine SupplierInvoiceLine     @relation(fields: [supplierInvoiceLineId], references: [id], onDelete: Restrict)
   exceptions          FinanceMatchException[]
 
@@ -823,24 +827,24 @@ model ThreeWayMatchLine {
 }
 
 model FinanceMatchException {
-  id                    String    @id
-  tenantId              String
-  matchId               String
-  matchLineId           String?
-  supplierInvoiceId     String
-  exceptionType         String
-  status                String    @default("open")
-  expectedValue         Decimal?  @db.Decimal(18, 4)
-  actualValue           Decimal?  @db.Decimal(18, 4)
-  varianceValue         Decimal?  @db.Decimal(18, 4)
-  currency              String?
-  resolution            String?
-  resolvedAt            DateTime?
-  resolvedById          String?
-  version               Int       @default(0)
-  metadata              Json?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                String    @id
+  tenantId          String
+  matchId           String
+  matchLineId       String?
+  supplierInvoiceId String
+  exceptionType     String
+  status            String    @default("open")
+  expectedValue     Decimal?  @db.Decimal(18, 4)
+  actualValue       Decimal?  @db.Decimal(18, 4)
+  varianceValue     Decimal?  @db.Decimal(18, 4)
+  currency          String?
+  resolution        String?
+  resolvedAt        DateTime?
+  resolvedById      String?
+  version           Int       @default(0)
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   match           ThreeWayMatch      @relation(fields: [matchId], references: [id], onDelete: Cascade)
@@ -853,67 +857,69 @@ model FinanceMatchException {
 }
 
 model PayableObligation {
-  id                        String    @id
-  tenantId                  String
-  supplierInvoiceId         String    @unique
-  obligationNumber          String
-  originalAmount            Decimal   @db.Decimal(18, 4)
-  outstandingAmount         Decimal   @db.Decimal(18, 4)
-  approvedCreditAmount      Decimal   @default(0) @db.Decimal(18, 4)
-  currency                  String
-  dueDate                   DateTime
-  status                    String    @default("draft")
-  approvedAt                DateTime?
-  approvedById              String?
-  heldAt                    DateTime?
-  heldById                  String?
-  holdReason                String?
-  exportReadyAt             DateTime?
-  exportReadyById           String?
-  exportedAt                DateTime?
-  externalExportReference   String?
-  cancelledAt               DateTime?
-  cancelledById             String?
-  cancellationReason        String?
-  version                   Int       @default(0)
-  metadata                  Json?
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  id                      String    @id
+  tenantId                String
+  supplierInvoiceId       String    @unique
+  obligationNumber        String
+  originalAmount          Decimal   @db.Decimal(18, 4)
+  outstandingAmount       Decimal   @db.Decimal(18, 4)
+  approvedCreditAmount    Decimal   @default(0) @db.Decimal(18, 4)
+  currency                String
+  dueDate                 DateTime
+  status                  String    @default("draft")
+  approvedAt              DateTime?
+  approvedById            String?
+  heldAt                  DateTime?
+  heldById                String?
+  holdReason              String?
+  exportReadyAt           DateTime?
+  exportReadyById         String?
+  exportedAt              DateTime?
+  externalExportReference String?
+  cancelledAt             DateTime?
+  cancelledById           String?
+  cancellationReason      String?
+  version                 Int       @default(0)
+  metadata                Json?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  supplierInvoice SupplierInvoice @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  supplierInvoice       SupplierInvoice        @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
+  settlementAllocations SettlementAllocation[]
 
   @@unique([tenantId, obligationNumber])
+  @@unique([tenantId, id])
   @@index([tenantId, status])
   @@index([tenantId, dueDate])
 }
 
 model SupplierCreditMemo {
-  id                    String    @id
-  tenantId              String
-  creditMemoNumber      String
-  supplierInvoiceId     String
-  returnPostingId       String
-  supplierId            String?
-  supplierNameSnapshot  String?
-  currency              String
-  subtotalAmount        Decimal   @db.Decimal(18, 4)
-  enteredTaxAmount      Decimal   @default(0) @db.Decimal(18, 4)
-  totalAmount           Decimal   @db.Decimal(18, 4)
-  status                String    @default("draft")
-  approvedAt            DateTime?
-  approvedById          String?
-  cancelledAt           DateTime?
-  cancelledById         String?
-  cancellationReason    String?
-  version               Int       @default(0)
-  metadata              Json?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                   String    @id
+  tenantId             String
+  creditMemoNumber     String
+  supplierInvoiceId    String
+  returnPostingId      String
+  supplierId           String?
+  supplierNameSnapshot String?
+  currency             String
+  subtotalAmount       Decimal   @db.Decimal(18, 4)
+  enteredTaxAmount     Decimal   @default(0) @db.Decimal(18, 4)
+  totalAmount          Decimal   @db.Decimal(18, 4)
+  status               String    @default("draft")
+  approvedAt           DateTime?
+  approvedById         String?
+  cancelledAt          DateTime?
+  cancelledById        String?
+  cancellationReason   String?
+  version              Int       @default(0)
+  metadata             Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  supplierInvoice SupplierInvoice       @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
-  returnPosting   ReturnPostingDocument @relation(fields: [returnPostingId], references: [id], onDelete: Restrict)
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  supplierInvoice SupplierInvoice          @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
+  returnPosting   ReturnPostingDocument    @relation(fields: [returnPostingId], references: [id], onDelete: Restrict)
   lines           SupplierCreditMemoLine[]
 
   @@unique([tenantId, creditMemoNumber])
@@ -923,15 +929,15 @@ model SupplierCreditMemo {
 }
 
 model SupplierCreditMemoLine {
-  id                    String   @id
+  id                    String  @id
   supplierCreditMemoId  String
   supplierInvoiceLineId String
   returnPostingLineId   String
-  quantity              Decimal  @db.Decimal(18, 4)
-  unitPrice             Decimal  @db.Decimal(18, 4)
-  lineAmount            Decimal  @db.Decimal(18, 4)
-  enteredTaxAmount      Decimal  @default(0) @db.Decimal(18, 4)
-  totalAmount           Decimal  @db.Decimal(18, 4)
+  quantity              Decimal @db.Decimal(18, 4)
+  unitPrice             Decimal @db.Decimal(18, 4)
+  lineAmount            Decimal @db.Decimal(18, 4)
+  enteredTaxAmount      Decimal @default(0) @db.Decimal(18, 4)
+  totalAmount           Decimal @db.Decimal(18, 4)
   pricingSource         String
   metadata              Json?
 
@@ -945,42 +951,42 @@ model SupplierCreditMemoLine {
 }
 
 model CustomerInvoice {
-  id                    String    @id
-  tenantId              String
-  invoiceNumber         String
-  salesOrderId          String
-  shipmentId            String
-  customerId            String?
-  customerNameSnapshot  String
-  invoiceDate           DateTime
-  dueDate               DateTime
-  subtotalAmount        Decimal   @db.Decimal(18, 4)
-  enteredTaxAmount      Decimal   @default(0) @db.Decimal(18, 4)
-  totalAmount           Decimal   @db.Decimal(18, 4)
-  currency              String
-  status                String    @default("draft")
-  submittedAt           DateTime?
-  submittedById         String?
-  approvedAt            DateTime?
-  approvedById          String?
-  issuedAt              DateTime?
-  issuedById            String?
-  disputedAt            DateTime?
-  disputeReason         String?
-  cancelledAt           DateTime?
-  cancelledById         String?
-  cancellationReason    String?
-  version               Int       @default(0)
-  metadata              Json?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                   String    @id
+  tenantId             String
+  invoiceNumber        String
+  salesOrderId         String
+  shipmentId           String
+  customerId           String?
+  customerNameSnapshot String
+  invoiceDate          DateTime
+  dueDate              DateTime
+  subtotalAmount       Decimal   @db.Decimal(18, 4)
+  enteredTaxAmount     Decimal   @default(0) @db.Decimal(18, 4)
+  totalAmount          Decimal   @db.Decimal(18, 4)
+  currency             String
+  status               String    @default("draft")
+  submittedAt          DateTime?
+  submittedById        String?
+  approvedAt           DateTime?
+  approvedById         String?
+  issuedAt             DateTime?
+  issuedById           String?
+  disputedAt           DateTime?
+  disputeReason        String?
+  cancelledAt          DateTime?
+  cancelledById        String?
+  cancellationReason   String?
+  version              Int       @default(0)
+  metadata             Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  salesOrder            SalesOrder             @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
-  shipment              ShipmentDocument       @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
-  lines                 CustomerInvoiceLine[]
-  receivableObligation  ReceivableObligation?
-  creditNotes           CustomerCreditNote[]
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  salesOrder           SalesOrder            @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  shipment             ShipmentDocument      @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  lines                CustomerInvoiceLine[]
+  receivableObligation ReceivableObligation?
+  creditNotes          CustomerCreditNote[]
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status])
@@ -990,28 +996,28 @@ model CustomerInvoice {
 }
 
 model CustomerInvoiceLine {
-  id                    String   @id
-  customerInvoiceId     String
-  lineNumber            Int
-  shipmentLineId        String
-  salesOrderLineId      String
-  itemId                String
-  sku                   String
-  itemName              String
-  quantity              Decimal  @db.Decimal(18, 4)
-  unit                   String
-  unitPrice             Decimal  @db.Decimal(18, 4)
-  lineAmount            Decimal  @db.Decimal(18, 4)
-  enteredTaxAmount      Decimal  @default(0) @db.Decimal(18, 4)
-  totalAmount           Decimal  @db.Decimal(18, 4)
-  version               Int      @default(0)
-  metadata              Json?
+  id                String  @id
+  customerInvoiceId String
+  lineNumber        Int
+  shipmentLineId    String
+  salesOrderLineId  String
+  itemId            String
+  sku               String
+  itemName          String
+  quantity          Decimal @db.Decimal(18, 4)
+  unit              String
+  unitPrice         Decimal @db.Decimal(18, 4)
+  lineAmount        Decimal @db.Decimal(18, 4)
+  enteredTaxAmount  Decimal @default(0) @db.Decimal(18, 4)
+  totalAmount       Decimal @db.Decimal(18, 4)
+  version           Int     @default(0)
+  metadata          Json?
 
-  customerInvoice  CustomerInvoice          @relation(fields: [customerInvoiceId], references: [id], onDelete: Cascade)
-  shipmentLine     ShipmentLine             @relation(fields: [shipmentLineId], references: [id], onDelete: Restrict)
-  salesOrderLine   SalesOrderLine           @relation(fields: [salesOrderLineId], references: [id], onDelete: Restrict)
-  item             Item                     @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  creditNoteLines  CustomerCreditNoteLine[]
+  customerInvoice CustomerInvoice          @relation(fields: [customerInvoiceId], references: [id], onDelete: Cascade)
+  shipmentLine    ShipmentLine             @relation(fields: [shipmentLineId], references: [id], onDelete: Restrict)
+  salesOrderLine  SalesOrderLine           @relation(fields: [salesOrderLineId], references: [id], onDelete: Restrict)
+  item            Item                     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  creditNoteLines CustomerCreditNoteLine[]
 
   @@unique([customerInvoiceId, shipmentLineId])
   @@index([shipmentLineId])
@@ -1019,61 +1025,178 @@ model CustomerInvoiceLine {
 }
 
 model ReceivableObligation {
-  id                           String    @id
-  tenantId                     String
-  customerInvoiceId            String    @unique
-  obligationNumber             String
-  originalAmount               Decimal   @db.Decimal(18, 4)
-  outstandingAmount            Decimal   @db.Decimal(18, 4)
-  approvedCreditAmount         Decimal   @default(0) @db.Decimal(18, 4)
-  currency                     String
-  dueDate                      DateTime
-  status                       String    @default("open")
-  disputeStatus                String    @default("none")
-  disputeReason                String?
-  externalSettlementReference  String?
-  externalSettlementEnteredAt  DateTime?
+  id                            String    @id
+  tenantId                      String
+  customerInvoiceId             String    @unique
+  obligationNumber              String
+  originalAmount                Decimal   @db.Decimal(18, 4)
+  outstandingAmount             Decimal   @db.Decimal(18, 4)
+  approvedCreditAmount          Decimal   @default(0) @db.Decimal(18, 4)
+  currency                      String
+  dueDate                       DateTime
+  status                        String    @default("open")
+  disputeStatus                 String    @default("none")
+  disputeReason                 String?
+  externalSettlementReference   String?
+  externalSettlementEnteredAt   DateTime?
   externalSettlementEnteredById String?
-  version                      Int       @default(0)
-  metadata                     Json?
-  createdAt                    DateTime  @default(now())
-  updatedAt                    DateTime  @updatedAt
+  version                       Int       @default(0)
+  metadata                      Json?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
 
-  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  customerInvoice CustomerInvoice @relation(fields: [customerInvoiceId], references: [id], onDelete: Restrict)
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customerInvoice       CustomerInvoice        @relation(fields: [customerInvoiceId], references: [id], onDelete: Restrict)
+  settlementAllocations SettlementAllocation[]
 
   @@unique([tenantId, obligationNumber])
+  @@unique([tenantId, id])
   @@index([tenantId, status])
   @@index([tenantId, dueDate])
   @@index([tenantId, currency])
 }
 
-model CustomerCreditNote {
-  id                    String    @id
-  tenantId              String
-  creditNoteNumber      String
-  customerInvoiceId     String
-  returnPostingId       String
-  customerId            String?
-  customerNameSnapshot  String
-  currency              String
-  subtotalAmount        Decimal   @db.Decimal(18, 4)
-  enteredTaxAmount      Decimal   @default(0) @db.Decimal(18, 4)
-  totalAmount           Decimal   @db.Decimal(18, 4)
-  status                String    @default("draft")
-  approvedAt            DateTime?
-  approvedById          String?
-  cancelledAt           DateTime?
-  cancelledById         String?
-  cancellationReason    String?
-  version               Int       @default(0)
-  metadata              Json?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+model CashbookAccount {
+  id             String   @id
+  tenantId       String
+  accountCode    String
+  name           String
+  accountType    String
+  currency       String
+  openingBalance Decimal  @default(0) @db.Decimal(18, 4)
+  currentBalance Decimal  @default(0) @db.Decimal(18, 4)
+  status         String   @default("active")
+  version        Int      @default(0)
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  customerInvoice CustomerInvoice       @relation(fields: [customerInvoiceId], references: [id], onDelete: Restrict)
-  returnPosting   ReturnPostingDocument @relation(fields: [returnPostingId], references: [id], onDelete: Restrict)
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  settlements SettlementDocument[]
+  entries     CashbookEntry[]
+
+  @@unique([tenantId, accountCode])
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+  @@index([tenantId, currency])
+}
+
+model SettlementDocument {
+  id                       String    @id
+  tenantId                 String
+  settlementNumber         String
+  direction                String
+  counterpartyType         String
+  counterpartyId           String?
+  counterpartyNameSnapshot String?
+  cashbookAccountId        String
+  currency                 String
+  amount                   Decimal   @db.Decimal(18, 4)
+  settlementDate           DateTime
+  status                   String    @default("draft")
+  externalReference        String?
+  memo                     String?
+  postedAt                 DateTime?
+  postedById               String?
+  reversedAt               DateTime?
+  reversedById             String?
+  reversalReason           String?
+  version                  Int       @default(0)
+  metadata                 Json?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cashbookAccount CashbookAccount        @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  allocations     SettlementAllocation[]
+  cashbookEntries CashbookEntry[]
+
+  @@unique([tenantId, settlementNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+  @@index([tenantId, direction, settlementDate])
+  @@index([tenantId, counterpartyType, counterpartyId])
+}
+
+model SettlementAllocation {
+  id                     String   @id
+  tenantId               String
+  settlementId           String
+  obligationType         String
+  payableObligationId    String?
+  receivableObligationId String?
+  amount                 Decimal  @db.Decimal(18, 4)
+  currency               String
+  metadata               Json?
+  createdAt              DateTime @default(now())
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  settlement           SettlementDocument    @relation(fields: [tenantId, settlementId], references: [tenantId, id], onDelete: Cascade)
+  payableObligation    PayableObligation?    @relation(fields: [tenantId, payableObligationId], references: [tenantId, id], onDelete: Restrict)
+  receivableObligation ReceivableObligation? @relation(fields: [tenantId, receivableObligationId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([settlementId, obligationType, payableObligationId, receivableObligationId])
+  @@index([tenantId, settlementId])
+  @@index([payableObligationId])
+  @@index([receivableObligationId])
+}
+
+model CashbookEntry {
+  id                String   @id
+  tenantId          String
+  cashbookAccountId String
+  settlementId      String
+  entryNumber       String
+  entryType         String
+  direction         String
+  amount            Decimal  @db.Decimal(18, 4)
+  currency          String
+  occurredAt        DateTime
+  balanceBefore     Decimal  @db.Decimal(18, 4)
+  balanceAfter      Decimal  @db.Decimal(18, 4)
+  postingBatchId    String
+  reversalOfEntryId String?  @unique
+  reversedByEntryId String?  @unique
+  actorId           String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cashbookAccount CashbookAccount    @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  settlement      SettlementDocument @relation(fields: [tenantId, settlementId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, entryNumber])
+  @@unique([settlementId, entryType])
+  @@index([tenantId, cashbookAccountId, occurredAt])
+  @@index([tenantId, settlementId])
+}
+
+model CustomerCreditNote {
+  id                   String    @id
+  tenantId             String
+  creditNoteNumber     String
+  customerInvoiceId    String
+  returnPostingId      String
+  customerId           String?
+  customerNameSnapshot String
+  currency             String
+  subtotalAmount       Decimal   @db.Decimal(18, 4)
+  enteredTaxAmount     Decimal   @default(0) @db.Decimal(18, 4)
+  totalAmount          Decimal   @db.Decimal(18, 4)
+  status               String    @default("draft")
+  approvedAt           DateTime?
+  approvedById         String?
+  cancelledAt          DateTime?
+  cancelledById        String?
+  cancellationReason   String?
+  version              Int       @default(0)
+  metadata             Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customerInvoice CustomerInvoice          @relation(fields: [customerInvoiceId], references: [id], onDelete: Restrict)
+  returnPosting   ReturnPostingDocument    @relation(fields: [returnPostingId], references: [id], onDelete: Restrict)
   lines           CustomerCreditNoteLine[]
 
   @@unique([tenantId, creditNoteNumber])
@@ -1083,15 +1206,15 @@ model CustomerCreditNote {
 }
 
 model CustomerCreditNoteLine {
-  id                    String   @id
+  id                    String  @id
   customerCreditNoteId  String
   customerInvoiceLineId String
   returnPostingLineId   String
-  quantity              Decimal  @db.Decimal(18, 4)
-  unitPrice             Decimal  @db.Decimal(18, 4)
-  lineAmount            Decimal  @db.Decimal(18, 4)
-  enteredTaxAmount      Decimal  @default(0) @db.Decimal(18, 4)
-  totalAmount           Decimal  @db.Decimal(18, 4)
+  quantity              Decimal @db.Decimal(18, 4)
+  unitPrice             Decimal @db.Decimal(18, 4)
+  lineAmount            Decimal @db.Decimal(18, 4)
+  enteredTaxAmount      Decimal @default(0) @db.Decimal(18, 4)
+  totalAmount           Decimal @db.Decimal(18, 4)
   pricingSource         String
   metadata              Json?
 
@@ -1608,8 +1731,8 @@ model ReturnPostingDocument {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  returnAuthorization ReturnAuthorization @relation(fields: [returnAuthorizationId], references: [id], onDelete: Restrict)
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  returnAuthorization ReturnAuthorization  @relation(fields: [returnAuthorizationId], references: [id], onDelete: Restrict)
   lines               ReturnPostingLine[]
   supplierCreditMemos SupplierCreditMemo[]
   customerCreditNotes CustomerCreditNote[]
@@ -1644,8 +1767,8 @@ model ReturnPostingLine {
   inventoryBalance            InventoryBalance?           @relation("ReturnPostingSourceInventoryBalance", fields: [inventoryBalanceId], references: [id], onDelete: Restrict)
   quarantineBalance           QuarantineInventoryBalance? @relation(fields: [quarantineBalanceId], references: [id], onDelete: Restrict)
   destinationInventoryBalance InventoryBalance?           @relation("ReturnPostingDestinationInventoryBalance", fields: [destinationInventoryBalanceId], references: [id], onDelete: Restrict)
-  supplierCreditMemoLines      SupplierCreditMemoLine[]
-  customerCreditNoteLines      CustomerCreditNoteLine[]
+  supplierCreditMemoLines     SupplierCreditMemoLine[]
+  customerCreditNoteLines     CustomerCreditNoteLine[]
 
   @@unique([returnPostingId, returnAuthorizationLineId])
   @@index([returnPostingId])
@@ -1718,10 +1841,10 @@ model SalesOrder {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  tenant       Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  lines        SalesOrderLine[]
-  reservations InventoryReservation[]
-  shipments    ShipmentDocument[]
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  lines            SalesOrderLine[]
+  reservations     InventoryReservation[]
+  shipments        ShipmentDocument[]
   customerInvoices CustomerInvoice[]
 
   @@unique([tenantId, orderNumber])
@@ -1732,24 +1855,24 @@ model SalesOrder {
 }
 
 model SalesOrderLine {
-  id                String  @id
+  id                String   @id
   salesOrderId      String
   itemId            String
   sku               String
   itemName          String
-  orderedQuantity   Decimal @db.Decimal(18, 4)
-  reservedQuantity  Decimal @default(0) @db.Decimal(18, 4)
-  fulfilledQuantity Decimal @default(0) @db.Decimal(18, 4)
+  orderedQuantity   Decimal  @db.Decimal(18, 4)
+  reservedQuantity  Decimal  @default(0) @db.Decimal(18, 4)
+  fulfilledQuantity Decimal  @default(0) @db.Decimal(18, 4)
   unit              String
   unitPrice         Decimal? @db.Decimal(18, 4)
   amount            Decimal? @db.Decimal(18, 4)
-  version           Int     @default(0)
+  version           Int      @default(0)
   metadata          Json?
 
-  salesOrder    SalesOrder             @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
-  item          Item                   @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  reservations  InventoryReservation[]
-  shipmentLines ShipmentLine[]
+  salesOrder           SalesOrder             @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  item                 Item                   @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  reservations         InventoryReservation[]
+  shipmentLines        ShipmentLine[]
   customerInvoiceLines CustomerInvoiceLine[]
 
   @@index([salesOrderId])
@@ -1831,11 +1954,11 @@ model ShipmentDocument {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  salesOrder SalesOrder     @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
-  postedBy   User?          @relation("ShipmentPostedBy", fields: [postedById], references: [id], onDelete: Restrict)
-  reversedBy User?          @relation("ShipmentReversedBy", fields: [reversedById], references: [id], onDelete: Restrict)
-  lines      ShipmentLine[]
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  salesOrder       SalesOrder        @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  postedBy         User?             @relation("ShipmentPostedBy", fields: [postedById], references: [id], onDelete: Restrict)
+  reversedBy       User?             @relation("ShipmentReversedBy", fields: [reversedById], references: [id], onDelete: Restrict)
+  lines            ShipmentLine[]
   customerInvoices CustomerInvoice[]
 
   @@unique([tenantId, shipmentNumber])
@@ -1856,10 +1979,10 @@ model ShipmentLine {
   version           Int     @default(0)
   metadata          Json?
 
-  shipment       ShipmentDocument     @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
-  salesOrderLine SalesOrderLine       @relation(fields: [salesOrderLineId], references: [id], onDelete: Restrict)
-  item           Item                 @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  allocations    ShipmentAllocation[]
+  shipment             ShipmentDocument      @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  salesOrderLine       SalesOrderLine        @relation(fields: [salesOrderLineId], references: [id], onDelete: Restrict)
+  item                 Item                  @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  allocations          ShipmentAllocation[]
   customerInvoiceLines CustomerInvoiceLine[]
 
   @@index([shipmentId])
