@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import EmbeddedPostgres from "embedded-postgres";
 import { createPrismaClient } from "../server/persistence/prisma-client.mjs";
+import { createDurableProcurementRepository } from "../server/repositories/durable-procurement-repository.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -15,6 +16,7 @@ const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 const tenantId = "tenant-operational-finance-browser";
 const apiPort = Number(process.env.PLAYWRIGHT_API_PORT || 18787);
 const warehouseId = "finance-browser-warehouse";
+const settlementScenario = ["PLAYWRIGHT_INTERNAL_SETTLEMENT_DB", "PLAYWRIGHT_SETTLEMENT_WORKFLOW_DB", "PLAYWRIGHT_MOBILE_OPERATIONS_DB"].some((key) => process.env[key] === "true");
 const actorId = (email) =>
   `USR-${createHash("sha256").update(email).digest("hex").slice(0, 16)}`;
 const freePort = () =>
@@ -31,6 +33,7 @@ const directory = await mkdtemp(
   join(tmpdir(), "flowchain-operational-finance-browser-"),
 );
 const database = "flowchain_operational_finance_browser";
+const procurementRuntimeFile = join(directory, "procurement-runtime.json");
 const url = `postgresql://flowchain_operational_finance_browser:${encodeURIComponent(password)}@127.0.0.1:${pgPort}/${database}?schema=public`;
 const pg = new EmbeddedPostgres({
   databaseDir: directory,
@@ -223,6 +226,13 @@ async function seed() {
       name: "Operational Finance Browser",
       timezone: "America/New_York",
       operationalSettings: {
+        settlementPolicy: {
+          settlementApprovalRequired: true,
+          settlementSelfApprovalAllowed: false,
+          settlementSelfPostingAllowed: true,
+          settlementApprovalThreshold: "0",
+          settlementDiscountThreshold: "0",
+        },
         review: {
           quantityTolerance: "0.0000",
           pricePercentageTolerance: "0.0000",
@@ -237,8 +247,11 @@ async function seed() {
       ["manager@example.com", "Finance Manager", "manager"],
       ["specialist@example.com", "Finance Specialist", "business-specialist"],
       ["viewer@example.com", "Finance Viewer", "viewer"],
-      ...(process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true"
-        ? [["settlement@example.com", "Settlement Specialist", "finance-specialist"]]
+      ...(settlementScenario
+        ? [["settlement@example.com", "Settlement Specialist", "finance-specialist"], ["settlement-en@example.com", "Settlement Specialist EN", "finance-specialist"]]
+        : []),
+      ...(process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true"
+        ? [["mobile@example.com", "Mobile Operations Manager", "manager"], ["mobile-en@example.com", "Mobile Operations Manager EN", "manager"]]
         : []),
     ].map(([email, name, role]) => ({
       id: actorId(email),
@@ -246,7 +259,7 @@ async function seed() {
       email,
       name,
       role,
-      languagePreference: email === "viewer@example.com" ? "en-US" : null,
+      languagePreference: ["viewer@example.com", "mobile-en@example.com", "settlement-en@example.com"].includes(email) ? "en-US" : null,
     })),
   });
   await prisma.supplier.create({
@@ -257,7 +270,7 @@ async function seed() {
       name: "Finance Browser Supplier",
     },
   });
-  if (process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true") {
+  if (settlementScenario) {
     await prisma.supplierInvoice.create({
       data: {
         id: "finance-browser-settlement-invoice",
@@ -303,6 +316,12 @@ async function seed() {
       name: "Finance Browser Warehouse",
     },
   });
+  if (process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true") {
+    await prisma.userWarehouseScope.createMany({ data: [
+      { id: "mobile-browser-warehouse-scope", tenantId, userId: actorId("mobile@example.com"), warehouseId, accessLevel: "operate" },
+      { id: "mobile-browser-en-warehouse-scope", tenantId, userId: actorId("mobile-en@example.com"), warehouseId, accessLevel: "operate" },
+    ] });
+  }
   await prisma.inventoryBalance.create({
     data: {
       id: "finance-browser-balance",
@@ -358,6 +377,51 @@ async function seed() {
       },
     },
   });
+  if (process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true") {
+    await prisma.purchaseOrder.create({
+      data: {
+        id: "mobile-browser-receiving-po",
+        tenantId,
+        status: "approved",
+        supplierId: "finance-browser-supplier",
+        supplierName: "Finance Browser Supplier",
+        currency: "CNY",
+        lines: {
+          create: {
+            id: "mobile-browser-receiving-po-line",
+            itemId: "finance-browser-item",
+            sku: "FIN-BROWSER",
+            itemName: "Finance Browser Item",
+            orderedQuantity: "10.0000",
+            receivedQuantity: "0.0000",
+            unit: "EA",
+            unitPrice: "10.0000",
+          },
+        },
+      },
+    });
+    const procurement = createDurableProcurementRepository({ dataFile: procurementRuntimeFile });
+    await procurement.transact((document) => {
+      const base = {
+        supplierId: "finance-browser-supplier",
+        supplierSnapshot: { id: "finance-browser-supplier", supplierCode: "FIN-BROWSER-SUP", supplierName: "Finance Browser Supplier" },
+        currency: "CNY",
+        totalAmount: 100,
+        sourcePrId: "PR-MOBILE-BROWSER",
+        sourceRfqId: "RFQ-MOBILE-BROWSER",
+        deliveryTerms: "DAP Finance Browser Warehouse",
+        status: "pending_approval",
+        version: 1,
+        auditTrailIds: [],
+        lines: [{ id: "mobile-browser-po-line", sku: "FIN-BROWSER", itemNameSnapshot: "Finance Browser Item", quantity: 10, unitSnapshot: "EA", unitPrice: 10, amount: 100 }],
+      };
+      document.purchaseOrders.push(
+        { ...base, id: "PO-MOBILE-APPROVE", orderNumber: "PO-MOBILE-APPROVE" },
+        { ...base, id: "PO-MOBILE-REJECT", orderNumber: "PO-MOBILE-REJECT", lines: base.lines.map((line) => ({ ...line, id: "mobile-browser-po-reject-line" })) },
+        { ...base, id: "PO-MOBILE-RACE", orderNumber: "PO-MOBILE-RACE", lines: base.lines.map((line) => ({ ...line, id: "mobile-browser-po-race-line" })) },
+      );
+    });
+  }
   await prisma.receivingDocument.create({
     data: {
       id: "finance-browser-grn",
@@ -391,6 +455,10 @@ async function seed() {
     },
   });
   const cny = await seedSales("CNY", "CNY");
+  if (settlementScenario) {
+    await prisma.customerInvoice.create({ data: { id: "finance-browser-customer-settlement-invoice", tenantId, invoiceNumber: "CI-BROWSER-SETTLEMENT", salesOrderId: "finance-browser-sales-order-CNY", shipmentId: cny.shipmentId, customerId: "finance-browser-customer-cny", customerNameSnapshot: "Finance Browser Customer CNY", invoiceDate: new Date("2026-07-01T00:00:00.000Z"), dueDate: new Date("2026-08-01T00:00:00.000Z"), subtotalAmount: "80.0000", totalAmount: "80.0000", currency: "CNY", status: "issued" } });
+    await prisma.receivableObligation.create({ data: { id: "finance-browser-settlement-receivable", tenantId, customerInvoiceId: "finance-browser-customer-settlement-invoice", obligationNumber: "AR-BROWSER-SETTLEMENT", originalAmount: "80.0000", outstandingAmount: "80.0000", currency: "CNY", dueDate: new Date("2026-08-01T00:00:00.000Z"), status: "open" } });
+  }
   await seedSales("USD", "USD");
   await seedReturn({
     suffix: "SUP",
@@ -435,9 +503,20 @@ try {
         ? "false"
         : "true",
     FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT:
-      process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true"
+      process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true" || process.env.PLAYWRIGHT_SETTLEMENT_WORKFLOW_DB === "true" || process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true"
         ? "true"
         : "false",
+    FLOWCHAIN_ENABLE_DB_SETTLEMENT_WORKFLOW:
+      process.env.PLAYWRIGHT_SETTLEMENT_WORKFLOW_DISABLED === "true" ? "false" : (process.env.PLAYWRIGHT_SETTLEMENT_WORKFLOW_DB === "true" || process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : "false"),
+    FLOWCHAIN_ENABLE_DB_MOBILE_SYNC:
+      process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : "false",
+    FLOWCHAIN_ENABLE_DB_MOBILE_OPERATIONS:
+      process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : "false",
+    FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING:
+      process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : (process.env.FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING || "false"),
+    FLOWCHAIN_SYNC_CURSOR_SECRET: `mobile-browser-${randomUUID()}-cursor-secret`,
+    FLOWCHAIN_PROCUREMENT_RUNTIME_FILE: procurementRuntimeFile,
+    FLOWCHAIN_UPLOAD_STORAGE_DIR: join(directory, "uploads"),
     FLOWCHAIN_DEFAULT_TENANT_ID: tenantId,
     FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: "false",
     FLOWCHAIN_LOCAL_SESSION_SECRET: `finance-browser-${randomUUID()}-secure`,
