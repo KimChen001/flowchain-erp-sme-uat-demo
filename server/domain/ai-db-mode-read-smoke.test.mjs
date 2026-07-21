@@ -160,7 +160,7 @@ test('DB mode AI read context exposes master data repository while route evidenc
   assert.equal(JSON.stringify(context.cache.aiEvidenceReuse.procurementDocuments).includes('PO-JSON-STALE'), false)
 })
 
-test('DB mode AI draft preparation is preview-only and currently documented as JSON/context fallback', async () => {
+test('DB mode AI draft preparation stays preview-only and does not trust stale JSON master data', async () => {
   const db = staleJsonDb()
   const before = clone(db)
   const repositories = createDatabaseRepositoryRegistry({ db, env, prisma: createPrisma() })
@@ -173,7 +173,10 @@ test('DB mode AI draft preparation is preview-only and currently documented as J
   assert.equal(route.response.payload.cards[0].type, 'pr_draft')
   assert.equal(route.response.payload.cards[0].reviewRequired, true)
   assert.equal(route.response.payload.cards[0].data.documentStatus, 'draft')
-  assert.equal(route.response.payload.cards[0].data.itemId, 'ITEM-JSON-100')
+  assert.equal(repositories.procurementRuntime.adapter, 'durable-procurement-runtime-v2')
+  assert.equal(route.response.payload.cards[0].data.itemId, '')
+  assert.ok(route.response.payload.cards.find((card) => card.type === 'missing_fields').fields.some((field) => field.name === 'item'))
+  assert.equal(JSON.stringify(route.response.payload).includes('ITEM-JSON-100'), false)
   assert.equal(JSON.stringify(route.response.payload).includes('DB-A100'), false)
   assert.deepEqual(db, before)
 })

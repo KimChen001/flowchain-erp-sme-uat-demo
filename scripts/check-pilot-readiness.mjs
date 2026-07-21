@@ -16,11 +16,16 @@ check('outbound_posting', env.FLOWCHAIN_ENABLE_DB_OUTBOUND_POSTING === 'true', '
 check('inventory_operations', env.FLOWCHAIN_ENABLE_DB_INVENTORY_OPERATIONS === 'true', 'Set FLOWCHAIN_ENABLE_DB_INVENTORY_OPERATIONS=true.')
 check('operational_finance', env.FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE === 'true', 'Set FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE=true.')
 check('internal_settlement', env.FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT === 'true', 'Set FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT=true.')
+check('settlement_workflow', env.FLOWCHAIN_ENABLE_DB_SETTLEMENT_WORKFLOW === 'true', 'Set FLOWCHAIN_ENABLE_DB_SETTLEMENT_WORKFLOW=true.')
+check('mobile_sync', env.FLOWCHAIN_ENABLE_DB_MOBILE_SYNC === 'true', 'Set FLOWCHAIN_ENABLE_DB_MOBILE_SYNC=true.')
+check('mobile_operations', env.FLOWCHAIN_ENABLE_DB_MOBILE_OPERATIONS === 'true', 'Set FLOWCHAIN_ENABLE_DB_MOBILE_OPERATIONS=true.')
+check('sync_cursor_secret', String(env.FLOWCHAIN_SYNC_CURSOR_SECRET || '').length >= 32, 'Set FLOWCHAIN_SYNC_CURSOR_SECRET to at least 32 random characters.')
 check('bootstrap_disabled', env.FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP !== 'true', 'Disable FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP outside disposable local tests.')
 check('identity_migration', existsSync(path.join(root, 'prisma/migrations/20260715020000_pilot_identity_foundation/migration.sql')), 'Deploy the Pilot identity migration.')
 check('import_migration', existsSync(path.join(root, 'prisma/migrations/20260715021000_pilot_import_foundation/migration.sql')), 'Deploy the Pilot import migration.')
 check('inventory_operations_migration', existsSync(path.join(root, 'prisma/migrations/20260716010000_inventory_operations_foundation/migration.sql')), 'Deploy the Inventory Operations foundation migration.')
 check('internal_settlement_migration', existsSync(path.join(root, 'prisma/migrations/20260720010000_internal_settlement_cashbook_foundation/migration.sql')), 'Deploy the Internal Settlement and Cashbook migration.')
+check('settlement_workflow_mobile_migration', existsSync(path.join(root, 'prisma/migrations/20260720020000_settlement_workflow_mobile_foundation/migration.sql')), 'Deploy the Settlement Workflow and Mobile foundation migration.')
 
 const report = { ready: checks.every(row => row.status === 'pass'), checkedAt: new Date().toISOString(), checks }
 if (process.argv.includes('--json')) console.log(JSON.stringify(report, null, 2))
