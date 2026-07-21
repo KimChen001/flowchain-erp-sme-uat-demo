@@ -77,7 +77,7 @@ async function verifyUpgrade(pg, database, url) {
   `);
   await run([prismaCli, "migrate", "deploy"], envFor(url));
   const latest = await query(pg, database, `SELECT "migration_name" FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL ORDER BY "migration_name" DESC LIMIT 1`);
-  assert.equal(latest.rows[0].migration_name, foundationMigration);
+  assert.ok(latest.rows[0].migration_name >= foundationMigration, `expected settlement foundation or a later additive migration, got ${latest.rows[0].migration_name}`);
   const settlements = await query(pg, database, `
     SELECT "settlementNumber", "workflowStatus", "postingStatus", "cashAmount"::text AS "cashAmount", "discountAmount"::text AS "discountAmount", "totalSettlementAmount"::text AS "totalSettlementAmount", "advanceCreatedAmount"::text AS "advanceCreatedAmount"
     FROM "SettlementDocument" WHERE "tenantId" = 'phase52b-upgrade-tenant' ORDER BY "settlementNumber"
