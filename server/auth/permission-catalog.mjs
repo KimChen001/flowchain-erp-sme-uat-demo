@@ -106,6 +106,37 @@ const definitions = [
   ["finance.settlement.post", "finance", "settlement", "post", "critical"],
   ["finance.settlement.reverse", "finance", "settlement", "reverse", "critical"],
   ["finance.settlement.reconciliation.read", "finance", "settlement_reconciliation", "read", "high"],
+  ["finance.settlement.revise", "finance", "settlement", "revise", "medium"],
+  ["finance.settlement.submit", "finance", "settlement", "submit", "high"],
+  ["finance.settlement.approve", "finance", "settlement", "approve", "critical"],
+  ["finance.settlement.reject", "finance", "settlement", "reject", "high"],
+  ["finance.settlement.cancel", "finance", "settlement", "cancel", "high"],
+  ["finance.advance.read", "finance", "advance", "read", "low"],
+  ["finance.advance.create", "finance", "advance", "create", "medium"],
+  ["finance.advance.submit", "finance", "advance", "submit", "high"],
+  ["finance.advance.approve", "finance", "advance", "approve", "critical"],
+  ["finance.advance.post", "finance", "advance", "post", "critical"],
+  ["finance.advance.reverse", "finance", "advance", "reverse", "critical"],
+  ["finance.internal_transfer.read", "finance", "internal_transfer", "read", "low"],
+  ["finance.internal_transfer.create", "finance", "internal_transfer", "create", "medium"],
+  ["finance.internal_transfer.submit", "finance", "internal_transfer", "submit", "high"],
+  ["finance.internal_transfer.approve", "finance", "internal_transfer", "approve", "critical"],
+  ["finance.internal_transfer.post", "finance", "internal_transfer", "post", "critical"],
+  ["finance.internal_transfer.reverse", "finance", "internal_transfer", "reverse", "critical"],
+  ["finance.settlement_discount.apply", "finance", "settlement_discount", "apply", "high"],
+  ["finance.settlement_attachment.read", "finance", "settlement_attachment", "read", "high", ["finance_partner_snapshot"]],
+  ["finance.settlement_attachment.manage", "finance", "settlement_attachment", "manage", "high"],
+  ["procurement.purchase_order.read", "procurement", "purchase_order", "read", "low"],
+  ["procurement.purchase_order.approve", "procurement", "purchase_order", "approve", "critical"],
+  ["procurement.purchase_order.reject", "procurement", "purchase_order", "reject", "high"],
+  ["procurement.purchase_order.revise", "procurement", "purchase_order", "revise", "medium"],
+  ["mobile.sync.use", "mobile", "sync", "use", "high"],
+  ["mobile.tasks.read", "mobile", "tasks", "read", "low"],
+  ["mobile.procurement.approval.read", "mobile", "procurement_approval", "read", "low"],
+  ["mobile.procurement.approval.execute", "mobile", "procurement_approval", "execute", "critical"],
+  ["mobile.receiving.read", "mobile", "receiving", "read", "low"],
+  ["mobile.receiving.prepare", "mobile", "receiving", "prepare", "medium"],
+  ["mobile.receiving.post", "mobile", "receiving", "post", "critical"],
 ]
 
 export const permissionCatalog = Object.freeze(definitions.map(([code, module, resource, action, riskLevel, fieldVisibility = []]) => Object.freeze({
@@ -148,10 +179,10 @@ const without = (items, denied) => items.filter((code) => !denied.includes(code)
 
 export const defaultRoleTemplates = Object.freeze([
   { roleKey: "workspace-administrator", name: "Workspace Administrator", permissions: [...permissionCodes] },
-  { roleKey: "operations-manager", name: "Operations Manager", permissions: without([...byPrefix("returns.", "receiving.", "sales_order.", "shipment.", "inventory.", "finance."), "settings.workspace.read", "settings.users.read", "settings.roles.read", "settings.numbering.read", "settings.review_policy.read", "settings.modules.read", "settings.import.manage", "settings.export.read", "audit.read"], ["procurement.prices.read", "finance.partner_snapshot.read", "finance.amounts.read", "audit.read_sensitive"]) },
+  { roleKey: "operations-manager", name: "Operations Manager", permissions: without([...byPrefix("returns.", "receiving.", "sales_order.", "shipment.", "inventory.", "finance.", "procurement.purchase_order.", "mobile."), "procurement.prices.read", "settings.workspace.read", "settings.users.read", "settings.roles.read", "settings.numbering.read", "settings.review_policy.read", "settings.modules.read", "settings.import.manage", "settings.export.read", "audit.read"], ["finance.settlement.post", "finance.settlement.reverse", "audit.read_sensitive"]) },
   { roleKey: "operations-specialist", name: "Operations Specialist", permissions: without([...byPrefix("returns.", "receiving.", "sales_order.", "shipment.", "inventory."), "finance.overview.read", "finance.supplier_invoice.read", "finance.supplier_invoice.create", "finance.supplier_invoice.revise", "finance.supplier_invoice.submit", "finance.three_way_match.read", "finance.three_way_match.execute", "finance.payable.read", "finance.supplier_credit.read", "finance.supplier_credit.create", "finance.customer_invoice.read", "finance.customer_invoice.create", "finance.customer_invoice.submit", "finance.receivable.read", "finance.receivable.dispute", "finance.receivable.resolve_dispute", "finance.receivable.record_external_reference", "finance.customer_credit.read", "finance.customer_credit.create"], ["returns.authorization.approve", "returns.authorization.reject", "returns.authorization.cancel", "returns.authorization.expire", "returns.posting.reverse", "returns.quarantine.release_reverse", "receiving.reverse", "shipment.reverse", "inventory.transfer.reverse", "inventory.count.review", "inventory.count.post", "inventory.count.reverse", "inventory.adjustment.post", "inventory.adjustment.reverse"]) },
-  { roleKey: "procurement-specialist", name: "Procurement Specialist", permissions: ["returns.request.read", "returns.request.create", "returns.request.revise", "returns.request.submit", "returns.request.cancel", "returns.authorization.read", "returns.posting.read", "returns.quarantine.read", "receiving.read", "inventory.balance.read", "procurement.prices.read"] },
-  { roleKey: "finance-specialist", name: "Finance Specialist", permissions: [...byPrefix("finance."), "audit.read"] },
+  { roleKey: "procurement-specialist", name: "Procurement Specialist", permissions: ["returns.request.read", "returns.request.create", "returns.request.revise", "returns.request.submit", "returns.request.cancel", "returns.authorization.read", "returns.posting.read", "returns.quarantine.read", "receiving.read", "inventory.balance.read", "procurement.prices.read", "procurement.purchase_order.read", "procurement.purchase_order.revise", "mobile.sync.use", "mobile.tasks.read", "mobile.procurement.approval.read", "mobile.receiving.read", "mobile.receiving.prepare"] },
+  { roleKey: "finance-specialist", name: "Finance Specialist", permissions: [...byPrefix("finance."), "mobile.sync.use", "mobile.tasks.read", "audit.read"] },
   { roleKey: "read-only-viewer", name: "Read-only Viewer", permissions: reads.filter((code) => !["audit.read_sensitive", "finance.amounts.read", "finance.partner_snapshot.read", "procurement.prices.read", "settings.diagnostics.read", "settings.export.read"].includes(code)) },
 ])
 
@@ -174,5 +205,6 @@ export const moduleReadPermissions = Object.freeze({
   sales: ["sales_order.read", "shipment.read"],
   inventory: ["inventory.balance.read", "inventory.transfer.read", "inventory.count.read", "inventory.adjustment.read"],
   finance: permissionCodes.filter((code) => code.startsWith("finance.") && code.endsWith(".read")),
+  "mobile-operations": ["mobile.tasks.read", "mobile.procurement.approval.read", "mobile.receiving.read"],
   "audit-history": ["audit.read"],
 })

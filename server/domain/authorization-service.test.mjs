@@ -21,6 +21,13 @@ test("default templates preserve legacy mappings and return separation", () => {
   assert.ok(operations.permissions.includes("returns.posting.post")); assert.ok(!operations.permissions.includes("returns.authorization.approve")); assert.ok(!operations.permissions.includes("returns.posting.reverse"))
 })
 
+test("operations manager can review sensitive approval evidence without settlement posting authority", () => {
+  const manager = defaultRoleTemplates.find((role) => role.roleKey === "operations-manager")
+  for (const permission of ["procurement.prices.read", "finance.amounts.read", "finance.partner_snapshot.read", "procurement.purchase_order.approve", "finance.settlement.approve"]) assert.ok(manager.permissions.includes(permission), permission)
+  assert.ok(!manager.permissions.includes("finance.settlement.post"))
+  assert.ok(!manager.permissions.includes("finance.settlement.reverse"))
+})
+
 test("authorization defaults deny and composes tenant, permission, and warehouse scope", () => {
   const current = actor(["returns.posting.post"])
   assert.equal(authorize({ actor: current, permission: "returns.posting.post", tenantId: "tenant-a", warehouseIds: ["warehouse-a"] }).allowed, true)
