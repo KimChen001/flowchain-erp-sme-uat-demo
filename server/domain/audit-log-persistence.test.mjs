@@ -100,7 +100,7 @@ function createAiRoute({ repositories } = {}) {
   }
 }
 
-function createAuditRoute({ method = 'GET', path = '/api/audit-log', repositories, db = createDb() } = {}) {
+function createAuditRoute({ method = 'GET', path = '/api/audit-log', repositories, db = createDb(), env } = {}) {
   let response = null
   return {
     ctx: {
@@ -108,6 +108,7 @@ function createAuditRoute({ method = 'GET', path = '/api/audit-log', repositorie
       res: {},
       url: new URL(path, 'http://localhost'),
       db,
+      env,
       repositories,
       send(_res, status, payload) {
         response = { status, payload }
@@ -254,6 +255,9 @@ test('audit log read route uses injected repository filters without mutating JSO
         return [{ id: 'AUD-ROUTE-1', entityType: filters.entityType, entityId: filters.entityId }]
       },
     },
+    settingsRuntime: {
+      listSettingsAuditEntries: async () => [],
+    },
   }
   const route = createAuditRoute({
     db,
@@ -303,7 +307,10 @@ test('database audit adapter backs read and write methods with sanitized records
     },
   })
   const route = createAuditRoute({
-    repositories,
+    repositories: {
+      ...repositories,
+      settingsRuntime: { listSettingsAuditEntries: async () => [] },
+    },
     path: '/api/audit-log?entityType=actionDraft&entityId=DRAFT-AUDIT-1&limit=2',
   })
 

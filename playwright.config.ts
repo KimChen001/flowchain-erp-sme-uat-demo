@@ -1,4 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const appPort = Number(process.env.PLAYWRIGHT_APP_PORT || 15173);
 const apiPort = Number(process.env.PLAYWRIGHT_API_PORT || 18787);
@@ -6,6 +8,7 @@ const workers = Number(process.env.PLAYWRIGHT_WORKERS || 1);
 
 export default defineConfig({
   testDir: "./tests/browser",
+  outputDir: join(tmpdir(), "flowchain-playwright-results", String(process.pid)),
   timeout: 45_000,
   expect: { timeout: 10_000 },
   workers,
@@ -29,6 +32,10 @@ export default defineConfig({
     {
       command:
         process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true"
+          ? "node scripts/browser-operational-finance-api.mjs"
+          : process.env.PLAYWRIGHT_SETTLEMENT_WORKFLOW_DB === "true"
+          ? "node scripts/browser-operational-finance-api.mjs"
+          : process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true"
           ? "node scripts/browser-operational-finance-api.mjs"
           : process.env.PLAYWRIGHT_OPERATIONAL_FINANCE_DB === "true"
           ? "node scripts/browser-operational-finance-api.mjs"

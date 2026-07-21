@@ -1,5 +1,5 @@
 export const PR_TRANSITIONS = { draft: ['submitted','cancelled'], submitted: ['approved','rejected','draft','cancelled'], approved: ['draft','cancelled','converted'], rejected: [], cancelled: [], converted: [] }
-export const PO_TRANSITIONS = { draft: ['pending_approval','cancelled'], pending_approval: ['approved','cancelled'], approved: ['issued','cancelled'], issued: [], cancelled: [] }
+export const PO_TRANSITIONS = { draft: ['pending_approval','cancelled'], pending_approval: ['approved','rejected','draft','cancelled'], approved: ['issued','cancelled'], rejected: ['draft'], issued: [], cancelled: [] }
 export const PROCUREMENT_PATHS = ['undecided','direct_po','rfq']
 
 export function procurementError(code, message, details = [], status = 422, extra = {}) {

@@ -42,8 +42,9 @@ test("internal settlement closes the cashbook, posting, reversal, redaction, and
   await expect(row).toContainText("60.0000");
   await row.getByRole("link", { name: "SET-BROWSER-001" }).click();
   await expect(page.getByTestId("settlement-detail")).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
   await page.getByTestId("post-settlement").click();
-  await expect(page.getByTestId("settlement-detail")).toContainText("posted");
+  await expect(page.getByText("posted · posted", { exact: true })).toBeVisible();
   await expect(page.getByTestId("settlement-reconciliation")).toContainText("matched");
   const settlementId = decodeURIComponent(new URL(page.url()).pathname.split("/").pop()!);
 
@@ -62,8 +63,9 @@ test("internal settlement closes the cashbook, posting, reversal, redaction, and
   await viewerContext.close();
 
   page.once("dialog", (dialog) => dialog.accept("Browser correction"));
+  await page.getByText("纠错操作", { exact: true }).click();
   await page.getByTestId("reverse-settlement").click();
-  await expect(page.getByTestId("settlement-detail")).toContainText("reversed");
+  await expect(page.getByText("reversed · reversed", { exact: true })).toBeVisible();
   await expect(page.getByTestId("settlement-reconciliation")).toContainText("matched");
   await page.goto("/app/finance/reconciliation");
   await expect(page.getByTestId("cashbook-entry")).toHaveCount(2);

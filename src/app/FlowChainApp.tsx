@@ -88,6 +88,7 @@ import { ReviewFirstActionWorkflowV2 } from "../components/actions/ReviewFirstAc
 import { BusinessEntityDetailPage } from "../components/business/BusinessEntityDetailPage";
 import OutboundWorkbench from "../modules/sales/OutboundWorkbench";
 import InventoryOperationsWorkbench from "../modules/inventory/InventoryOperationsWorkbench";
+import MobileOperationsPage from "../modules/mobile/MobileOperationsPage";
 import ReturnQuarantineWorkbench from "../modules/inventory/ReturnQuarantineWorkbench";
 import { useI18n } from "../i18n/I18n";
 
@@ -1188,6 +1189,7 @@ export default function FlowChainApp() {
         onNavigate={navigateTo}
       />
     ),
+    "mobile-operations": <MobileOperationsPage initialView={activeView} />,
     reports: (
       <ReportsPanel initialView={activeView as any} onNavigate={navigateTo} />
     ),

@@ -82,6 +82,9 @@ export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, p
     masterData: createDbMasterDataRepository({ env, prisma }),
     inventoryRead: createDbInventoryReadRepository({ env, prisma }),
     procurementRead: createDbProcurementReadRepository({ env, prisma }),
+    // Phase 5.2B reuses the canonical procurement workflow repository while
+    // PostgreSQL remains authoritative for finance, receiving, and inventory.
+    procurementRuntime: createDurableProcurementRepository({ dataFile: path.resolve(env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE || 'data/procurement-transactions.json') }),
     actionDrafts: createDbActionDraftRepository({ db, env, prisma }),
     exceptionCases: createInMemoryExceptionCaseRepository({ db }),
     auditLog: createDbAuditLogRepository({ env, prisma }),
