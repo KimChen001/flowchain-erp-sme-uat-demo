@@ -48,6 +48,10 @@ function requestHash(value) {
   return createHash('sha256').update(JSON.stringify(stableValue(value))).digest('hex')
 }
 
+function feedRow({ tenantId, entityType, entityId, entityVersion = null, actorId, requestId, operation = 'upsert' }) {
+  return { tenantId, entityType, entityId, operation, entityVersion, actorId, source: 'receiving_command_service', requestId, payloadHash: requestHash({ entityType, entityId, entityVersion, operation }), sensitivityGroups: [] }
+}
+
 function executionKey(tenantId, commandType, idempotencyKey) {
   return { tenantId_commandType_idempotencyKey: { tenantId, commandType, idempotencyKey } }
 }
@@ -439,6 +443,13 @@ export function createReceivingPostingCommandService({ prisma, now = () => new D
             }),
           },
         })
+        await tx.domainChangeFeed.createMany({ data: [
+          feedRow({ tenantId: scope.tenantId, entityType: 'ReceivingDocument', entityId: receivingDocument.id, entityVersion: receivingDocument.version + 1, actorId: scope.actorId, requestId: normalized.idempotencyKey }),
+          feedRow({ tenantId: scope.tenantId, entityType: 'PurchaseOrder', entityId: purchaseOrder.id, entityVersion: purchaseOrder.version + 1, actorId: scope.actorId, requestId: normalized.idempotencyKey }),
+          ...poLines.map((line) => feedRow({ tenantId: scope.tenantId, entityType: 'PurchaseOrderLine', entityId: line.id, entityVersion: line.version, actorId: scope.actorId, requestId: normalized.idempotencyKey })),
+          ...movements.map((movement) => feedRow({ tenantId: scope.tenantId, entityType: 'InventoryMovement', entityId: movement.id, actorId: scope.actorId, requestId: normalized.idempotencyKey })),
+          ...balances.map((balance) => feedRow({ tenantId: scope.tenantId, entityType: 'InventoryBalance', entityId: balance.id, entityVersion: balance.version, actorId: scope.actorId, requestId: normalized.idempotencyKey })),
+        ] })
         await faultInjector('after_audit', { tx, receivingDocument, purchaseOrder, movements, balances, auditId })
         return {
           receivingDocument: { id: receivingDocument.id, postingStatus: 'posted', workflowStatus: receivingDocument.workflowStatus, version: receivingDocument.version + 1 },
@@ -539,6 +550,13 @@ export function createReceivingPostingCommandService({ prisma, now = () => new D
             }),
           },
         })
+        await tx.domainChangeFeed.createMany({ data: [
+          feedRow({ tenantId: scope.tenantId, entityType: 'ReceivingDocument', entityId: receivingDocument.id, entityVersion: receivingDocument.version + 1, actorId: scope.actorId, requestId: normalized.idempotencyKey }),
+          feedRow({ tenantId: scope.tenantId, entityType: 'PurchaseOrder', entityId: purchaseOrder.id, entityVersion: purchaseOrder.version + 1, actorId: scope.actorId, requestId: normalized.idempotencyKey }),
+          ...nextPoLines.map((line) => feedRow({ tenantId: scope.tenantId, entityType: 'PurchaseOrderLine', entityId: line.id, entityVersion: line.version, actorId: scope.actorId, requestId: normalized.idempotencyKey })),
+          ...reversalMovements.map((movement) => feedRow({ tenantId: scope.tenantId, entityType: 'InventoryMovement', entityId: movement.id, actorId: scope.actorId, requestId: normalized.idempotencyKey })),
+          ...balances.map((balance) => feedRow({ tenantId: scope.tenantId, entityType: 'InventoryBalance', entityId: balance.id, entityVersion: balance.version, actorId: scope.actorId, requestId: normalized.idempotencyKey })),
+        ] })
         return {
           receivingDocument: { id: receivingDocument.id, postingStatus: 'reversed', workflowStatus: receivingDocument.workflowStatus, version: receivingDocument.version + 1 },
           purchaseOrder: { id: purchaseOrder.id, status: nextPoStatus, version: purchaseOrder.version + 1, lines: nextPoLines.map((line) => ({ id: line.id, receivedQuantity: text(line.receivedQuantity) })) },
