@@ -7,7 +7,6 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import EmbeddedPostgres from "embedded-postgres";
 import { createPrismaClient } from "../server/persistence/prisma-client.mjs";
-import { createDurableProcurementRepository } from "../server/repositories/durable-procurement-repository.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -33,7 +32,6 @@ const directory = await mkdtemp(
   join(tmpdir(), "flowchain-operational-finance-browser-"),
 );
 const database = "flowchain_operational_finance_browser";
-const procurementRuntimeFile = join(directory, "procurement-runtime.json");
 const url = `postgresql://flowchain_operational_finance_browser:${encodeURIComponent(password)}@127.0.0.1:${pgPort}/${database}?schema=public`;
 const pg = new EmbeddedPostgres({
   databaseDir: directory,
@@ -400,27 +398,9 @@ async function seed() {
         },
       },
     });
-    const procurement = createDurableProcurementRepository({ dataFile: procurementRuntimeFile });
-    await procurement.transact((document) => {
-      const base = {
-        supplierId: "finance-browser-supplier",
-        supplierSnapshot: { id: "finance-browser-supplier", supplierCode: "FIN-BROWSER-SUP", supplierName: "Finance Browser Supplier" },
-        currency: "CNY",
-        totalAmount: 100,
-        sourcePrId: "PR-MOBILE-BROWSER",
-        sourceRfqId: "RFQ-MOBILE-BROWSER",
-        deliveryTerms: "DAP Finance Browser Warehouse",
-        status: "pending_approval",
-        version: 1,
-        auditTrailIds: [],
-        lines: [{ id: "mobile-browser-po-line", sku: "FIN-BROWSER", itemNameSnapshot: "Finance Browser Item", quantity: 10, unitSnapshot: "EA", unitPrice: 10, amount: 100 }],
-      };
-      document.purchaseOrders.push(
-        { ...base, id: "PO-MOBILE-APPROVE", orderNumber: "PO-MOBILE-APPROVE" },
-        { ...base, id: "PO-MOBILE-REJECT", orderNumber: "PO-MOBILE-REJECT", lines: base.lines.map((line) => ({ ...line, id: "mobile-browser-po-reject-line" })) },
-        { ...base, id: "PO-MOBILE-RACE", orderNumber: "PO-MOBILE-RACE", lines: base.lines.map((line) => ({ ...line, id: "mobile-browser-po-race-line" })) },
-      );
-    });
+    for (const [poId, lineId] of [["PO-MOBILE-APPROVE", "mobile-browser-po-approve-line"], ["PO-MOBILE-REJECT", "mobile-browser-po-reject-line"], ["PO-MOBILE-RACE", "mobile-browser-po-race-line"]]) {
+      await prisma.purchaseOrder.create({ data: { id: poId, tenantId, status: "pending_approval", supplierId: "finance-browser-supplier", supplierName: "Finance Browser Supplier", sourceRequestId: "PR-MOBILE-BROWSER", sourceRfqId: "RFQ-MOBILE-BROWSER", amount: "100.0000", currency: "CNY", version: 1, metadata: { orderNumber: poId }, lines: { create: { id: lineId, itemId: "finance-browser-item", sku: "FIN-BROWSER", itemName: "Finance Browser Item", orderedQuantity: "10.0000", receivedQuantity: "0.0000", unit: "EA", unitPrice: "10.0000", amount: "100.0000" } } } });
+    }
   }
   await prisma.receivingDocument.create({
     data: {
@@ -515,7 +495,6 @@ try {
     FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING:
       process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : (process.env.FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING || "false"),
     FLOWCHAIN_SYNC_CURSOR_SECRET: `mobile-browser-${randomUUID()}-cursor-secret`,
-    FLOWCHAIN_PROCUREMENT_RUNTIME_FILE: procurementRuntimeFile,
     FLOWCHAIN_UPLOAD_STORAGE_DIR: join(directory, "uploads"),
     FLOWCHAIN_DEFAULT_TENANT_ID: tenantId,
     FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: "false",
