@@ -3,6 +3,7 @@ import { assertAuthorized } from "../auth/authorization-service.mjs";
 import { resolveProvisionedActor } from "./pilot-identity.mjs";
 import { financeFixed as fixed, financeUnits as units } from "./operational-finance-policy.mjs";
 import { InternalSettlementError } from "./internal-settlement-command-service.mjs";
+import { assertAdvanceApplicationEligibility, derivePayableSettlementStatus, deriveReceivableSettlementStatus } from "./obligation-status-policy.mjs";
 
 const text = (value) => String(value ?? "").trim();
 const fail = (code, message, status = 400, details) => { throw new InternalSettlementError(code, message, status, details); };
@@ -25,7 +26,7 @@ export function createAdvanceApplicationCommandService({ prisma, env = process.e
       if (inside) { if (inside.requestHash !== requestHash) fail("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD", "The idempotency key was reused with a different payload.", 409); return { ...inside.resultPayload, idempotentReplay: true }; }
       const execution = await tx.businessCommandExecution.create({ data: { id: idFactory(), tenantId: actor.tenantId, commandType, idempotencyKey: key, requestHash, status: "pending" } });
       const result = await work(tx, actor, { commandType, idempotencyKey: key });
-      await tx.domainChangeFeed.createMany({ data: [{ tenantId: actor.tenantId, entityType: "AdvanceApplicationDocument", entityId: result.entityId, operation: "upsert", entityVersion: result.application.version, actorId: actor.user.id, source: "advance_application_command", requestId: key, payloadHash: digest({ id: result.entityId, version: result.application.version }), sensitivityGroups: ["finance_amounts"] }, ...(result.advance ? [{ tenantId: actor.tenantId, entityType: "PartnerAdvance", entityId: result.advance.id, operation: "upsert", entityVersion: result.advance.version, actorId: actor.user.id, source: "advance_application_command", requestId: key, payloadHash: digest({ id: result.advance.id, version: result.advance.version }), sensitivityGroups: ["finance_amounts"] }] : [])] });
+      await tx.domainChangeFeed.createMany({ data: [{ tenantId: actor.tenantId, entityType: "AdvanceApplicationDocument", entityId: result.entityId, operation: "upsert", entityVersion: result.application.version, actorId: actor.user.id, source: "advance_application_command", requestId: key, payloadHash: digest({ id: result.entityId, version: result.application.version }), sensitivityGroups: ["finance_amounts"], moduleKey: "finance", authorizationClass: "finance.advance.read", resourceTenantId: actor.tenantId }, ...(result.advance ? [{ tenantId: actor.tenantId, entityType: "PartnerAdvance", entityId: result.advance.id, operation: "upsert", entityVersion: result.advance.version, actorId: actor.user.id, source: "advance_application_command", requestId: key, payloadHash: digest({ id: result.advance.id, version: result.advance.version }), sensitivityGroups: ["finance_amounts"], moduleKey: "finance", authorizationClass: "finance.advance.read", resourceTenantId: actor.tenantId }] : [])] });
       await tx.businessCommandExecution.update({ where: { id: execution.id }, data: { status: "completed", entityType: "AdvanceApplicationDocument", entityId: result.entityId, resultPayload: result, completedAt: now() } });
       return { ...result, idempotentReplay: false };
     }, { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 });
@@ -37,6 +38,7 @@ export function createAdvanceApplicationCommandService({ prisma, env = process.e
     if (Boolean(payableId) === Boolean(receivableId)) fail("ADVANCE_APPLICATION_OBLIGATION_INVALID", "Exactly one payable or receivable is required.", 422);
     const obligation = payableId ? await db.payableObligation.findFirst({ where: { id: payableId, tenantId }, include: { supplierInvoice: true } }) : await db.receivableObligation.findFirst({ where: { id: receivableId, tenantId }, include: { customerInvoice: true } });
     if (!obligation) fail("ADVANCE_APPLICATION_OBLIGATION_NOT_FOUND", "The tenant-owned obligation was not found.", 404);
+    try { assertAdvanceApplicationEligibility(obligation, payableId ? "payable" : "receivable"); } catch (error) { fail(error.code, error.message, error.status, error.details); }
     if (obligation.currency !== advance.currency) fail("ADVANCE_APPLICATION_CURRENCY_MISMATCH", "Advance and obligation currencies must match; FX is unavailable.", 409);
     const partnerId = payableId ? obligation.supplierInvoice.supplierId : obligation.customerInvoice.customerId;
     if ((payableId && (advance.advanceType !== "supplier_advance" || advance.supplierId !== partnerId)) || (receivableId && (advance.advanceType !== "customer_advance" || advance.customerId !== partnerId))) fail("ADVANCE_APPLICATION_PARTNER_MISMATCH", "An advance cannot be applied across partners.", 409);
@@ -62,6 +64,7 @@ export function createAdvanceApplicationCommandService({ prisma, env = process.e
       if (!row) fail("ADVANCE_APPLICATION_NOT_FOUND", "Advance application was not found.", 404);
       if (row.version !== payload.expectedVersion) fail("SYNC_VERSION_CONFLICT", "Advance application changed concurrently.", 409, { entityId: row.id, expectedVersion: payload.expectedVersion, currentVersion: row.version });
       const required = name === "submit" ? "draft" : "submitted"; if (row.workflowStatus !== required) fail("ADVANCE_APPLICATION_WORKFLOW_CONFLICT", `Advance application cannot be ${name}ted from ${row.workflowStatus}.`, 409);
+      await resolveFacts(tx, actor.tenantId, row);
       if (name === "approve" && row.metadata?.createdById === actor.user.id) fail("ADVANCE_APPLICATION_SELF_APPROVAL_BLOCKED", "The creator may not approve this application.", 409);
       const at = now(), data = name === "submit" ? { workflowStatus: "submitted", submittedById: actor.user.id, submittedAt: at, version: { increment: 1 } } : { workflowStatus: "approved", approvedById: actor.user.id, approvedAt: at, version: { increment: 1 } };
       const updated = await tx.advanceApplicationDocument.update({ where: { id: row.id }, data });
@@ -82,7 +85,7 @@ export function createAdvanceApplicationCommandService({ prisma, env = process.e
       await tx.$queryRawUnsafe(`SELECT "id" FROM "${obligationTable}" WHERE "tenantId"=$1 AND "id"=$2 FOR UPDATE`, actor.tenantId, obligationId);
       const facts = await resolveFacts(tx, actor.tenantId, row);
       const remaining = units(facts.advance.remainingAmount) - facts.amount, applied = units(facts.advance.appliedAmount) + facts.amount, outstanding = units(facts.obligation.outstandingAmount) - facts.amount;
-      const advanceStatus = remaining === 0n ? "fully_applied" : "partially_applied", obligationStatus = outstanding === 0n ? "settled" : "partially_settled";
+      const advanceStatus = remaining === 0n ? "fully_applied" : "partially_applied", obligationStatus = row.payableObligationId ? derivePayableSettlementStatus({ ...facts.obligation, outstandingAmount: fixed(outstanding) }) : deriveReceivableSettlementStatus({ ...facts.obligation, outstandingAmount: fixed(outstanding) });
       const advance = await tx.partnerAdvance.update({ where: { id: facts.advance.id }, data: { remainingAmount: fixed(remaining), appliedAmount: fixed(applied), status: advanceStatus, version: { increment: 1 } } });
       const model = row.payableObligationId ? tx.payableObligation : tx.receivableObligation;
       await model.update({ where: { id: obligationId }, data: { outstandingAmount: fixed(outstanding), status: obligationStatus, version: { increment: 1 } } });
@@ -106,7 +109,8 @@ export function createAdvanceApplicationCommandService({ prisma, env = process.e
       const restoredAdvance = units(advance.remainingAmount) + amount, restoredOutstanding = units(obligation.outstandingAmount) + amount;
       if (restoredAdvance > units(advance.originalAmount) || restoredOutstanding > units(obligation.originalAmount) - units(obligation.approvedCreditAmount || 0)) fail("ADVANCE_APPLICATION_REVERSAL_NOT_SAFE", "Current facts cannot accept an exact reversal.", 409);
       const updatedAdvance = await tx.partnerAdvance.update({ where: { id: advance.id }, data: { remainingAmount: fixed(restoredAdvance), appliedAmount: fixed(units(advance.appliedAmount) - amount), status: restoredAdvance === units(advance.originalAmount) ? "open" : "partially_applied", version: { increment: 1 } } });
-      await model.update({ where: { id: obligation.id }, data: { outstandingAmount: fixed(restoredOutstanding), status: restoredOutstanding === 0n ? "settled" : row.payableObligationId ? "approved" : "open", version: { increment: 1 } } });
+      const restoredStatus = row.payableObligationId ? derivePayableSettlementStatus({ ...obligation, outstandingAmount: fixed(restoredOutstanding) }) : deriveReceivableSettlementStatus({ ...obligation, outstandingAmount: fixed(restoredOutstanding) });
+      await model.update({ where: { id: obligation.id }, data: { outstandingAmount: fixed(restoredOutstanding), status: restoredStatus, version: { increment: 1 } } });
       const reversed = await tx.advanceApplicationDocument.update({ where: { id: row.id }, data: { workflowStatus: "reversed", postingStatus: "reversed", reversedById: actor.user.id, reversedAt: now(), reversalReason: payload.reason, version: { increment: 1 } } });
       await tx.auditLog.create({ data: { id: idFactory(), tenantId: actor.tenantId, actorId: actor.user.id, source: "advance_application_command_service", module: "finance", action: "advance_application_reversed", entityType: "AdvanceApplicationDocument", entityId: row.id, summary: `Reversed advance application ${row.applicationNumber}.`, metadata: { ...command, exactInverse: true, cashbookEntryCount: 0 } } });
       return { entityId: row.id, application: { id: row.id, applicationNumber: row.applicationNumber, workflowStatus: reversed.workflowStatus, postingStatus: reversed.postingStatus, version: reversed.version }, advance: { id: updatedAdvance.id, remainingAmount: fixed(restoredAdvance), appliedAmount: fixed(units(updatedAdvance.appliedAmount)), version: updatedAdvance.version }, cashbookEntryCount: 0 };

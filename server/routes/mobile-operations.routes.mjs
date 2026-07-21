@@ -16,7 +16,7 @@ export async function handleMobileOperationsRoute(ctx) {
   if (!capabilityForEnvironment("mobile-operations", ctx.env || process.env)?.enabled) { ctx.send(ctx.res, 409, { code: "MOBILE_OPERATIONS_CAPABILITY_NOT_AVAILABLE", message: "Mobile operations require database persistence and explicit enablement." }); return true; }
   try {
     const prisma = ctx.mobileOperationsPrisma || await getPrismaClient(ctx.env || process.env);
-    const service = ctx.mobileOperationsService || createMobileOperationsService({ prisma, procurementRepository: ctx.repositories?.procurementRuntime, masterDataRepository: ctx.repositories?.masterData, env: ctx.env || process.env });
+    const service = ctx.mobileOperationsService || createMobileOperationsService({ prisma, procurementRepository: ctx.repositories?.procurementLegacyRuntime || ctx.repositories?.procurementRuntime, procurementAuthority: ctx.repositories?.procurementAuthority, masterDataRepository: ctx.repositories?.masterData, env: ctx.env || process.env });
     if (ctx.req.method === "GET" && path === "/api/mobile/tasks") { ctx.send(ctx.res, 200, await service.listTasks(ctx)); return true; }
     const task = path.match(/^\/api\/mobile\/tasks\/(.+)$/); if (ctx.req.method === "GET" && task) { ctx.send(ctx.res, 200, await service.taskDetail(decodeURIComponent(task[1]), ctx)); return true; }
     const po = path.match(/^\/api\/mobile\/purchase-orders\/([^/]+)$/); if (ctx.req.method === "GET" && po) { ctx.send(ctx.res, 200, await service.purchaseOrderDetail(decodeURIComponent(po[1]), ctx)); return true; }

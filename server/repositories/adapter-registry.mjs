@@ -15,6 +15,8 @@ import { createInMemoryProcurementTransactionRepository } from './procurement-tr
 import { createDurableInventoryRepository } from './durable-inventory-repository.mjs'
 import { createDurableSalesOrderRepository } from './durable-sales-order-repository.mjs'
 import { createDurableProcurementRepository } from './durable-procurement-repository.mjs'
+import { createDbProcurementCommandService } from '../domain/procurement-db-command-service.mjs'
+import { createDbProcurementRuntimeRepository } from './db-procurement-runtime-repository.mjs'
 import { createSettingsRuntimeRepository } from './settings-runtime-repository.mjs'
 import path from 'node:path'
 
@@ -82,9 +84,11 @@ export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, p
     masterData: createDbMasterDataRepository({ env, prisma }),
     inventoryRead: createDbInventoryReadRepository({ env, prisma }),
     procurementRead: createDbProcurementReadRepository({ env, prisma }),
-    // Phase 5.2B reuses the canonical procurement workflow repository while
-    // PostgreSQL remains authoritative for finance, receiving, and inventory.
-    procurementRuntime: createDurableProcurementRepository({ dataFile: path.resolve(env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE || 'data/procurement-transactions.json') }),
+    // Phase 5.2C makes PostgreSQL authoritative for formal PO reads and commands.
+    // The JSON runtime remains available only as an explicit legacy adapter.
+    procurementRuntime: createDbProcurementRuntimeRepository({ env, prisma }),
+    procurementLegacyRuntime: createDurableProcurementRepository({ dataFile: path.resolve(env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE || 'data/procurement-transactions.json') }),
+    procurementAuthority: createDbProcurementCommandService({ env, prisma }),
     actionDrafts: createDbActionDraftRepository({ db, env, prisma }),
     exceptionCases: createInMemoryExceptionCaseRepository({ db }),
     auditLog: createDbAuditLogRepository({ env, prisma }),

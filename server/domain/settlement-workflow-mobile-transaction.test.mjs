@@ -90,9 +90,9 @@ test("settlement workflow, advance application, internal transfer, and sync feed
     const startCursor = sync.issueCursor({ v: 1, tenantId, userId: finance.identity.userId, clientId: financeRow.id, deviceIdHash: financeRow.deviceIdHash, lastSequence: String(beforeSensitive._max.sequence || 0), authorizationFingerprint: financeFingerprint }, testEnv);
     const hiddenPage = await sync.changes({ clientId: financeClient.clientId, deviceId: "phase52b-finance-device", cursor: startCursor, limit: 1 }, finance);
     assert.equal(hiddenPage.changes.length, 0);
-    const visiblePage = await sync.changes({ clientId: financeClient.clientId, deviceId: "phase52b-finance-device", cursor: hiddenPage.cursor, limit: 1 }, finance);
-    assert.equal(visiblePage.changes[0].entityId, "visible-receiving-event");
-    const acknowledged = await sync.acknowledge({ clientId: financeClient.clientId, deviceId: "phase52b-finance-device", cursor: visiblePage.cursor }, finance);
+    const receivingFilteredPage = await sync.changes({ clientId: financeClient.clientId, deviceId: "phase52b-finance-device", cursor: hiddenPage.cursor, limit: 1 }, finance);
+    assert.equal(receivingFilteredPage.changes.length, 0);
+    const acknowledged = await sync.acknowledge({ clientId: financeClient.clientId, deviceId: "phase52b-finance-device", cursor: receivingFilteredPage.cursor }, finance);
     assert.ok(BigInt(acknowledged.acknowledgedSequence) > BigInt(beforeSensitive._max.sequence || 0));
 
     await prisma.tenant.update({ where: { id: tenantId }, data: { version: { increment: 1 } } });
