@@ -495,7 +495,9 @@ try {
     FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING:
       process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : (process.env.FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING || "false"),
     FLOWCHAIN_SYNC_CURSOR_SECRET: `mobile-browser-${randomUUID()}-cursor-secret`,
+    FLOWCHAIN_ATTACHMENT_STORAGE_PROVIDER: "local",
     FLOWCHAIN_UPLOAD_STORAGE_DIR: join(directory, "uploads"),
+    FLOWCHAIN_ALLOW_TEST_TEMP_ATTACHMENT_STORAGE: "true",
     FLOWCHAIN_DEFAULT_TENANT_ID: tenantId,
     FLOWCHAIN_ALLOW_LOCAL_ACTOR_BOOTSTRAP: "false",
     FLOWCHAIN_LOCAL_SESSION_SECRET: `finance-browser-${randomUUID()}-secure`,

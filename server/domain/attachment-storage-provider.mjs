@@ -16,7 +16,8 @@ export function createLocalDurableAttachmentStorage({ env = process.env, rootDir
   const root = resolve(configured || join(tmpdir(), "flowchain-test-attachments"));
   if (production && !isAbsolute(configured)) fail("ATTACHMENT_STORAGE_PATH_INVALID", "Production attachment storage must use an absolute path.");
   const tempRoot = resolve(tmpdir());
-  if (production && (root === tempRoot || root.startsWith(`${tempRoot}${sep}`))) fail("ATTACHMENT_STORAGE_PATH_INVALID", "Production attachment storage cannot use an operating-system temporary directory.");
+  const allowTestTemp = text(env.FLOWCHAIN_ALLOW_TEST_TEMP_ATTACHMENT_STORAGE).toLowerCase() === "true";
+  if (production && !allowTestTemp && (root === tempRoot || root.startsWith(`${tempRoot}${sep}`))) fail("ATTACHMENT_STORAGE_PATH_INVALID", "Production attachment storage cannot use an operating-system temporary directory.");
   const hash = digest || ((bytes) => bytes.toString("hex"));
   let ready = false;
   async function healthCheck() {
