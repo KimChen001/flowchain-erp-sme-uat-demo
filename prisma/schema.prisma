@@ -47,7 +47,15 @@ model Tenant {
   cashbookAccounts                 CashbookAccount[]
   settlementDocuments              SettlementDocument[]
   settlementAllocations            SettlementAllocation[]
+  settlementAttachments            SettlementAttachment[]
+  partnerAdvances                  PartnerAdvance[]
+  advanceApplications              AdvanceApplicationDocument[]
+  internalTransfers                InternalTransferDocument[]
   cashbookEntries                  CashbookEntry[]
+  stagedUploads                    StagedUpload[]
+  receivingAttachments             ReceivingAttachment[]
+  domainChangeFeed                 DomainChangeFeed[]
+  syncClients                      SyncClient[]
   documentLinks                    DocumentLink[]
   procurementFollowups             ProcurementFollowup[]
   inventoryBalances                InventoryBalance[]
@@ -105,6 +113,7 @@ model User {
   roleGrantsCreated   TenantRolePermission[]      @relation("RolePermissionCreator")
   invitationsSent     WorkspaceInvitation[]       @relation("InvitationInviter")
   invitationsAccepted WorkspaceInvitation[]       @relation("InvitationAcceptor")
+  syncClients         SyncClient[]
   importBatches       ImportBatch[]
   reservationsCreated InventoryReservation[]      @relation("ReservationReservedBy")
   reservationEvents   InventoryReservationEvent[] @relation("ReservationEventActor")
@@ -655,10 +664,12 @@ model ReceivingDocument {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  tenant Tenant          @relation(fields: [tenantId], references: [id])
-  lines  ReceivingLine[]
+  tenant      Tenant                @relation(fields: [tenantId], references: [id])
+  lines       ReceivingLine[]
+  attachments ReceivingAttachment[]
 
   @@unique([tenantId, documentNumber])
+  @@unique([tenantId, id])
   @@index([tenantId, status])
   @@index([tenantId, poId])
   @@index([tenantId, postingStatus])
@@ -884,9 +895,10 @@ model PayableObligation {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  supplierInvoice       SupplierInvoice        @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
+  tenant                Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  supplierInvoice       SupplierInvoice              @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
   settlementAllocations SettlementAllocation[]
+  advanceApplications   AdvanceApplicationDocument[]
 
   @@unique([tenantId, obligationNumber])
   @@unique([tenantId, id])
@@ -1045,9 +1057,10 @@ model ReceivableObligation {
   createdAt                     DateTime  @default(now())
   updatedAt                     DateTime  @updatedAt
 
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  customerInvoice       CustomerInvoice        @relation(fields: [customerInvoiceId], references: [id], onDelete: Restrict)
+  tenant                Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customerInvoice       CustomerInvoice              @relation(fields: [customerInvoiceId], references: [id], onDelete: Restrict)
   settlementAllocations SettlementAllocation[]
+  advanceApplications   AdvanceApplicationDocument[]
 
   @@unique([tenantId, obligationNumber])
   @@unique([tenantId, id])
@@ -1071,9 +1084,11 @@ model CashbookAccount {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  settlements SettlementDocument[]
-  entries     CashbookEntry[]
+  tenant        Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  settlements   SettlementDocument[]
+  entries       CashbookEntry[]
+  transfersFrom InternalTransferDocument[] @relation("InternalTransferFrom")
+  transfersTo   InternalTransferDocument[] @relation("InternalTransferTo")
 
   @@unique([tenantId, accountCode])
   @@unique([tenantId, id])
@@ -1094,6 +1109,26 @@ model SettlementDocument {
   amount                   Decimal   @db.Decimal(18, 4)
   settlementDate           DateTime
   status                   String    @default("draft")
+  workflowStatus           String    @default("draft")
+  postingStatus            String    @default("unposted")
+  submittedById            String?
+  submittedAt              DateTime?
+  approvedById             String?
+  approvedAt               DateTime?
+  rejectedById             String?
+  rejectedAt               DateTime?
+  rejectionReason          String?
+  cancelledById            String?
+  cancelledAt              DateTime?
+  cancellationReason       String?
+  attachmentCount          Int       @default(0)
+  clientMutationId         String?
+  sourceDeviceId           String?
+  lastWorkflowActionAt     DateTime?
+  cashAmount               Decimal   @default(0) @db.Decimal(18, 4)
+  discountAmount           Decimal   @default(0) @db.Decimal(18, 4)
+  totalSettlementAmount    Decimal   @default(0) @db.Decimal(18, 4)
+  advanceCreatedAmount     Decimal   @default(0) @db.Decimal(18, 4)
   externalReference        String?
   memo                     String?
   postedAt                 DateTime?
@@ -1110,6 +1145,8 @@ model SettlementDocument {
   cashbookAccount CashbookAccount        @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
   allocations     SettlementAllocation[]
   cashbookEntries CashbookEntry[]
+  advances        PartnerAdvance[]
+  attachments     SettlementAttachment[]
 
   @@unique([tenantId, settlementNumber])
   @@unique([tenantId, id])
@@ -1126,6 +1163,11 @@ model SettlementAllocation {
   payableObligationId    String?
   receivableObligationId String?
   amount                 Decimal  @db.Decimal(18, 4)
+  cashAppliedAmount      Decimal  @default(0) @db.Decimal(18, 4)
+  discountAmount         Decimal  @default(0) @db.Decimal(18, 4)
+  totalSettlementAmount  Decimal  @default(0) @db.Decimal(18, 4)
+  discountReason         String?
+  discountApprovedById   String?
   currency               String
   metadata               Json?
   createdAt              DateTime @default(now())
@@ -1141,32 +1183,267 @@ model SettlementAllocation {
   @@index([receivableObligationId])
 }
 
-model CashbookEntry {
-  id                String   @id
+model PartnerAdvance {
+  id                 String    @id
+  tenantId           String
+  advanceNumber      String
+  advanceType        String
+  supplierId         String?
+  customerId         String?
+  currency           String
+  originalAmount     Decimal   @db.Decimal(18, 4)
+  appliedAmount      Decimal   @default(0) @db.Decimal(18, 4)
+  remainingAmount    Decimal   @db.Decimal(18, 4)
+  sourceSettlementId String
+  status             String    @default("open")
+  version            Int       @default(0)
+  createdById        String?
+  reversedAt         DateTime?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant           Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sourceSettlement SettlementDocument           @relation(fields: [tenantId, sourceSettlementId], references: [tenantId, id], onDelete: Restrict)
+  applications     AdvanceApplicationDocument[]
+
+  @@unique([tenantId, advanceNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, advanceType, status])
+  @@index([tenantId, sourceSettlementId])
+}
+
+model AdvanceApplicationDocument {
+  id                     String    @id
+  tenantId               String
+  applicationNumber      String
+  advanceId              String
+  payableObligationId    String?
+  receivableObligationId String?
+  appliedAmount          Decimal   @db.Decimal(18, 4)
+  currency               String
+  workflowStatus         String    @default("draft")
+  postingStatus          String    @default("unposted")
+  version                Int       @default(0)
+  submittedById          String?
+  submittedAt            DateTime?
+  approvedById           String?
+  approvedAt             DateTime?
+  postedById             String?
+  postedAt               DateTime?
+  reversedById           String?
+  reversedAt             DateTime?
+  reversalReason         String?
+  clientMutationId       String?
+  sourceDeviceId         String?
+  metadata               Json?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  advance              PartnerAdvance        @relation(fields: [tenantId, advanceId], references: [tenantId, id], onDelete: Restrict)
+  payableObligation    PayableObligation?    @relation(fields: [tenantId, payableObligationId], references: [tenantId, id], onDelete: Restrict)
+  receivableObligation ReceivableObligation? @relation(fields: [tenantId, receivableObligationId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, applicationNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, advanceId, postingStatus])
+}
+
+model InternalTransferDocument {
+  id                    String    @id
+  tenantId              String
+  transferNumber        String
+  fromCashbookAccountId String
+  toCashbookAccountId   String
+  currency              String
+  amount                Decimal   @db.Decimal(18, 4)
+  transferDate          DateTime
+  externalReference     String?
+  memo                  String?
+  workflowStatus        String    @default("draft")
+  postingStatus         String    @default("unposted")
+  version               Int       @default(0)
+  submittedById         String?
+  submittedAt           DateTime?
+  approvedById          String?
+  approvedAt            DateTime?
+  rejectedById          String?
+  rejectedAt            DateTime?
+  rejectionReason       String?
+  cancelledById         String?
+  cancelledAt           DateTime?
+  cancellationReason    String?
+  postedById            String?
+  postedAt              DateTime?
+  reversedById          String?
+  reversedAt            DateTime?
+  reversalReason        String?
+  clientMutationId      String?
+  sourceDeviceId        String?
+  metadata              Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  fromAccount CashbookAccount @relation("InternalTransferFrom", fields: [tenantId, fromCashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  toAccount   CashbookAccount @relation("InternalTransferTo", fields: [tenantId, toCashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  entries     CashbookEntry[]
+
+  @@unique([tenantId, transferNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, workflowStatus, postingStatus])
+}
+
+model SettlementAttachment {
+  id             String    @id
+  tenantId       String
+  settlementId   String
+  uploadId       String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  sha256         String
+  attachmentType String
+  status         String    @default("active")
+  sourceDeviceId String?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  deletedAt      DateTime?
+  metadata       Json?
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  settlement SettlementDocument @relation(fields: [tenantId, settlementId], references: [tenantId, id], onDelete: Restrict)
+  upload     StagedUpload       @relation(fields: [tenantId, uploadId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, settlementId, status])
+  @@index([tenantId, sha256])
+}
+
+model StagedUpload {
+  id          String    @id
+  tenantId    String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  sha256      String
+  storageKey  String
+  status      String    @default("staged")
+  createdById String
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  boundAt     DateTime?
+  deletedAt   DateTime?
+  metadata    Json?
+
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  settlementAttachments SettlementAttachment[]
+  receivingAttachments  ReceivingAttachment[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, expiresAt])
+  @@index([tenantId, sha256])
+}
+
+model ReceivingAttachment {
+  id                  String    @id
+  tenantId            String
+  receivingDocumentId String
+  uploadId            String
+  fileName            String
+  mimeType            String
+  sizeBytes           Int
+  sha256              String
+  status              String    @default("active")
+  sourceDeviceId      String?
+  createdById         String
+  createdAt           DateTime  @default(now())
+  deletedAt           DateTime?
+  metadata            Json?
+
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  receivingDocument ReceivingDocument @relation(fields: [tenantId, receivingDocumentId], references: [tenantId, id], onDelete: Restrict)
+  upload            StagedUpload      @relation(fields: [tenantId, uploadId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, receivingDocumentId, status])
+}
+
+model DomainChangeFeed {
+  sequence          BigInt   @id @default(autoincrement())
   tenantId          String
-  cashbookAccountId String
-  settlementId      String
-  entryNumber       String
-  entryType         String
-  direction         String
-  amount            Decimal  @db.Decimal(18, 4)
-  currency          String
-  occurredAt        DateTime
-  balanceBefore     Decimal  @db.Decimal(18, 4)
-  balanceAfter      Decimal  @db.Decimal(18, 4)
-  postingBatchId    String
-  reversalOfEntryId String?  @unique
-  reversedByEntryId String?  @unique
+  entityType        String
+  entityId          String
+  operation         String
+  entityVersion     Int?
+  changedAt         DateTime @default(now())
   actorId           String?
-  metadata          Json?
+  source            String
+  requestId         String?
+  payloadHash       String
+  sensitivityGroups String[] @default([])
   createdAt         DateTime @default(now())
 
-  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  cashbookAccount CashbookAccount    @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
-  settlement      SettlementDocument @relation(fields: [tenantId, settlementId], references: [tenantId, id], onDelete: Restrict)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, sequence])
+  @@index([tenantId, entityType, entityId])
+}
+
+model SyncClient {
+  id                       String    @id
+  tenantId                 String
+  userId                   String
+  deviceIdHash             String
+  platform                 String
+  appVersion               String?
+  deviceName               String?
+  status                   String    @default("active")
+  lastSeenAt               DateTime  @default(now())
+  lastAcknowledgedSequence BigInt    @default(0)
+  authorizationFingerprint String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  revokedAt                DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, userId, deviceIdHash])
+  @@unique([tenantId, id])
+  @@index([tenantId, status, lastSeenAt])
+}
+
+model CashbookEntry {
+  id                 String   @id
+  tenantId           String
+  cashbookAccountId  String
+  settlementId       String?
+  internalTransferId String?
+  entryNumber        String
+  entryType          String
+  direction          String
+  amount             Decimal  @db.Decimal(18, 4)
+  currency           String
+  occurredAt         DateTime
+  balanceBefore      Decimal  @db.Decimal(18, 4)
+  balanceAfter       Decimal  @db.Decimal(18, 4)
+  postingBatchId     String
+  reversalOfEntryId  String?  @unique
+  reversedByEntryId  String?  @unique
+  actorId            String?
+  metadata           Json?
+  createdAt          DateTime @default(now())
+
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cashbookAccount  CashbookAccount           @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  settlement       SettlementDocument?       @relation(fields: [tenantId, settlementId], references: [tenantId, id], onDelete: Restrict)
+  internalTransfer InternalTransferDocument? @relation(fields: [tenantId, internalTransferId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, entryNumber])
   @@unique([settlementId, entryType])
+  @@unique([internalTransferId, entryType])
   @@index([tenantId, cashbookAccountId, occurredAt])
   @@index([tenantId, settlementId])
 }
