@@ -72,7 +72,9 @@ test("settlement workflow, advance application, internal transfer, and sync feed
     assert.equal(initial.changes.some((change) => "amount" in change || "payload" in change), false);
     assert.ok(await prisma.domainChangeFeed.count({ where: { tenantId } }) > 0);
 
-    await assert.rejects(() => sync.changes({ clientId: registered.clientId, deviceId: "phase52b-device-a", cursor: `${initial.cursor.slice(0, -1)}x` }, admin), (error) => error.code === "SYNC_CURSOR_TAMPERED");
+    const tamperedCursor = `${initial.cursor.slice(0, -1)}${initial.cursor.endsWith("x") ? "y" : "x"}`;
+    assert.notEqual(tamperedCursor, initial.cursor);
+    await assert.rejects(() => sync.changes({ clientId: registered.clientId, deviceId: "phase52b-device-a", cursor: tamperedCursor }, admin), (error) => error.code === "SYNC_CURSOR_TAMPERED");
     const deviceB = await sync.register({ deviceId: "phase52b-device-b", platform: "ios" }, admin);
     await assert.rejects(() => sync.changes({ clientId: deviceB.clientId, deviceId: "phase52b-device-b", cursor: initial.cursor }, admin), (error) => error.code === "SYNC_CURSOR_DEVICE_MISMATCH");
 
