@@ -11,6 +11,8 @@ import { createOperationalFinanceO2cCommandService } from "../domain/operational
 import { createOperationalFinanceO2cReadService } from "../domain/operational-finance-o2c-read-service.mjs";
 import { createInternalSettlementCommandService, InternalSettlementError } from "../domain/internal-settlement-command-service.mjs";
 import { createInternalSettlementReadService } from "../domain/internal-settlement-read-service.mjs";
+import { createInternalTransferCommandService } from "../domain/internal-transfer-command-service.mjs";
+import { createAdvanceApplicationCommandService } from "../domain/advance-application-command-service.mjs";
 import { PilotIdentityError } from "../domain/pilot-identity.mjs";
 import { getPrismaClient } from "../persistence/prisma-client.mjs";
 
@@ -23,6 +25,7 @@ const capabilityIds = [
   "receivable-obligation",
   "customer-credit-note",
   "internal-settlement",
+  "settlement-workflow",
   "cashbook",
 ];
 const capabilities = (env) =>
@@ -32,10 +35,14 @@ const capabilities = (env) =>
 const query = (url) => Object.fromEntries(url.searchParams.entries());
 
 function unavailable(ctx, capabilityId) {
+  const settlementWorkflow = capabilityId === "settlement-workflow";
   ctx.send(ctx.res, 409, {
-    code: "OPERATIONAL_FINANCE_CAPABILITY_NOT_AVAILABLE",
-    message:
-      "Operational finance requires database persistence and explicit enablement.",
+    code: settlementWorkflow
+      ? "SETTLEMENT_WORKFLOW_CAPABILITY_NOT_AVAILABLE"
+      : "OPERATIONAL_FINANCE_CAPABILITY_NOT_AVAILABLE",
+    message: settlementWorkflow
+      ? "Settlement workflow requires database persistence and explicit enablement."
+      : "Operational finance requires database persistence and explicit enablement.",
     details: { capability: capabilityId },
   });
 }
@@ -112,6 +119,8 @@ async function services(ctx) {
     settlementCommand:
       ctx.internalSettlementCommandService ||
       createInternalSettlementCommandService({ prisma, env }),
+    transferCommand: ctx.internalTransferCommandService || createInternalTransferCommandService({ prisma, env }),
+    advanceCommand: ctx.advanceApplicationCommandService || createAdvanceApplicationCommandService({ prisma, env }),
   };
 }
 
@@ -120,7 +129,7 @@ export async function handleOperationalFinanceRoute(ctx) {
   if (!path.startsWith("/api/finance/")) return false;
   if (!ensureBoundary(ctx)) return true;
   try {
-    const { read, command, o2cRead, o2cCommand, settlementRead, settlementCommand } = await services(ctx);
+    const { read, command, o2cRead, o2cCommand, settlementRead, settlementCommand, transferCommand, advanceCommand } = await services(ctx);
     if (ctx.req.method === "GET" && path === "/api/finance/entry-data") {
       const [p2p, o2c, settlement] = await Promise.all([
         read.entryData(ctx),
@@ -147,6 +156,51 @@ export async function handleOperationalFinanceRoute(ctx) {
       ctx.send(ctx.res, 200, await settlementRead.listSettlements(query(ctx.url), ctx));
       return true;
     }
+    if (ctx.req.method === "GET" && path === "/api/finance/advances") {
+      ctx.send(ctx.res, 200, await settlementRead.listAdvances(query(ctx.url), ctx));
+      return true;
+    }
+    if (ctx.req.method === "POST" && path === "/api/finance/advance-applications") {
+      if (!ensureCapability(ctx, "settlement-workflow")) return true;
+      ctx.send(ctx.res, 201, await advanceCommand.createAdvanceApplication(await ctx.readBody(ctx.req), ctx));
+      return true;
+    }
+    const advanceMatch = path.match(/^\/api\/finance\/advance-applications\/([^/]+)\/(submit|approve|post|reverse)$/);
+    if (ctx.req.method === "POST" && advanceMatch) {
+      if (!ensureCapability(ctx, "settlement-workflow")) return true;
+      const methods = { submit: "submitAdvanceApplication", approve: "approveAdvanceApplication", post: "postAdvanceApplication", reverse: "reverseAdvanceApplication" };
+      ctx.send(ctx.res, 200, await advanceCommand[methods[advanceMatch[2]]](decodeURIComponent(advanceMatch[1]), await ctx.readBody(ctx.req), ctx));
+      return true;
+    }
+    if (ctx.req.method === "GET" && path === "/api/finance/internal-transfers") {
+      ctx.send(ctx.res, 200, await settlementRead.listInternalTransfers(query(ctx.url), ctx));
+      return true;
+    }
+    if (ctx.req.method === "POST" && path === "/api/finance/internal-transfers/preview") {
+      if (!ensureCapability(ctx, "settlement-workflow")) return true;
+      ctx.send(ctx.res, 200, await transferCommand.previewInternalTransferPosting(await ctx.readBody(ctx.req), ctx));
+      return true;
+    }
+    if (ctx.req.method === "POST" && path === "/api/finance/internal-transfers") {
+      if (!ensureCapability(ctx, "settlement-workflow")) return true;
+      ctx.send(ctx.res, 201, await transferCommand.createInternalTransfer(await ctx.readBody(ctx.req), ctx));
+      return true;
+    }
+    const transferMatch = path.match(/^\/api\/finance\/internal-transfers\/([^/]+)(?:\/(revise|submit|approve|reject|cancel|post|reverse))?$/);
+    if (transferMatch) {
+      const transferId = decodeURIComponent(transferMatch[1]), action = transferMatch[2] || "";
+      if (ctx.req.method === "GET" && !action) {
+        const result = await settlementRead.internalTransferDetail(transferId, ctx);
+        ctx.send(ctx.res, result ? 200 : 404, result || { code: "TRANSFER_NOT_FOUND", message: "Internal transfer was not found." });
+        return true;
+      }
+      if (ctx.req.method === "POST" && action) {
+        if (!ensureCapability(ctx, "settlement-workflow")) return true;
+        const methods = { revise: "reviseInternalTransfer", submit: "submitInternalTransfer", approve: "approveInternalTransfer", reject: "rejectInternalTransfer", cancel: "cancelInternalTransfer", post: "postInternalTransfer", reverse: "reverseInternalTransfer" };
+        ctx.send(ctx.res, 200, await transferCommand[methods[action]](transferId, await ctx.readBody(ctx.req), ctx));
+        return true;
+      }
+    }
     if (ctx.req.method === "POST" && path === "/api/finance/settlements/preview") {
       if (!ensureCapability(ctx, "internal-settlement")) return true;
       ctx.send(ctx.res, 200, await settlementCommand.previewSettlement(await ctx.readBody(ctx.req), ctx));
@@ -157,7 +211,7 @@ export async function handleOperationalFinanceRoute(ctx) {
       ctx.send(ctx.res, 201, await settlementCommand.createSettlement(await ctx.readBody(ctx.req), ctx));
       return true;
     }
-    const settlementMatch = path.match(/^\/api\/finance\/settlements\/([^/]+)(?:\/(post|reverse|reconciliation))?$/);
+    const settlementMatch = path.match(/^\/api\/finance\/settlements\/([^/]+)(?:\/(revise|submit|approve|reject|cancel|posting-preview|post|reverse|reconciliation))?$/);
     if (settlementMatch) {
       const settlementId = decodeURIComponent(settlementMatch[1]);
       const action = settlementMatch[2] || "";
@@ -171,10 +225,16 @@ export async function handleOperationalFinanceRoute(ctx) {
         ctx.send(ctx.res, result ? 200 : 404, result || { code: "SETTLEMENT_NOT_FOUND", message: "Settlement was not found." });
         return true;
       }
-      if (ctx.req.method === "POST" && ["post", "reverse"].includes(action)) {
-        if (!ensureCapability(ctx, "internal-settlement")) return true;
+      if (ctx.req.method === "POST" && action === "posting-preview") {
+        if (!ensureCapability(ctx, "settlement-workflow")) return true;
+        ctx.send(ctx.res, 200, await settlementCommand.previewSettlementPosting(settlementId, ctx));
+        return true;
+      }
+      if (ctx.req.method === "POST" && ["revise", "submit", "approve", "reject", "cancel", "post", "reverse"].includes(action)) {
+        if (!ensureCapability(ctx, ["revise", "submit", "approve", "reject", "cancel"].includes(action) ? "settlement-workflow" : "internal-settlement")) return true;
         const body = await ctx.readBody(ctx.req);
-        const result = action === "post" ? await settlementCommand.postSettlement(settlementId, body, ctx) : await settlementCommand.reverseSettlement(settlementId, body, ctx);
+        const commands = { revise: "reviseSettlement", submit: "submitSettlement", approve: "approveSettlement", reject: "rejectSettlement", cancel: "cancelSettlement", post: "postSettlement", reverse: "reverseSettlement" };
+        const result = await settlementCommand[commands[action]](settlementId, body, ctx);
         ctx.send(ctx.res, 200, result);
         return true;
       }
