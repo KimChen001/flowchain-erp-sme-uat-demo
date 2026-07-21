@@ -124,9 +124,7 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
       const nextCursor = { typeIndex: cursor + 1, rowOffset: 0 };
       return { changes: [], nextCursor, hasMore: nextCursor.typeIndex < entityTypes.length };
     }
-    const where = policy.parent
-      ? { [policy.parent === "purchaseOrder" ? "purchaseOrder" : policy.parent === "receivingDocument" ? "receivingDocument" : policy.parent === "settlementDocument" ? "settlementDocument" : "cashbookAccount"]: { tenantId: actor.tenantId } }
-      : { tenantId: actor.tenantId };
+    const where = policy.parent ? { [policy.parent]: { tenantId: actor.tenantId } } : { tenantId: actor.tenantId };
     const rows = await model.findMany({ where, ...(policy.include ? { include: policy.include } : {}), orderBy: { id: "asc" }, skip: rowOffset, take: pageSize + 1 });
     const pageRows = rows.slice(0, pageSize);
     const changes = [];
@@ -136,7 +134,9 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
     }
     const hasMoreRows = rows.length > pageSize;
     const nextState = hasMoreRows ? { typeIndex: cursor, rowOffset: rowOffset + pageSize } : { typeIndex: cursor + 1, rowOffset: 0 };
-    return { changes, nextCursor: nextState, hasMore: hasMoreRows || nextState.typeIndex < entityTypes.length };
+    const hasMore = hasMoreRows || nextState.typeIndex < entityTypes.length;
+    if (!changes.length && hasMore) return snapshotRows({ ...session, entityTypeCursor: JSON.stringify(nextState) }, actor, tenant);
+    return { changes, nextCursor: nextState, hasMore };
   }
 
   async function initial(input, context) {
@@ -155,7 +155,16 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
       const requestedPageSize = Math.min(200, Math.max(1, Number(input.pageSize || input.limit || 100)));
       session = await prisma.syncSnapshotSession.create({ data: { id: idFactory(), tenantId: actor.tenantId, userId: actor.user.id, syncClientId: client.id, authorizationFingerprint: fingerprint, highWatermarkSequence: highWatermark, status: "active", entityTypeCursor: "0", pageSize: requestedPageSize, expiresAt: new Date(now().getTime() + Number(cursorTtlSeconds) * 1000) } });
     }
-    const page = await snapshotRows(session, actor, tenant);
+    let page = await snapshotRows(session, actor, tenant);
+    if (!input.snapshotCursor && input.limit && !input.pageSize) {
+      const legacyLimit = Number(session.pageSize);
+      const legacyChanges = [...page.changes];
+      while (page.hasMore && legacyChanges.length < legacyLimit) {
+        page = await snapshotRows({ ...session, entityTypeCursor: JSON.stringify(page.nextCursor), pageSize: legacyLimit - legacyChanges.length }, actor, tenant);
+        legacyChanges.push(...page.changes);
+      }
+      page = { ...page, changes: legacyChanges };
+    }
     const nextCursorIndex = JSON.stringify(page.nextCursor);
     if (page.hasMore) {
       const updated = await prisma.syncSnapshotSession.update({ where: { id: session.id }, data: { entityTypeCursor: nextCursorIndex } });
@@ -216,7 +225,7 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
     return { clientId: client.id, status: "revoked", revokedAt: serial(now()) };
   }
 
-  return { register, initial, changes, acknowledge, revoke, authorizationFingerprint, issueCursor: (claims) => issueCursor(claims, env), verifyCursor: (cursor) => verifyCursor(cursor, env, now().getTime()) };
+  return { register, initial, changes, acknowledge, revoke, authorizationFingerprint, issueCursor: (claims) => { const issuedAt = Number(claims.issuedAt ?? now().getTime()); return issueCursor({ ...claims, issuedAt, expiresAt: Number(claims.expiresAt ?? issuedAt + Number(cursorTtlSeconds) * 1000), snapshotSessionId: claims.snapshotSessionId ?? null }, env); }, verifyCursor: (cursor) => verifyCursor(cursor, env, now().getTime()) };
 }
 
 export { issueCursor, verifyCursor };

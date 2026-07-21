@@ -19,7 +19,7 @@ const registry = {
   CustomerInvoice: { moduleKey: "finance", capabilityId: "customer-invoice", requiredReadPermission: "finance.customer_invoice.create", amountSensitive: true, partnerSensitive: true, model: "customerInvoice" },
   ReceivableObligation: { moduleKey: "finance", capabilityId: "receivable-obligation", requiredReadPermission: "finance.receivable.read", amountSensitive: true, partnerSensitive: true, model: "receivableObligation" },
   SettlementDocument: { moduleKey: "finance", capabilityId: "settlement-workflow", requiredReadPermission: "finance.settlement.read", amountSensitive: true, partnerSensitive: true, model: "settlementDocument", include: { allocations: true } },
-  SettlementAllocation: { moduleKey: "finance", capabilityId: "settlement-workflow", requiredReadPermission: "finance.settlement.read", amountSensitive: true, model: "settlementAllocation", parent: "settlementDocument" },
+  SettlementAllocation: { moduleKey: "finance", capabilityId: "settlement-workflow", requiredReadPermission: "finance.settlement.read", amountSensitive: true, model: "settlementAllocation", parent: "settlement" },
   CashbookAccount: { moduleKey: "finance", capabilityId: "internal-settlement", requiredReadPermission: "finance.cashbook.read", amountSensitive: true, model: "cashbookAccount" },
   CashbookEntry: { moduleKey: "finance", capabilityId: "internal-settlement", requiredReadPermission: "finance.cashbook.read", amountSensitive: true, model: "cashbookEntry", parent: "cashbookAccount" },
   PartnerAdvance: { moduleKey: "finance", capabilityId: "settlement-workflow", requiredReadPermission: "finance.advance.read", amountSensitive: true, partnerSensitive: true, model: "partnerAdvance" },
@@ -79,7 +79,7 @@ export async function loadAuthorizedSyncProjection({ prisma, tenant, actor, enti
   if (!policy.parent) where.tenantId = actor.tenantId;
   if (policy.parent === "purchaseOrder") where.purchaseOrder = { tenantId: actor.tenantId };
   if (policy.parent === "receivingDocument") where.receivingDocument = { tenantId: actor.tenantId };
-  if (policy.parent === "settlementDocument") where.settlementDocument = { tenantId: actor.tenantId };
+  if (policy.parent === "settlement") where.settlement = { tenantId: actor.tenantId };
   if (policy.parent === "cashbookAccount") where.cashbookAccount = { tenantId: actor.tenantId };
   const row = await model.findFirst({ where, ...(policy.include ? { include: policy.include } : {}) });
   if (!row) return null;
