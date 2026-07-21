@@ -56,6 +56,7 @@ model Tenant {
   receivingAttachments             ReceivingAttachment[]
   domainChangeFeed                 DomainChangeFeed[]
   syncClients                      SyncClient[]
+  syncSnapshotSessions             SyncSnapshotSession[]
   documentLinks                    DocumentLink[]
   procurementFollowups             ProcurementFollowup[]
   inventoryBalances                InventoryBalance[]
@@ -114,6 +115,7 @@ model User {
   invitationsSent     WorkspaceInvitation[]       @relation("InvitationInviter")
   invitationsAccepted WorkspaceInvitation[]       @relation("InvitationAcceptor")
   syncClients         SyncClient[]
+  syncSnapshotSessions SyncSnapshotSession[]
   importBatches       ImportBatch[]
   reservationsCreated InventoryReservation[]      @relation("ReservationReservedBy")
   reservationEvents   InventoryReservationEvent[] @relation("ReservationEventActor")
@@ -1336,6 +1338,12 @@ model StagedUpload {
   boundAt     DateTime?
   deletedAt   DateTime?
   metadata    Json?
+  storageProvider     String   @default("local")
+  storageVersion      String   @default("v1")
+  storageBucket       String?
+  storageRegion       String?
+  persistedAt         DateTime?
+  storageHealthStatus String   @default("unknown")
 
   tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   settlementAttachments SettlementAttachment[]
@@ -1383,6 +1391,10 @@ model DomainChangeFeed {
   requestId         String?
   payloadHash       String
   sensitivityGroups String[] @default([])
+  moduleKey         String?
+  scopeWarehouseIds String[] @default([])
+  authorizationClass String?
+  resourceTenantId  String?
   createdAt         DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1409,10 +1421,34 @@ model SyncClient {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  snapshotSessions SyncSnapshotSession[]
 
   @@unique([tenantId, userId, deviceIdHash])
   @@unique([tenantId, id])
   @@index([tenantId, status, lastSeenAt])
+}
+
+model SyncSnapshotSession {
+  id                       String   @id
+  tenantId                 String
+  userId                   String
+  syncClientId             String
+  authorizationFingerprint String
+  highWatermarkSequence    BigInt
+  status                   String   @default("active")
+  entityTypeCursor         String?
+  pageSize                 Int      @default(100)
+  createdAt                DateTime @default(now())
+  expiresAt                DateTime
+  completedAt              DateTime?
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  syncClient SyncClient @relation(fields: [tenantId, syncClientId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, userId, status, expiresAt])
+  @@index([tenantId, syncClientId, status])
 }
 
 model CashbookEntry {
