@@ -67,6 +67,8 @@
     "test:api:receiving-decimal-parity": "node scripts/run-postgres-test-files.mjs tests/postgres/receiving-decimal-parity.test.mjs",
     "test:domain:bank-statement-parser": "node --test server/domain/bank-statement-parser.test.mjs",
     "test:db:bank-reconciliation": "node scripts/run-postgres-test-files.mjs tests/postgres/bank-reconciliation.test.mjs",
+    "test:api:bank-reconciliation": "node --test server/routes/bank-reconciliation.routes.test.mjs",
+    "test:db:bank-reconciliation-evidence": "node scripts/run-postgres-test-files.mjs tests/postgres/bank-reconciliation-evidence.test.mjs",
     "test:api:authorization": "node scripts/smoke-authorization-api.mjs",
     "test:browser:authorization": "node scripts/run-authorization-playwright.mjs",
     "db:generate": "prisma generate",
