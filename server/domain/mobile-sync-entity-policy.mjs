@@ -16,7 +16,7 @@ const registry = {
   ReturnPostingDocument: { moduleKey: "returns", capabilityId: "return-posting", requiredReadPermission: "returns.posting.read", model: "returnPostingDocument" },
   SupplierInvoice: { moduleKey: "finance", capabilityId: "supplier-invoice", requiredReadPermission: "finance.supplier_invoice.read", amountSensitive: true, partnerSensitive: true, model: "supplierInvoice" },
   PayableObligation: { moduleKey: "finance", capabilityId: "payable-obligation", requiredReadPermission: "finance.payable.read", amountSensitive: true, partnerSensitive: true, model: "payableObligation" },
-  CustomerInvoice: { moduleKey: "finance", capabilityId: "customer-invoice", requiredReadPermission: "finance.customer_invoice.create", amountSensitive: true, partnerSensitive: true, model: "customerInvoice" },
+  CustomerInvoice: { moduleKey: "finance", capabilityId: "customer-invoice", requiredReadPermission: "finance.customer_invoice.read", amountSensitive: true, partnerSensitive: true, model: "customerInvoice" },
   ReceivableObligation: { moduleKey: "finance", capabilityId: "receivable-obligation", requiredReadPermission: "finance.receivable.read", amountSensitive: true, partnerSensitive: true, model: "receivableObligation" },
   SettlementDocument: { moduleKey: "finance", capabilityId: "settlement-workflow", requiredReadPermission: "finance.settlement.read", amountSensitive: true, partnerSensitive: true, model: "settlementDocument", include: { allocations: true } },
   SettlementAllocation: { moduleKey: "finance", capabilityId: "settlement-workflow", requiredReadPermission: "finance.settlement.read", amountSensitive: true, model: "settlementAllocation", parent: "settlement" },
@@ -54,8 +54,12 @@ function project(row, entityType, policy, actor) {
   if (["InventoryMovement", "InventoryBalance"].includes(entityType)) return { ...base, sku: row.sku, itemName: row.itemName, quantityIn: decimal(row.quantityIn), quantityOut: decimal(row.quantityOut), availableQuantity: decimal(row.availableQuantity), onHandQuantity: decimal(row.onHandQuantity), reservedQuantity: decimal(row.reservedQuantity), movementType: row.movementType };
   if (entityType.endsWith("Attachment")) return { ...base, fileName: row.fileName, mimeType: row.mimeType, sizeBytes: row.sizeBytes, sha256: row.sha256, status: row.status };
   const result = { ...base, currency: row.currency || null };
-  if (amounts) Object.assign(result, { amount: decimal(row.amount ?? row.originalAmount ?? row.outstandingAmount ?? row.appliedAmount ?? row.remainingAmount ?? row.currentBalance), originalAmount: decimal(row.originalAmount), outstandingAmount: decimal(row.outstandingAmount), remainingAmount: decimal(row.remainingAmount) });
-  if (partner) Object.assign(result, { supplierId: row.supplierId || row.supplierInvoice?.supplierId || null, customerId: row.customerId || row.customerInvoice?.customerId || null });
+  if (policy.amountSensitive) Object.assign(result, amounts
+    ? { amount: decimal(row.amount ?? row.totalAmount ?? row.originalAmount ?? row.outstandingAmount ?? row.appliedAmount ?? row.remainingAmount ?? row.currentBalance), originalAmount: decimal(row.originalAmount), outstandingAmount: decimal(row.outstandingAmount), remainingAmount: decimal(row.remainingAmount) }
+    : { amount: null, originalAmount: null, outstandingAmount: null, remainingAmount: null });
+  if (policy.partnerSensitive) Object.assign(result, partner
+    ? { supplierId: row.supplierId || row.supplierInvoice?.supplierId || null, supplierNameSnapshot: row.supplierNameSnapshot || null, customerId: row.customerId || row.customerInvoice?.customerId || null, customerNameSnapshot: row.customerNameSnapshot || row.customerInvoice?.customerNameSnapshot || null }
+    : { supplierId: null, supplierNameSnapshot: null, customerId: null, customerNameSnapshot: null });
   if (entityType === "SettlementDocument") Object.assign(result, { workflowStatus: row.workflowStatus, postingStatus: row.postingStatus, settlementNumber: row.settlementNumber });
   if (entityType === "AdvanceApplicationDocument") Object.assign(result, { advanceId: row.advanceId, workflowStatus: row.workflowStatus, postingStatus: row.postingStatus });
   return result;
@@ -63,16 +67,46 @@ function project(row, entityType, policy, actor) {
 
 export const mobileSyncEntityPolicy = Object.freeze(registry);
 
+export function validateMobileSyncEntityPolicy(value = registry) {
+  for (const [entityType, policy] of Object.entries(value)) {
+    const permission = text(policy.requiredReadPermission);
+    const action = permission.split(".").at(-1);
+    if (action === "read") continue;
+    if (text(policy.readPermissionExceptionReason)) continue;
+    throw new Error(`${entityType} requiredReadPermission must be a read action; received ${permission || "<empty>"}.`);
+  }
+  return true;
+}
+
+validateMobileSyncEntityPolicy();
+
 export function getMobileSyncEntityPolicy(entityType) {
   return registry[text(entityType)] || null;
 }
 
-export async function loadAuthorizedSyncProjection({ prisma, tenant, actor, entityType, entityId, operation = "upsert", env = process.env }) {
+export async function loadAuthorizedSyncProjection({ prisma, tenant, actor, entityType, entityId, operation = "upsert", feedContext, env = process.env }) {
   const policy = getMobileSyncEntityPolicy(entityType);
-  if (!policy || !hasPermission(actor, policy.requiredReadPermission) || !moduleEnabled(tenant, policy.moduleKey)) return null;
+  if (!policy) return null;
+  if (operation === "tombstone") {
+    const feedTenantId = text(feedContext?.tenantId);
+    const resourceTenantId = text(feedContext?.resourceTenantId);
+    if (feedTenantId && feedTenantId !== actor.tenantId) return null;
+    if (resourceTenantId && resourceTenantId !== actor.tenantId) return null;
+    if (policy.warehouseScoped && resourceTenantId !== actor.tenantId) return null;
+    if (text(feedContext?.moduleKey) && text(feedContext.moduleKey) !== policy.moduleKey) return null;
+    if (text(feedContext?.authorizationClass) && text(feedContext.authorizationClass) !== policy.requiredReadPermission) return null;
+  }
+  if (!moduleEnabled(tenant, policy.moduleKey)) return null;
   const capability = capabilityForEnvironment(policy.capabilityId, env);
   if (capability?.requiresExplicitEnable && !capability.enabled) return null;
-  if (operation === "tombstone") return { id: text(entityId), entityType, tombstone: true };
+  if (!hasPermission(actor, policy.requiredReadPermission)) return null;
+  if (operation === "tombstone") {
+    if (policy.warehouseScoped && !actor.allWarehouses) {
+      const scopeWarehouseIds = Array.isArray(feedContext?.scopeWarehouseIds) ? feedContext.scopeWarehouseIds.map(text).filter(Boolean) : [];
+      if (!scopeWarehouseIds.length || !scopeWarehouseIds.some((warehouseId) => actor.readWarehouseIds?.has?.(warehouseId))) return null;
+    }
+    return { id: text(entityId), entityType, tombstone: true };
+  }
   const model = prisma[policy.model];
   if (!model) return null;
   const where = { id: text(entityId) };

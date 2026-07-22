@@ -29,8 +29,18 @@ function cursorKeyring(env) {
   if (previous) {
     try {
       const parsed = JSON.parse(previous);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) for (const [keyId, secret] of Object.entries(parsed)) if (text(secret).length >= 32) keys.set(text(keyId), text(secret));
-    } catch { fail("SYNC_CURSOR_KEY_CONFIG_INVALID", "FLOWCHAIN_SYNC_CURSOR_PREVIOUS_KEYS must be a JSON object.", 503); }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) fail("SYNC_CURSOR_KEY_CONFIG_INVALID", "FLOWCHAIN_SYNC_CURSOR_PREVIOUS_KEYS must be a JSON object.", 503);
+      for (const [rawKeyId, rawSecret] of Object.entries(parsed)) {
+        const keyId = text(rawKeyId), secret = text(rawSecret);
+        if (!keyId) fail("SYNC_CURSOR_KEY_CONFIG_INVALID", "Previous sync cursor key ids cannot be empty.", 503);
+        if (secret.length < 32) fail("SYNC_CURSOR_KEY_WEAK", `Previous sync cursor key ${keyId} must be at least 32 characters.`, 503);
+        if (keyId === currentId) fail("SYNC_CURSOR_KEY_CONFIG_INVALID", "The current sync cursor key id cannot also be configured as previous.", 503);
+        keys.set(keyId, secret);
+      }
+    } catch (error) {
+      if (error instanceof MobileSyncError) throw error;
+      fail("SYNC_CURSOR_KEY_CONFIG_INVALID", "FLOWCHAIN_SYNC_CURSOR_PREVIOUS_KEYS must be a JSON object.", 503);
+    }
   }
   return { currentId, keys };
 }
@@ -95,8 +105,8 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
     return { actor, client, fingerprint };
   }
 
-  async function maxSequence(tenantId) {
-    const result = await prisma.domainChangeFeed.aggregate({ where: { tenantId }, _max: { sequence: true } });
+  async function maxSequence(tenantId, db = prisma) {
+    const result = await db.domainChangeFeed.aggregate({ where: { tenantId }, _max: { sequence: true } });
     return BigInt(result._max.sequence || 0);
   }
 
@@ -107,25 +117,26 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
 
   async function snapshotRows(session, actor, tenant) {
     const entityTypes = Object.keys(mobileSyncEntityPolicy);
-    let state = { typeIndex: 0, rowOffset: 0 };
+    let state = { typeIndex: 0, lastId: null };
     if (session.entityTypeCursor) {
       try {
         const parsed = JSON.parse(session.entityTypeCursor);
-        state = typeof parsed === "number" ? { typeIndex: parsed, rowOffset: 0 } : { typeIndex: Number(parsed.typeIndex || 0), rowOffset: Number(parsed.rowOffset || 0) };
-      } catch { state = { typeIndex: Number(session.entityTypeCursor) || 0, rowOffset: 0 }; }
+        state = typeof parsed === "number" ? { typeIndex: parsed, lastId: null } : { typeIndex: Number(parsed.typeIndex || 0), lastId: text(parsed.lastId) || null };
+      } catch { state = { typeIndex: Number(session.entityTypeCursor) || 0, lastId: null }; }
     }
-    const cursor = Math.max(0, state.typeIndex), rowOffset = Math.max(0, state.rowOffset);
+    const cursor = Math.max(0, state.typeIndex), lastId = text(state.lastId) || null;
     const pageSize = Math.min(200, Math.max(1, Number(session.pageSize || 100)));
     const type = entityTypes[cursor];
     if (!type) return { changes: [], nextCursor: cursor, hasMore: false };
     const policy = getMobileSyncEntityPolicy(type);
     const model = prisma[policy.model];
     if (!model) {
-      const nextCursor = { typeIndex: cursor + 1, rowOffset: 0 };
+      const nextCursor = { typeIndex: cursor + 1, lastId: null };
       return { changes: [], nextCursor, hasMore: nextCursor.typeIndex < entityTypes.length };
     }
     const where = policy.parent ? { [policy.parent]: { tenantId: actor.tenantId } } : { tenantId: actor.tenantId };
-    const rows = await model.findMany({ where, ...(policy.include ? { include: policy.include } : {}), orderBy: { id: "asc" }, skip: rowOffset, take: pageSize + 1 });
+    if (lastId) where.id = { gt: lastId };
+    const rows = await model.findMany({ where, ...(policy.include ? { include: policy.include } : {}), orderBy: { id: "asc" }, take: pageSize + 1 });
     const pageRows = rows.slice(0, pageSize);
     const changes = [];
     for (const row of pageRows) {
@@ -133,7 +144,7 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
       if (projection) changes.push({ sequence: "0", entityType: type, entityId: row.id, operation: "upsert", entityVersion: row.version ?? null, changedAt: serial(row.updatedAt || row.createdAt), projection, fieldVisibility: fieldVisibility(actor), limitations: [] });
     }
     const hasMoreRows = rows.length > pageSize;
-    const nextState = hasMoreRows ? { typeIndex: cursor, rowOffset: rowOffset + pageSize } : { typeIndex: cursor + 1, rowOffset: 0 };
+    const nextState = hasMoreRows ? { typeIndex: cursor, lastId: text(pageRows.at(-1)?.id) || lastId } : { typeIndex: cursor + 1, lastId: null };
     const hasMore = hasMoreRows || nextState.typeIndex < entityTypes.length;
     if (!changes.length && hasMore) return snapshotRows({ ...session, entityTypeCursor: JSON.stringify(nextState) }, actor, tenant);
     return { changes, nextCursor: nextState, hasMore };
@@ -169,11 +180,11 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
     if (page.hasMore) {
       const updated = await prisma.syncSnapshotSession.update({ where: { id: session.id }, data: { entityTypeCursor: nextCursorIndex } });
       const snapshotCursor = issueCursor(normalClaims(client, fingerprint, session.highWatermarkSequence, updated.id), env);
-      return { resetRequired: false, authorizationFingerprint: fingerprint, changes: page.changes, snapshotSessionId: updated.id, snapshotCursor, hasMore: true, nextEntityType: Object.keys(mobileSyncEntityPolicy)[page.nextCursor.typeIndex], pageSize: Number(session.pageSize), highWatermark: String(session.highWatermarkSequence), serverTime: serial(now()) };
+      return { resetRequired: false, authorizationFingerprint: fingerprint, changes: page.changes, snapshotSessionId: updated.id, snapshotCursor, hasMore: true, nextEntityType: Object.keys(mobileSyncEntityPolicy)[page.nextCursor.typeIndex], lastId: page.nextCursor.lastId, pageSize: Number(session.pageSize), highWatermark: String(session.highWatermarkSequence), consistencyContract: "convergent_keyset_initial_sync", serverTime: serial(now()) };
     }
     const completed = await prisma.syncSnapshotSession.update({ where: { id: session.id }, data: { status: "completed", entityTypeCursor: nextCursorIndex, completedAt: now() } });
     const cursor = issueCursor(normalClaims(client, fingerprint, completed.highWatermarkSequence, null), env);
-    return { resetRequired: false, authorizationFingerprint: fingerprint, changes: page.changes, snapshotSessionId: completed.id, snapshotCursor: null, hasMore: false, nextEntityType: null, pageSize: Number(session.pageSize), highWatermark: String(completed.highWatermarkSequence), cursor, serverTime: serial(now()) };
+    return { resetRequired: false, authorizationFingerprint: fingerprint, changes: page.changes, snapshotSessionId: completed.id, snapshotCursor: null, hasMore: false, nextEntityType: null, lastId: null, pageSize: Number(session.pageSize), highWatermark: String(completed.highWatermarkSequence), consistencyContract: "convergent_keyset_initial_sync", cursor, serverTime: serial(now()) };
   }
 
   async function pageChanges(actor, afterSequence, limit) {
@@ -181,15 +192,15 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
     const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { id: true, operationalSettings: true } });
     const changes = [];
     for (const row of rows) {
-      const projection = await loadAuthorizedSyncProjection({ prisma, tenant, actor, entityType: row.entityType, entityId: row.entityId, operation: row.operation, env });
+      const projection = await loadAuthorizedSyncProjection({ prisma, tenant, actor, entityType: row.entityType, entityId: row.entityId, operation: row.operation, feedContext: { tenantId: row.tenantId, resourceTenantId: row.resourceTenantId, moduleKey: row.moduleKey, authorizationClass: row.authorizationClass, scopeWarehouseIds: row.scopeWarehouseIds }, env });
       if (!projection) continue;
       changes.push({ sequence: String(row.sequence), entityType: row.entityType, entityId: row.entityId, operation: row.operation, entityVersion: row.entityVersion, changedAt: serial(row.changedAt), projection, fieldVisibility: fieldVisibility(actor), limitations: [] });
     }
     return { scannedThroughSequence: String(rows.at(-1)?.sequence ?? afterSequence), changes };
   }
 
-  async function assertSequenceCeiling(tenantId, sequence) {
-    const max = await maxSequence(tenantId);
+  async function assertSequenceCeiling(tenantId, sequence, db = prisma) {
+    const max = await maxSequence(tenantId, db);
     if (BigInt(sequence) > max) fail("SYNC_CURSOR_SEQUENCE_INVALID", "The cursor sequence exceeds the server high-watermark.", 409, { highWatermark: String(max) });
   }
 
@@ -211,12 +222,28 @@ export function createMobileSyncService({ prisma, env = process.env, idFactory =
   async function acknowledge(input, context) {
     const { actor, client, fingerprint } = await resolveClient(input, context), claims = verifyCursor(input.cursor, env, now().getTime());
     if (claims.tenantId !== actor.tenantId || claims.userId !== actor.user.id || claims.clientId !== client.id || claims.deviceIdHash !== client.deviceIdHash) fail("SYNC_CURSOR_SCOPE_MISMATCH", "The cursor scope does not match this client.", 403);
-    if (claims.authorizationFingerprint !== fingerprint) fail("SYNC_AUTHORIZATION_CHANGED", "Authorization changed; initial sync is required.", 409, { resetRequired: true });
+    if (claims.authorizationFingerprint !== fingerprint || client.authorizationFingerprint !== fingerprint) fail("SYNC_AUTHORIZATION_CHANGED", "Authorization changed; initial sync is required.", 409, { resetRequired: true });
     const sequence = BigInt(claims.lastSequence || 0);
-    await assertSequenceCeiling(actor.tenantId, sequence);
-    if (sequence < BigInt(client.lastAcknowledgedSequence || 0)) fail("SYNC_ACKNOWLEDGEMENT_REGRESSION", "Acknowledgement sequence cannot move backwards.", 409, { currentSequence: String(client.lastAcknowledgedSequence) });
-    await prisma.syncClient.update({ where: { id: client.id }, data: { lastAcknowledgedSequence: sequence, lastSeenAt: now() } });
-    return { acknowledgedSequence: String(sequence), serverTime: serial(now()) };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await prisma.$transaction(async (tx) => {
+          await tx.$queryRawUnsafe('SELECT "id" FROM "SyncClient" WHERE "tenantId"=$1 AND "id"=$2 FOR UPDATE', actor.tenantId, client.id);
+          const current = await tx.syncClient.findFirst({ where: { id: client.id, tenantId: actor.tenantId, userId: actor.user.id } });
+          if (!current) fail("SYNC_CLIENT_NOT_FOUND", "The sync client was not found.", 404);
+          if (current.status !== "active") fail("SYNC_CLIENT_REVOKED", "This sync client is revoked.", 403);
+          if (current.deviceIdHash !== claims.deviceIdHash) fail("SYNC_CURSOR_SCOPE_MISMATCH", "The cursor scope does not match this client.", 403);
+          if (current.authorizationFingerprint !== fingerprint) fail("SYNC_AUTHORIZATION_CHANGED", "Authorization changed; initial sync is required.", 409, { resetRequired: true });
+          await assertSequenceCeiling(actor.tenantId, sequence, tx);
+          if (sequence < BigInt(current.lastAcknowledgedSequence || 0)) fail("SYNC_ACKNOWLEDGEMENT_REGRESSION", "Acknowledgement sequence cannot move backwards.", 409, { currentSequence: String(current.lastAcknowledgedSequence) });
+          await tx.syncClient.update({ where: { id: current.id }, data: { lastAcknowledgedSequence: sequence, lastSeenAt: now() } });
+          return { acknowledgedSequence: String(sequence), serverTime: serial(now()) };
+        }, { isolationLevel: "Serializable", maxWait: 10_000, timeout: 30_000 });
+      } catch (error) {
+        if (error?.code === "P2034" && attempt < 2) continue;
+        throw error;
+      }
+    }
+    fail("SYNC_ACKNOWLEDGEMENT_CONFLICT", "The acknowledgement could not be serialized.", 409);
   }
 
   async function revoke(clientId, input, context) {
