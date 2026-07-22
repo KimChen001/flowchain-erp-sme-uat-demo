@@ -55,7 +55,7 @@ test("mobile sync browser acceptance enforces cursor/device, monotonic acknowled
   const observedByA = new Set(changes.changes.map((change: any) => `${change.entityType}:${change.entityId}:${change.operation}`));
   expect(deviceBChanges.changes.some((change: any) => observedByA.has(`${change.entityType}:${change.entityId}:${change.operation}`))).toBeTruthy();
   const deviceBAck = await api(request, mobile.token, "post", "/api/sync/acknowledge", { clientId: initialB.registered.clientId, deviceId: deviceB, cursor: deviceBChanges.cursor }, { "X-Device-Id": deviceB });
-  expect(deviceBAck.acknowledgedSequence).toBeGreaterThan(0);
+  expect(Number(deviceBAck.acknowledgedSequence)).toBeGreaterThan(0);
   const crossDevice = await request.get(`/api/sync/changes?clientId=${encodeURIComponent(initialB.registered.clientId)}&deviceId=${encodeURIComponent(deviceB)}&cursor=${encodeURIComponent(changes.cursor)}`, { headers: { Authorization: `Bearer ${mobile.token}`, "X-Device-Id": deviceB } });
   expect(crossDevice.status()).toBe(403);
   expect((await crossDevice.json()).code).toBe("SYNC_CURSOR_DEVICE_MISMATCH");
