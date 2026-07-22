@@ -65,6 +65,7 @@
     "test:integration:attachment-restart": "node scripts/run-postgres-test-files.mjs tests/postgres/attachment-restart-diagnostics.test.mjs",
     "test:ops:attachment-diagnostics": "node scripts/run-postgres-test-files.mjs tests/postgres/attachment-restart-diagnostics.test.mjs",
     "test:api:receiving-decimal-parity": "node scripts/run-postgres-test-files.mjs tests/postgres/receiving-decimal-parity.test.mjs",
+    "test:domain:bank-statement-parser": "node --test server/domain/bank-statement-parser.test.mjs",
     "test:api:authorization": "node scripts/smoke-authorization-api.mjs",
     "test:browser:authorization": "node scripts/run-authorization-playwright.mjs",
     "db:generate": "prisma generate",
