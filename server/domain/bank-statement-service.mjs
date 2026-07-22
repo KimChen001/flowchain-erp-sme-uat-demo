@@ -164,9 +164,8 @@ export function createBankStatementService({ prisma, env = process.env, storageP
       let balanceMismatch = false;
       if (batch.coverageType === "full_statement" && batch.openingBalance != null && batch.closingBalance != null) {
         const calculated = bankAmountUnits(batch.openingBalance) + credits - debits; const recorded = bankAmountUnits(batch.closingBalance); balanceMismatch = calculated !== recorded;
-        if (balanceMismatch) errors += 1;
       }
-      const validationStatus = errors ? "invalid" : possible ? "valid_with_warnings" : "valid";
+      const validationStatus = errors ? "invalid" : possible || balanceMismatch ? "valid_with_warnings" : "valid";
       await tx.bankStatementImportBatch.update({ where: { id: batch.id }, data: { workflowStatus: validationStatus === "invalid" ? "draft" : "validated", validationStatus, acceptedRowCount: accepted, errorRowCount: errors, exactDuplicateRowCount: exact, possibleDuplicateRowCount: possible, validatedById: actor.user.id, validatedAt: now(), version: { increment: 1 }, metadata: { ...(batch.metadata || {}), credits: bankAmountString(credits), debits: bankAmountString(debits), balanceDifference: batch.openingBalance != null && batch.closingBalance != null ? bankAmountString(bankAmountUnits(batch.openingBalance) + credits - debits - bankAmountUnits(batch.closingBalance)) : null, balanceOverrideRequired: balanceMismatch, transactionExportLimitation: batch.coverageType === "transaction_export" } } });
       await audit(tx, actor, "bank_statement_batch_validated", "BankStatementImportBatch", batch.id, `Validated bank statement batch ${batch.batchNumber}.`, { validationStatus, accepted, errors, exact, possible, balanceMismatch });
     }, { isolationLevel: "Serializable" });
@@ -196,7 +195,7 @@ export function createBankStatementService({ prisma, env = process.env, storageP
       await tx.$queryRawUnsafe('SELECT "id" FROM "BankStatementImportBatch" WHERE "tenantId" = $1 AND "id" = $2 FOR UPDATE', actor.tenantId, text(id));
       const batch = await tx.bankStatementImportBatch.findFirst({ where: { id: text(id), tenantId: actor.tenantId }, include: { rows: true } }); if (!batch) fail("BANK_STATEMENT_BATCH_NOT_FOUND", "Statement batch was not found.", 404); if (batch.version !== version(input.expectedVersion)) fail("BANK_STATEMENT_BATCH_VERSION_CONFLICT", "Statement batch changed concurrently.", 409);
       if (!new Set(["valid", "valid_with_warnings"]).has(batch.validationStatus) || batch.workflowStatus !== "validated") fail("BANK_STATEMENT_BATCH_NOT_COMMITTABLE", "Only a validated batch can be committed.", 409);
-      if (batch.metadata?.balanceOverrideRequired && !text(input.overrideReason)) fail("BANK_STATEMENT_BALANCE_OVERRIDE_REASON_REQUIRED", "Balance mismatch override requires a reason and supporting evidence.", 422);
+      if (batch.metadata?.balanceOverrideRequired && (!text(input.overrideReason) || !input.supportingEvidence)) fail("BANK_STATEMENT_BALANCE_MISMATCH", "Full-statement balances do not reconcile; override requires a reason and supporting evidence.", 422, { differenceAmount: batch.metadata?.balanceDifference, overrideRequired: true });
       const duplicateFile = await tx.bankStatementImportBatch.findFirst({ where: { tenantId: actor.tenantId, cashbookAccountId: batch.cashbookAccountId, fileSha256: batch.fileSha256, workflowStatus: "committed", id: { not: batch.id } } }); if (duplicateFile) fail("BANK_STATEMENT_FILE_ALREADY_IMPORTED", "This statement file is already committed for the account.", 409);
       const execution = await tx.businessCommandExecution.create({ data: { id: idFactory(), tenantId: actor.tenantId, commandType: "commit_bank_statement", idempotencyKey, requestHash, status: "pending" } });
       const rows = batch.rows.filter((row) => ["valid", "warning", "accepted"].includes(row.validationStatus) && row.duplicateStatus !== "exact_duplicate").sort((a, b) => a.sourceRowNumber - b.sourceRowNumber);
