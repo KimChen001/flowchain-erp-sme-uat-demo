@@ -105,6 +105,7 @@ export async function loadAuthorizedSyncProjection({ prisma, tenant, actor, enti
   if (operation === "tombstone") {
     const feedTenantId = text(feedContext?.tenantId);
     const resourceTenantId = text(feedContext?.resourceTenantId);
+    if (policy.tombstonePolicy === "fail_closed_metadata" && (!feedTenantId || !resourceTenantId || !text(feedContext?.moduleKey) || !text(feedContext?.authorizationClass))) return null;
     if (feedTenantId && feedTenantId !== actor.tenantId) return null;
     if (resourceTenantId && resourceTenantId !== actor.tenantId) return null;
     if (policy.warehouseScoped && resourceTenantId !== actor.tenantId) return null;

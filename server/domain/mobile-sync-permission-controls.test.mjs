@@ -20,6 +20,10 @@ const enabledReceiving = {
   FLOWCHAIN_PERSISTENCE_MODE: "database",
   FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING: "true",
 };
+const enabledBankReconciliation = {
+  FLOWCHAIN_PERSISTENCE_MODE: "database",
+  FLOWCHAIN_ENABLE_DB_BANK_RECONCILIATION: "true",
+};
 const actor = (permissions, options = {}) => ({
   tenantId: options.tenantId || "tenant-a",
   user: { id: "user-a" },
@@ -109,6 +113,26 @@ test("warehouse tombstones enforce trusted tenant and warehouse scope and expose
   assert.equal(await loadAuthorizedSyncProjection({ ...base, actor: warehouseA, feedContext: { ...trusted, resourceTenantId: "tenant-b" } }), null);
   assert.deepEqual(await loadAuthorizedSyncProjection({ ...base, actor: actor(["receiving.read"], { allWarehouses: true }), feedContext: { ...trusted, scopeWarehouseIds: [] } }), { id: "attachment-a", entityType: "ReceivingAttachment", tombstone: true });
   assert.equal(await loadAuthorizedSyncProjection({ ...base, actor: actor(["receiving.read"], { allWarehouses: true }), feedContext: { ...trusted, resourceTenantId: null, scopeWarehouseIds: [] } }), null);
+});
+
+test("bank reconciliation sync is read-authorized, independently redacted, and fails closed for tombstones", async () => {
+  const row = { id: "bank-line-a", tenantId: "tenant-a", version: 2, transactionDate: new Date("2026-07-21T00:00:00.000Z"), direction: "credit", amount: "125.5", matchedAmount: "0", remainingAmount: "125.5000", currency: "CNY", reconciliationStatus: "unmatched", counterpartyName: "Fictitious Customer", counterpartyAccountMasked: "****5678" };
+  const prisma = { bankStatementLine: { findFirst: async () => row } };
+  const redacted = await loadAuthorizedSyncProjection({ prisma, tenant: { operationalSettings: {} }, actor: actor(["finance.bank_statement.read"]), entityType: "BankStatementLine", entityId: row.id, env: enabledBankReconciliation });
+  assert.equal(redacted.amount, null);
+  assert.equal(redacted.matchedAmount, null);
+  assert.equal(redacted.counterpartyName, null);
+  const visible = await loadAuthorizedSyncProjection({ prisma, tenant: { operationalSettings: {} }, actor: actor(["finance.bank_statement.read", "finance.amounts.read", "finance.partner_snapshot.read"]), entityType: "BankStatementLine", entityId: row.id, env: enabledBankReconciliation });
+  assert.equal(visible.amount, "125.5000");
+  assert.equal(visible.matchedAmount, "0.0000");
+  assert.equal(visible.counterpartyName, "Fictitious Customer");
+  assert.equal(await loadAuthorizedSyncProjection({ prisma, tenant: { operationalSettings: {} }, actor: actor(["finance.bank_statement.import"]), entityType: "BankStatementLine", entityId: row.id, env: enabledBankReconciliation }), null);
+  const base = { prisma, tenant: { operationalSettings: {} }, actor: actor(["finance.bank_statement.read"]), entityType: "BankStatementLine", entityId: row.id, operation: "tombstone", env: enabledBankReconciliation };
+  assert.equal(await loadAuthorizedSyncProjection(base), null);
+  const trusted = { tenantId: "tenant-a", resourceTenantId: "tenant-a", moduleKey: "finance", authorizationClass: "finance.bank_statement.read", scopeWarehouseIds: [] };
+  assert.deepEqual(await loadAuthorizedSyncProjection({ ...base, feedContext: trusted }), { id: row.id, entityType: "BankStatementLine", tombstone: true });
+  assert.equal(await loadAuthorizedSyncProjection({ ...base, feedContext: { ...trusted, resourceTenantId: "tenant-b" } }), null);
+  assert.equal(await loadAuthorizedSyncProjection({ ...base, feedContext: { ...trusted, authorizationClass: "finance.bank_statement.import" } }), null);
 });
 
 test("cursor key rotation verifies a cursor genuinely signed by the previous key", () => {
