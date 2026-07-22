@@ -41,6 +41,7 @@ export const capabilityRegistry = [
   capability('mobile-operations', 'beta', true, true, 'Database-only mobile task, PO approval, and receiving facades', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_MOBILE_OPERATIONS' }),
   capability('mobile-sync', 'beta', true, true, 'Database-only signed cross-module synchronization feed', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_MOBILE_SYNC' }),
   capability('cashbook', 'beta', true, true, 'Database-only internal cashbook facts without bank statement import or general ledger', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT' }),
+  capability('bank-statement-reconciliation', 'beta', true, true, 'Database-only durable bank statement import and controlled external evidence reconciliation', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_BANK_RECONCILIATION' }),
   capability('finance', 'beta', true, true, 'Database-only operational P2P and O2C finance without payment, collection, refund, FX, tax filing, or general-ledger execution', { databaseOnly: true, requiresExplicitEnable: true, environmentFlag: 'FLOWCHAIN_ENABLE_DB_OPERATIONAL_FINANCE' }),
   capability('reports', 'stable', true, false, 'Authoritative runtime analytics'),
   capability('settings', 'beta', true, true, 'Local/UAT workspace settings'),
