@@ -19,7 +19,7 @@ const supplierPostingMigration =
   "20260718020000_supplier_return_posting_kernel";
 const customerReceiptMigration =
   "20260718030000_customer_return_receipt_kernel";
-const latestMigration = "20260722020000_bank_statement_reconciliation_foundation";
+const latestMigration = "20260722030000_bank_reconciliation_control_hardening";
 const node = process.execPath;
 const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 
