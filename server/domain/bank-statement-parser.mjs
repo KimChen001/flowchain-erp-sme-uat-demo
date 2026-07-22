@@ -123,7 +123,7 @@ function safeMapping(mapping) {
   const walk = (value, path = []) => {
     if (!value || typeof value !== "object") return;
     for (const [key, child] of Object.entries(value)) {
-      if (ACCOUNT_KEYS.test(key)) fail("BANK_STATEMENT_SECRET_FIELD_FORBIDDEN", "Mapping metadata must not contain bank credentials.", { field: [...path, key].join(".") });
+      if (ACCOUNT_KEYS.test(key) && child !== false && child != null && text(child)) fail("BANK_STATEMENT_SECRET_FIELD_FORBIDDEN", "Mapping metadata must not contain bank credentials.", { field: [...path, key].join(".") });
       walk(child, [...path, key]);
     }
   };
