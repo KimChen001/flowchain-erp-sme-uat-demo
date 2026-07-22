@@ -5,6 +5,7 @@ import OperationalFinanceO2cWorkbench, {
 } from "./OperationalFinanceO2cWorkbench";
 import OperationalFinanceP2pWorkbench from "./OperationalFinanceP2pWorkbench";
 import InternalSettlementWorkbench from "./InternalSettlementWorkbench";
+import BankReconciliationWorkbench from "./BankReconciliationWorkbench";
 
 export type FinanceTab =
   | "invoices"
@@ -12,6 +13,8 @@ export type FinanceTab =
   | "payables"
   | "credits"
   | "reconciliation"
+  | "bank-statements"
+  | "bank-reconciliation"
   | "settlement"
   | "settlement-detail"
   | "match"
@@ -29,6 +32,7 @@ export default function FinanceWorkbench({ initialView = "invoices" }: { initial
   if (["overview", "invoices", "payables", "credits", "match"].includes(initialView))
     return <OperationalFinanceP2pWorkbench view={initialView as "overview" | "invoices" | "payables" | "credits" | "match"} />;
   if (initialView === "reconciliation") return <InternalSettlementWorkbench view="cashbook" />;
+  if (initialView === "bank-statements" || initialView === "bank-reconciliation") return <BankReconciliationWorkbench initialView={initialView} />;
   if (initialView === "settlement" || initialView === "settlement-detail") return <InternalSettlementWorkbench view={initialView} />;
   const copy = fallbackCopy;
   return <Card className="py-16 text-center"><h2 className="text-base font-semibold">{t(copy[0])}</h2><p className="mt-2 text-xs text-slate-500">{t(copy[1])}</p></Card>;

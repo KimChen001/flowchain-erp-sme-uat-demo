@@ -754,7 +754,7 @@ export default function FlowChainApp() {
     ? routeLabel(activeRoute)
     : undefined;
   const capabilityAccess = resolveCapabilityRouteAccess({
-    moduleId: activeModule,
+    moduleId: activeRoute?.capabilityId || activeModule,
     loadState: capabilityLoadState,
     capabilities,
     experimentalModuleIds,
@@ -1737,7 +1737,7 @@ export default function FlowChainApp() {
               className={`mx-auto w-full ${contentMaxWidthClass}`}
             >
               {activeRoute ? (
-                <ModuleShell route={activeRoute}>
+                <ModuleShell route={activeRoute} capabilities={capabilities}>
                   {searchFocus && (
                     <div
                       className="mb-4 rounded-xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
