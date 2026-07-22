@@ -22,7 +22,9 @@ export function assertAdvanceApplicationEligibility(obligation, type) {
   if (!obligation) throw Object.assign(new Error("The obligation was not found."), { code: "ADVANCE_APPLICATION_OBLIGATION_NOT_FOUND", status: 404 });
   if (units(obligation.outstandingAmount) <= 0n) throw Object.assign(new Error("The obligation has no outstanding balance."), { code: "ADVANCE_APPLICATION_OBLIGATION_SETTLED", status: 409 });
   const status = text(obligation.status);
-  const blocked = type === "payable" ? ["held", "cancelled", "closed"] : ["disputed", "cancelled", "closed"];
-  if (blocked.includes(status)) throw Object.assign(new Error(`The ${type} obligation status ${status} is not eligible for advance application.`), { code: "ADVANCE_APPLICATION_OBLIGATION_NOT_ELIGIBLE", status: 409, details: { status, obligationType: type } });
+  const allowedStatuses = type === "payable" ? new Set(["approved", "partially_settled"]) : new Set(["open", "partially_settled"]);
+  const disputeStatus = text(obligation.disputeStatus || "none");
+  const disputeAllowed = type === "payable" || new Set(["none", "resolved"]).has(disputeStatus);
+  if (!allowedStatuses.has(status) || !disputeAllowed) throw Object.assign(new Error(`The ${type} obligation status ${status} is not eligible for advance application.`), { code: "ADVANCE_APPLICATION_OBLIGATION_NOT_ELIGIBLE", status: 409, details: { status, disputeStatus, obligationType: type } });
   return true;
 }
