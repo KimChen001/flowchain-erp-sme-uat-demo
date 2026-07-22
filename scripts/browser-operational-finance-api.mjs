@@ -254,6 +254,9 @@ async function seed() {
       ...(process.env.PLAYWRIGHT_MOBILE_SYNC_CONTROLS === "true"
         ? [["admin@example.com", "Sync Controls Admin", "admin"], ["sync-create@example.com", "Sync Create Only", "viewer"], ["sync-warehouse-a@example.com", "Sync Warehouse A", "viewer"], ["sync-warehouse-b@example.com", "Sync Warehouse B", "viewer"]]
         : []),
+      ...(process.env.PLAYWRIGHT_BANK_RECONCILIATION === "true" && process.env.PLAYWRIGHT_MOBILE_SYNC_CONTROLS !== "true"
+        ? [["admin@example.com", "Bank Reconciliation Admin", "admin"]]
+        : []),
     ].map(([email, name, role]) => ({
       id: actorId(email),
       tenantId,
@@ -499,7 +502,7 @@ try {
         ? "false"
         : "true",
     FLOWCHAIN_ENABLE_DB_INTERNAL_SETTLEMENT:
-      process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true" || process.env.PLAYWRIGHT_SETTLEMENT_WORKFLOW_DB === "true" || process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true"
+      process.env.PLAYWRIGHT_INTERNAL_SETTLEMENT_DB === "true" || process.env.PLAYWRIGHT_SETTLEMENT_WORKFLOW_DB === "true" || process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" || process.env.PLAYWRIGHT_BANK_RECONCILIATION === "true"
         ? "true"
         : "false",
     FLOWCHAIN_ENABLE_DB_SETTLEMENT_WORKFLOW:
@@ -508,6 +511,8 @@ try {
       process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : "false",
     FLOWCHAIN_ENABLE_DB_MOBILE_OPERATIONS:
       process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : "false",
+    FLOWCHAIN_ENABLE_DB_BANK_RECONCILIATION:
+      process.env.PLAYWRIGHT_BANK_RECONCILIATION === "true" ? "true" : "false",
     FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING:
       process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : (process.env.FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING || "false"),
     FLOWCHAIN_ENABLE_LEGACY_PROCUREMENT_RUNTIME: "false",

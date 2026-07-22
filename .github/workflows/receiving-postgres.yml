@@ -125,3 +125,4 @@ jobs:
       - run: npm run test:browser:mobile-operations
       - run: npm run test:browser:mobile-authority
       - run: npm run test:browser:mobile-sync-controls
+      - run: npm run test:browser:bank-reconciliation
