@@ -16,7 +16,7 @@ const execFileAsync = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const migrationsRoot = join(root, "prisma", "migrations");
 const baselineMigration = "20260720020000_settlement_workflow_mobile_foundation";
-const targetMigration = "20260722010000_mobile_authority_evidence_hardening";
+const targetMigration = "20260722020000_bank_statement_reconciliation_foundation";
 const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 const freePort = () => new Promise((resolvePort, reject) => {
   const server = createServer().on("error", reject);
@@ -146,7 +146,7 @@ try {
   assert.equal(downloaded.sha256, attachmentHash);
   assert.deepEqual(downloaded.bytes, attachmentBytes);
   assert.equal(await prisma.auditLog.count({ where: { tenantId, action: "attachment_downloaded", entityId: "upgrade-attachment" } }), 1);
-  console.log("Exact v0.5.2B -> v0.5.2C upgrade gate: 1 passed; 0 failed; 0 skipped");
+  console.log("v0.5.2B -> current additive upgrade regression gate: 1 passed; 0 failed; 0 skipped");
 } finally {
   await prisma?.$disconnect().catch(() => {});
   await pg.stop().catch(() => {});

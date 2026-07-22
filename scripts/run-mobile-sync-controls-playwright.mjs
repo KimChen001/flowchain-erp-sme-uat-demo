@@ -26,6 +26,10 @@ const code = await new Promise((resolveExit) => {
 try {
   if (existsSync(sentinel)) throw new Error("Browser acceptance created or modified the forbidden legacy procurement sentinel.");
   if (code !== 0) process.exitCode = code;
+  else {
+    const restart = spawn(process.execPath, [join(root, "scripts", "run-attachment-restart-playwright.mjs")], { cwd: root, stdio: "inherit", env: process.env });
+    process.exitCode = await new Promise((resolveExit) => restart.once("exit", (value) => resolveExit(value ?? 1)));
+  }
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

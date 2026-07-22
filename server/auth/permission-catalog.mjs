@@ -126,6 +126,21 @@ const definitions = [
   ["finance.settlement_discount.apply", "finance", "settlement_discount", "apply", "high"],
   ["finance.settlement_attachment.read", "finance", "settlement_attachment", "read", "high", ["finance_partner_snapshot"]],
   ["finance.settlement_attachment.manage", "finance", "settlement_attachment", "manage", "high"],
+  ["finance.bank_statement.read", "finance", "bank_statement", "read", "high", ["finance_amounts", "finance_partner_snapshot"]],
+  ["finance.bank_statement.import", "finance", "bank_statement", "import", "high"],
+  ["finance.bank_statement.validate", "finance", "bank_statement", "validate", "high"],
+  ["finance.bank_statement.commit", "finance", "bank_statement", "commit", "critical"],
+  ["finance.bank_statement.void", "finance", "bank_statement", "void", "critical"],
+  ["finance.bank_statement.export", "finance", "bank_statement", "export", "high"],
+  ["finance.bank_mapping.read", "finance", "bank_mapping", "read", "high"],
+  ["finance.bank_mapping.manage", "finance", "bank_mapping", "manage", "critical"],
+  ["finance.bank_reconciliation.read", "finance", "bank_reconciliation", "read", "high", ["finance_amounts", "finance_partner_snapshot"]],
+  ["finance.bank_reconciliation.generate_candidates", "finance", "bank_reconciliation", "generate_candidates", "high"],
+  ["finance.bank_reconciliation.confirm", "finance", "bank_reconciliation", "confirm", "critical"],
+  ["finance.bank_reconciliation.reverse", "finance", "bank_reconciliation", "reverse", "critical"],
+  ["finance.bank_reconciliation.dismiss_candidate", "finance", "bank_reconciliation", "dismiss_candidate", "high"],
+  ["finance.bank_reconciliation.resolve_exception", "finance", "bank_reconciliation", "resolve_exception", "critical"],
+  ["finance.bank_reconciliation.export", "finance", "bank_reconciliation", "export", "high"],
   ["procurement.purchase_order.read", "procurement", "purchase_order", "read", "low"],
   ["procurement.purchase_order.approve", "procurement", "purchase_order", "approve", "critical"],
   ["procurement.purchase_order.reject", "procurement", "purchase_order", "reject", "high"],
@@ -179,11 +194,11 @@ const without = (items, denied) => items.filter((code) => !denied.includes(code)
 
 export const defaultRoleTemplates = Object.freeze([
   { roleKey: "workspace-administrator", name: "Workspace Administrator", permissions: [...permissionCodes] },
-  { roleKey: "operations-manager", name: "Operations Manager", permissions: without([...byPrefix("returns.", "receiving.", "sales_order.", "shipment.", "inventory.", "finance.", "procurement.purchase_order.", "mobile."), "procurement.prices.read", "settings.workspace.read", "settings.users.read", "settings.roles.read", "settings.numbering.read", "settings.review_policy.read", "settings.modules.read", "settings.import.manage", "settings.export.read", "audit.read"], ["finance.settlement.post", "finance.settlement.reverse", "audit.read_sensitive"]) },
+  { roleKey: "operations-manager", name: "Operations Manager", permissions: without([...byPrefix("returns.", "receiving.", "sales_order.", "shipment.", "inventory.", "finance.", "procurement.purchase_order.", "mobile."), "procurement.prices.read", "settings.workspace.read", "settings.users.read", "settings.roles.read", "settings.numbering.read", "settings.review_policy.read", "settings.modules.read", "settings.import.manage", "settings.export.read", "audit.read"], ["finance.settlement.post", "finance.settlement.reverse", "finance.bank_statement.import", "finance.bank_statement.validate", "finance.bank_statement.commit", "finance.bank_statement.void", "finance.bank_statement.export", "finance.bank_mapping.read", "finance.bank_mapping.manage", "finance.bank_reconciliation.generate_candidates", "finance.bank_reconciliation.confirm", "finance.bank_reconciliation.reverse", "finance.bank_reconciliation.dismiss_candidate", "finance.bank_reconciliation.resolve_exception", "finance.bank_reconciliation.export", "audit.read_sensitive"]) },
   { roleKey: "operations-specialist", name: "Operations Specialist", permissions: without([...byPrefix("returns.", "receiving.", "sales_order.", "shipment.", "inventory."), "finance.overview.read", "finance.supplier_invoice.read", "finance.supplier_invoice.create", "finance.supplier_invoice.revise", "finance.supplier_invoice.submit", "finance.three_way_match.read", "finance.three_way_match.execute", "finance.payable.read", "finance.supplier_credit.read", "finance.supplier_credit.create", "finance.customer_invoice.read", "finance.customer_invoice.create", "finance.customer_invoice.submit", "finance.receivable.read", "finance.receivable.dispute", "finance.receivable.resolve_dispute", "finance.receivable.record_external_reference", "finance.customer_credit.read", "finance.customer_credit.create"], ["returns.authorization.approve", "returns.authorization.reject", "returns.authorization.cancel", "returns.authorization.expire", "returns.posting.reverse", "returns.quarantine.release_reverse", "receiving.reverse", "shipment.reverse", "inventory.transfer.reverse", "inventory.count.review", "inventory.count.post", "inventory.count.reverse", "inventory.adjustment.post", "inventory.adjustment.reverse"]) },
   { roleKey: "procurement-specialist", name: "Procurement Specialist", permissions: ["returns.request.read", "returns.request.create", "returns.request.revise", "returns.request.submit", "returns.request.cancel", "returns.authorization.read", "returns.posting.read", "returns.quarantine.read", "receiving.read", "inventory.balance.read", "procurement.prices.read", "procurement.purchase_order.read", "procurement.purchase_order.revise", "mobile.sync.use", "mobile.tasks.read", "mobile.procurement.approval.read", "mobile.receiving.read", "mobile.receiving.prepare"] },
   { roleKey: "finance-specialist", name: "Finance Specialist", permissions: [...byPrefix("finance."), "mobile.sync.use", "mobile.tasks.read", "audit.read"] },
-  { roleKey: "read-only-viewer", name: "Read-only Viewer", permissions: reads.filter((code) => !["audit.read_sensitive", "finance.amounts.read", "finance.partner_snapshot.read", "procurement.prices.read", "settings.diagnostics.read", "settings.export.read"].includes(code)) },
+  { roleKey: "read-only-viewer", name: "Read-only Viewer", permissions: reads.filter((code) => !["audit.read_sensitive", "finance.amounts.read", "finance.partner_snapshot.read", "finance.bank_statement.read", "finance.bank_mapping.read", "finance.bank_reconciliation.read", "procurement.prices.read", "settings.diagnostics.read", "settings.export.read"].includes(code)) },
 ])
 
 export const legacyRoleTemplateMap = Object.freeze({

@@ -148,9 +148,9 @@ test('unsafe provider output is rejected and falls back to local evidence', () =
 })
 
 test('timeout non-2xx malformed and too-long provider outputs safely fail', async () => {
-  const envBase = { FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted', FLOWCHAIN_AI_PROVIDER_KIND: 'generic_http', FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key', FLOWCHAIN_AI_PROVIDER_TIMEOUT_MS: '20' }
+  const envBase = { FLOWCHAIN_AI_RUNTIME_MODE: 'provider_assisted', FLOWCHAIN_AI_PROVIDER_KIND: 'generic_http', FLOWCHAIN_AI_PROVIDER_API_KEY: 'test-key', FLOWCHAIN_AI_PROVIDER_TIMEOUT_MS: '1000' }
   await withServer((_req, res) => setTimeout(() => res.end('late'), 80), async (endpoint) => {
-    const result = await callGenericHttpProvider(buildProviderInputPackageV2(contextBundleFromDraft(), { message: '今天' }, localDraft()), { ...envBase, FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint })
+    const result = await callGenericHttpProvider(buildProviderInputPackageV2(contextBundleFromDraft(), { message: '今天' }, localDraft()), { ...envBase, FLOWCHAIN_AI_PROVIDER_ENDPOINT: endpoint, FLOWCHAIN_AI_PROVIDER_TIMEOUT_MS: '20' })
     assert.equal(result.ok, false)
     assert.equal(result.reason, 'timeout')
   })

@@ -1,0 +1,4 @@
+transaction_id,transaction_date,signed_amount,currency
+ROW-1,2026-07-07,1.0000,CNY
+ROW-2,2026-07-07,1.0000,CNY
+ROW-3,2026-07-07,1.0000,CNY

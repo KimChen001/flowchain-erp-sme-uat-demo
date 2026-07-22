@@ -1,0 +1,3 @@
+transaction_id,transaction_date,signed_amount,currency,bank_reference
+DUP-1,2026-07-06,20.0000,CNY,DUPLICATE-REF
+DUP-2,2026-07-06,20.0000,CNY,DUPLICATE-REF

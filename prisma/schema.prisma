@@ -22,67 +22,76 @@ model Tenant {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  users                            User[]
-  suppliers                        Supplier[]
-  items                            Item[]
-  warehouses                       Warehouse[]
-  paymentTerms                     PaymentTerm[]
-  taxCodes                         TaxCode[]
-  actionDrafts                     ActionDraft[]
-  auditLogs                        AuditLog[]
-  aiEvidence                       AiEvidence[]
-  purchaseRequests                 PurchaseRequest[]
-  rfqs                             Rfq[]
-  supplierQuotations               SupplierQuotation[]
-  purchaseOrders                   PurchaseOrder[]
-  receivingDocuments               ReceivingDocument[]
-  supplierInvoices                 SupplierInvoice[]
-  threeWayMatches                  ThreeWayMatch[]
-  financeMatchExceptions           FinanceMatchException[]
-  payableObligations               PayableObligation[]
-  supplierCreditMemos              SupplierCreditMemo[]
-  customerInvoices                 CustomerInvoice[]
-  receivableObligations            ReceivableObligation[]
-  customerCreditNotes              CustomerCreditNote[]
-  cashbookAccounts                 CashbookAccount[]
-  settlementDocuments              SettlementDocument[]
-  settlementAllocations            SettlementAllocation[]
-  settlementAttachments            SettlementAttachment[]
-  partnerAdvances                  PartnerAdvance[]
-  advanceApplications              AdvanceApplicationDocument[]
-  internalTransfers                InternalTransferDocument[]
-  cashbookEntries                  CashbookEntry[]
-  stagedUploads                    StagedUpload[]
-  receivingAttachments             ReceivingAttachment[]
-  domainChangeFeed                 DomainChangeFeed[]
-  syncClients                      SyncClient[]
-  syncSnapshotSessions             SyncSnapshotSession[]
-  documentLinks                    DocumentLink[]
-  procurementFollowups             ProcurementFollowup[]
-  inventoryBalances                InventoryBalance[]
-  inventoryLots                    InventoryLot[]
-  inventorySerials                 InventorySerial[]
-  inventoryMovements               InventoryMovement[]
-  inventoryExceptions              InventoryException[]
-  commandExecutions                BusinessCommandExecution[]
-  userWarehouseScopes              UserWarehouseScope[]
-  roles                            TenantRole[]
-  rolePermissions                  TenantRolePermission[]
-  userRoleAssignments              UserRoleAssignment[]
-  workspaceInvitations             WorkspaceInvitation[]
-  warehouseLocations               WarehouseLocation[]
-  importBatches                    ImportBatch[]
-  importIssues                     ImportIssue[]
-  salesOrders                      SalesOrder[]
-  inventoryReservations            InventoryReservation[]
-  reservationEvents                InventoryReservationEvent[]
-  shipmentDocuments                ShipmentDocument[]
-  shipmentAllocations              ShipmentAllocation[]
-  quarantineBalances               QuarantineInventoryBalance[]
-  returnRequests                   ReturnRequest[]
-  returnAuthorizations             ReturnAuthorization[]
-  returnPostings                   ReturnPostingDocument[]
-  quarantineDispositionAllocations QuarantineDispositionAllocation[]
+  users                                 User[]
+  suppliers                             Supplier[]
+  items                                 Item[]
+  warehouses                            Warehouse[]
+  paymentTerms                          PaymentTerm[]
+  taxCodes                              TaxCode[]
+  actionDrafts                          ActionDraft[]
+  auditLogs                             AuditLog[]
+  aiEvidence                            AiEvidence[]
+  purchaseRequests                      PurchaseRequest[]
+  rfqs                                  Rfq[]
+  supplierQuotations                    SupplierQuotation[]
+  purchaseOrders                        PurchaseOrder[]
+  receivingDocuments                    ReceivingDocument[]
+  supplierInvoices                      SupplierInvoice[]
+  threeWayMatches                       ThreeWayMatch[]
+  financeMatchExceptions                FinanceMatchException[]
+  payableObligations                    PayableObligation[]
+  supplierCreditMemos                   SupplierCreditMemo[]
+  customerInvoices                      CustomerInvoice[]
+  receivableObligations                 ReceivableObligation[]
+  customerCreditNotes                   CustomerCreditNote[]
+  cashbookAccounts                      CashbookAccount[]
+  settlementDocuments                   SettlementDocument[]
+  settlementAllocations                 SettlementAllocation[]
+  settlementAttachments                 SettlementAttachment[]
+  partnerAdvances                       PartnerAdvance[]
+  advanceApplications                   AdvanceApplicationDocument[]
+  internalTransfers                     InternalTransferDocument[]
+  cashbookEntries                       CashbookEntry[]
+  stagedUploads                         StagedUpload[]
+  receivingAttachments                  ReceivingAttachment[]
+  domainChangeFeed                      DomainChangeFeed[]
+  syncClients                           SyncClient[]
+  syncSnapshotSessions                  SyncSnapshotSession[]
+  documentLinks                         DocumentLink[]
+  procurementFollowups                  ProcurementFollowup[]
+  inventoryBalances                     InventoryBalance[]
+  inventoryLots                         InventoryLot[]
+  inventorySerials                      InventorySerial[]
+  inventoryMovements                    InventoryMovement[]
+  inventoryExceptions                   InventoryException[]
+  commandExecutions                     BusinessCommandExecution[]
+  userWarehouseScopes                   UserWarehouseScope[]
+  roles                                 TenantRole[]
+  rolePermissions                       TenantRolePermission[]
+  userRoleAssignments                   UserRoleAssignment[]
+  workspaceInvitations                  WorkspaceInvitation[]
+  warehouseLocations                    WarehouseLocation[]
+  importBatches                         ImportBatch[]
+  importIssues                          ImportIssue[]
+  salesOrders                           SalesOrder[]
+  inventoryReservations                 InventoryReservation[]
+  reservationEvents                     InventoryReservationEvent[]
+  shipmentDocuments                     ShipmentDocument[]
+  shipmentAllocations                   ShipmentAllocation[]
+  quarantineBalances                    QuarantineInventoryBalance[]
+  returnRequests                        ReturnRequest[]
+  returnAuthorizations                  ReturnAuthorization[]
+  returnPostings                        ReturnPostingDocument[]
+  quarantineDispositionAllocations      QuarantineDispositionAllocation[]
+  bankStatementMappings                 BankStatementMappingTemplate[]
+  bankStatementImportBatches            BankStatementImportBatch[]
+  bankStatementImportRows               BankStatementImportRow[]
+  bankStatementLines                    BankStatementLine[]
+  bankReconciliationCandidates          BankReconciliationCandidate[]
+  bankReconciliationGroups              BankReconciliationGroup[]
+  bankReconciliationBankAllocations     BankReconciliationBankLineAllocation[]
+  bankReconciliationCashbookAllocations BankReconciliationCashbookAllocation[]
+  bankReconciliationExceptions          BankReconciliationException[]
 }
 
 model User {
@@ -102,25 +111,25 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  tenant              Tenant                      @relation(fields: [tenantId], references: [id])
-  actionDrafts        ActionDraft[]
-  auditLogs           AuditLog[]
-  defaultWarehouse    Warehouse?                  @relation("UserDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: Restrict)
-  warehouseScopes     UserWarehouseScope[]
-  roleAssignments     UserRoleAssignment[]        @relation("AssignedUser")
-  roleAssignmentsMade UserRoleAssignment[]        @relation("RoleAssignmentCreator")
-  rolesCreated        TenantRole[]                @relation("RoleCreator")
-  rolesUpdated        TenantRole[]                @relation("RoleUpdater")
-  roleGrantsCreated   TenantRolePermission[]      @relation("RolePermissionCreator")
-  invitationsSent     WorkspaceInvitation[]       @relation("InvitationInviter")
-  invitationsAccepted WorkspaceInvitation[]       @relation("InvitationAcceptor")
-  syncClients         SyncClient[]
+  tenant               Tenant                      @relation(fields: [tenantId], references: [id])
+  actionDrafts         ActionDraft[]
+  auditLogs            AuditLog[]
+  defaultWarehouse     Warehouse?                  @relation("UserDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: Restrict)
+  warehouseScopes      UserWarehouseScope[]
+  roleAssignments      UserRoleAssignment[]        @relation("AssignedUser")
+  roleAssignmentsMade  UserRoleAssignment[]        @relation("RoleAssignmentCreator")
+  rolesCreated         TenantRole[]                @relation("RoleCreator")
+  rolesUpdated         TenantRole[]                @relation("RoleUpdater")
+  roleGrantsCreated    TenantRolePermission[]      @relation("RolePermissionCreator")
+  invitationsSent      WorkspaceInvitation[]       @relation("InvitationInviter")
+  invitationsAccepted  WorkspaceInvitation[]       @relation("InvitationAcceptor")
+  syncClients          SyncClient[]
   syncSnapshotSessions SyncSnapshotSession[]
-  importBatches       ImportBatch[]
-  reservationsCreated InventoryReservation[]      @relation("ReservationReservedBy")
-  reservationEvents   InventoryReservationEvent[] @relation("ReservationEventActor")
-  shipmentsPosted     ShipmentDocument[]          @relation("ShipmentPostedBy")
-  shipmentsReversed   ShipmentDocument[]          @relation("ShipmentReversedBy")
+  importBatches        ImportBatch[]
+  reservationsCreated  InventoryReservation[]      @relation("ReservationReservedBy")
+  reservationEvents    InventoryReservationEvent[] @relation("ReservationEventActor")
+  shipmentsPosted      ShipmentDocument[]          @relation("ShipmentPostedBy")
+  shipmentsReversed    ShipmentDocument[]          @relation("ShipmentReversedBy")
 
   @@unique([tenantId, email])
   @@unique([tenantId, id])
@@ -1086,11 +1095,15 @@ model CashbookAccount {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant        Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  settlements   SettlementDocument[]
-  entries       CashbookEntry[]
-  transfersFrom InternalTransferDocument[] @relation("InternalTransferFrom")
-  transfersTo   InternalTransferDocument[] @relation("InternalTransferTo")
+  tenant                     Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  settlements                SettlementDocument[]
+  entries                    CashbookEntry[]
+  transfersFrom              InternalTransferDocument[]     @relation("InternalTransferFrom")
+  transfersTo                InternalTransferDocument[]     @relation("InternalTransferTo")
+  bankStatementMappings      BankStatementMappingTemplate[]
+  bankStatementImportBatches BankStatementImportBatch[]
+  bankStatementLines         BankStatementLine[]
+  bankReconciliationGroups   BankReconciliationGroup[]
 
   @@unique([tenantId, accountCode])
   @@unique([tenantId, id])
@@ -1143,12 +1156,14 @@ model SettlementDocument {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
-  tenant          Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  cashbookAccount CashbookAccount        @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
-  allocations     SettlementAllocation[]
-  cashbookEntries CashbookEntry[]
-  advances        PartnerAdvance[]
-  attachments     SettlementAttachment[]
+  tenant                                Tenant                                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cashbookAccount                       CashbookAccount                        @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  allocations                           SettlementAllocation[]
+  cashbookEntries                       CashbookEntry[]
+  advances                              PartnerAdvance[]
+  attachments                           SettlementAttachment[]
+  bankReconciliationCandidates          BankReconciliationCandidate[]
+  bankReconciliationCashbookAllocations BankReconciliationCashbookAllocation[]
 
   @@unique([tenantId, settlementNumber])
   @@unique([tenantId, id])
@@ -1324,30 +1339,31 @@ model SettlementAttachment {
 }
 
 model StagedUpload {
-  id          String    @id
-  tenantId    String
-  fileName    String
-  mimeType    String
-  sizeBytes   Int
-  sha256      String
-  storageKey  String
-  status      String    @default("staged")
-  createdById String
-  expiresAt   DateTime
-  createdAt   DateTime  @default(now())
-  boundAt     DateTime?
-  deletedAt   DateTime?
-  metadata    Json?
-  storageProvider     String   @default("local")
-  storageVersion      String   @default("v1")
+  id                  String    @id
+  tenantId            String
+  fileName            String
+  mimeType            String
+  sizeBytes           Int
+  sha256              String
+  storageKey          String
+  status              String    @default("staged")
+  createdById         String
+  expiresAt           DateTime
+  createdAt           DateTime  @default(now())
+  boundAt             DateTime?
+  deletedAt           DateTime?
+  metadata            Json?
+  storageProvider     String    @default("local")
+  storageVersion      String    @default("v1")
   storageBucket       String?
   storageRegion       String?
   persistedAt         DateTime?
-  storageHealthStatus String   @default("unknown")
+  storageHealthStatus String    @default("unknown")
 
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  settlementAttachments SettlementAttachment[]
-  receivingAttachments  ReceivingAttachment[]
+  tenant                     Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  settlementAttachments      SettlementAttachment[]
+  receivingAttachments       ReceivingAttachment[]
+  bankStatementImportBatches BankStatementImportBatch[]
 
   @@unique([tenantId, id])
   @@index([tenantId, status, expiresAt])
@@ -1379,23 +1395,23 @@ model ReceivingAttachment {
 }
 
 model DomainChangeFeed {
-  sequence          BigInt   @id @default(autoincrement())
-  tenantId          String
-  entityType        String
-  entityId          String
-  operation         String
-  entityVersion     Int?
-  changedAt         DateTime @default(now())
-  actorId           String?
-  source            String
-  requestId         String?
-  payloadHash       String
-  sensitivityGroups String[] @default([])
-  moduleKey         String?
-  scopeWarehouseIds String[] @default([])
+  sequence           BigInt   @id @default(autoincrement())
+  tenantId           String
+  entityType         String
+  entityId           String
+  operation          String
+  entityVersion      Int?
+  changedAt          DateTime @default(now())
+  actorId            String?
+  source             String
+  requestId          String?
+  payloadHash        String
+  sensitivityGroups  String[] @default([])
+  moduleKey          String?
+  scopeWarehouseIds  String[] @default([])
   authorizationClass String?
-  resourceTenantId  String?
-  createdAt         DateTime @default(now())
+  resourceTenantId   String?
+  createdAt          DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -1419,8 +1435,8 @@ model SyncClient {
   updatedAt                DateTime  @updatedAt
   revokedAt                DateTime?
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user             User                  @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
   snapshotSessions SyncSnapshotSession[]
 
   @@unique([tenantId, userId, deviceIdHash])
@@ -1429,21 +1445,21 @@ model SyncClient {
 }
 
 model SyncSnapshotSession {
-  id                       String   @id
+  id                       String    @id
   tenantId                 String
   userId                   String
   syncClientId             String
   authorizationFingerprint String
   highWatermarkSequence    BigInt
-  status                   String   @default("active")
+  status                   String    @default("active")
   entityTypeCursor         String?
-  pageSize                 Int      @default(100)
-  createdAt                DateTime @default(now())
+  pageSize                 Int       @default(100)
+  createdAt                DateTime  @default(now())
   expiresAt                DateTime
   completedAt              DateTime?
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      User       @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
   syncClient SyncClient @relation(fields: [tenantId, syncClientId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([tenantId, id])
@@ -1472,16 +1488,324 @@ model CashbookEntry {
   metadata           Json?
   createdAt          DateTime @default(now())
 
-  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  cashbookAccount  CashbookAccount           @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
-  settlement       SettlementDocument?       @relation(fields: [tenantId, settlementId], references: [tenantId, id], onDelete: Restrict)
-  internalTransfer InternalTransferDocument? @relation(fields: [tenantId, internalTransferId], references: [tenantId, id], onDelete: Restrict)
+  tenant                        Tenant                                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cashbookAccount               CashbookAccount                        @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  settlement                    SettlementDocument?                    @relation(fields: [tenantId, settlementId], references: [tenantId, id], onDelete: Restrict)
+  internalTransfer              InternalTransferDocument?              @relation(fields: [tenantId, internalTransferId], references: [tenantId, id], onDelete: Restrict)
+  bankReconciliationCandidates  BankReconciliationCandidate[]
+  bankReconciliationAllocations BankReconciliationCashbookAllocation[]
+  bankReconciliationExceptions  BankReconciliationException[]
 
   @@unique([tenantId, entryNumber])
   @@unique([settlementId, entryType])
   @@unique([internalTransferId, entryType])
   @@index([tenantId, cashbookAccountId, occurredAt])
   @@index([tenantId, settlementId])
+}
+
+model BankStatementMappingTemplate {
+  id                 String   @id
+  tenantId           String
+  templateCode       String
+  name               String
+  bankName           String?
+  formatType         String
+  cashbookAccountId  String
+  fileEncoding       String   @default("auto_detect")
+  sheetName          String?
+  headerRowNumber    Int      @default(1)
+  firstDataRowNumber Int      @default(2)
+  dateFormat         String?
+  decimalSeparator   String   @default(".")
+  thousandsSeparator String   @default(",")
+  debitCreditMode    String
+  signConvention     String
+  timezone           String
+  columnMapping      Json
+  status             String   @default("active")
+  version            Int      @default(1)
+  createdById        String
+  updatedById        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  metadata           Json?
+
+  tenant          Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cashbookAccount CashbookAccount            @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  batches         BankStatementImportBatch[]
+
+  @@unique([tenantId, templateCode, version])
+  @@unique([tenantId, id])
+  @@index([tenantId, templateCode, status])
+}
+
+model BankStatementImportBatch {
+  id                        String    @id
+  tenantId                  String
+  batchNumber               String
+  cashbookAccountId         String
+  mappingTemplateId         String
+  mappingTemplateVersion    Int
+  uploadId                  String
+  fileName                  String
+  fileMimeType              String
+  fileSha256                String
+  sourceType                String    @default("file_upload")
+  coverageType              String    @default("transaction_export")
+  statementStartDate        DateTime?
+  statementEndDate          DateTime?
+  openingBalance            Decimal?  @db.Decimal(18, 4)
+  closingBalance            Decimal?  @db.Decimal(18, 4)
+  currency                  String
+  bankNameSnapshot          String?
+  accountIdentifierMasked   String?
+  accountIdentifierHash     String?
+  workflowStatus            String    @default("draft")
+  validationStatus          String    @default("not_validated")
+  totalRowCount             Int       @default(0)
+  acceptedRowCount          Int       @default(0)
+  errorRowCount             Int       @default(0)
+  exactDuplicateRowCount    Int       @default(0)
+  possibleDuplicateRowCount Int       @default(0)
+  importedLineCount         Int       @default(0)
+  version                   Int       @default(0)
+  createdById               String
+  validatedById             String?
+  committedById             String?
+  voidedById                String?
+  createdAt                 DateTime  @default(now())
+  validatedAt               DateTime?
+  committedAt               DateTime?
+  voidedAt                  DateTime?
+  voidReason                String?
+  metadata                  Json?
+
+  tenant          Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cashbookAccount CashbookAccount              @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  mappingTemplate BankStatementMappingTemplate @relation(fields: [tenantId, mappingTemplateId], references: [tenantId, id], onDelete: Restrict)
+  upload          StagedUpload                 @relation(fields: [tenantId, uploadId], references: [tenantId, id], onDelete: Restrict)
+  rows            BankStatementImportRow[]
+  lines           BankStatementLine[]
+
+  @@unique([tenantId, batchNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, cashbookAccountId, workflowStatus])
+  @@index([tenantId, cashbookAccountId, fileSha256])
+}
+
+model BankStatementImportRow {
+  id                                  String    @id
+  tenantId                            String
+  batchId                             String
+  sourceSheet                         String?
+  sourceRowNumber                     Int
+  rawRowHash                          String
+  rawData                             Json
+  normalizedTransactionId             String?
+  normalizedTransactionDate           DateTime?
+  normalizedPostingDate               DateTime?
+  normalizedValueDate                 DateTime?
+  normalizedDirection                 String?
+  normalizedAmount                    Decimal?  @db.Decimal(18, 4)
+  normalizedCurrency                  String?
+  normalizedCounterpartyName          String?
+  normalizedCounterpartyAccountMasked String?
+  normalizedCounterpartyAccountHash   String?
+  normalizedDescription               String?
+  normalizedBankReference             String?
+  normalizedCustomerReference         String?
+  normalizedRunningBalance            Decimal?  @db.Decimal(18, 4)
+  validationStatus                    String    @default("pending")
+  duplicateStatus                     String    @default("none")
+  issueCodes                          String[]  @default([])
+  overrideData                        Json?
+  overrideReason                      String?
+  overriddenById                      String?
+  version                             Int       @default(0)
+  createdAt                           DateTime  @default(now())
+  updatedAt                           DateTime  @updatedAt
+
+  tenant Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  batch  BankStatementImportBatch @relation(fields: [tenantId, batchId], references: [tenantId, id], onDelete: Restrict)
+  line   BankStatementLine?
+
+  @@unique([tenantId, batchId, sourceSheet, sourceRowNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, batchId, validationStatus, duplicateStatus])
+}
+
+model BankStatementLine {
+  id                        String    @id
+  tenantId                  String
+  batchId                   String
+  cashbookAccountId         String
+  lineNumber                Int
+  bankTransactionId         String?
+  transactionDate           DateTime
+  postingDate               DateTime?
+  valueDate                 DateTime?
+  direction                 String
+  amount                    Decimal   @db.Decimal(18, 4)
+  currency                  String
+  counterpartyName          String?
+  counterpartyAccountMasked String?
+  counterpartyAccountHash   String?
+  description               String?
+  bankReference             String?
+  customerReference         String?
+  runningBalance            Decimal?  @db.Decimal(18, 4)
+  canonicalFingerprint      String
+  exactDuplicateOfLineId    String?
+  reconciliationStatus      String    @default("unmatched")
+  matchedAmount             Decimal   @default(0) @db.Decimal(18, 4)
+  remainingAmount           Decimal   @db.Decimal(18, 4)
+  status                    String    @default("active")
+  version                   Int       @default(0)
+  sourceRowId               String    @unique
+  createdAt                 DateTime  @default(now())
+  metadata                  Json?
+
+  tenant          Tenant                                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  batch           BankStatementImportBatch               @relation(fields: [tenantId, batchId], references: [tenantId, id], onDelete: Restrict)
+  cashbookAccount CashbookAccount                        @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  sourceRow       BankStatementImportRow                 @relation(fields: [sourceRowId], references: [id], onDelete: Restrict)
+  candidates      BankReconciliationCandidate[]
+  allocations     BankReconciliationBankLineAllocation[]
+  exceptions      BankReconciliationException[]
+
+  @@unique([tenantId, batchId, lineNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, cashbookAccountId, reconciliationStatus, status])
+  @@index([tenantId, cashbookAccountId, bankTransactionId])
+  @@index([tenantId, cashbookAccountId, canonicalFingerprint])
+}
+
+model BankReconciliationCandidate {
+  id                   String    @id
+  tenantId             String
+  bankStatementLineId  String
+  cashbookEntryId      String
+  settlementDocumentId String?
+  candidateType        String
+  score                Int
+  algorithmVersion     String
+  amountScore          Int
+  dateScore            Int
+  referenceScore       Int
+  counterpartyScore    Int
+  documentScore        Int
+  evidence             Json
+  status               String    @default("active")
+  generatedAt          DateTime  @default(now())
+  generatedById        String
+  dismissedAt          DateTime?
+  dismissedById        String?
+  dismissalReason      String?
+  expiresAt            DateTime?
+  metadata             Json?
+
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  bankStatementLine BankStatementLine   @relation(fields: [tenantId, bankStatementLineId], references: [tenantId, id], onDelete: Restrict)
+  cashbookEntry     CashbookEntry       @relation(fields: [cashbookEntryId], references: [id], onDelete: Restrict)
+  settlement        SettlementDocument? @relation(fields: [settlementDocumentId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, bankStatementLineId, cashbookEntryId, algorithmVersion])
+  @@index([tenantId, bankStatementLineId, status, score])
+}
+
+model BankReconciliationGroup {
+  id                   String    @id
+  tenantId             String
+  reconciliationNumber String
+  cashbookAccountId    String
+  currency             String
+  direction            String
+  reconciliationDate   DateTime
+  workflowStatus       String    @default("draft")
+  integrityStatus      String    @default("matched")
+  totalBankAmount      Decimal   @default(0) @db.Decimal(18, 4)
+  totalCashbookAmount  Decimal   @default(0) @db.Decimal(18, 4)
+  differenceAmount     Decimal   @default(0) @db.Decimal(18, 4)
+  algorithmVersion     String
+  confirmedById        String?
+  confirmedAt          DateTime?
+  reversedById         String?
+  reversedAt           DateTime?
+  reversalReason       String?
+  version              Int       @default(0)
+  createdById          String
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  metadata             Json?
+
+  tenant              Tenant                                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cashbookAccount     CashbookAccount                        @relation(fields: [tenantId, cashbookAccountId], references: [tenantId, id], onDelete: Restrict)
+  bankAllocations     BankReconciliationBankLineAllocation[]
+  cashbookAllocations BankReconciliationCashbookAllocation[]
+  exceptions          BankReconciliationException[]
+
+  @@unique([tenantId, reconciliationNumber])
+  @@unique([tenantId, id])
+  @@index([tenantId, cashbookAccountId, workflowStatus])
+}
+
+model BankReconciliationBankLineAllocation {
+  id                    String   @id
+  tenantId              String
+  reconciliationGroupId String
+  bankStatementLineId   String
+  allocatedAmount       Decimal  @db.Decimal(18, 4)
+  createdAt             DateTime @default(now())
+
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  group             BankReconciliationGroup @relation(fields: [tenantId, reconciliationGroupId], references: [tenantId, id], onDelete: Restrict)
+  bankStatementLine BankStatementLine       @relation(fields: [tenantId, bankStatementLineId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([reconciliationGroupId, bankStatementLineId])
+  @@index([tenantId, bankStatementLineId])
+}
+
+model BankReconciliationCashbookAllocation {
+  id                    String   @id
+  tenantId              String
+  reconciliationGroupId String
+  cashbookEntryId       String
+  settlementDocumentId  String?
+  internalTransferId    String?
+  allocatedAmount       Decimal  @db.Decimal(18, 4)
+  createdAt             DateTime @default(now())
+
+  tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  group         BankReconciliationGroup @relation(fields: [tenantId, reconciliationGroupId], references: [tenantId, id], onDelete: Restrict)
+  cashbookEntry CashbookEntry           @relation(fields: [cashbookEntryId], references: [id], onDelete: Restrict)
+  settlement    SettlementDocument?     @relation(fields: [settlementDocumentId], references: [id], onDelete: Restrict)
+
+  @@unique([reconciliationGroupId, cashbookEntryId])
+  @@index([tenantId, cashbookEntryId])
+}
+
+model BankReconciliationException {
+  id                    String    @id
+  tenantId              String
+  reconciliationGroupId String
+  bankStatementLineId   String?
+  cashbookEntryId       String?
+  exceptionType         String
+  severity              String
+  status                String    @default("open")
+  detectedAt            DateTime  @default(now())
+  resolvedAt            DateTime?
+  resolvedById          String?
+  resolution            Json?
+  metadata              Json?
+
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  group             BankReconciliationGroup @relation(fields: [tenantId, reconciliationGroupId], references: [tenantId, id], onDelete: Restrict)
+  bankStatementLine BankStatementLine?      @relation(fields: [bankStatementLineId], references: [id], onDelete: Restrict)
+  cashbookEntry     CashbookEntry?          @relation(fields: [cashbookEntryId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status, severity])
+  @@index([tenantId, reconciliationGroupId])
 }
 
 model CustomerCreditNote {

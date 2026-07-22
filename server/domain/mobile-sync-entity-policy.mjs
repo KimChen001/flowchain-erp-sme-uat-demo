@@ -2,7 +2,14 @@ import { capabilityForEnvironment } from "./capability-registry.mjs";
 
 const text = (value) => String(value ?? "").trim();
 const serial = (value) => value?.toISOString?.() || value || null;
-const decimal = (value) => value === null || value === undefined ? null : Number(value).toFixed(4);
+const decimal = (value) => {
+  if (value === null || value === undefined) return null;
+  const raw = String(value).trim();
+  if (!/^[+-]?\d+(?:\.\d{1,4})?$/.test(raw)) return null;
+  const negative = raw.startsWith("-"), unsigned = raw.replace(/^[+-]/, ""), [whole, fraction = ""] = unsigned.split(".");
+  const units = BigInt(whole) * 10_000n + BigInt(fraction.padEnd(4, "0")), signed = negative ? -units : units, absolute = signed < 0n ? -signed : signed;
+  return `${signed < 0n ? "-" : ""}${absolute / 10_000n}.${String(absolute % 10_000n).padStart(4, "0")}`;
+};
 
 const registry = {
   PurchaseOrder: { moduleKey: "procurement", capabilityId: "procurement", requiredReadPermission: "procurement.purchase_order.read", amountSensitive: true, partnerSensitive: true, priceSensitive: true, model: "purchaseOrder", include: { lines: true } },
@@ -27,6 +34,10 @@ const registry = {
   InternalTransferDocument: { moduleKey: "finance", capabilityId: "settlement-workflow", requiredReadPermission: "finance.internal_transfer.read", amountSensitive: true, model: "internalTransferDocument" },
   SettlementAttachment: { moduleKey: "finance", capabilityId: "settlement-workflow", requiredReadPermission: "finance.settlement_attachment.read", partnerSensitive: true, model: "settlementAttachment" },
   ReceivingAttachment: { moduleKey: "receiving", capabilityId: "receiving-posting", requiredReadPermission: "receiving.read", warehouseScoped: true, model: "receivingAttachment" },
+  BankStatementImportBatch: { moduleKey: "finance", capabilityId: "bank-statement-reconciliation", requiredReadPermission: "finance.bank_statement.read", amountSensitive: true, partnerSensitive: true, model: "bankStatementImportBatch", tombstonePolicy: "fail_closed_metadata" },
+  BankStatementLine: { moduleKey: "finance", capabilityId: "bank-statement-reconciliation", requiredReadPermission: "finance.bank_statement.read", amountSensitive: true, partnerSensitive: true, model: "bankStatementLine", tombstonePolicy: "fail_closed_metadata" },
+  BankReconciliationGroup: { moduleKey: "finance", capabilityId: "bank-statement-reconciliation", requiredReadPermission: "finance.bank_reconciliation.read", amountSensitive: true, partnerSensitive: true, model: "bankReconciliationGroup", tombstonePolicy: "fail_closed_metadata" },
+  BankReconciliationException: { moduleKey: "finance", capabilityId: "bank-statement-reconciliation", requiredReadPermission: "finance.bank_reconciliation.read", amountSensitive: true, partnerSensitive: true, model: "bankReconciliationException", tombstonePolicy: "fail_closed_metadata" },
 };
 
 const moduleEnabled = (tenant, moduleKey) => {
@@ -62,6 +73,10 @@ function project(row, entityType, policy, actor) {
     : { supplierId: null, supplierNameSnapshot: null, customerId: null, customerNameSnapshot: null });
   if (entityType === "SettlementDocument") Object.assign(result, { workflowStatus: row.workflowStatus, postingStatus: row.postingStatus, settlementNumber: row.settlementNumber });
   if (entityType === "AdvanceApplicationDocument") Object.assign(result, { advanceId: row.advanceId, workflowStatus: row.workflowStatus, postingStatus: row.postingStatus });
+  if (entityType === "BankStatementImportBatch") Object.assign(result, { batchNumber: row.batchNumber, workflowStatus: row.workflowStatus, validationStatus: row.validationStatus, unmatchedCount: row.importedLineCount, desktopDeepLink: `/app/finance/bank-reconciliation?batch=${encodeURIComponent(row.id)}` });
+  if (entityType === "BankStatementLine") Object.assign(result, { transactionDate: serial(row.transactionDate), direction: row.direction, reconciliationStatus: row.reconciliationStatus, amount: amounts ? decimal(row.amount) : null, matchedAmount: amounts ? decimal(row.matchedAmount) : null, remainingAmount: amounts ? decimal(row.remainingAmount) : null, counterpartyName: partner ? row.counterpartyName : null, counterpartyAccountMasked: partner ? row.counterpartyAccountMasked : null, desktopDeepLink: `/app/finance/bank-reconciliation?line=${encodeURIComponent(row.id)}` });
+  if (entityType === "BankReconciliationGroup") Object.assign(result, { reconciliationNumber: row.reconciliationNumber, workflowStatus: row.workflowStatus, integrityStatus: row.integrityStatus, totalBankAmount: amounts ? decimal(row.totalBankAmount) : null, totalCashbookAmount: amounts ? decimal(row.totalCashbookAmount) : null, desktopDeepLink: `/app/finance/bank-reconciliation?group=${encodeURIComponent(row.id)}` });
+  if (entityType === "BankReconciliationException") Object.assign(result, { exceptionType: row.exceptionType, severity: row.severity, reconciliationGroupId: row.reconciliationGroupId, desktopDeepLink: `/app/finance/bank-reconciliation?exception=${encodeURIComponent(row.id)}` });
   return result;
 }
 
@@ -90,6 +105,7 @@ export async function loadAuthorizedSyncProjection({ prisma, tenant, actor, enti
   if (operation === "tombstone") {
     const feedTenantId = text(feedContext?.tenantId);
     const resourceTenantId = text(feedContext?.resourceTenantId);
+    if (policy.tombstonePolicy === "fail_closed_metadata" && (!feedTenantId || !resourceTenantId || !text(feedContext?.moduleKey) || !text(feedContext?.authorizationClass))) return null;
     if (feedTenantId && feedTenantId !== actor.tenantId) return null;
     if (resourceTenantId && resourceTenantId !== actor.tenantId) return null;
     if (policy.warehouseScoped && resourceTenantId !== actor.tenantId) return null;

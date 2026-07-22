@@ -5,11 +5,11 @@ import { A } from "../ui";
 import { AppBreadcrumb } from "./AppBreadcrumb";
 import { useI18n } from "../../i18n/I18n";
 
-export function ModuleShell({ route, children }: { route: AppRouteDefinition; children: React.ReactNode }) {
+export function ModuleShell({ route, children, capabilities = {} }: { route: AppRouteDefinition; children: React.ReactNode; capabilities?: Record<string, { enabled: boolean }> }) {
   const navigate = useNavigate();
   const { routeLabel, workspaceName, language } = useI18n();
   const root = moduleRoute(route.moduleId) || route;
-  const subRoutes = routesForModule(route.moduleId);
+  const subRoutes = routesForModule(route.moduleId).filter((item) => !item.capabilityId || capabilities[item.capabilityId]?.enabled === true);
   const activeMenuId = route.currentActiveMenuId || route.id;
   const showModuleHeader = route.id === root.id;
   const showPageHeader = route.id !== root.id && route.pageType !== "detail" && route.moduleId !== "reports";

@@ -50,6 +50,7 @@ export type AppRouteDefinition = {
   legacyIds?: string[];
   panelId?: string;
   viewId?: string;
+  capabilityId?: string;
   group?: "主导航" | "高级与内部";
   order: number;
 };
@@ -1331,6 +1332,32 @@ export const appRouteRegistry: AppRouteDefinition[] = [
     pageType: "list",
     viewId: "reconciliation",
     order: 64,
+  }),
+  page({
+    id: "finance:bank-statements",
+    path: "/app/finance/bank-statements",
+    moduleId: "finance",
+    moduleLabel: "财务协同",
+    label: "银行流水",
+    description: "导入并校验 CSV / XLSX 银行流水证据。",
+    parentId: "finance",
+    pageType: "list",
+    viewId: "bank-statements",
+    capabilityId: "bank-statement-reconciliation",
+    order: 64.1,
+  }),
+  page({
+    id: "finance:bank-reconciliation",
+    path: "/app/finance/bank-reconciliation",
+    moduleId: "finance",
+    moduleLabel: "财务协同",
+    label: "银行对账",
+    description: "以确定性候选和人工确认关联导入流水与内部 Cashbook。",
+    parentId: "finance",
+    pageType: "analysis",
+    viewId: "bank-reconciliation",
+    capabilityId: "bank-statement-reconciliation",
+    order: 64.2,
   }),
   page({
     id: "finance:settlement",
