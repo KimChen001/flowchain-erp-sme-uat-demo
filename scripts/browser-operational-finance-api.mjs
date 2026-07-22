@@ -255,7 +255,7 @@ async function seed() {
         ? [["admin@example.com", "Sync Controls Admin", "admin"], ["sync-create@example.com", "Sync Create Only", "viewer"], ["sync-warehouse-a@example.com", "Sync Warehouse A", "viewer"], ["sync-warehouse-b@example.com", "Sync Warehouse B", "viewer"]]
         : []),
       ...(process.env.PLAYWRIGHT_BANK_RECONCILIATION === "true" && process.env.PLAYWRIGHT_MOBILE_SYNC_CONTROLS !== "true"
-        ? [["admin@example.com", "Bank Reconciliation Admin", "admin"]]
+        ? [["admin@example.com", "Bank Reconciliation Admin", "admin"], ["bank-en@example.com", "Bank Reconciliation Admin EN", "admin"]]
         : []),
     ].map(([email, name, role]) => ({
       id: actorId(email),
@@ -263,9 +263,14 @@ async function seed() {
       email,
       name,
       role,
-      languagePreference: ["viewer@example.com", "mobile-en@example.com", "settlement-en@example.com"].includes(email) ? "en-US" : null,
+      languagePreference: ["viewer@example.com", "mobile-en@example.com", "settlement-en@example.com", "bank-en@example.com"].includes(email) ? "en-US" : null,
     })),
   });
+  if (process.env.PLAYWRIGHT_BANK_RECONCILIATION === "true") {
+    await prisma.cashbookAccount.create({ data: { id: "bank-browser-account", tenantId, accountCode: "BANK-BROWSER-CNY", name: "Browser Fictitious Bank", accountType: "bank", currency: "CNY", openingBalance: "1000.0000", currentBalance: "1125.5000" } });
+    await prisma.settlementDocument.create({ data: { id: "bank-browser-settlement", tenantId, settlementNumber: "SET-BANK-BROWSER", direction: "receipt", counterpartyType: "customer", counterpartyId: "bank-browser-customer", counterpartyNameSnapshot: "Fictitious Customer", cashbookAccountId: "bank-browser-account", currency: "CNY", amount: "125.5000", cashAmount: "125.5000", totalSettlementAmount: "125.5000", settlementDate: new Date("2026-07-21"), status: "posted", workflowStatus: "posted", postingStatus: "posted", externalReference: "REF-BROWSER-001" } });
+    await prisma.cashbookEntry.create({ data: { id: "bank-browser-entry", tenantId, cashbookAccountId: "bank-browser-account", settlementId: "bank-browser-settlement", entryNumber: "CB-BANK-BROWSER", entryType: "settlement", direction: "inflow", amount: "125.5000", currency: "CNY", occurredAt: new Date("2026-07-21"), balanceBefore: "1000.0000", balanceAfter: "1125.5000", postingBatchId: "bank-browser-posting", metadata: { externalReference: "REF-BROWSER-001" } } });
+  }
   await prisma.supplier.create({
     data: {
       id: "finance-browser-supplier",
