@@ -85,6 +85,9 @@ jobs:
       - run: npm run test:db:bank-reconciliation
       - run: npm run test:db:bank-reconciliation-evidence
       - run: npm run test:api:bank-reconciliation
+      - run: npm run test:db:bank-security-hardening
+      - run: npm run test:api:bank-projection-security
+      - run: npm run test:db:bank-candidate-quality
       - run: npm run pilot:check
         env:
           FLOWCHAIN_PERSISTENCE_MODE: database
@@ -130,3 +133,4 @@ jobs:
       - run: npm run test:browser:mobile-authority
       - run: npm run test:browser:mobile-sync-controls
       - run: npm run test:browser:bank-reconciliation
+      - run: npm run test:browser:bank-security-hardening

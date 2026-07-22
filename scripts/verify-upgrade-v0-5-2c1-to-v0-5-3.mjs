@@ -13,6 +13,7 @@ const root = resolve(import.meta.dirname, "..");
 const migrations = join(root, "prisma", "migrations");
 const baseline = "20260722010000_mobile_authority_evidence_hardening";
 const target = "20260722020000_bank_statement_reconciliation_foundation";
+const hardening = "20260722030000_bank_reconciliation_control_hardening";
 const prismaCli = join(root, "node_modules", "prisma", "build", "index.js");
 const freePort = () => new Promise((resolvePort, reject) => {
   const server = createServer().on("error", reject);
@@ -47,7 +48,9 @@ try {
   await run(process.execPath, [prismaCli, "migrate", "deploy"], { cwd: root, env, maxBuffer: 20 * 1024 * 1024 });
   assert.deepEqual((await query(`SELECT "name","version" FROM "Tenant" WHERE "id"='phase53-upgrade-tenant'`)).rows[0], before);
   assert.equal((await query(`SELECT "version" FROM "CashbookAccount" WHERE "id"='phase53-upgrade-account'`)).rows[0].version, 4);
-  assert.equal((await query(`SELECT "migration_name" FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL ORDER BY "finished_at" DESC LIMIT 1`)).rows[0].migration_name, target);
+  const applied = (await query(`SELECT "migration_name" FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL ORDER BY "migration_name"`)).rows.map((row) => row.migration_name);
+  assert.ok(applied.includes(target));
+  assert.ok(applied.indexOf(target) < applied.indexOf(hardening));
   for (const table of ["BankStatementMappingTemplate", "BankStatementImportBatch", "BankStatementLine", "BankReconciliationGroup", "BankReconciliationException"]) {
     assert.equal((await query(`SELECT to_regclass('"${table}"') IS NOT NULL AS present`)).rows[0].present, true);
   }
