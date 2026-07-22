@@ -47,6 +47,7 @@ import { handleInventoryRoute } from "./inventory.routes.mjs";
 import { handleInventoryOperationsRoute } from "./inventory-operations.routes.mjs";
 import { handleReturnsRoute } from "./returns.routes.mjs";
 import { handleOperationalFinanceRoute } from "./operational-finance.routes.mjs";
+import { handleBankReconciliationRoute } from "./bank-reconciliation.routes.mjs";
 import { handleMobileSyncRoute } from "./mobile-sync.routes.mjs";
 import { handleAttachmentRoute } from "./attachments.routes.mjs";
 import { handleMobileOperationsRoute } from "./mobile-operations.routes.mjs";
@@ -1763,6 +1764,7 @@ export function createScmServer() {
       if (await handleTodayCockpitRoute(routeContext)) return;
       if (await handleReturnsRoute(routeContext)) return;
       if (await handleAttachmentRoute(routeContext)) return;
+      if (await handleBankReconciliationRoute(routeContext)) return;
       if (await handleOperationalFinanceRoute(routeContext)) return;
       if (await handleMobileSyncRoute(routeContext)) return;
       if (await handleMobileOperationsRoute(routeContext)) return;
