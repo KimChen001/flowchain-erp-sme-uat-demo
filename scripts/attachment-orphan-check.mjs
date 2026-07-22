@@ -5,6 +5,7 @@ const prisma = await createPrismaClient(process.env);
 try {
   const report = await createAttachmentService({ prisma, env: process.env }).orphanCheck();
   console.log(JSON.stringify(report, null, 2));
+  if (process.argv.includes("--strict") && !report.ok) process.exitCode = 2;
 } finally {
   await prisma.$disconnect();
 }

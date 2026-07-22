@@ -79,6 +79,7 @@ export function createJsonRepositoryRegistry({ db = {}, env = process.env } = {}
 }
 
 export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, prisma } = {}) {
+  const legacyProcurementEnabled = text(env.FLOWCHAIN_ENABLE_LEGACY_PROCUREMENT_RUNTIME) === 'true'
   return {
     mode: PERSISTENCE_MODES.database,
     masterData: createDbMasterDataRepository({ env, prisma }),
@@ -87,7 +88,9 @@ export function createDatabaseRepositoryRegistry({ db = {}, env = process.env, p
     // Phase 5.2C makes PostgreSQL authoritative for formal PO reads and commands.
     // The JSON runtime remains available only as an explicit legacy adapter.
     procurementRuntime: createDbProcurementRuntimeRepository({ env, prisma }),
-    procurementLegacyRuntime: createDurableProcurementRepository({ dataFile: path.resolve(env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE || 'data/procurement-transactions.json') }),
+    procurementLegacyRuntime: legacyProcurementEnabled
+      ? createDurableProcurementRepository({ dataFile: path.resolve(env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE || 'data/procurement-transactions.json') })
+      : null,
     procurementAuthority: createDbProcurementCommandService({ env, prisma }),
     actionDrafts: createDbActionDraftRepository({ db, env, prisma }),
     exceptionCases: createInMemoryExceptionCaseRepository({ db }),

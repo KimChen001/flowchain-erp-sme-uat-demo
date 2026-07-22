@@ -251,6 +251,9 @@ async function seed() {
       ...(process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true"
         ? [["mobile@example.com", "Mobile Operations Manager", "manager"], ["mobile-en@example.com", "Mobile Operations Manager EN", "manager"]]
         : []),
+      ...(process.env.PLAYWRIGHT_MOBILE_SYNC_CONTROLS === "true"
+        ? [["admin@example.com", "Sync Controls Admin", "admin"], ["sync-create@example.com", "Sync Create Only", "viewer"], ["sync-warehouse-a@example.com", "Sync Warehouse A", "viewer"], ["sync-warehouse-b@example.com", "Sync Warehouse B", "viewer"]]
+        : []),
     ].map(([email, name, role]) => ({
       id: actorId(email),
       tenantId,
@@ -314,10 +317,17 @@ async function seed() {
       name: "Finance Browser Warehouse",
     },
   });
+  if (process.env.PLAYWRIGHT_MOBILE_SYNC_CONTROLS === "true") {
+    await prisma.warehouse.create({ data: { id: "finance-browser-warehouse-b", tenantId, code: "FIN-BROWSER-WH-B", name: "Finance Browser Warehouse B" } });
+  }
   if (process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true") {
     await prisma.userWarehouseScope.createMany({ data: [
       { id: "mobile-browser-warehouse-scope", tenantId, userId: actorId("mobile@example.com"), warehouseId, accessLevel: "operate" },
       { id: "mobile-browser-en-warehouse-scope", tenantId, userId: actorId("mobile-en@example.com"), warehouseId, accessLevel: "operate" },
+      ...(process.env.PLAYWRIGHT_MOBILE_SYNC_CONTROLS === "true" ? [
+        { id: "sync-browser-warehouse-a-scope", tenantId, userId: actorId("sync-warehouse-a@example.com"), warehouseId, accessLevel: "operate" },
+        { id: "sync-browser-warehouse-b-scope", tenantId, userId: actorId("sync-warehouse-b@example.com"), warehouseId: "finance-browser-warehouse-b", accessLevel: "operate" },
+      ] : []),
     ] });
   }
   await prisma.inventoryBalance.create({
@@ -400,6 +410,12 @@ async function seed() {
     });
     for (const [poId, lineId] of [["PO-MOBILE-APPROVE", "mobile-browser-po-approve-line"], ["PO-MOBILE-REJECT", "mobile-browser-po-reject-line"], ["PO-MOBILE-RACE", "mobile-browser-po-race-line"]]) {
       await prisma.purchaseOrder.create({ data: { id: poId, tenantId, status: "pending_approval", supplierId: "finance-browser-supplier", supplierName: "Finance Browser Supplier", sourceRequestId: "PR-MOBILE-BROWSER", sourceRfqId: "RFQ-MOBILE-BROWSER", amount: "100.0000", currency: "CNY", version: 1, metadata: { orderNumber: poId }, lines: { create: { id: lineId, itemId: "finance-browser-item", sku: "FIN-BROWSER", itemName: "Finance Browser Item", orderedQuantity: "10.0000", receivedQuantity: "0.0000", unit: "EA", unitPrice: "10.0000", amount: "100.0000" } } } });
+    }
+    if (process.env.PLAYWRIGHT_MOBILE_SYNC_CONTROLS === "true") {
+      await prisma.receivingDocument.createMany({ data: [
+        { id: "sync-browser-receiving-a", tenantId, documentNumber: "GRN-SYNC-A", status: "receiving", workflowStatus: "draft", postingStatus: "unposted", warehouseId, currency: "CNY" },
+        { id: "sync-browser-receiving-b", tenantId, documentNumber: "GRN-SYNC-B", status: "receiving", workflowStatus: "draft", postingStatus: "unposted", warehouseId: "finance-browser-warehouse-b", currency: "CNY" },
+      ] });
     }
   }
   await prisma.receivingDocument.create({
@@ -494,6 +510,8 @@ try {
       process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : "false",
     FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING:
       process.env.PLAYWRIGHT_MOBILE_OPERATIONS_DB === "true" ? "true" : (process.env.FLOWCHAIN_ENABLE_DB_RECEIVING_POSTING || "false"),
+    FLOWCHAIN_ENABLE_LEGACY_PROCUREMENT_RUNTIME: "false",
+    ...(process.env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE ? { FLOWCHAIN_PROCUREMENT_RUNTIME_FILE: process.env.FLOWCHAIN_PROCUREMENT_RUNTIME_FILE } : {}),
     FLOWCHAIN_SYNC_CURSOR_SECRET: `mobile-browser-${randomUUID()}-cursor-secret`,
     FLOWCHAIN_ATTACHMENT_STORAGE_PROVIDER: "local",
     FLOWCHAIN_UPLOAD_STORAGE_DIR: join(directory, "uploads"),
