@@ -50,6 +50,10 @@ export function createMobileOperationsService({ prisma, procurementRepository, p
       const transfers = await prisma.internalTransferDocument.findMany({ where: { tenantId: actor.tenantId, workflowStatus: "submitted" } });
       for (const row of transfers) tasks.push(task({ taskId: `internal_transfer_approval:${row.id}`, taskType: "internal_transfer_approval", entityType: "InternalTransferDocument", entityId: row.id, title: `Internal transfer ${row.transferNumber}`, summary: `${row.fromCashbookAccountId} -> ${row.toCashbookAccountId}`, amountSummary: actor.permissionCodes.has("finance.amounts.read") ? { amount: decimal(row.amount), currency: row.currency } : null, availableActions: ["approve", "reject"], entityVersion: row.version, deepLink: `/app/mobile/tasks/internal_transfer_approval:${row.id}` }, actor));
     }
+    if (capabilityForEnvironment("bank-statement-reconciliation", env)?.enabled && can({ actor, permission: "finance.bank_reconciliation.read", tenantId: actor.tenantId })) {
+      const exceptions = await prisma.bankReconciliationException.findMany({ where: { tenantId: actor.tenantId, status: "open" }, orderBy: { detectedAt: "desc" }, take: 50 });
+      for (const row of exceptions) tasks.push(task({ taskId: `bank_reconciliation_exception:${row.id}`, taskType: "bank_reconciliation_exception", entityType: "BankReconciliationException", entityId: row.id, title: "Bank reconciliation evidence exception", summary: row.exceptionType, amountSummary: null, availableActions: [], deepLink: `/app/finance/bank-reconciliation?exception=${encodeURIComponent(row.id)}`, evidenceSummary: [row.severity, row.exceptionType], limitations: ["Read-only on mobile", "Open the desktop workbench to resolve"] }, actor));
+    }
     return { items: tasks, total: tasks.length, serverTime: serial(now()) };
   }
   async function taskDetail(taskId, context) { const result = await listTasks(context), item = result.items.find((row) => row.taskId === text(taskId)); if (!item) fail("MOBILE_TASK_NOT_FOUND", "Task was not found or is no longer authorized.", 404); return item; }
