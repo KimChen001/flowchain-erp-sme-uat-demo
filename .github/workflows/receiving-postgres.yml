@@ -81,6 +81,10 @@ jobs:
           FLOWCHAIN_UPLOAD_STORAGE_DIR: /tmp/flowchain-ci-attachment-diagnostics
       - run: npm run test:ops:attachment-diagnostics
       - run: npm run test:api:receiving-decimal-parity
+      - run: npm run test:domain:bank-statement-parser
+      - run: npm run test:db:bank-reconciliation
+      - run: npm run test:db:bank-reconciliation-evidence
+      - run: npm run test:api:bank-reconciliation
       - run: npm run pilot:check
         env:
           FLOWCHAIN_PERSISTENCE_MODE: database
