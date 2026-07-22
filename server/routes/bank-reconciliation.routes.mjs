@@ -75,6 +75,7 @@ export async function handleBankReconciliationRoute(ctx) {
     if (line && ctx.req.method === "GET") { ctx.send(ctx.res, 200, await statement.getLine(decode(line[1]), ctx)); return true; }
     const candidate = path.match(/^\/api\/finance\/bank-reconciliation\/candidates\/([^/]+)\/dismiss$/);
     if (candidate && ctx.req.method === "POST") { ctx.send(ctx.res, 200, await reconciliation.dismissCandidate(decode(candidate[1]), await ctx.readBody(ctx.req), ctx)); return true; }
+    if (path === "/api/finance/bank-reconciliation/integrity/refresh" && ctx.req.method === "POST") { ctx.send(ctx.res, 200, await reconciliation.refreshIntegrity(ctx)); return true; }
     if (path === "/api/finance/bank-reconciliation/groups") {
       if (ctx.req.method === "GET") ctx.send(ctx.res, 200, await reconciliation.listGroups(query(ctx.url), ctx));
       else if (ctx.req.method === "POST") ctx.send(ctx.res, 201, await reconciliation.createGroup(await ctx.readBody(ctx.req), ctx));

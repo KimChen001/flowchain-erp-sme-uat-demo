@@ -135,6 +135,23 @@ test("bank reconciliation sync is read-authorized, independently redacted, and f
   assert.equal(await loadAuthorizedSyncProjection({ ...base, feedContext: { ...trusted, authorizationClass: "finance.bank_statement.import" } }), null);
 });
 
+test("bank batch mobile counts use active reconciliation aggregates instead of imported count", async () => {
+  const row = { id: "batch-a", tenantId: "tenant-a", version: 3, batchNumber: "BST-1", workflowStatus: "committed", validationStatus: "valid", importedLineCount: 99 };
+  const prisma = {
+    bankStatementImportBatch: { findFirst: async () => row },
+    bankStatementLine: { groupBy: async () => [
+      { reconciliationStatus: "unmatched", _count: { _all: 2 } },
+      { reconciliationStatus: "partially_matched", _count: { _all: 1 } },
+      { reconciliationStatus: "matched", _count: { _all: 4 } },
+      { reconciliationStatus: "exception", _count: { _all: 1 } },
+    ] },
+    bankReconciliationException: { count: async () => 2 },
+  };
+  const projected = await loadAuthorizedSyncProjection({ prisma, tenant: { operationalSettings: {} }, actor: actor(["finance.bank_statement.read"]), entityType: "BankStatementImportBatch", entityId: row.id, env: enabledBankReconciliation });
+  assert.deepEqual({ active: projected.activeLineCount, unmatched: projected.unmatchedCount, partial: projected.partiallyMatchedCount, matched: projected.matchedCount, exceptions: projected.exceptionCount }, { active: 8, unmatched: 2, partial: 1, matched: 4, exceptions: 3 });
+  assert.notEqual(projected.unmatchedCount, row.importedLineCount);
+});
+
 test("cursor key rotation verifies a cursor genuinely signed by the previous key", () => {
   const k1 = "previous-key-secret-that-is-at-least-32-characters";
   const k2 = "current-key-secret-that-is-at-least-32-characters";
