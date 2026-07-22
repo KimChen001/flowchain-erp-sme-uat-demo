@@ -20,7 +20,7 @@ const env = {
 };
 
 const code = await new Promise((resolveExit) => {
-  const child = spawn(process.execPath, [cli, "test", "tests/browser/mobile-operations.spec.ts"], { cwd: root, stdio: "inherit", env });
+  const child = spawn(process.execPath, [cli, "test", "tests/browser/mobile-operations.spec.ts", "tests/browser/mobile-sync-controls.spec.ts"], { cwd: root, stdio: "inherit", env });
   child.once("exit", (value) => resolveExit(value ?? 1));
 });
 try {
