@@ -8,6 +8,7 @@ const AMOUNT_TERMS = ["amount", "debit", "credit", "balance", "fee", "金额", "
 const PARTNER_TERMS = ["counterparty", "partner", "customer", "supplier", "accountholder", "payee", "payer", "对方", "客户", "供应商", "户名", "收款人", "付款人"];
 const ACCOUNT_TERMS = ["account", "iban", "swift", "bankreference", "customerreference", "账号", "账户", "银行参考", "客户参考"];
 const HASH_TERMS = ["hash", "fingerprint", "checksum", "摘要哈希", "指纹"];
+const SECRET_DECLARATION = /(?:password|passwd|client[_\-\s]?secret|api[_\-\s]?secret|access[_\-\s]?token|refresh[_\-\s]?token|private[_\-\s]?key|signing[_\-\s]?key|credential|certificate|密码|口令|私钥|密钥|令牌|凭证)\s*[:=]/iu;
 
 export const BANK_DATA_CLASSIFICATIONS = Object.freeze([
   "public_metadata", "business_identifier", "finance_amount", "partner_identity",
@@ -67,6 +68,12 @@ function sanitize(value, { visibility, semantics, path = "", redacted, override 
     const semantic = semantics.get(normalizeBankFieldKey(key)) || key;
     const classification = classifyBankField(key, semantic);
     if (classification === "secret" || classification === "internal_hash") { redacted.push(childPath); continue; }
+    if (typeof child === "string" && SECRET_DECLARATION.test(child)) { redacted.push(childPath); continue; }
+    if (override && normalizeBankFieldKey(key) === "actor") {
+      const actor = child && typeof child === "object" ? child : {};
+      result[key] = { id: actor.id ?? actor.userId ?? null, displayName: actor.displayName ?? actor.name ?? null };
+      continue;
+    }
     if (classification === "finance_amount" && !visibility.amounts) { result[key] = null; redacted.push(childPath); continue; }
     if (["partner_identity", "bank_account_identifier"].includes(classification) && !visibility.partner) { result[key] = null; redacted.push(childPath); continue; }
     if (classification === "raw_import_data") {
@@ -97,9 +104,10 @@ export function findBankMappingSecretPaths(value, path = "") {
   if (Array.isArray(value)) value.forEach((item, index) => result.push(...findBankMappingSecretPaths(item, `${path}[${index}]`)));
   else if (value && typeof value === "object") for (const [key, child] of Object.entries(value)) {
     const childPath = path ? `${path}.${key}` : key;
+    if (normalizeBankFieldKey(key) === "credentialsstored" && child === false) continue;
     if (classifyBankField(key) === "secret") result.push(childPath);
     else result.push(...findBankMappingSecretPaths(child, childPath));
-  } else if (typeof value === "string" && /(?:password|passwd|client[_\-\s]?secret|api[_\-\s]?secret|access[_\-\s]?token|refresh[_\-\s]?token|private[_\-\s]?key|密码|口令|私钥|令牌)\s*[:=]/iu.test(value)) result.push(path || "$");
+  } else if (typeof value === "string" && SECRET_DECLARATION.test(value)) result.push(path || "$");
   return result;
 }
 

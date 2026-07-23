@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { assertSafeBankMappingConfiguration, bankActorVisibility, sanitizeBankImportRawData, sanitizeBankOverrideData } from "./bank-projection-policy.mjs";
 import { buildBankImportRowDto, buildBankStatementLineDto } from "./bank-statement-dto.mjs";
-import { buildBankReconciliationGroupDto } from "./bank-reconciliation-dto.mjs";
+import { buildBankAiContextDto, buildBankReconciliationExceptionDto, buildBankReconciliationGroupDto } from "./bank-reconciliation-dto.mjs";
 
 const actor = (...permissions) => ({ permissionCodes: new Set(["finance.bank_statement.read", ...permissions]) });
 const mapping = { debitAmount: "借方金额", counterpartyName: "Counter_Party-Name", counterpartyAccount: "对方账号" };
@@ -13,6 +13,15 @@ test("raw and historical override data are recursively classified using current 
   assert.equal(raw.value["借方金额"], null); assert.equal(raw.value["Counter_Party-Name"], null); assert.equal(raw.value.nested[0]["对方账号"], null); assert.ok(!("access_token" in raw.value.nested[0])); assert.equal(raw.value.unknown, null);
   const override = sanitizeBankOverrideData({ overrideData: { before: { amount: "10", customerName: "A", privateKey: "never" }, after: { amount: "20", customerName: "B" }, reason: "corrected" }, columnMapping: mapping, actorVisibility: visibility });
   assert.equal(override.value.before.amount, null); assert.equal(override.value.after.customerName, null); assert.ok(!("privateKey" in override.value.before)); assert.equal(override.value.reason, "corrected");
+});
+
+test("secret-like strings and override actors cannot bypass recursive projection", () => {
+  const visibility = bankActorVisibility(actor("finance.amounts.read", "finance.partner_snapshot.read"));
+  const raw = sanitizeBankImportRawData({ rawData: { transaction_id: "password=must-not-return", note: { id: "api_secret:must-not-return" } }, actorVisibility: visibility });
+  assert.ok(!("transaction_id" in raw.value));
+  assert.ok(!("id" in raw.value.note));
+  const override = sanitizeBankOverrideData({ overrideData: { actor: { id: "U1", name: "Reviewer", email: "private@example.invalid", authorizationContext: { token: "never" } } }, actorVisibility: visibility });
+  assert.deepEqual(override.value.actor, { id: "U1", displayName: "Reviewer" });
 });
 
 test("explicit DTO allowlists never expose hashes, raw Prisma metadata, or nested unauthorized values", () => {
@@ -28,5 +37,17 @@ test("explicit DTO allowlists never expose hashes, raw Prisma metadata, or neste
 test("mapping secret validator reports paths without echoing values", () => {
   assert.throws(() => assertSafeBankMappingConfiguration({ metadata: { adapter: [{ client_secret: "do-not-echo" }] } }), (error) => error.code === "BANK_MAPPING_SECRET_FIELD_FORBIDDEN" && error.details.paths[0] === "metadata.adapter[0].client_secret" && !JSON.stringify(error).includes("do-not-echo"));
   assert.throws(() => assertSafeBankMappingConfiguration({ metadata: { adapterConfig: "client_secret=do-not-echo" } }), (error) => error.details.paths[0] === "metadata.adapterConfig" && !JSON.stringify(error).includes("do-not-echo"));
+  assert.doesNotThrow(() => assertSafeBankMappingConfiguration({ metadata: { credentialsStored: false } }));
+  assert.throws(() => assertSafeBankMappingConfiguration({ metadata: { credentialsStored: true } }), (error) => error.details.paths[0] === "metadata.credentialsStored");
   assert.doesNotThrow(() => assertSafeBankMappingConfiguration({ columnMapping: { transactionId: "流水号" }, metadata: { parserVersion: "1" } }));
+});
+
+test("AI and exception DTOs expose only allowlisted summaries", () => {
+  const limited = actor();
+  const ai = buildBankAiContextDto({ validationSummary: { status: "valid", acceptedRowCount: 1, rawData: { password: "never" } }, candidateEvidenceSummary: { algorithmVersion: "bank-match-v1.1", score: 80, recommendation: "recommended", matchedDocumentTokens: ["INV001"], rawData: "never", counterpartyName: "Partner" }, totalBankAmount: "9", counterpartyName: "Partner" }, limited);
+  const exception = buildBankReconciliationExceptionDto({ id: "E1", status: "open", severity: "blocking", metadata: { detectedBy: "integrity", message: "review", rawData: "never", token: "never" } }, limited);
+  const serialized = JSON.stringify({ ai, exception });
+  assert.doesNotMatch(serialized, /rawData|password|token|Partner|"9\.0000"/);
+  assert.equal(ai.reconciliationSummary.totalBankAmount, null);
+  assert.equal(ai.reconciliationSummary.counterpartyName, null);
 });

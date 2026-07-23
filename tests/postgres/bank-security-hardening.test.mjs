@@ -24,6 +24,13 @@ test("real PostgreSQL bank security hardening controls", async (t) => {
       assert.deepEqual([await prisma.bankStatementMappingTemplate.count(), await prisma.auditLog.count()], before);
     });
 
+    await t.test("mapping secret updates reject the final merged configuration atomically", async () => {
+      const mapping = await statement.createMapping({ templateCode: "SAFE-UPD", name: "Safe", formatType: "csv", cashbookAccountId: "hardening-account", debitCreditMode: "signed_amount", signConvention: "positive_credit", columnMapping: { transactionId: "id" }, metadata: { parserVersion: "1" } }, context);
+      const before = [await prisma.bankStatementMappingTemplate.count(), await prisma.auditLog.count(), (await prisma.bankStatementMappingTemplate.findUniqueOrThrow({ where: { id: mapping.id } })).status];
+      await assert.rejects(() => statement.updateMapping(mapping.id, { expectedVersion: mapping.version, metadata: { adapter: [{ signing_key: "not-stored" }] } }, context), (error) => error.code === "BANK_MAPPING_SECRET_FIELD_FORBIDDEN" && error.details?.paths?.includes("metadata.adapter[0].signing_key") && !JSON.stringify(error).includes("not-stored"));
+      assert.deepEqual([await prisma.bankStatementMappingTemplate.count(), await prisma.auditLog.count(), (await prisma.bankStatementMappingTemplate.findUniqueOrThrow({ where: { id: mapping.id } })).status], before);
+    });
+
     await t.test("same-batch fingerprint duplicate is raised during validation", async () => {
       const mapping = await statement.createMapping({ templateCode: "DUP", name: "Duplicate", formatType: "csv", cashbookAccountId: "hardening-account", debitCreditMode: "signed_amount", signConvention: "positive_credit", timezone: "UTC", columnMapping: { transactionId: "transaction_id", transactionDate: "transaction_date", signedAmount: "signed_amount", currency: "currency", bankReference: "bank_reference" } }, context);
       const csv = "transaction_id,transaction_date,signed_amount,currency,bank_reference\nDUP-1,2026-07-06,20.0000,CNY,SAME\nDUP-2,2026-07-06,20.0000,CNY,SAME\nDUP-2,2026-07-07,21.0000,CNY,OTHER\n";
