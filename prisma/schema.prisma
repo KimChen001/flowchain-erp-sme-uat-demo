@@ -1306,6 +1306,7 @@ model InternalTransferDocument {
   fromAccount CashbookAccount @relation("InternalTransferFrom", fields: [tenantId, fromCashbookAccountId], references: [tenantId, id], onDelete: Restrict)
   toAccount   CashbookAccount @relation("InternalTransferTo", fields: [tenantId, toCashbookAccountId], references: [tenantId, id], onDelete: Restrict)
   entries     CashbookEntry[]
+  bankReconciliationCashbookAllocations BankReconciliationCashbookAllocation[]
 
   @@unique([tenantId, transferNumber])
   @@unique([tenantId, id])
@@ -1497,6 +1498,7 @@ model CashbookEntry {
   bankReconciliationExceptions  BankReconciliationException[]
 
   @@unique([tenantId, entryNumber])
+  @@unique([tenantId, id])
   @@unique([settlementId, entryType])
   @@unique([internalTransferId, entryType])
   @@index([tenantId, cashbookAccountId, occurredAt])
@@ -1706,8 +1708,8 @@ model BankReconciliationCandidate {
 
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   bankStatementLine BankStatementLine   @relation(fields: [tenantId, bankStatementLineId], references: [tenantId, id], onDelete: Restrict)
-  cashbookEntry     CashbookEntry       @relation(fields: [cashbookEntryId], references: [id], onDelete: Restrict)
-  settlement        SettlementDocument? @relation(fields: [settlementDocumentId], references: [id], onDelete: Restrict)
+  cashbookEntry     CashbookEntry       @relation(fields: [tenantId, cashbookEntryId], references: [tenantId, id], onDelete: Restrict)
+  settlement        SettlementDocument? @relation(fields: [tenantId, settlementDocumentId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, bankStatementLineId, cashbookEntryId, algorithmVersion])
   @@index([tenantId, bankStatementLineId, status, score])
@@ -1777,8 +1779,9 @@ model BankReconciliationCashbookAllocation {
 
   tenant        Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   group         BankReconciliationGroup @relation(fields: [tenantId, reconciliationGroupId], references: [tenantId, id], onDelete: Restrict)
-  cashbookEntry CashbookEntry           @relation(fields: [cashbookEntryId], references: [id], onDelete: Restrict)
-  settlement    SettlementDocument?     @relation(fields: [settlementDocumentId], references: [id], onDelete: Restrict)
+  cashbookEntry CashbookEntry           @relation(fields: [tenantId, cashbookEntryId], references: [tenantId, id], onDelete: Restrict)
+  settlement    SettlementDocument?     @relation(fields: [tenantId, settlementDocumentId], references: [tenantId, id], onDelete: Restrict)
+  internalTransfer InternalTransferDocument? @relation(fields: [tenantId, internalTransferId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([reconciliationGroupId, cashbookEntryId])
   @@index([tenantId, cashbookEntryId])
@@ -1801,8 +1804,8 @@ model BankReconciliationException {
 
   tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   group             BankReconciliationGroup @relation(fields: [tenantId, reconciliationGroupId], references: [tenantId, id], onDelete: Restrict)
-  bankStatementLine BankStatementLine?      @relation(fields: [bankStatementLineId], references: [id], onDelete: Restrict)
-  cashbookEntry     CashbookEntry?          @relation(fields: [cashbookEntryId], references: [id], onDelete: Restrict)
+  bankStatementLine BankStatementLine?      @relation(fields: [tenantId, bankStatementLineId], references: [tenantId, id], onDelete: Restrict)
+  cashbookEntry     CashbookEntry?          @relation(fields: [tenantId, cashbookEntryId], references: [tenantId, id], onDelete: Restrict)
 
   @@index([tenantId, status, severity])
   @@index([tenantId, reconciliationGroupId])

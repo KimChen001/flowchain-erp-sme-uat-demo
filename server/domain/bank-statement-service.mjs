@@ -4,6 +4,8 @@ import { createLocalDurableAttachmentStorage } from "./attachment-storage-provid
 import { canonicalBankStatementFingerprint, bankAmountString, bankAmountUnits, parseBankStatement } from "./bank-statement-parser.mjs";
 import { capabilityForEnvironment } from "./capability-registry.mjs";
 import { resolveProvisionedActor } from "./pilot-identity.mjs";
+import { assertSafeBankMappingConfiguration } from "./bank-projection-policy.mjs";
+import { buildBankImportBatchDto, buildBankImportRowDto, buildBankMappingDto, buildBankStatementLineDto } from "./bank-statement-dto.mjs";
 
 export class BankStatementError extends Error {
   constructor(code, message, status = 400, details) { super(message); this.name = "BankStatementError"; this.code = code; this.status = status; this.details = details; }
@@ -15,7 +17,7 @@ const digest = (value) => createHash("sha256").update(value).digest("hex");
 const jsonHash = (value) => digest(JSON.stringify(value, Object.keys(value || {}).sort()));
 const date = (value, code = "BANK_STATEMENT_DATE_INVALID") => { if (!value) return null; const parsed = new Date(value); if (Number.isNaN(parsed.getTime())) fail(code, "Date is invalid.", 422); return parsed; };
 const version = (value) => { const parsed = Number(value); if (!Number.isInteger(parsed) || parsed < 0) fail("BANK_STATEMENT_VERSION_INVALID", "expectedVersion must be a non-negative integer.", 422); return parsed; };
-const ALGORITHM_VERSION = "bank-match-v1";
+const ALGORITHM_VERSION = "bank-match-v1.1";
 const ALLOWED_ACCOUNT_TYPES = new Set(["bank", "payment_platform"]);
 
 function enabled(env) {
@@ -33,34 +35,10 @@ const has = (actor, permission) => Boolean(actor.permissionCodes?.has(permission
 const authorize = (actor, permission) => assertAuthorized({ actor, permission, tenantId: actor.tenantId });
 const limits = (env) => ({ maxFileBytes: Number(env.FLOWCHAIN_BANK_IMPORT_MAX_FILE_BYTES || 20 * 1024 * 1024), maxRows: Number(env.FLOWCHAIN_BANK_IMPORT_MAX_ROWS || 10_000), maxSheets: Number(env.FLOWCHAIN_BANK_IMPORT_MAX_SHEETS || 3) });
 const mimeAllowed = (name, mime) => (/\.csv$/i.test(name) && /csv|text\/plain|octet-stream/i.test(mime)) || (/\.xlsx$/i.test(name) && /spreadsheetml|octet-stream/i.test(mime));
-const mask = (visible, value) => visible ? value : null;
 const serial = (value) => value?.toISOString?.() || value || null;
-
-function redaction(actor) {
-  return {
-    amounts: has(actor, "finance.amounts.read"), partner: has(actor, "finance.partner_snapshot.read"),
-    fieldVisibility: {
-      finance_amounts: { visible: has(actor, "finance.amounts.read"), permission: "finance.amounts.read", redacted: !has(actor, "finance.amounts.read") },
-      finance_partner_snapshot: { visible: has(actor, "finance.partner_snapshot.read"), permission: "finance.partner_snapshot.read", redacted: !has(actor, "finance.partner_snapshot.read") },
-    },
-  };
-}
-
-function batchProjection(row, actor) {
-  const visibility = redaction(actor);
-  return { ...row, openingBalance: mask(visibility.amounts, row.openingBalance?.toString?.() ?? row.openingBalance), closingBalance: mask(visibility.amounts, row.closingBalance?.toString?.() ?? row.closingBalance), accountIdentifierMasked: mask(visibility.partner, row.accountIdentifierMasked), accountIdentifierHash: undefined, fieldVisibility: visibility.fieldVisibility, conclusion: row.workflowStatus === "committed" ? "Bank statement file imported" : "Bank statement import is not committed", evidence: { fileSha256: row.fileSha256, mappingTemplateId: row.mappingTemplateId, mappingTemplateVersion: row.mappingTemplateVersion }, businessImpact: "No cashbook, payable, or receivable amount was modified.", availableActions: [], limitations: row.coverageType === "transaction_export" ? ["This export does not prove complete period balances"] : [], reconciliation: { importedLineCount: row.importedLineCount }, auditSummary: { createdById: row.createdById, committedById: row.committedById, committedAt: serial(row.committedAt) } };
-}
-
-function rowProjection(row, actor) {
-  const visibility = redaction(actor);
-  return { ...row, rawData: has(actor, "finance.bank_statement.read") ? row.rawData : null, normalizedAmount: mask(visibility.amounts, row.normalizedAmount?.toString?.() ?? row.normalizedAmount), normalizedRunningBalance: mask(visibility.amounts, row.normalizedRunningBalance?.toString?.() ?? row.normalizedRunningBalance), normalizedCounterpartyName: mask(visibility.partner, row.normalizedCounterpartyName), normalizedCounterpartyAccountMasked: mask(visibility.partner, row.normalizedCounterpartyAccountMasked), normalizedCounterpartyAccountHash: undefined, fieldVisibility: visibility.fieldVisibility };
-}
-
-function lineProjection(row, actor) {
-  const visibility = redaction(actor);
-  const amount = (value) => mask(visibility.amounts, value == null ? value : bankAmountString(bankAmountUnits(value)));
-  return { ...row, amount: amount(row.amount), matchedAmount: amount(row.matchedAmount), remainingAmount: amount(row.remainingAmount), runningBalance: amount(row.runningBalance), counterpartyName: mask(visibility.partner, row.counterpartyName), counterpartyAccountMasked: mask(visibility.partner, row.counterpartyAccountMasked), counterpartyAccountHash: undefined, conclusion: row.reconciliationStatus === "matched" ? "Matched to an imported bank statement" : row.reconciliationStatus === "partially_matched" ? "Partially matched" : row.reconciliationStatus === "exception" ? "Reconciliation evidence exception" : "Not matched to a bank statement", evidence: { batchId: row.batchId, sourceRowId: row.sourceRowId, canonicalFingerprint: row.canonicalFingerprint }, businessImpact: "This external evidence does not execute or guarantee bank funds.", availableActions: row.status === "active" ? ["generate_candidates", "create_reconciliation_draft"] : [], limitations: ["No bank API confirmation", "No general ledger posting"], reconciliation: { status: row.reconciliationStatus, matchedAmount: amount(row.matchedAmount), remainingAmount: amount(row.remainingAmount) }, auditSummary: { createdAt: serial(row.createdAt) }, fieldVisibility: visibility.fieldVisibility };
-}
+const batchProjection = buildBankImportBatchDto;
+const lineProjection = buildBankStatementLineDto;
+const rowProjection = (row, actor, columnMapping = {}) => buildBankImportRowDto(row, actor, columnMapping);
 
 export function createBankStatementService({ prisma, env = process.env, storageProvider, idFactory = randomUUID, now = () => new Date() } = {}) {
   if (!prisma) throw new Error("prisma is required");
@@ -70,10 +48,11 @@ export function createBankStatementService({ prisma, env = process.env, storageP
   const audit = (tx, actor, action, entityType, entityId, summary, metadata) => tx.auditLog.create({ data: { id: idFactory(), tenantId: actor.tenantId, actorId: actor.user.id, source: "bank_statement_service", module: "finance", action, entityType, entityId, summary, metadata } });
   const change = (tx, actor, entityType, entityId, entityVersion, operation = "upsert", permission = "finance.bank_statement.read", extra = {}) => tx.domainChangeFeed.create({ data: { tenantId: actor.tenantId, entityType, entityId, operation, entityVersion, actorId: actor.user.id, source: "bank_statement_service", requestId: extra.requestId || null, payloadHash: digest(Buffer.from(`${entityType}:${entityId}:${entityVersion ?? ""}:${operation}`)), sensitivityGroups: ["finance_amounts", "finance_partner_snapshot"], moduleKey: "finance", authorizationClass: permission, resourceTenantId: actor.tenantId } });
 
-  async function listMappings(context) { const actor = await actorFor(context, "finance.bank_mapping.read"); return { items: await prisma.bankStatementMappingTemplate.findMany({ where: { tenantId: actor.tenantId }, orderBy: [{ templateCode: "asc" }, { version: "desc" }] }) }; }
-  async function getMapping(id, context) { const actor = await actorFor(context, "finance.bank_mapping.read"); return owned(prisma.bankStatementMappingTemplate, id, actor); }
+  async function listMappings(context) { const actor = await actorFor(context, "finance.bank_mapping.read"); return { items: (await prisma.bankStatementMappingTemplate.findMany({ where: { tenantId: actor.tenantId }, orderBy: [{ templateCode: "asc" }, { version: "desc" }] })).map(buildBankMappingDto) }; }
+  async function getMapping(id, context) { const actor = await actorFor(context, "finance.bank_mapping.read"); return buildBankMappingDto(await owned(prisma.bankStatementMappingTemplate, id, actor)); }
   async function createMapping(input, context) {
     const actor = await actorFor(context, "finance.bank_mapping.manage");
+    try { assertSafeBankMappingConfiguration({ columnMapping: input.columnMapping, metadata: input.metadata }); } catch (error) { fail(error.code, error.message, error.status, error.details); }
     const account = await prisma.cashbookAccount.findFirst({ where: { id: text(input.cashbookAccountId), tenantId: actor.tenantId, status: "active" } });
     if (!account || !ALLOWED_ACCOUNT_TYPES.has(account.accountType)) fail("BANK_STATEMENT_ACCOUNT_NOT_ELIGIBLE", "An active bank or payment-platform cashbook account is required.", 409);
     const templateCode = text(input.templateCode).toUpperCase(); if (!templateCode || !text(input.name)) fail("BANK_MAPPING_INVALID", "Template code and name are required.", 422);
@@ -84,17 +63,20 @@ export function createBankStatementService({ prisma, env = process.env, storageP
     if (!new Set(["csv", "xlsx"]).has(data.formatType) || !data.debitCreditMode || !data.signConvention || !Object.keys(data.columnMapping).length) fail("BANK_MAPPING_INVALID", "Mapping format, amount mode, sign convention, and columns are required.", 422);
     const created = await prisma.bankStatementMappingTemplate.create({ data });
     await audit(prisma, actor, "bank_mapping_created", "BankStatementMappingTemplate", created.id, `Created bank mapping ${templateCode} v1.`, { templateCode, version: 1, cashbookAccountId: account.id });
-    return created;
+    return buildBankMappingDto(created);
   }
   async function updateMapping(id, input, context) {
     const actor = await actorFor(context, "finance.bank_mapping.manage"); const current = await owned(prisma.bankStatementMappingTemplate, id, actor);
+    const nextColumnMapping = input.columnMapping || current.columnMapping;
+    const nextMetadata = { ...(current.metadata || {}), ...(input.metadata || {}), previousVersionId: current.id, credentialsStored: false };
+    try { assertSafeBankMappingConfiguration({ columnMapping: nextColumnMapping, metadata: nextMetadata }); } catch (error) { fail(error.code, error.message, error.status, error.details); }
     if (current.version !== version(input.expectedVersion)) fail("BANK_MAPPING_VERSION_CONFLICT", "Mapping changed concurrently.", 409);
     const next = await prisma.$transaction(async (tx) => {
       await tx.bankStatementMappingTemplate.update({ where: { id: current.id }, data: { status: "superseded", updatedById: actor.user.id } });
-      const created = await tx.bankStatementMappingTemplate.create({ data: { ...Object.fromEntries(Object.entries(current).filter(([key]) => !["id", "createdAt", "updatedAt"].includes(key))), id: idFactory(), version: current.version + 1, status: "active", name: text(input.name || current.name), bankName: text(input.bankName ?? current.bankName) || null, fileEncoding: text(input.fileEncoding || current.fileEncoding), sheetName: text(input.sheetName ?? current.sheetName) || null, headerRowNumber: Number(input.headerRowNumber || current.headerRowNumber), firstDataRowNumber: Number(input.firstDataRowNumber || current.firstDataRowNumber), dateFormat: text(input.dateFormat ?? current.dateFormat) || null, decimalSeparator: text(input.decimalSeparator || current.decimalSeparator), thousandsSeparator: text(input.thousandsSeparator ?? current.thousandsSeparator), debitCreditMode: text(input.debitCreditMode || current.debitCreditMode), signConvention: text(input.signConvention || current.signConvention), timezone: text(input.timezone || current.timezone), columnMapping: input.columnMapping || current.columnMapping, updatedById: actor.user.id, createdById: actor.user.id, metadata: { ...(current.metadata || {}), ...(input.metadata || {}), previousVersionId: current.id, credentialsStored: false } } });
+      const created = await tx.bankStatementMappingTemplate.create({ data: { id: idFactory(), tenantId: current.tenantId, templateCode: current.templateCode, version: current.version + 1, status: "active", name: text(input.name || current.name), bankName: text(input.bankName ?? current.bankName) || null, formatType: current.formatType, cashbookAccountId: current.cashbookAccountId, fileEncoding: text(input.fileEncoding || current.fileEncoding), sheetName: text(input.sheetName ?? current.sheetName) || null, headerRowNumber: Number(input.headerRowNumber || current.headerRowNumber), firstDataRowNumber: Number(input.firstDataRowNumber || current.firstDataRowNumber), dateFormat: text(input.dateFormat ?? current.dateFormat) || null, decimalSeparator: text(input.decimalSeparator || current.decimalSeparator), thousandsSeparator: text(input.thousandsSeparator ?? current.thousandsSeparator), debitCreditMode: text(input.debitCreditMode || current.debitCreditMode), signConvention: text(input.signConvention || current.signConvention), timezone: text(input.timezone || current.timezone), columnMapping: nextColumnMapping, updatedById: actor.user.id, createdById: actor.user.id, metadata: nextMetadata } });
       await audit(tx, actor, "bank_mapping_versioned", "BankStatementMappingTemplate", created.id, `Created bank mapping ${created.templateCode} v${created.version}.`, { previousVersionId: current.id, version: created.version }); return created;
     }, { isolationLevel: "Serializable" });
-    return next;
+    return buildBankMappingDto(next);
   }
 
   async function stageUpload(input, context) {
@@ -146,20 +128,28 @@ export function createBankStatementService({ prisma, env = process.env, storageP
     if (batch.workflowStatus !== "draft" || !batch.rows.length) fail("BANK_STATEMENT_BATCH_NOT_PARSED", "A parsed draft batch is required.", 409);
     let credits = 0n, debits = 0n, exact = 0, possible = 0, errors = 0, accepted = 0;
     await prisma.$transaction(async (tx) => {
+      const seenTransactionIds = new Map(), seenCanonicalFingerprints = new Map();
       for (const row of [...batch.rows].sort((a, b) => a.sourceRowNumber - b.sourceRowNumber)) {
         if (["error", "excluded"].includes(row.validationStatus)) { if (row.validationStatus === "error") errors += 1; continue; }
         const issueCodes = [...row.issueCodes]; let duplicateStatus = "none", validationStatus = "valid";
         if (row.normalizedCurrency !== batch.currency) { issueCodes.push("BANK_STATEMENT_CURRENCY_MISMATCH"); validationStatus = "error"; errors += 1; }
         const fingerprint = canonicalBankStatementFingerprint({ cashbookAccountId: batch.cashbookAccountId, currency: row.normalizedCurrency, direction: row.normalizedDirection, amount: row.normalizedAmount, transactionDate: row.normalizedTransactionDate, valueDate: row.normalizedValueDate, bankReference: row.normalizedBankReference, counterpartyAccountHash: row.normalizedCounterpartyAccountHash, description: row.normalizedDescription });
-        const exactLine = await tx.bankStatementLine.findFirst({ where: { tenantId: actor.tenantId, cashbookAccountId: batch.cashbookAccountId, status: "active", OR: row.normalizedTransactionId ? [{ bankTransactionId: row.normalizedTransactionId }] : [{ bankTransactionId: null, canonicalFingerprint: fingerprint }] } });
-        if (exactLine) { duplicateStatus = "exact_duplicate"; validationStatus = "error"; issueCodes.push("BANK_STATEMENT_TRANSACTION_ALREADY_IMPORTED"); exact += 1; errors += 1; }
+        const exactLine = await tx.bankStatementLine.findFirst({ where: { tenantId: actor.tenantId, cashbookAccountId: batch.cashbookAccountId, status: "active", OR: row.normalizedTransactionId ? [{ bankTransactionId: row.normalizedTransactionId }, { canonicalFingerprint: fingerprint }] : [{ canonicalFingerprint: fingerprint }] } });
+        const priorTransactionRowId = row.normalizedTransactionId ? seenTransactionIds.get(row.normalizedTransactionId) : null;
+        const priorFingerprintRowId = seenCanonicalFingerprints.get(fingerprint);
+        let duplicateEvidence = {};
+        if (exactLine) { duplicateStatus = "exact_duplicate"; validationStatus = "error"; issueCodes.push("BANK_STATEMENT_TRANSACTION_ALREADY_IMPORTED"); duplicateEvidence = { duplicateSource: "committed_line", duplicateOfLineId: exactLine.id }; exact += 1; errors += 1; }
+        else if (priorTransactionRowId) { duplicateStatus = "exact_duplicate"; validationStatus = "error"; issueCodes.push("BANK_ROW_DUPLICATE_TRANSACTION_ID_IN_BATCH"); duplicateEvidence = { duplicateSource: "same_batch_row", duplicateOfRowId: priorTransactionRowId }; exact += 1; errors += 1; }
+        else if (priorFingerprintRowId) { duplicateStatus = "exact_duplicate"; validationStatus = "error"; issueCodes.push("BANK_ROW_DUPLICATE_FINGERPRINT_IN_BATCH"); duplicateEvidence = { duplicateSource: "same_batch_row", duplicateOfRowId: priorFingerprintRowId }; exact += 1; errors += 1; }
         else {
           const start = new Date(row.normalizedTransactionDate); start.setUTCDate(start.getUTCDate() - 3); const end = new Date(row.normalizedTransactionDate); end.setUTCDate(end.getUTCDate() + 3);
           const near = await tx.bankStatementLine.findFirst({ where: { tenantId: actor.tenantId, cashbookAccountId: batch.cashbookAccountId, status: "active", direction: row.normalizedDirection, amount: row.normalizedAmount, transactionDate: { gte: start, lte: end } } });
           if (near) { duplicateStatus = "possible_duplicate"; validationStatus = "warning"; issueCodes.push("BANK_STATEMENT_POSSIBLE_DUPLICATE"); possible += 1; }
         }
+        if (row.normalizedTransactionId && !seenTransactionIds.has(row.normalizedTransactionId)) seenTransactionIds.set(row.normalizedTransactionId, row.id);
+        if (!seenCanonicalFingerprints.has(fingerprint)) seenCanonicalFingerprints.set(fingerprint, row.id);
         if (validationStatus !== "error") { accepted += 1; const amount = bankAmountUnits(row.normalizedAmount); if (row.normalizedDirection === "credit") credits += amount; else debits += amount; }
-        await tx.bankStatementImportRow.update({ where: { id: row.id }, data: { duplicateStatus, validationStatus, issueCodes, overrideData: { ...(row.overrideData || {}), canonicalFingerprint: fingerprint } } });
+        await tx.bankStatementImportRow.update({ where: { id: row.id }, data: { duplicateStatus, validationStatus, issueCodes: [...new Set(issueCodes)], overrideData: { ...(row.overrideData || {}), canonicalFingerprint: fingerprint, ...duplicateEvidence } } });
       }
       let balanceMismatch = false;
       if (batch.coverageType === "full_statement" && batch.openingBalance != null && batch.closingBalance != null) {
@@ -176,7 +166,7 @@ export function createBankStatementService({ prisma, env = process.env, storageP
     const actor = await actorFor(context, "finance.bank_statement.validate"); const batch = await owned(prisma.bankStatementImportBatch, batchId, actor); if (batch.workflowStatus === "committed") fail("BANK_STATEMENT_BATCH_IMMUTABLE", "Committed rows cannot be modified.", 409);
     const row = await prisma.bankStatementImportRow.findFirst({ where: { id: text(rowId), tenantId: actor.tenantId, batchId: batch.id } }); if (!row) fail("BANK_STATEMENT_ROW_NOT_FOUND", "Statement row was not found.", 404);
     if (row.version !== version(input.expectedVersion)) fail("BANK_STATEMENT_ROW_VERSION_CONFLICT", "Statement row changed concurrently.", 409); if (!text(input.overrideReason)) fail("BANK_STATEMENT_OVERRIDE_REASON_REQUIRED", "Row override requires a reason.", 422);
-    const changes = input.changes || {}; const data = { overrideData: { before: rowProjection(row, actor), after: changes }, overrideReason: text(input.overrideReason), overriddenById: actor.user.id, validationStatus: "pending", duplicateStatus: "none", issueCodes: [], version: { increment: 1 } };
+    const changes = input.changes || {}; const data = { overrideData: { before: { transactionId: row.normalizedTransactionId, transactionDate: row.normalizedTransactionDate, direction: row.normalizedDirection, amount: row.normalizedAmount?.toString?.(), currency: row.normalizedCurrency, counterpartyName: row.normalizedCounterpartyName, description: row.normalizedDescription, bankReference: row.normalizedBankReference, customerReference: row.normalizedCustomerReference }, after: changes }, overrideReason: text(input.overrideReason), overriddenById: actor.user.id, validationStatus: "pending", duplicateStatus: "none", issueCodes: [], version: { increment: 1 } };
     if (changes.amount != null) data.normalizedAmount = bankAmountString(bankAmountUnits(changes.amount)); if (changes.direction != null) { if (!new Set(["credit", "debit"]).has(text(changes.direction))) fail("BANK_STATEMENT_DIRECTION_INVALID", "Direction must be credit or debit.", 422); data.normalizedDirection = text(changes.direction); }
     if (changes.transactionDate != null) data.normalizedTransactionDate = date(changes.transactionDate); if (changes.currency != null) data.normalizedCurrency = text(changes.currency).toUpperCase();
     for (const [source, target] of [["transactionId", "normalizedTransactionId"], ["counterpartyName", "normalizedCounterpartyName"], ["description", "normalizedDescription"], ["bankReference", "normalizedBankReference"], ["customerReference", "normalizedCustomerReference"]]) if (changes[source] !== undefined) data[target] = text(changes[source]) || null;
@@ -197,8 +187,17 @@ export function createBankStatementService({ prisma, env = process.env, storageP
       if (!new Set(["valid", "valid_with_warnings"]).has(batch.validationStatus) || batch.workflowStatus !== "validated") fail("BANK_STATEMENT_BATCH_NOT_COMMITTABLE", "Only a validated batch can be committed.", 409);
       if (batch.metadata?.balanceOverrideRequired && (!text(input.overrideReason) || !input.supportingEvidence)) fail("BANK_STATEMENT_BALANCE_MISMATCH", "Full-statement balances do not reconcile; override requires a reason and supporting evidence.", 422, { differenceAmount: batch.metadata?.balanceDifference, overrideRequired: true });
       const duplicateFile = await tx.bankStatementImportBatch.findFirst({ where: { tenantId: actor.tenantId, cashbookAccountId: batch.cashbookAccountId, fileSha256: batch.fileSha256, workflowStatus: "committed", id: { not: batch.id } } }); if (duplicateFile) fail("BANK_STATEMENT_FILE_ALREADY_IMPORTED", "This statement file is already committed for the account.", 409);
-      const execution = await tx.businessCommandExecution.create({ data: { id: idFactory(), tenantId: actor.tenantId, commandType: "commit_bank_statement", idempotencyKey, requestHash, status: "pending" } });
       const rows = batch.rows.filter((row) => ["valid", "warning", "accepted"].includes(row.validationStatus) && row.duplicateStatus !== "exact_duplicate").sort((a, b) => a.sourceRowNumber - b.sourceRowNumber);
+      const transactionIds = new Set(), fingerprints = new Set();
+      for (const row of rows) {
+        const fingerprint = row.overrideData?.canonicalFingerprint || canonicalBankStatementFingerprint({ cashbookAccountId: batch.cashbookAccountId, currency: row.normalizedCurrency, direction: row.normalizedDirection, amount: row.normalizedAmount, transactionDate: row.normalizedTransactionDate, valueDate: row.normalizedValueDate, bankReference: row.normalizedBankReference, counterpartyAccountHash: row.normalizedCounterpartyAccountHash, description: row.normalizedDescription });
+        if (row.normalizedTransactionId && transactionIds.has(row.normalizedTransactionId)) fail("BANK_ROW_DUPLICATE_TRANSACTION_ID_IN_BATCH", "A transaction identifier is duplicated within this batch.", 409, { rowId: row.id });
+        if (fingerprints.has(fingerprint)) fail("BANK_ROW_DUPLICATE_FINGERPRINT_IN_BATCH", "A canonical transaction fingerprint is duplicated within this batch.", 409, { rowId: row.id });
+        const committedDuplicate = await tx.bankStatementLine.findFirst({ where: { tenantId: actor.tenantId, cashbookAccountId: batch.cashbookAccountId, status: "active", OR: row.normalizedTransactionId ? [{ bankTransactionId: row.normalizedTransactionId }, { canonicalFingerprint: fingerprint }] : [{ canonicalFingerprint: fingerprint }] }, select: { id: true } });
+        if (committedDuplicate) fail("BANK_STATEMENT_TRANSACTION_ALREADY_IMPORTED", "A statement transaction was committed concurrently.", 409, { duplicateOfLineId: committedDuplicate.id });
+        if (row.normalizedTransactionId) transactionIds.add(row.normalizedTransactionId); fingerprints.add(fingerprint);
+      }
+      const execution = await tx.businessCommandExecution.create({ data: { id: idFactory(), tenantId: actor.tenantId, commandType: "commit_bank_statement", idempotencyKey, requestHash, status: "pending" } });
       for (let index = 0; index < rows.length; index += 1) { const row = rows[index], fingerprint = row.overrideData?.canonicalFingerprint || canonicalBankStatementFingerprint({ cashbookAccountId: batch.cashbookAccountId, currency: row.normalizedCurrency, direction: row.normalizedDirection, amount: row.normalizedAmount, transactionDate: row.normalizedTransactionDate, valueDate: row.normalizedValueDate, bankReference: row.normalizedBankReference, counterpartyAccountHash: row.normalizedCounterpartyAccountHash, description: row.normalizedDescription }); const createdLine = await tx.bankStatementLine.create({ data: { id: idFactory(), tenantId: actor.tenantId, batchId: batch.id, cashbookAccountId: batch.cashbookAccountId, lineNumber: index + 1, bankTransactionId: row.normalizedTransactionId, transactionDate: row.normalizedTransactionDate, postingDate: row.normalizedPostingDate, valueDate: row.normalizedValueDate, direction: row.normalizedDirection, amount: row.normalizedAmount, currency: row.normalizedCurrency, counterpartyName: row.normalizedCounterpartyName, counterpartyAccountMasked: row.normalizedCounterpartyAccountMasked, counterpartyAccountHash: row.normalizedCounterpartyAccountHash, description: row.normalizedDescription, bankReference: row.normalizedBankReference, customerReference: row.normalizedCustomerReference, runningBalance: row.normalizedRunningBalance, canonicalFingerprint: fingerprint, remainingAmount: row.normalizedAmount, sourceRowId: row.id, metadata: { sourceRowHash: row.rawRowHash, mappingTemplateId: batch.mappingTemplateId, mappingTemplateVersion: batch.mappingTemplateVersion } } }); await change(tx, actor, "BankStatementLine", createdLine.id, createdLine.version, "upsert", "finance.bank_statement.read", { requestId: idempotencyKey }); }
       const committed = await tx.bankStatementImportBatch.update({ where: { id: batch.id }, data: { workflowStatus: "committed", importedLineCount: rows.length, committedById: actor.user.id, committedAt: now(), version: { increment: 1 }, metadata: { ...(batch.metadata || {}), balanceOverrideReason: text(input.overrideReason) || null, supportingEvidence: input.supportingEvidence || null } } }); await tx.stagedUpload.update({ where: { id: batch.uploadId }, data: { status: "bound", boundAt: now() } });
       await audit(tx, actor, "bank_statement_batch_committed", "BankStatementImportBatch", batch.id, `Committed ${rows.length} immutable bank statement lines.`, { fileSha256: batch.fileSha256, mappingTemplateId: batch.mappingTemplateId, mappingTemplateVersion: batch.mappingTemplateVersion, importedLineCount: rows.length, cashbookMutation: false }); await change(tx, actor, "BankStatementImportBatch", batch.id, committed.version, "upsert", "finance.bank_statement.read", { requestId: idempotencyKey });
@@ -213,7 +212,7 @@ export function createBankStatementService({ prisma, env = process.env, storageP
 
   async function listBatches(filters, context) { const actor = await actorFor(context, "finance.bank_statement.read"); const rows = await prisma.bankStatementImportBatch.findMany({ where: { tenantId: actor.tenantId, ...(filters?.workflowStatus ? { workflowStatus: text(filters.workflowStatus) } : {}) }, orderBy: { createdAt: "desc" } }); return { items: rows.map((row) => batchProjection(row, actor)) }; }
   async function getBatch(id, context) { const actor = await actorFor(context, "finance.bank_statement.read"); return batchProjection(await owned(prisma.bankStatementImportBatch, id, actor), actor); }
-  async function listRows(id, context) { const actor = await actorFor(context, "finance.bank_statement.read"); await owned(prisma.bankStatementImportBatch, id, actor); return { items: (await prisma.bankStatementImportRow.findMany({ where: { tenantId: actor.tenantId, batchId: text(id) }, orderBy: { sourceRowNumber: "asc" } })).map((row) => rowProjection(row, actor)) }; }
+  async function listRows(id, context) { const actor = await actorFor(context, "finance.bank_statement.read"); const batch = await owned(prisma.bankStatementImportBatch, id, actor, { mappingTemplate: true }); return { items: (await prisma.bankStatementImportRow.findMany({ where: { tenantId: actor.tenantId, batchId: text(id) }, orderBy: { sourceRowNumber: "asc" } })).map((row) => rowProjection(row, actor, batch.mappingTemplate.columnMapping)) }; }
   async function listLines(filters, context) { const actor = await actorFor(context, "finance.bank_statement.read"); const rows = await prisma.bankStatementLine.findMany({ where: { tenantId: actor.tenantId, ...(filters?.status ? { status: text(filters.status) } : {}), ...(filters?.reconciliationStatus ? { reconciliationStatus: text(filters.reconciliationStatus) } : {}) }, orderBy: [{ transactionDate: "desc" }, { lineNumber: "asc" }] }); return { items: rows.map((row) => lineProjection(row, actor)) }; }
   async function getLine(id, context) { const actor = await actorFor(context, "finance.bank_statement.read"); return lineProjection(await owned(prisma.bankStatementLine, id, actor), actor); }
 

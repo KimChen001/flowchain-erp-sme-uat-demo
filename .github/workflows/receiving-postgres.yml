@@ -85,6 +85,13 @@ jobs:
       - run: npm run test:db:bank-reconciliation
       - run: npm run test:db:bank-reconciliation-evidence
       - run: npm run test:api:bank-reconciliation
+      - run: npm run test:db:bank-security-hardening
+      - run: npm run test:api:bank-projection-security
+      - run: npm run test:db:bank-candidate-quality
+      - run: npm run bank:mapping-security-scan
+        env:
+          DATABASE_URL: postgresql://flowchain_ci:flowchain_ci_password@127.0.0.1:55432/flowchain_ci_diagnostics?schema=public
+          FLOWCHAIN_PERSISTENCE_MODE: database
       - run: npm run pilot:check
         env:
           FLOWCHAIN_PERSISTENCE_MODE: database
@@ -130,3 +137,4 @@ jobs:
       - run: npm run test:browser:mobile-authority
       - run: npm run test:browser:mobile-sync-controls
       - run: npm run test:browser:bank-reconciliation
+      - run: npm run test:browser:bank-security-hardening

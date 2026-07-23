@@ -73,7 +73,7 @@ function project(row, entityType, policy, actor) {
     : { supplierId: null, supplierNameSnapshot: null, customerId: null, customerNameSnapshot: null });
   if (entityType === "SettlementDocument") Object.assign(result, { workflowStatus: row.workflowStatus, postingStatus: row.postingStatus, settlementNumber: row.settlementNumber });
   if (entityType === "AdvanceApplicationDocument") Object.assign(result, { advanceId: row.advanceId, workflowStatus: row.workflowStatus, postingStatus: row.postingStatus });
-  if (entityType === "BankStatementImportBatch") Object.assign(result, { batchNumber: row.batchNumber, workflowStatus: row.workflowStatus, validationStatus: row.validationStatus, unmatchedCount: row.importedLineCount, desktopDeepLink: `/app/finance/bank-reconciliation?batch=${encodeURIComponent(row.id)}` });
+  if (entityType === "BankStatementImportBatch") Object.assign(result, { batchNumber: row.batchNumber, workflowStatus: row.workflowStatus, validationStatus: row.validationStatus, activeLineCount: row.mobileReconciliationCounts?.activeLineCount ?? 0, unmatchedCount: row.mobileReconciliationCounts?.unmatchedCount ?? 0, partiallyMatchedCount: row.mobileReconciliationCounts?.partiallyMatchedCount ?? 0, matchedCount: row.mobileReconciliationCounts?.matchedCount ?? 0, exceptionCount: row.mobileReconciliationCounts?.exceptionCount ?? 0, desktopDeepLink: `/app/finance/bank-reconciliation?batch=${encodeURIComponent(row.id)}` });
   if (entityType === "BankStatementLine") Object.assign(result, { transactionDate: serial(row.transactionDate), direction: row.direction, reconciliationStatus: row.reconciliationStatus, amount: amounts ? decimal(row.amount) : null, matchedAmount: amounts ? decimal(row.matchedAmount) : null, remainingAmount: amounts ? decimal(row.remainingAmount) : null, counterpartyName: partner ? row.counterpartyName : null, counterpartyAccountMasked: partner ? row.counterpartyAccountMasked : null, desktopDeepLink: `/app/finance/bank-reconciliation?line=${encodeURIComponent(row.id)}` });
   if (entityType === "BankReconciliationGroup") Object.assign(result, { reconciliationNumber: row.reconciliationNumber, workflowStatus: row.workflowStatus, integrityStatus: row.integrityStatus, totalBankAmount: amounts ? decimal(row.totalBankAmount) : null, totalCashbookAmount: amounts ? decimal(row.totalCashbookAmount) : null, desktopDeepLink: `/app/finance/bank-reconciliation?group=${encodeURIComponent(row.id)}` });
   if (entityType === "BankReconciliationException") Object.assign(result, { exceptionType: row.exceptionType, severity: row.severity, reconciliationGroupId: row.reconciliationGroupId, desktopDeepLink: `/app/finance/bank-reconciliation?exception=${encodeURIComponent(row.id)}` });
@@ -133,6 +133,12 @@ export async function loadAuthorizedSyncProjection({ prisma, tenant, actor, enti
   if (policy.parent === "cashbookAccount") where.cashbookAccount = { tenantId: actor.tenantId };
   const row = await model.findFirst({ where, ...(policy.include ? { include: policy.include } : {}) });
   if (!row) return null;
+  if (entityType === "BankStatementImportBatch") {
+    const grouped = await prisma.bankStatementLine.groupBy({ by: ["reconciliationStatus"], where: { tenantId: actor.tenantId, batchId: row.id, status: "active" }, _count: { _all: true } });
+    const counts = new Map(grouped.map((item) => [item.reconciliationStatus, item._count._all]));
+    const exceptionCount = (counts.get("exception") || 0) + await prisma.bankReconciliationException.count({ where: { tenantId: actor.tenantId, status: { in: ["open", "acknowledged"] }, severity: "blocking", group: { bankAllocations: { some: { bankStatementLine: { batchId: row.id } } } } } });
+    row.mobileReconciliationCounts = { activeLineCount: grouped.reduce((total, item) => total + item._count._all, 0), unmatchedCount: counts.get("unmatched") || 0, partiallyMatchedCount: counts.get("partially_matched") || 0, matchedCount: counts.get("matched") || 0, exceptionCount };
+  }
   if (policy.warehouseScoped && !visibleWarehouse(actor, entityWarehouse(row, policy))) return null;
   return project(row, entityType, policy, actor);
 }
